@@ -1,0 +1,196 @@
+{
+  "id": "doc_comp01",
+  "meta": {
+    "title": "Building with Vanilla Breeze Components",
+    "slug": "vanilla-breeze-components",
+    "collection": "docs",
+    "description": "How to use custom elements as semantic building blocks in your markup.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-14",
+    "updated": "2026-02-14",
+    "published": "2026-02-14",
+    "tags": ["web-components", "css", "html"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Vanilla Breeze components work in two modes: as CSS-only custom elements (no JavaScript required) or as full web components with progressive enhancement." }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "tip" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Most components work without JavaScript. The browser renders the custom element, CSS styles it. JS only adds interactivity like copy buttons or keyboard handling." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Installation" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Link the stylesheet" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<link rel=\"stylesheet\" href=\"/assets/css/main.css\"/>"
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Use components in your markup" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<ui-callout data-variant=\"warning\">\n  <p>This API is experimental.</p>\n</ui-callout>"
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Optionally load JavaScript for enhanced components" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<script src=\"/assets/js/main.js\" type=\"module\"></script>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Component Examples" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "Callout" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Use callouts to highlight important information:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<ui-callout data-variant=\"warning\">\n  <p>Breaking change in v2.0.</p>\n</ui-callout>"
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Collapsible" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Collapsible sections use the native " },
+                { "type": "text", "value": "<details>", "marks": ["code"] },
+                { "type": "text", "value": " element:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<details>\n  <summary>Advanced options</summary>\n  <p>Configure token overrides here.</p>\n</details>"
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Card" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Cards link to related content:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<content-card href=\"/docs/css-layers\">\n  <h3>CSS Layers Guide</h3>\n  <p>Learn cascade control.</p>\n</content-card>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "warning" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Custom elements require a hyphen in the name. " },
+            { "type": "text", "value": "<callout>", "marks": ["code"] },
+            { "type": "text", "value": " is invalid; " },
+            { "type": "text", "value": "<ui-callout>", "marks": ["code"] },
+            { "type": "text", "value": " is correct." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Why custom elements instead of CSS classes?" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Custom elements are semantic. A " },
+            { "type": "text", "value": "<ui-callout>", "marks": ["code"] },
+            { "type": "text", "value": " communicates intent to browsers, screen readers, and developers. A " },
+            { "type": "text", "value": "<div class=\"callout\">", "marks": ["code"] },
+            { "type": "text", "value": " communicates nothing — the class name is a convention, not a contract." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "card",
+      "attrs": { "href": "/docs/progressive-enhancement" },
+      "children": [
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "children": [
+            { "type": "text", "value": "Progressive Enhancement Guide" }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Learn how components work without JavaScript and enhance with it." }
+          ]
+        }
+      ]
+    }
+  ]
+}

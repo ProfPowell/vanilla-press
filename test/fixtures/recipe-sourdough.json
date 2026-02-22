@@ -1,0 +1,316 @@
+{
+  "id": "doc_recipe01",
+  "meta": {
+    "title": "Classic Sourdough Bread",
+    "slug": "classic-sourdough-bread",
+    "collection": "recipes",
+    "description": "A two-day sourdough loaf with a crispy crust and open crumb. Requires an active starter and a Dutch oven.",
+    "status": "published",
+    "created": "2026-01-10",
+    "updated": "2026-01-12",
+    "published": "2026-01-12",
+    "tags": ["bread", "fermentation", "intermediate"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is the sourdough recipe I've been baking every week for three years. It's forgiving, produces a beautiful open crumb, and works with any active starter. The total hands-on time is about 30 minutes — the rest is waiting." }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "note" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "This recipe assumes you have an active sourdough starter that doubles in 4-6 hours at room temperature. If your starter is sluggish, feed it twice a day for 3-4 days before attempting this bake." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Ingredients" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "375g bread flour (12.5%+ protein)" }] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "125g whole wheat flour" }] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "375g water (80°F / 27°C)" }] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "75g active starter (fed 4-6 hours prior)" }] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "10g fine sea salt" }] }]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "That gives you a " },
+        { "type": "text", "value": "75% hydration", "marks": ["strong"] },
+        { "type": "text", "value": " dough — wet enough for an open crumb, dry enough to handle without making a mess." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Day 1: Mix & Bulk Ferment" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Autolyse (9:00 AM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Mix both flours with water in a large bowl. No starter, no salt — just flour and water. Cover and rest for " },
+                { "type": "text", "value": "45 minutes to 1 hour", "marks": ["strong"] },
+                { "type": "text", "value": ". This hydrates the flour and develops gluten without kneading." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Add starter and salt (10:00 AM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Spread the starter over the dough, sprinkle salt on top. Use the " },
+                { "type": "text", "value": "pinch and fold", "marks": ["em"] },
+                { "type": "text", "value": " method: pinch the dough between thumb and fingers, then fold it over itself. Rotate the bowl and repeat for 3-4 minutes until incorporated." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Stretch and fold — 4 sets (10:30 AM – 12:00 PM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Every 30 minutes, perform one set: wet your hand, grab the dough from one side, stretch it up and fold it over. Rotate 90° and repeat (4 folds per set). You'll feel the dough tighten with each set." }
+              ]
+            },
+            {
+              "type": "callout",
+              "attrs": { "variant": "tip" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "If the dough tears instead of stretching, you're pulling too fast. Gentle, steady tension. Think taffy, not paper." }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Bulk ferment (12:00 PM – 5:00 PM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Leave the dough covered at room temperature (75-78°F / 24-26°C). It's ready when it has risen 50-75%, feels airy and jiggly, and you can see bubbles through the side of the container." }
+              ]
+            },
+            {
+              "type": "callout",
+              "attrs": { "variant": "warning" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Don't wait for it to double. Over-fermented dough loses structure and won't hold its shape during baking. If it looks like a pancake when you turn it out, you went too far." }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Shape and cold retard (5:00 PM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Turn the dough onto a lightly floured surface. Pre-shape into a round, rest 20 minutes, then do a final tight shaping. Place seam-side-up in a floured banneton. Cover and refrigerate for " },
+                { "type": "text", "value": "12-16 hours", "marks": ["strong"] },
+                { "type": "text", "value": "." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Day 2: Bake" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Preheat (7:00 AM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Place your Dutch oven (lid on) in the oven and preheat to " },
+                { "type": "text", "value": "500°F / 260°C", "marks": ["strong"] },
+                { "type": "text", "value": ". Let it heat for at least 45 minutes. The cast iron needs to be screaming hot." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Score and load (7:45 AM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Turn the cold dough out onto parchment paper. Score the top with a razor blade or lame — one confident slash at a 30° angle, about ¼ inch deep. Lower into the hot Dutch oven using the parchment as a sling." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Bake covered (7:45 – 8:05 AM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Bake with the lid on at " },
+                { "type": "text", "value": "500°F for 20 minutes", "marks": ["strong"] },
+                { "type": "text", "value": ". The lid traps steam, which creates the crispy, blistered crust." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Bake uncovered (8:05 – 8:30 AM)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Remove the lid. Drop temperature to " },
+                { "type": "text", "value": "450°F / 230°C", "marks": ["strong"] },
+                { "type": "text", "value": ". Bake another 20-25 minutes until deeply golden brown. The internal temperature should reach 205-210°F / 96-99°C." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Cool completely" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "This is the hardest step. Let the bread cool on a wire rack for " },
+                { "type": "text", "value": "at least 1 hour", "marks": ["strong"] },
+                { "type": "text", "value": " before cutting. The crumb is still setting. Cutting too early releases steam and makes the interior gummy." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Troubleshooting: Dense crumb?" },
+      "children": [
+        {
+          "type": "list",
+          "attrs": { "ordered": false },
+          "children": [
+            {
+              "type": "list_item",
+              "children": [{ "type": "paragraph", "children": [
+                { "type": "text", "value": "Starter not active enough", "marks": ["strong"] },
+                { "type": "text", "value": " — does it float in water? If not, it needs more feedings." }
+              ] }]
+            },
+            {
+              "type": "list_item",
+              "children": [{ "type": "paragraph", "children": [
+                { "type": "text", "value": "Under-fermented", "marks": ["strong"] },
+                { "type": "text", "value": " — bulk ferment longer. In a cold kitchen (68°F), this could take 8+ hours." }
+              ] }]
+            },
+            {
+              "type": "list_item",
+              "children": [{ "type": "paragraph", "children": [
+                { "type": "text", "value": "Flour too low protein", "marks": ["strong"] },
+                { "type": "text", "value": " — all-purpose flour (10% protein) can't build the gluten network that bread flour (12.5%+) can." }
+              ] }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Troubleshooting: Flat loaf?" },
+      "children": [
+        {
+          "type": "list",
+          "attrs": { "ordered": false },
+          "children": [
+            {
+              "type": "list_item",
+              "children": [{ "type": "paragraph", "children": [
+                { "type": "text", "value": "Over-fermented", "marks": ["strong"] },
+                { "type": "text", "value": " — the gluten has broken down. Reduce bulk ferment time or lower the room temperature." }
+              ] }]
+            },
+            {
+              "type": "list_item",
+              "children": [{ "type": "paragraph", "children": [
+                { "type": "text", "value": "Weak shaping", "marks": ["strong"] },
+                { "type": "text", "value": " — the final shape needs surface tension. Practice the envelope fold: fold bottom up, sides in, then roll towards you while dragging on the counter." }
+              ] }]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

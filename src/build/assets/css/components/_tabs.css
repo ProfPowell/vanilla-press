@@ -1,0 +1,44 @@
+/* ui-tabs CSS-only radio pattern */
+ui-tabs {
+  display: block;
+  margin-block: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+ui-tabs input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+ui-tabs label {
+  display: inline-block;
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-block-end: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+ui-tabs label:hover {
+  color: var(--color-text);
+}
+
+ui-tabs input[type="radio"]:checked + label {
+  color: var(--color-accent);
+  border-block-end-color: var(--color-accent);
+}
+
+ui-tabs .tab-panel {
+  display: none;
+  padding: var(--space-md) var(--space-lg);
+}
+
+/* Show panel when preceding radio is checked */
+ui-tabs input[type="radio"]:checked + label + .tab-panel {
+  display: block;
+}

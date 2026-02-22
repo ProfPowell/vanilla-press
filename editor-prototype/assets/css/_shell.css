@@ -1,0 +1,146 @@
+/* Editor layout grid: toolbar / editor / sidebar / inspector */
+:root {
+  --editor-toolbar-h: 3rem;
+  --editor-sidebar-w: 280px;
+  --editor-inspector-w: 320px;
+}
+
+body {
+  margin: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+editor-shell {
+  display: grid;
+  grid-template-columns: 1fr var(--editor-sidebar-w);
+  grid-template-rows: var(--editor-toolbar-h) minmax(0, 1fr);
+  grid-template-areas:
+    "toolbar toolbar"
+    "editor  sidebar";
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+editor-shell.inspector-open {
+  grid-template-columns: 1fr var(--editor-sidebar-w) var(--editor-inspector-w);
+  grid-template-rows: var(--editor-toolbar-h) minmax(0, 1fr);
+  grid-template-areas:
+    "toolbar toolbar toolbar"
+    "editor  sidebar inspector";
+}
+
+/* Toolbar */
+editor-shell .editor-toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-inline: var(--space-md);
+  background: var(--color-surface);
+  border-block-end: 1px solid var(--color-border);
+  overflow-x: auto;
+  z-index: 10;
+}
+
+.editor-toolbar .separator {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--color-border);
+  margin-inline: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.editor-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.editor-toolbar button:hover {
+  background: var(--color-bg);
+  border-color: var(--color-border);
+}
+
+.editor-toolbar button.active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+.editor-toolbar .spacer {
+  flex: 1;
+}
+
+.editor-toolbar .toolbar-utils {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-toolbar select {
+  height: 2rem;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+/* Editor pane */
+editor-shell .editor-pane {
+  grid-area: editor;
+  overflow-y: auto;
+  padding: var(--space-xl);
+  display: flex;
+  justify-content: center;
+}
+
+editor-shell .editor-content {
+  max-width: var(--content-width);
+  width: 100%;
+}
+
+/* Sidebar */
+editor-shell .editor-sidebar {
+  grid-area: sidebar;
+  overflow-y: auto;
+  border-inline-start: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: var(--space-md);
+}
+
+/* Inspector */
+editor-shell .editor-inspector {
+  grid-area: inspector;
+  overflow-y: auto;
+  border-inline-start: 1px solid var(--color-border);
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: var(--space-md);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  display: none;
+}
+
+editor-shell.inspector-open .editor-inspector {
+  display: block;
+}

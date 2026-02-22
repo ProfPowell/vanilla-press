@@ -1,0 +1,39 @@
+/* details/summary styling */
+details {
+  margin-block: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+details summary {
+  padding: var(--space-md) var(--space-lg);
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+details summary::before {
+  content: "▸";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+details > :not(summary) {
+  padding-inline: var(--space-lg);
+}
+
+details > :last-child {
+  padding-block-end: var(--space-md);
+}

@@ -1,0 +1,490 @@
+{
+  "id": "doc_ks_defs",
+  "meta": {
+    "title": "Kitchen Sink: Definition Lists",
+    "slug": "ks-definitions",
+    "collection": "kitchen-sink",
+    "description": "Exercises definition lists: simple pairs, multiple definitions per term, rich content in descriptions, glossary pattern, FAQ pattern.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-17",
+    "updated": "2026-02-17",
+    "published": "2026-02-17",
+    "tags": ["kitchen-sink", "definitions"]
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Simple Term/Definition Pairs" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A basic definition list with one term and one definition each." }
+      ]
+    },
+    {
+      "type": "definition_list",
+      "children": [
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Custom Element" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "An HTML element whose behavior is defined by the author using the " },
+                { "type": "text", "value": "customElements.define()", "marks": ["code"] },
+                { "type": "text", "value": " API. The element name must contain a hyphen." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Shadow DOM" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "An encapsulated DOM subtree attached to a host element. Styles and scripts inside the shadow tree do not leak out, and external styles do not bleed in." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Light DOM" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "The regular DOM children of a custom element, as opposed to its shadow DOM. Light DOM content can be projected into shadow DOM slots." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Multiple Definitions per Term" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Some terms have multiple valid definitions depending on context." }
+      ]
+    },
+    {
+      "type": "definition_list",
+      "children": [
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Cascade" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "In CSS: the algorithm that resolves competing declarations for a given property on a given element, considering origin, layer, specificity, and source order." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "In general computing: a sequence of operations where each step triggers the next, such as cascading deletes in a relational database." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Slot" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "In Web Components: a " },
+                { "type": "text", "value": "<slot>", "marks": ["code"] },
+                { "type": "text", "value": " element inside shadow DOM that serves as a placeholder for light DOM content." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "In templating systems: a named region in a layout that child templates can fill with content, similar to blocks in Jinja or yields in ERB." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "In scheduling: a fixed time window allocated for a task or event." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Rich Content in Definitions" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Definition descriptions can contain any block content, not just paragraphs." }
+      ]
+    },
+    {
+      "type": "definition_list",
+      "children": [
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "customElements.define()", "marks": ["code"] }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Registers a new custom element with the browser. Takes a tag name and a class that extends " },
+                { "type": "text", "value": "HTMLElement", "marks": ["code"] },
+                { "type": "text", "value": "." }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "js" },
+              "value": "class MyAlert extends HTMLElement {\n  connectedCallback() {\n    this.setAttribute('role', 'alert');\n  }\n}\ncustomElements.define('my-alert', MyAlert);"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Key constraints:" }
+              ]
+            },
+            {
+              "type": "list",
+              "attrs": { "ordered": false },
+              "children": [
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "The tag name " },
+                        { "type": "text", "value": "must", "marks": ["strong"] },
+                        { "type": "text", "value": " contain a hyphen" }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "The class " },
+                        { "type": "text", "value": "must", "marks": ["strong"] },
+                        { "type": "text", "value": " extend " },
+                        { "type": "text", "value": "HTMLElement", "marks": ["code"] },
+                        { "type": "text", "value": " (or a subclass)" }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Registration is global and cannot be undone" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "adoptedStyleSheets" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "A property on " },
+                { "type": "text", "value": "Document", "marks": ["code"] },
+                { "type": "text", "value": " and " },
+                { "type": "text", "value": "ShadowRoot", "marks": ["code"] },
+                { "type": "text", "value": " that accepts an array of " },
+                { "type": "text", "value": "CSSStyleSheet", "marks": ["code"] },
+                { "type": "text", "value": " objects. This is the performant way to share styles across shadow roots." }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "js" },
+              "value": "const sheet = new CSSStyleSheet();\nawait sheet.replace(':host { display: block; }');\nthis.shadowRoot.adoptedStyleSheets = [sheet];"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Glossary Pattern" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A definition list used as a reference glossary with concise, single-paragraph definitions." }
+      ]
+    },
+    {
+      "type": "definition_list",
+      "children": [
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "AST" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Abstract Syntax Tree. A tree representation of the structure of source code or content, where each node represents a construct." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Block" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "A typed node in the Vanilla Press content AST. Blocks have a " },
+                { "type": "text", "value": "type", "marks": ["code"] },
+                { "type": "text", "value": ", optional " },
+                { "type": "text", "value": "attrs", "marks": ["code"] },
+                { "type": "text", "value": ", and either " },
+                { "type": "text", "value": "children", "marks": ["code"] },
+                { "type": "text", "value": " or a leaf " },
+                { "type": "text", "value": "value", "marks": ["code"] },
+                { "type": "text", "value": "." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Content Negotiation" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "The HTTP mechanism where a server selects the best representation of a resource based on client preferences expressed through " },
+                { "type": "text", "value": "Accept", "marks": ["code"] },
+                { "type": "text", "value": " headers." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "D1" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Cloudflare's serverless SQLite database service. Runs at the edge with automatic replication." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Rendering Scope" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "One of five levels at which content can be rendered: " },
+                { "type": "text", "value": "page", "marks": ["code"] },
+                { "type": "text", "value": ", " },
+                { "type": "text", "value": "content", "marks": ["code"] },
+                { "type": "text", "value": ", " },
+                { "type": "text", "value": "block", "marks": ["code"] },
+                { "type": "text", "value": ", " },
+                { "type": "text", "value": "collection", "marks": ["code"] },
+                { "type": "text", "value": ", or " },
+                { "type": "text", "value": "meta", "marks": ["code"] },
+                { "type": "text", "value": "." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "FAQ Pattern" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Definition lists also work well for question-and-answer content." }
+      ]
+    },
+    {
+      "type": "definition_list",
+      "children": [
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Why vanilla JavaScript instead of TypeScript?" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "TypeScript adds a build step and creates a dependency on the TypeScript compiler. Vanilla Press uses JSDoc type annotations, which provide editor autocompletion and type checking without a compilation step. The types live in comments, so the source code runs directly in Node.js and browsers." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "Can I use this with a framework like React or Vue?" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "The content API is framework-agnostic. The JSON block AST can be consumed by any rendering layer. However, the built-in renderers produce semantic HTML with custom elements, which work best when rendered server-side or with a lightweight client." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "definition_term",
+          "children": [
+            { "type": "text", "value": "How does content negotiation work with static hosting?" }
+          ]
+        },
+        {
+          "type": "definition_desc",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Common representations (HTML page, HTML content fragment, markdown) are pre-generated at build time as static files. The Cloudflare Worker reads the " },
+                { "type": "text", "value": "Accept", "marks": ["code"] },
+                { "type": "text", "value": " header and serves the appropriate static file. Only dynamic queries (search, filtered collections) hit the D1 database at runtime." }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

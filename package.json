@@ -1,0 +1,32 @@
+{
+  "name": "vanilla-press",
+  "version": "0.1.0",
+  "description": "A platform-first content system built on web standards",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/**/*.test.js",
+    "test:watch": "node --test --watch test/**/*.test.js",
+    "build": "node src/build/publish.js",
+    "seed": "node scripts/seed.js",
+    "setup": "npm run seed && npm run build",
+    "dev": "node src/server/index.js",
+    "serve": "node src/server/index.js"
+  },
+  "keywords": [
+    "cms",
+    "web-components",
+    "static-site",
+    "content-management",
+    "hypermedia"
+  ],
+  "bin": {
+    "vp": "./bin/vp.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.8.1"
+  }
+}

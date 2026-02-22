@@ -1,0 +1,69 @@
+/* Design tokens: colors, typography, spacing */
+:root {
+  /* --- Colors (light) --- */
+  --color-bg: #fdfdfd;
+  --color-surface: #ffffff;
+  --color-text: #1a1a2e;
+  --color-text-muted: #555;
+  --color-border: #e0e0e0;
+  --color-link: #1a6dd4;
+  --color-link-hover: #0f4c91;
+  --color-accent: #1a6dd4;
+
+  /* Semantic */
+  --color-note: #1a6dd4;
+  --color-note-bg: #eef4fc;
+  --color-tip: #1a8a4a;
+  --color-tip-bg: #eef8f0;
+  --color-warning: #c27600;
+  --color-warning-bg: #fdf6e8;
+  --color-danger: #c23030;
+  --color-danger-bg: #fdeaea;
+
+  /* --- Typography --- */
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-size-base: 1rem;
+  --font-size-sm: 0.875rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 2rem;
+  --line-height-body: 1.65;
+  --line-height-heading: 1.25;
+
+  /* --- Spacing --- */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+
+  /* --- Layout --- */
+  --content-width: 42rem;
+  --page-padding: var(--space-lg);
+
+  /* --- Misc --- */
+  --radius: 4px;
+  --radius-lg: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0f0f1a;
+    --color-surface: #1a1a2e;
+    --color-text: #e0e0e8;
+    --color-text-muted: #999;
+    --color-border: #2a2a3e;
+    --color-link: #5ba3e6;
+    --color-link-hover: #8bc4f5;
+    --color-accent: #5ba3e6;
+
+    --color-note-bg: #141c2e;
+    --color-tip-bg: #142218;
+    --color-warning-bg: #2a2010;
+    --color-danger-bg: #2a1414;
+  }
+}

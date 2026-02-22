@@ -1,0 +1,258 @@
+{
+  "id": "doc_recipe02",
+  "meta": {
+    "title": "Thai Green Curry from Scratch",
+    "slug": "thai-green-curry",
+    "collection": "recipes",
+    "description": "A proper Thai green curry with homemade paste, coconut cream, and Thai basil. 45 minutes, no shortcuts.",
+    "status": "published",
+    "created": "2026-01-18",
+    "updated": "2026-01-20",
+    "published": "2026-01-20",
+    "tags": ["thai", "curry", "weeknight"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Store-bought curry paste gets you 70% of the way there. This recipe gets you to 100%. The difference is the fresh aromatics — galangal, lemongrass, and makrut lime leaves — that lose their magic the moment they hit a jar." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Paste" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This makes about ¼ cup of paste — enough for one batch of curry. It freezes well if you want to double it." }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "6-8 green Thai chilies (seeds in for heat, out for mild)" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "2 stalks lemongrass (bottom 3 inches, sliced thin)" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "1 thumb galangal, peeled and sliced" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "4 makrut lime leaves, deveined" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "4 cloves garlic" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "3 shallots" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "1 tsp coriander seeds, toasted and ground" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "½ tsp cumin seeds, toasted and ground" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "1 tsp shrimp paste (or 1 tbsp soy sauce for vegetarian)" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "Handful of cilantro roots and stems" }] }] }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "tip" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "A granite mortar and pestle makes the best paste — pounding ruptures cell walls differently than blading. But a food processor works fine for a weeknight. Add a splash of coconut cream to help it blend." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Curry" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "1 can (400ml) coconut cream (not coconut milk — you want the fat)" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "500g protein: chicken thigh, shrimp, or firm tofu" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "200g Thai eggplant or regular eggplant, cubed" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "1 cup bamboo shoots" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "2 tbsp fish sauce" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "1 tbsp palm sugar (or brown sugar)" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "Big handful Thai basil leaves" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "2-3 makrut lime leaves, torn" }] }] }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Method" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Crack the coconut cream" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Scoop the thick cream from the top of the can into a cold wok or heavy pan. Heat over medium-high until it " },
+                { "type": "text", "value": "splits", "marks": ["em"] },
+                { "type": "text", "value": " — you'll see oil separating from the solids. This takes 3-4 minutes and is the foundation of the curry's richness." }
+              ]
+            },
+            {
+              "type": "callout",
+              "attrs": { "variant": "warning" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Don't skip the crack. If you dump everything in at once, you get a thin, watery curry instead of the rich, creamy sauce you're after." }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Fry the paste" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Add all of the curry paste to the cracked coconut cream. Fry for 2-3 minutes, stirring constantly, until fragrant and the oil turns green. You should be able to smell every aromatic individually." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Add protein" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Add your protein and stir to coat. Cook for 2-3 minutes until the outside is sealed. Don't worry about cooking it through — it'll finish in the simmer." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Build the sauce" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Pour in the remaining coconut cream (the thinner liquid from the bottom of the can). Add fish sauce, palm sugar, torn lime leaves, eggplant, and bamboo shoots. Bring to a gentle simmer." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Simmer and finish" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Simmer uncovered for 8-10 minutes until the eggplant is tender and the sauce has thickened slightly. Taste and adjust: more fish sauce for salt, more sugar for sweetness, more chili for heat. Kill the heat and fold in the Thai basil — it wilts in seconds." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Serve over jasmine rice with extra basil, sliced chilies, and a squeeze of lime." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Variations" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "Classic" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Chicken thigh + Thai eggplant + bamboo shoots. This is the standard Bangkok street version. Use bone-in thigh for maximum flavor if you don't mind picking around the bones." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Seafood" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Shrimp + mussels + squid. Add the seafood in the last 3-4 minutes — it cooks fast and goes rubbery if overdone. Replace bamboo shoots with baby corn." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Vegetarian" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Pressed firm tofu + sweet potato + green beans. Replace fish sauce with soy sauce + a splash of lime juice. Replace shrimp paste in the curry paste with fermented soybean paste (tao jiao)." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Can't find Thai ingredients?" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Substitutions, ranked from best to acceptable:" }
+          ]
+        },
+        {
+          "type": "list",
+          "attrs": { "ordered": false },
+          "children": [
+            { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+              { "type": "text", "value": "Galangal", "marks": ["strong"] },
+              { "type": "text", "value": " → fresh ginger (different flavor but works)" }
+            ] }] },
+            { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+              { "type": "text", "value": "Makrut lime leaves", "marks": ["strong"] },
+              { "type": "text", "value": " → zest of 2 limes (add at the end)" }
+            ] }] },
+            { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+              { "type": "text", "value": "Thai basil", "marks": ["strong"] },
+              { "type": "text", "value": " → Italian basil + a few mint leaves" }
+            ] }] },
+            { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+              { "type": "text", "value": "Palm sugar", "marks": ["strong"] },
+              { "type": "text", "value": " → brown sugar or coconut sugar" }
+            ] }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Vanilla Press Editor</title>
+<link rel="stylesheet" href="assets/css/editor.css"/>
+
+<script type="importmap">
+{
+  "imports": {
+    "prosemirror-model": "https://esm.sh/*prosemirror-model@1.25.1",
+    "prosemirror-state": "https://esm.sh/*prosemirror-state@1.4.3",
+    "prosemirror-view": "https://esm.sh/*prosemirror-view@1.38.1",
+    "prosemirror-transform": "https://esm.sh/*prosemirror-transform@1.10.4",
+    "prosemirror-keymap": "https://esm.sh/*prosemirror-keymap@1.2.2",
+    "prosemirror-commands": "https://esm.sh/*prosemirror-commands@1.6.2",
+    "prosemirror-history": "https://esm.sh/*prosemirror-history@1.4.1",
+    "prosemirror-inputrules": "https://esm.sh/*prosemirror-inputrules@1.4.0",
+    "prosemirror-schema-list": "https://esm.sh/*prosemirror-schema-list@1.5.1",
+    "prosemirror-dropcursor": "https://esm.sh/*prosemirror-dropcursor@1.8.1",
+    "prosemirror-gapcursor": "https://esm.sh/*prosemirror-gapcursor@1.3.2",
+    "rope-sequence": "https://esm.sh/*rope-sequence@1.3.4",
+    "w3c-keyname": "https://esm.sh/*w3c-keyname@2.2.8",
+    "orderedmap": "https://esm.sh/*orderedmap@2.1.1",
+    "crelt": "https://esm.sh/*crelt@1.0.6"
+  }
+}
+</script>
+</head>
+<body>
+<editor-shell>
+  <div class="editor-toolbar">
+    <!-- Formatting buttons injected by menu.js -->
+    <div class="toolbar-utils">
+      <div class="spacer"></div>
+      <select data-fixture-loader title="Load fixture">
+        <option value="">Load fixture...</option>
+        <option value="minimal.json">minimal.json</option>
+        <option value="inline-marks.json">inline-marks.json</option>
+        <option value="simple-post.json">simple-post.json</option>
+        <option value="component-rich.json">component-rich.json</option>
+        <option value="edge-cases.json">edge-cases.json</option>
+        <option value="about-page.json">about-page.json</option>
+      </select>
+      <button data-export-json title="Export JSON">Export</button>
+      <button data-toggle-inspector title="Toggle AST Inspector">AST</button>
+    </div>
+  </div>
+
+  <div class="editor-pane">
+    <div class="editor-content">
+      <!-- ProseMirror mounts here -->
+    </div>
+  </div>
+
+  <div class="editor-sidebar">
+    <meta-panel></meta-panel>
+  </div>
+
+  <div class="editor-inspector">
+    <ast-inspector></ast-inspector>
+  </div>
+</editor-shell>
+
+<script type="module" src="assets/js/editor.js"></script>
+</body>
+</html>

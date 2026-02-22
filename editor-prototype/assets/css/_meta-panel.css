@@ -1,0 +1,125 @@
+/* Meta panel sidebar form fields */
+.meta-panel h3 {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-block: var(--space-md) var(--space-sm);
+}
+
+.meta-panel h3:first-child {
+  margin-block-start: 0;
+}
+
+.meta-panel .field {
+  margin-block-end: var(--space-md);
+}
+
+.meta-panel label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-block-end: var(--space-xs);
+  cursor: default;
+  padding: 0;
+  font-weight: normal;
+  border: none;
+}
+
+.meta-panel input,
+.meta-panel select,
+.meta-panel textarea {
+  width: 100%;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+}
+
+.meta-panel textarea {
+  min-height: 4rem;
+  resize: vertical;
+}
+
+.meta-panel input:focus,
+.meta-panel select:focus,
+.meta-panel textarea:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.meta-panel .tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-block-start: var(--space-xs);
+}
+
+.meta-panel .tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0.15em 0.5em;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.meta-panel .tag-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.meta-panel .tag-chip button:hover {
+  color: var(--color-danger);
+}
+
+/* Action buttons in sidebar */
+.meta-panel .actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-block-start: var(--space-lg);
+  padding-block-start: var(--space-lg);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.meta-panel .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.meta-panel .btn:hover {
+  border-color: var(--color-accent);
+}
+
+.meta-panel .btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+.meta-panel .btn-primary:hover {
+  opacity: 0.9;
+}

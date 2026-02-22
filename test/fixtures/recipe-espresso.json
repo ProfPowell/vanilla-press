@@ -1,0 +1,275 @@
+{
+  "id": "doc_recipe03",
+  "meta": {
+    "title": "Perfect Espresso at Home",
+    "slug": "perfect-espresso-at-home",
+    "collection": "recipes",
+    "description": "A systematic approach to dialing in espresso. Covers grind size, dose, yield, and timing for consistent shots every morning.",
+    "status": "published",
+    "created": "2026-02-01",
+    "updated": "2026-02-03",
+    "published": "2026-02-03",
+    "tags": ["coffee", "technique", "beginner"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Espresso is not magic. It's a controlled extraction with four variables: " },
+        { "type": "text", "value": "dose", "marks": ["strong"] },
+        { "type": "text", "value": " (coffee in), " },
+        { "type": "text", "value": "yield", "marks": ["strong"] },
+        { "type": "text", "value": " (liquid out), " },
+        { "type": "text", "value": "time", "marks": ["strong"] },
+        { "type": "text", "value": " (how long), and " },
+        { "type": "text", "value": "grind", "marks": ["strong"] },
+        { "type": "text", "value": " (how fine). Change one, taste the result, adjust. That's the whole process." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Equipment You Actually Need" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "An espresso machine", "marks": ["strong"] },
+            { "type": "text", "value": " — any machine with a 58mm portafilter and at least 9 bars of pressure. Entry-level: Breville Bambino. Mid-range: Lelit Anna." }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "A burr grinder", "marks": ["strong"] },
+            { "type": "text", "value": " — this matters more than the machine. Blade grinders produce inconsistent particles that make dialing in impossible. Budget pick: 1Zpresso JX-Pro (hand) or Eureka Mignon Notte (electric)." }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "A scale", "marks": ["strong"] },
+            { "type": "text", "value": " — 0.1g resolution. You need to measure dose and yield precisely. Eyeballing is the enemy of consistency." }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Fresh beans", "marks": ["strong"] },
+            { "type": "text", "value": " — roasted within the last 3 weeks. Coffee degasses and goes stale. Supermarket beans are usually months old." }
+          ] }]
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "danger" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Do not buy a Nespresso machine and call it espresso. Pods produce coffee-flavored water at 2 bars of pressure. Real espresso requires 9 bars and freshly ground coffee. There is no shortcut." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Recipe: A Starting Point" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Start here and adjust to taste:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "text", "filename": "espresso-recipe.txt" },
+      "value": "Dose:    18g in\nYield:   36g out (1:2 ratio)\nTime:    25-30 seconds\nTemp:    93°C / 200°F\n\nAdjust grind size to hit the time window.\nFiner = slower. Coarser = faster."
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Dialing In: A Step-by-Step Process" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Weigh your dose" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Grind 18g of coffee into the portafilter. Use a scale, not the grinder's timer — bean density varies. Distribute the grounds evenly with a WDT tool (a needle in a cork works fine) and tamp level with moderate pressure." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Pull the shot" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Place the cup on the scale, tare it, and start the shot. Watch the scale — you're targeting 36g of liquid. Stop the shot when you hit the target, and note the time." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Read the shot" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Taste it. This is the most important step. Don't just look at numbers — your palate is the final judge." }
+              ]
+            },
+            {
+              "type": "tabs",
+              "children": [
+                {
+                  "type": "tab",
+                  "attrs": { "label": "Sour" },
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Under-extracted. The water didn't pull enough flavor from the coffee. Fix: grind finer (slows the shot, increases extraction)." }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tab",
+                  "attrs": { "label": "Bitter" },
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Over-extracted. Too much was pulled, including harsh compounds. Fix: grind coarser (speeds the shot, reduces extraction)." }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "tab",
+                  "attrs": { "label": "Balanced" },
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Sweet, complex, lingering finish. You've found the sweet spot. Write down your grind setting, dose, yield, and time. This is your recipe for this bag of beans." }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Adjust and repeat" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Change " },
+                { "type": "text", "value": "one variable at a time", "marks": ["strong"] },
+                { "type": "text", "value": ". If the shot was sour, grind 1-2 clicks finer. If bitter, go coarser. Pull another shot and taste again. Most beans dial in within 3-4 shots." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Common Mistakes" }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Channeling (uneven extraction)" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Water finds the path of least resistance through the coffee puck. If there are gaps or uneven density, some areas over-extract while others under-extract. Symptoms: shot starts thin and watery, then suddenly gushes." }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Fix: better distribution before tamping. Use a WDT tool to break up clumps. Tamp level — a crooked tamp creates a thin spot where water channels through." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Stale beans" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Fresh-roasted beans need 5-7 days to degas before they're at peak espresso flavor. After 3-4 weeks, they've gone stale. The sweet spot is " },
+            { "type": "text", "value": "7-21 days post-roast", "marks": ["strong"] },
+            { "type": "text", "value": "." }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Store beans in an airtight container at room temperature. Don't freeze them unless you're storing long-term — temperature cycling causes condensation inside the bag." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Machine not hot enough" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Single-boiler machines lose temperature when you pull a shot. Run a blank shot (no coffee) through the portafilter before your real shot to heat the group head and portafilter. This alone can fix sour, under-extracted espresso." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hr"
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Espresso is a practice, not a recipe. The numbers are a starting point. Your palate is the instrument. Pull shots, taste, adjust, repeat." }
+          ]
+        }
+      ]
+    }
+  ]
+}

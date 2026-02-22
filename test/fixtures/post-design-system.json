@@ -1,0 +1,277 @@
+{
+  "id": "doc_ds01",
+  "meta": {
+    "title": "Building a Design System with Native CSS",
+    "slug": "building-design-system-native-css",
+    "collection": "posts",
+    "description": "How to build a production design system using custom properties, @layer, and custom elements — no Sass, no Tailwind, no build step.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-01-15",
+    "updated": "2026-01-20",
+    "published": "2026-01-20",
+    "tags": ["css", "design-systems", "web-standards"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Every design system eventually becomes a build tool. Sass compiles to CSS. Tailwind compiles to CSS. Style Dictionary compiles to CSS. What if you just " },
+        { "type": "text", "value": "started", "marks": ["em"] },
+        { "type": "text", "value": " with CSS?" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Modern CSS has native features that replace every layer of the traditional design system toolchain: custom properties for tokens, " },
+        { "type": "text", "value": "@layer", "marks": ["code"] },
+        { "type": "text", "value": " for cascade control, " },
+        { "type": "text", "value": "@import", "marks": ["code"] },
+        { "type": "text", "value": " for module loading, and custom elements for component encapsulation." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Token Layer" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Design tokens are the atomic values of your system — colors, spacing, typography, radii. In native CSS, they're just custom properties on " },
+        { "type": "text", "value": ":root", "marks": ["code"] },
+        { "type": "text", "value": ":" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "css", "filename": "_tokens.css" },
+      "value": "@layer tokens {\n  :root {\n    /* Color primitives */\n    --color-blue-500: oklch(55% 0.2 260);\n    --color-gray-100: oklch(96% 0.005 260);\n    --color-gray-900: oklch(20% 0.02 260);\n\n    /* Semantic aliases */\n    --color-text: var(--color-gray-900);\n    --color-bg: var(--color-gray-100);\n    --color-accent: var(--color-blue-500);\n\n    /* Spacing scale */\n    --space-xs: 0.25rem;\n    --space-sm: 0.5rem;\n    --space-md: 1rem;\n    --space-lg: 2rem;\n    --space-xl: 4rem;\n\n    /* Typography */\n    --font-body: system-ui, sans-serif;\n    --font-mono: 'SF Mono', 'Fira Code', monospace;\n    --font-size-sm: 0.875rem;\n    --font-size-base: 1rem;\n    --font-size-lg: 1.25rem;\n  }\n}"
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "tip" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Use " },
+            { "type": "text", "value": "oklch()", "marks": ["code"] },
+            { "type": "text", "value": " for colors instead of hex or HSL. OKLCH is perceptually uniform — a lightness of 50% actually " },
+            { "type": "text", "value": "looks", "marks": ["em"] },
+            { "type": "text", "value": " 50% bright, unlike HSL where 50% lightness varies wildly between hues." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Layer Stack" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "CSS " },
+        { "type": "text", "value": "@layer", "marks": ["code"] },
+        { "type": "text", "value": " lets you declare cascade priority explicitly. Later layers always beat earlier ones, regardless of specificity:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "css", "filename": "main.css" },
+      "value": "@layer reset, tokens, base, layout, components, pages;\n\n@import '_reset.css' layer(reset);\n@import '_tokens.css' layer(tokens);\n@import '_base.css' layer(base);\n@import '_layout.css' layer(layout);\n@import '_components.css' layer(components);"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This means a simple " },
+        { "type": "text", "value": "p { color: red }", "marks": ["code"] },
+        { "type": "text", "value": " in the " },
+        { "type": "text", "value": "pages", "marks": ["code"] },
+        { "type": "text", "value": " layer beats " },
+        { "type": "text", "value": "#main .content article p.intro", "marks": ["code"] },
+        { "type": "text", "value": " in the " },
+        { "type": "text", "value": "base", "marks": ["code"] },
+        { "type": "text", "value": " layer. Specificity wars are over." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Components as Custom Elements" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The real power move is using custom elements for components. Not web components with shadow DOM — just custom HTML tags styled with CSS:" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "HTML" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<ui-callout data-variant=\"warning\">\n  <p>This API is deprecated and will be removed in v3.</p>\n</ui-callout>\n\n<content-card href=\"/docs/migration\">\n  <h3>Migration Guide</h3>\n  <p>Step-by-step upgrade instructions.</p>\n</content-card>"
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "CSS" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "css" },
+              "value": "@layer components {\n  ui-callout {\n    display: block;\n    padding: var(--space-md);\n    border-radius: var(--radius);\n    border-left: 4px solid var(--callout-color);\n    background: var(--callout-bg);\n  }\n\n  ui-callout[data-variant='warning'] {\n    --callout-color: var(--color-warning);\n    --callout-bg: oklch(from var(--color-warning) l c h / 0.1);\n  }\n}"
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Result" },
+          "children": [
+            {
+              "type": "callout",
+              "attrs": { "variant": "warning" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "This API is deprecated and will be removed in v3." }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Theming for Free" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Because everything references tokens, theming is just swapping custom property values. A " },
+        { "type": "text", "value": "data-theme", "marks": ["code"] },
+        { "type": "text", "value": " attribute selector overrides the token layer:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "css", "filename": "ocean.css" },
+      "value": "[data-theme~='ocean'] {\n  --color-text: oklch(90% 0.02 230);\n  --color-bg: oklch(15% 0.04 240);\n  --color-accent: oklch(65% 0.18 230);\n  --font-body: 'Inter', system-ui, sans-serif;\n}"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "One attribute, entire site transforms. No class swapping, no JavaScript theme providers, no CSS-in-JS runtime. The cascade does all the work." }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "note" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Vanilla Breeze ships 23 themes out of the box — from color swaps like Ocean and Forest to dramatic personality themes like Brutalist, Terminal, and Kawaii. All built on the same token override pattern." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "What You Don't Need" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Sass", "marks": ["strong"] },
+                { "type": "text", "value": " — native nesting, custom properties, and " },
+                { "type": "text", "value": "color-mix()", "marks": ["code"] },
+                { "type": "text", "value": " replace variables, mixins, and functions" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Tailwind", "marks": ["strong"] },
+                { "type": "text", "value": " — custom properties give you the same single-source tokens without utility class explosion" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Style Dictionary", "marks": ["strong"] },
+                { "type": "text", "value": " — CSS custom properties " },
+                { "type": "text", "value": "are", "marks": ["em"] },
+                { "type": "text", "value": " the token format; no compilation step needed" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "CSS-in-JS", "marks": ["strong"] },
+                { "type": "text", "value": " — the cascade is the runtime; no JavaScript overhead for styling" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hr"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The web platform has caught up to what preprocessors pioneered. A modern design system doesn't need a build step — it needs " },
+        { "type": "text", "value": "good architecture", "marks": ["strong"] },
+        { "type": "text", "value": "." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,425 @@
+{
+  "id": "doc_ks_prose",
+  "meta": {
+    "title": "Kitchen Sink: Prose",
+    "slug": "ks-prose",
+    "collection": "kitchen-sink",
+    "description": "Exercises all prose block types: headings, paragraphs with every mark, lists, blockquotes, horizontal rules, links, and footnotes.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-17",
+    "updated": "2026-02-17",
+    "published": "2026-02-17",
+    "tags": ["kitchen-sink", "prose"]
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Heading Level 2 — The Document Section" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This document exercises every prose primitive in the Vanilla Press content schema. Each block type appears at least once, and inline marks are used in every valid combination." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Heading Level 3 — Subsection" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A paragraph with " },
+        { "type": "text", "value": "strong text", "marks": ["strong"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "emphasized text", "marks": ["em"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "inline code", "marks": ["code"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "strikethrough text", "marks": ["strikethrough"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "highlighted text", "marks": ["mark"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "Ctrl+S", "marks": ["kbd"] },
+        { "type": "text", "value": " as a keyboard shortcut, H" },
+        { "type": "text", "value": "2", "marks": ["sub"] },
+        { "type": "text", "value": "O for subscript, and x" },
+        { "type": "text", "value": "2", "marks": ["sup"] },
+        { "type": "text", "value": " for superscript." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 4 },
+      "children": [
+        { "type": "text", "value": "Heading Level 4 — Combined Marks" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Marks can combine: " },
+        { "type": "text", "value": "bold and italic", "marks": ["strong", "em"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "bold code", "marks": ["strong", "code"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "highlighted and strong", "marks": ["mark", "strong"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "strikethrough emphasis", "marks": ["strikethrough", "em"] },
+        { "type": "text", "value": ", and " },
+        { "type": "text", "value": "Shift+Enter", "marks": ["kbd", "strong"] },
+        { "type": "text", "value": " for keyboard shortcuts that need emphasis." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 5 },
+      "children": [
+        { "type": "text", "value": "Heading Level 5 — Links and Footnotes" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The " },
+        {
+          "type": "link",
+          "attrs": { "href": "https://developer.mozilla.org/en-US/docs/Web/CSS" },
+          "children": [
+            { "type": "text", "value": "MDN CSS reference" }
+          ]
+        },
+        { "type": "text", "value": " is an essential resource. See also the " },
+        {
+          "type": "link",
+          "attrs": { "href": "/docs/css-layers", "title": "CSS Layers Guide" },
+          "children": [
+            { "type": "text", "value": "layers guide", "marks": ["strong"] }
+          ]
+        },
+        { "type": "text", "value": " for cascade control" },
+        { "type": "footnote_ref", "attrs": { "id": "fn-cascade" } },
+        { "type": "text", "value": " and the " },
+        {
+          "type": "link",
+          "attrs": { "href": "https://www.w3.org/TR/css-cascade-5/" },
+          "children": [
+            { "type": "text", "value": "W3C Cascade specification" }
+          ]
+        },
+        { "type": "text", "value": " for the formal model" },
+        { "type": "footnote_ref", "attrs": { "id": "fn-w3c" } },
+        { "type": "text", "value": "." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 6 },
+      "children": [
+        { "type": "text", "value": "Heading Level 6 — The Deepest Section" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Level 6 headings are rare but sometimes useful for fine-grained document structure, such as API parameter groups or changelog sub-entries." }
+      ]
+    },
+    {
+      "type": "hr",
+      "attrs": { "variant": "default" }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Unordered Lists" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "First-level item: CSS custom properties" }
+              ]
+            },
+            {
+              "type": "list",
+              "attrs": { "ordered": false },
+              "children": [
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Second-level: " },
+                        { "type": "text", "value": "--color-primary", "marks": ["code"] }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attrs": { "ordered": false },
+                      "children": [
+                        {
+                          "type": "list_item",
+                          "children": [
+                            {
+                              "type": "paragraph",
+                              "children": [
+                                { "type": "text", "value": "Third-level: resolves to " },
+                                { "type": "text", "value": "oklch(0.7 0.15 250)", "marks": ["code"] },
+                                { "type": "text", "value": " in light mode" }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "list_item",
+                          "children": [
+                            {
+                              "type": "paragraph",
+                              "children": [
+                                { "type": "text", "value": "Third-level: resolves to " },
+                                { "type": "text", "value": "oklch(0.85 0.12 250)", "marks": ["code"] },
+                                { "type": "text", "value": " in dark mode" }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Second-level: " },
+                        { "type": "text", "value": "--space-md", "marks": ["code"] }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "First-level item: CSS layers" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "First-level item: container queries" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Ordered Lists" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": true },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Define your design tokens in CSS custom properties" }
+              ]
+            },
+            {
+              "type": "list",
+              "attrs": { "ordered": true },
+              "children": [
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Colors using " },
+                        { "type": "text", "value": "oklch()", "marks": ["code"] },
+                        { "type": "text", "value": " for perceptual uniformity" }
+                      ]
+                    },
+                    {
+                      "type": "list",
+                      "attrs": { "ordered": true },
+                      "children": [
+                        {
+                          "type": "list_item",
+                          "children": [
+                            {
+                              "type": "paragraph",
+                              "children": [
+                                { "type": "text", "value": "Lightness channel for dark mode toggling" }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "list_item",
+                          "children": [
+                            {
+                              "type": "paragraph",
+                              "children": [
+                                { "type": "text", "value": "Chroma channel for accessibility adjustments" }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Spacing using a modular scale" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Declare your layer order" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Write component styles in the " },
+                { "type": "text", "value": "components", "marks": ["code"] },
+                { "type": "text", "value": " layer" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hr",
+      "attrs": { "variant": "decorative" }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Blockquotes" }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The cascade is not the enemy. The cascade is a ", "marks": ["em"] },
+            { "type": "text", "value": "feature", "marks": ["em", "strong"] },
+            { "type": "text", "value": ". Learn to use it, and your CSS will become simpler, not more complex." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Blockquotes can nest to indicate layered attribution:" }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The web platform is the most successful application runtime ever created." }
+          ]
+        },
+        {
+          "type": "blockquote",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "And custom elements are its component model — built into every browser, no framework required." }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "A component that works without JavaScript is a component that " },
+                    { "type": "text", "value": "works", "marks": ["strong"] },
+                    { "type": "text", "value": "." }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This concludes the prose kitchen sink. Every heading level, every inline mark, nested lists three deep, nested blockquotes three deep, both horizontal rule variants, links with titles, and footnote references have all been exercised." }
+      ]
+    }
+  ]
+}

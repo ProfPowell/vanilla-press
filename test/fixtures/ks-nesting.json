@@ -1,0 +1,673 @@
+{
+  "id": "doc_ks_nesting",
+  "meta": {
+    "title": "Kitchen Sink: Nesting",
+    "slug": "ks-nesting",
+    "collection": "kitchen-sink",
+    "description": "Exercises deeply nested structures: tables in collapsibles, definition lists in cards, combined marks, empty blocks, deeply nested blockquotes, lists in blockquotes, and code blocks in callouts in tabs.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-17",
+    "updated": "2026-02-17",
+    "published": "2026-02-17",
+    "tags": ["kitchen-sink", "nesting"]
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Table inside Collapsible" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A reference table tucked inside a collapsible section to keep the page scannable." }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "View the complete list of HTML content categories" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Every HTML element belongs to one or more content categories. These categories define where an element can appear in the document:" }
+          ]
+        },
+        {
+          "type": "table",
+          "attrs": { "striped": true, "bordered": true },
+          "children": [
+            {
+              "type": "table_row",
+              "children": [
+                { "type": "table_header", "children": [{ "type": "text", "value": "Category" }] },
+                { "type": "table_header", "children": [{ "type": "text", "value": "Examples" }] },
+                { "type": "table_header", "children": [{ "type": "text", "value": "Description" }] }
+              ]
+            },
+            {
+              "type": "table_row",
+              "children": [
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Flow" }] },
+                { "type": "table_cell", "children": [
+                  { "type": "text", "value": "<div>", "marks": ["code"] },
+                  { "type": "text", "value": ", " },
+                  { "type": "text", "value": "<p>", "marks": ["code"] },
+                  { "type": "text", "value": ", " },
+                  { "type": "text", "value": "<table>", "marks": ["code"] }
+                ]},
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Most elements used in the body of a document" }] }
+              ]
+            },
+            {
+              "type": "table_row",
+              "children": [
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Phrasing" }] },
+                { "type": "table_cell", "children": [
+                  { "type": "text", "value": "<span>", "marks": ["code"] },
+                  { "type": "text", "value": ", " },
+                  { "type": "text", "value": "<a>", "marks": ["code"] },
+                  { "type": "text", "value": ", " },
+                  { "type": "text", "value": "<em>", "marks": ["code"] }
+                ]},
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Inline-level elements that form runs of text" }] }
+              ]
+            },
+            {
+              "type": "table_row",
+              "children": [
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Heading" }] },
+                { "type": "table_cell", "children": [
+                  { "type": "text", "value": "<h1>", "marks": ["code"] },
+                  { "type": "text", "value": " through " },
+                  { "type": "text", "value": "<h6>", "marks": ["code"] }
+                ]},
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Define document outline sections" }] }
+              ]
+            },
+            {
+              "type": "table_row",
+              "children": [
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Sectioning" }] },
+                { "type": "table_cell", "children": [
+                  { "type": "text", "value": "<article>", "marks": ["code"] },
+                  { "type": "text", "value": ", " },
+                  { "type": "text", "value": "<section>", "marks": ["code"] },
+                  { "type": "text", "value": ", " },
+                  { "type": "text", "value": "<nav>", "marks": ["code"] }
+                ]},
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Create outline entries with implicit ARIA landmarks" }] }
+              ]
+            },
+            {
+              "type": "table_row",
+              "children": [
+                { "type": "table_cell", "children": [{ "type": "text", "value": "Embedded" }] },
+                { "type": "table_cell", "children": [
+                  { "type": "text", "value": "<img>", "marks": ["code"] },
+                  { "type": "text", "value": ", " },
+                  { "type": "text", "value": "<video>", "marks": ["code"] },
+                  { "type": "text", "value": ", " },
+                  { "type": "text", "value": "<iframe>", "marks": ["code"] }
+                ]},
+                { "type": "table_cell", "children": [{ "type": "text", "value": "External content loaded into the document" }] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Definition List inside Card" }
+      ]
+    },
+    {
+      "type": "card",
+      "attrs": { "href": "/docs/content-model" },
+      "children": [
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "children": [
+            { "type": "text", "value": "Block Content Model Reference" }
+          ]
+        },
+        {
+          "type": "definition_list",
+          "children": [
+            {
+              "type": "definition_term",
+              "children": [
+                { "type": "text", "value": "children: 'inline'", "marks": ["code"] }
+              ]
+            },
+            {
+              "type": "definition_desc",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Block contains inline nodes (text, links, footnotes). Used by: " },
+                    { "type": "text", "value": "paragraph", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "heading", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "figcaption", "marks": ["code"] },
+                    { "type": "text", "value": "." }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "definition_term",
+              "children": [
+                { "type": "text", "value": "children: 'block'", "marks": ["code"] }
+              ]
+            },
+            {
+              "type": "definition_desc",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Block contains other blocks. Used by: " },
+                    { "type": "text", "value": "blockquote", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "list_item", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "callout", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "collapsible", "marks": ["code"] },
+                    { "type": "text", "value": "." }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "definition_term",
+              "children": [
+                { "type": "text", "value": "leaf: true", "marks": ["code"] }
+              ]
+            },
+            {
+              "type": "definition_desc",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Block has no children; uses " },
+                    { "type": "text", "value": "value", "marks": ["code"] },
+                    { "type": "text", "value": " string instead. Used by: " },
+                    { "type": "text", "value": "code_block", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "hr", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "embed", "marks": ["code"] },
+                    { "type": "text", "value": "." }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "All Marks on One Text Node" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Multiple marks can be combined on a single text node:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "bold+italic: " },
+                { "type": "text", "value": "important emphasis", "marks": ["strong", "em"] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "bold+code: " },
+                { "type": "text", "value": "critical identifier", "marks": ["strong", "code"] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "strong+em+code: " },
+                { "type": "text", "value": "must-use API", "marks": ["strong", "em", "code"] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "mark+kbd: " },
+                { "type": "text", "value": "Ctrl+Z", "marks": ["mark", "kbd"] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "mark+strong: " },
+                { "type": "text", "value": "highlighted emphasis", "marks": ["mark", "strong"] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "strikethrough+em: " },
+                { "type": "text", "value": "deprecated emphasis", "marks": ["strikethrough", "em"] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "strong+mark+em: " },
+                { "type": "text", "value": "critical highlight", "marks": ["strong", "mark", "em"] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "sub+em: " },
+                { "type": "text", "value": "i", "marks": ["em", "sub"] },
+                { "type": "text", "value": " (as in the " },
+                { "type": "text", "value": "i", "marks": ["em"] },
+                { "type": "text", "value": "-th index)" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "sup+strong: " },
+                { "type": "text", "value": "2", "marks": ["sup", "strong"] },
+                { "type": "text", "value": " (bold superscript for emphasis in formulas)" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Empty Blocks" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Renderers must handle paragraphs with empty text content gracefully:" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The paragraph above has an empty text node. The paragraph below follows it normally." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Nested Blockquotes Three Levels Deep" }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Level 1: The web is the most ubiquitous application platform in history." }
+          ]
+        },
+        {
+          "type": "blockquote",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Level 2: And yet most web applications ship megabytes of JavaScript just to render a form." }
+              ]
+            },
+            {
+              "type": "blockquote",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Level 3: The platform already has " },
+                    { "type": "text", "value": "<form>", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "<input>", "marks": ["code"] },
+                    { "type": "text", "value": ", " },
+                    { "type": "text", "value": "<select>", "marks": ["code"] },
+                    { "type": "text", "value": ", and " },
+                    { "type": "text", "value": "<dialog>", "marks": ["code"] },
+                    { "type": "text", "value": ". Use them." }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "List in Blockquote" }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The three pillars of web performance:" }
+          ]
+        },
+        {
+          "type": "list",
+          "attrs": { "ordered": true },
+          "children": [
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Ship less code", "marks": ["strong"] },
+                    { "type": "text", "value": " — every byte has a cost on parse, compile, and execute" }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Render server-side first", "marks": ["strong"] },
+                    { "type": "text", "value": " — HTML streams to the browser faster than any JavaScript framework can hydrate" }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Cache aggressively", "marks": ["strong"] },
+                    { "type": "text", "value": " — immutable assets with content hashes, stale-while-revalidate for documents" }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Follow these and your site will be fast " },
+            { "type": "text", "value": "without", "marks": ["em"] },
+            { "type": "text", "value": " a performance team." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Code Block in Callout in Tab" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "Server" },
+          "children": [
+            {
+              "type": "callout",
+              "attrs": { "variant": "danger" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Never expose the database file path to client-side code. The example below shows a server-only pattern:" }
+                  ]
+                },
+                {
+                  "type": "code_block",
+                  "attrs": { "language": "js", "filename": "src/store/content.js" },
+                  "value": "import Database from 'better-sqlite3';\n\n// Server-only — this path never reaches the client\nconst DB_PATH = process.env.DB_PATH || './data/content.db';\nconst db = new Database(DB_PATH);\n\nexport function getDocument(id) {\n  const row = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);\n  if (!row) return null;\n  return {\n    id: row.id,\n    meta: JSON.parse(row.meta),\n    blocks: JSON.parse(row.blocks)\n  };\n}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Client" },
+          "children": [
+            {
+              "type": "callout",
+              "attrs": { "variant": "tip" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "On the client side, always use the API endpoint. The response format is the same:" }
+                  ]
+                },
+                {
+                  "type": "code_block",
+                  "attrs": { "language": "js", "filename": "editor/assets/js/api-client.js" },
+                  "value": "export async function getDocument(id) {\n  const res = await fetch(`/api/documents/${id}`);\n  if (!res.ok) throw new Error(`Failed to load document: ${res.status}`);\n  return res.json();\n}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Worker" },
+          "children": [
+            {
+              "type": "callout",
+              "attrs": { "variant": "note" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "In the Cloudflare Worker, the D1 binding replaces the local SQLite connection:" }
+                  ]
+                },
+                {
+                  "type": "code_block",
+                  "attrs": { "language": "js", "filename": "src/worker/index.js" },
+                  "value": "export default {\n  async fetch(request, env) {\n    const url = new URL(request.url);\n    const id = url.pathname.split('/').pop();\n\n    const { results } = await env.DB.prepare(\n      'SELECT * FROM documents WHERE id = ?'\n    ).bind(id).all();\n\n    if (!results.length) {\n      return new Response('Not found', { status: 404 });\n    }\n\n    return Response.json(results[0]);\n  }\n};"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Callout in List Item" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Define your custom element class:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "js" },
+              "value": "class UiTabs extends HTMLElement {\n  connectedCallback() {\n    this.setAttribute('role', 'tablist');\n  }\n}"
+            },
+            {
+              "type": "callout",
+              "attrs": { "variant": "warning" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "The " },
+                    { "type": "text", "value": "connectedCallback", "marks": ["code"] },
+                    { "type": "text", "value": " may fire before child elements are parsed. Use " },
+                    { "type": "text", "value": "queueMicrotask()", "marks": ["code"] },
+                    { "type": "text", "value": " to defer child access." }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Register it with the browser:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "js" },
+              "value": "customElements.define('ui-tabs', UiTabs);"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Figure inside Callout" }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "tip" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Use the browser's built-in Layers panel to debug compositing issues:" }
+          ]
+        },
+        {
+          "type": "figure",
+          "attrs": {
+            "src": "/media/layers-panel-tip.png",
+            "alt": "Chrome DevTools Layers panel showing layer boundaries and compositing reasons",
+            "variant": "bordered"
+          },
+          "children": [
+            {
+              "type": "figcaption",
+              "children": [
+                { "type": "text", "value": "The " },
+                { "type": "text", "value": "Layers", "marks": ["strong"] },
+                { "type": "text", "value": " panel reveals why elements are promoted to their own compositing layer." }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

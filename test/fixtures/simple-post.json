@@ -1,0 +1,129 @@
+{
+  "id": "doc_simple01",
+  "meta": {
+    "title": "Getting Started with CSS Layers",
+    "slug": "getting-started-css-layers",
+    "collection": "posts",
+    "description": "A practical guide to using @layer for cascade control in modern CSS.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-10",
+    "updated": "2026-02-12",
+    "published": "2026-02-12",
+    "tags": ["css", "tutorial"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "CSS layers give you " },
+        { "type": "text", "value": "explicit control", "marks": ["strong"] },
+        { "type": "text", "value": " over the cascade. No more specificity wars." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Declaring Layers" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Start with a layer declaration in your " },
+        { "type": "text", "value": "main.css", "marks": ["code"] },
+        { "type": "text", "value": " entry point:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "css", "filename": "main.css" },
+      "value": "@layer reset, tokens, base, layout, components, pages;\n\n@import \"_reset.css\" layer(reset);\n@import \"_tokens.css\" layer(tokens);"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The order of the " },
+        { "type": "text", "value": "@layer", "marks": ["code"] },
+        { "type": "text", "value": " declaration determines priority. Later layers win regardless of selector specificity." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Why This Matters" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Resets never accidentally override component styles" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Page-specific overrides always win without " },
+                { "type": "text", "value": "!important", "marks": ["code"] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Third-party CSS stays in its lane" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/layer-cascade.svg",
+        "alt": "Diagram showing CSS layer priority from reset (lowest) to pages (highest)"
+      },
+      "children": [
+        {
+          "type": "figcaption",
+          "children": [
+            { "type": "text", "value": "Layer priority flows from left to right" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Read the " },
+        {
+          "type": "link",
+          "attrs": { "href": "/docs/css-author" },
+          "children": [
+            { "type": "text", "value": "CSS authoring guide" }
+          ]
+        },
+        { "type": "text", "value": " for the full layer strategy." }
+      ]
+    }
+  ]
+}

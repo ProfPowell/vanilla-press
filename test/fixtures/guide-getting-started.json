@@ -1,0 +1,201 @@
+{
+  "id": "doc_guide01",
+  "meta": {
+    "title": "Getting Started with Vanilla Press",
+    "slug": "getting-started",
+    "collection": "guides",
+    "description": "Install Vanilla Press, create your first document, and publish a static site in under 10 minutes.",
+    "status": "published",
+    "created": "2026-01-05",
+    "updated": "2026-02-10",
+    "published": "2026-02-10",
+    "tags": ["setup", "beginner", "tutorial"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Vanilla Press is a content system that stores documents as a typed block AST and renders them to HTML, markdown, and JSON. No framework, no build step, no ORM — just JavaScript, SQLite, and the web platform." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Prerequisites" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Node.js 20+", "marks": ["strong"] },
+          { "type": "text", "value": " — uses native test runner, ES modules, and " },
+          { "type": "text", "value": "node:fs", "marks": ["code"] },
+          { "type": "text", "value": " imports" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "npm 9+", "marks": ["strong"] },
+          { "type": "text", "value": " — for dependency management" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "A text editor", "marks": ["strong"] },
+          { "type": "text", "value": " — or use the built-in visual editor at " },
+          { "type": "text", "value": "/editor/", "marks": ["code"] }
+        ] }] }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Installation" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Clone and install" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "git clone https://github.com/vanilla-press/vanilla-press.git\ncd vanilla-press\nnpm install"
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Seed the database" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "npm run seed"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "This creates " },
+                { "type": "text", "value": "content.db", "marks": ["code"] },
+                { "type": "text", "value": " with sample documents across multiple collections. It also copies sample media files to the " },
+                { "type": "text", "value": "media/", "marks": ["code"] },
+                { "type": "text", "value": " directory." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Start the dev server" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "npm run dev"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Open " },
+                { "type": "text", "value": "http://localhost:3000/editor/", "marks": ["code"] },
+                { "type": "text", "value": " in your browser. You should see the editor with the document browser in the sidebar." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Publish" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "node src/build/publish.js"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "The static site is written to " },
+                { "type": "text", "value": "_site/", "marks": ["code"] },
+                { "type": "text", "value": ". Open " },
+                { "type": "text", "value": "_site/index.html", "marks": ["code"] },
+                { "type": "text", "value": " to see the published output." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Project Structure" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "text" },
+      "value": "vanilla-press/\n├── src/\n│   ├── schema/           ← content-schema.js (block type definitions)\n│   ├── renderers/        ← html.js, markdown.js, feed.js\n│   ├── store/            ← SQLite content & config APIs\n│   ├── server/           ← dev server with API routes\n│   └── build/            ← static publisher + templates\n│       └── assets/css/   ← Vanilla Breeze styles + themes\n├── editor/               ← ProseMirror-based visual editor\n├── test/\n│   ├── fixtures/         ← sample documents (JSON)\n│   └── server/           ← API integration tests\n├── media/                ← uploaded images\n├── _site/                ← published output (git-ignored)\n└── content.db            ← SQLite database (git-ignored)"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Creating Your First Document" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Documents are JSON objects with " },
+        { "type": "text", "value": "meta", "marks": ["code"] },
+        { "type": "text", "value": " (metadata) and " },
+        { "type": "text", "value": "blocks", "marks": ["code"] },
+        { "type": "text", "value": " (content). Here's the simplest possible document:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "json", "filename": "my-first-post.json" },
+      "value": "{\n  \"id\": \"my-first-post\",\n  \"meta\": {\n    \"title\": \"My First Post\",\n    \"slug\": \"my-first-post\",\n    \"collection\": \"posts\",\n    \"status\": \"published\",\n    \"created\": \"2026-02-10\"\n  },\n  \"blocks\": [\n    {\n      \"type\": \"paragraph\",\n      \"children\": [\n        { \"type\": \"text\", \"value\": \"Hello from Vanilla Press!\" }\n      ]\n    }\n  ]\n}"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Save this as a JSON file, add it to " },
+        { "type": "text", "value": "test/fixtures/", "marks": ["code"] },
+        { "type": "text", "value": ", run " },
+        { "type": "text", "value": "npm run seed", "marks": ["code"] },
+        { "type": "text", "value": ", and publish. Or use the visual editor — it saves documents through the API automatically." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Next Steps" }
+      ]
+    },
+    {
+      "type": "card",
+      "attrs": { "href": "/guides/content-modeling" },
+      "children": [
+        { "type": "heading", "attrs": { "level": 3 }, "children": [{ "type": "text", "value": "Content Modeling Guide" }] },
+        { "type": "paragraph", "children": [{ "type": "text", "value": "Learn the block AST, available block types, and how to structure documents for different use cases." }] }
+      ]
+    },
+    {
+      "type": "card",
+      "attrs": { "href": "/guides/deploying-to-cloudflare" },
+      "children": [
+        { "type": "heading", "attrs": { "level": 3 }, "children": [{ "type": "text", "value": "Deploying to Cloudflare" }] },
+        { "type": "paragraph", "children": [{ "type": "text", "value": "Publish to Cloudflare Pages with content negotiation via Workers." }] }
+      ]
+    }
+  ]
+}

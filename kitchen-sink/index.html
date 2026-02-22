@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Kitchen Sink — Vanilla Breeze</title>
+<link rel="stylesheet" href="../src/build/assets/css/main.css"/>
+<style>
+  .ks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-lg);
+    margin-block: var(--space-xl);
+  }
+  .ks-card {
+    display: block;
+    padding: var(--space-lg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    color: var(--color-text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ks-card:hover {
+    border-color: var(--color-accent);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+  .ks-card h3 {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--font-size-lg);
+  }
+  .ks-card p {
+    margin: var(--space-xs) 0 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+  .ks-card .ks-number {
+    font-size: var(--font-size-sm);
+    color: var(--color-accent);
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+<nav>
+<a href="index.html" class="site-title">Kitchen Sink</a>
+<a href="typography.html">Typography</a>
+<a href="layout.html">Layout</a>
+<a href="custom-elements.html">Custom Elements</a>
+<a href="web-components.html">Web Components</a>
+<a href="data-attributes.html">Data Attributes</a>
+<a href="forms.html">Forms</a>
+<a href="buttons.html">Buttons</a>
+<a href="themes.html">Themes</a>
+</nav>
+</header>
+<main>
+<header class="doc-header">
+<h1>Vanilla Breeze Kitchen Sink</h1>
+<p class="site-description">A comprehensive exercise of every Vanilla Breeze feature outside the Vanilla Press content model. Each page isolates a category and shows working examples.</p>
+</header>
+
+<div class="ks-grid">
+  <a href="typography.html" class="ks-card">
+    <span class="ks-number">01</span>
+    <h3>Typography</h3>
+    <p>Headings, blockquotes, code blocks, inline elements, lists, tables, figures, and horizontal rules.</p>
+  </a>
+  <a href="layout.html" class="ks-card">
+    <span class="ks-number">02</span>
+    <h3>Layout</h3>
+    <p>All 14 data-layout values with colored placeholder boxes showing gap, align, and ratio attributes.</p>
+  </a>
+  <a href="custom-elements.html" class="ks-card">
+    <span class="ks-number">03</span>
+    <h3>Custom Elements</h3>
+    <p>The 21 CSS-only custom elements: layout primitives, cards, badges, status messages, avatars, and more.</p>
+  </a>
+  <a href="web-components.html" class="ks-card">
+    <span class="ks-number">04</span>
+    <h3>Web Components</h3>
+    <p>JS-enhanced components: accordion, tabs, tooltip, dropdown, toast, footnotes, carousel, and more.</p>
+  </a>
+  <a href="data-attributes.html" class="ks-card">
+    <span class="ks-number">05</span>
+    <h3>Data Attributes</h3>
+    <p>Utility behaviors via data-* attributes: copy, spoiler, switch, hotkey, mask, counter, and effects.</p>
+  </a>
+  <a href="forms.html" class="ks-card">
+    <span class="ks-number">06</span>
+    <h3>Forms</h3>
+    <p>Every input type, textarea, select, datalist, fieldset, validation states, and form layouts.</p>
+  </a>
+  <a href="buttons.html" class="ks-card">
+    <span class="ks-number">07</span>
+    <h3>Buttons</h3>
+    <p>Button variants, sizes, groups, disabled states, icon buttons, and link-as-button patterns.</p>
+  </a>
+  <a href="themes.html" class="ks-card">
+    <span class="ks-number">08</span>
+    <h3>Themes</h3>
+    <p>All 23+ themes applied to identical reference content, showing how each transforms the same markup.</p>
+  </a>
+</div>
+</main>
+<footer class="site-footer">
+<p>Vanilla Breeze Kitchen Sink</p>
+</footer>
+<script src="../src/build/assets/js/main.js" type="module"></script>
+</body>
+</html>

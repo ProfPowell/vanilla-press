@@ -1,0 +1,217 @@
+/* Document browser sidebar panel */
+.doc-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.browser-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block-end: var(--space-sm);
+}
+
+.browser-header h3 {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.browser-toggle {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  padding: 0 var(--space-xs);
+}
+
+.browser-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.browser-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.browser-collection {
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.browser-status-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.status-tab {
+  flex: 1;
+  padding: var(--space-xs) 0;
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  text-align: center;
+}
+
+.status-tab:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+
+.status-tab.active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.status-tab:hover:not(.active) {
+  background: var(--color-surface);
+}
+
+.browser-search {
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.browser-search:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.browser-actions {
+  display: flex;
+}
+
+.browser-new-btn {
+  width: 100%;
+  padding: var(--space-sm);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.browser-new-btn:hover {
+  background: var(--color-bg);
+  border-style: solid;
+  border-color: var(--color-accent);
+}
+
+/* Document list */
+.browser-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  max-height: 40vh;
+}
+
+.browser-empty {
+  padding: var(--space-md);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.browser-item {
+  position: relative;
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: var(--color-bg);
+}
+
+.browser-item:hover {
+  border-color: var(--color-accent);
+  background: var(--color-surface);
+}
+
+.browser-item.active {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
+}
+
+.browser-item-title {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 1.5rem;
+}
+
+.browser-item-meta {
+  display: flex;
+  gap: var(--space-sm);
+  margin-block-start: 2px;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.browser-item-status {
+  padding: 0 0.3em;
+  border-radius: 2px;
+}
+
+.browser-item-status.status-draft {
+  background: color-mix(in srgb, var(--color-warning, #f0ad4e) 20%, transparent);
+  color: var(--color-warning, #f0ad4e);
+}
+
+.browser-item-status.status-published {
+  background: color-mix(in srgb, var(--color-success, #5cb85c) 20%, transparent);
+  color: var(--color-success, #5cb85c);
+}
+
+.browser-item-status.status-archived {
+  background: color-mix(in srgb, var(--color-text-muted) 15%, transparent);
+}
+
+.browser-item-delete {
+  position: absolute;
+  top: var(--space-xs);
+  right: var(--space-xs);
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0;
+}
+
+.browser-item:hover .browser-item-delete {
+  opacity: 1;
+}
+
+.browser-item-delete:hover {
+  color: var(--color-danger, #d9534f);
+}

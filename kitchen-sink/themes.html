@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Themes — Kitchen Sink</title>
+<link rel="stylesheet" href="../src/build/assets/css/main.css"/>
+<!-- Theme bridge: maps VB tokens to VP tokens -->
+<link rel="stylesheet" href="../src/build/assets/css/themes/_bridge.css"/>
+<!-- Load all 23 theme files -->
+<link rel="stylesheet" href="../src/build/assets/css/themes/ocean.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/forest.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/sunset.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/rose.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/lavender.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/coral.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/slate.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/emerald.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/amber.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/indigo.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/modern.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/minimal.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/classic.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/brutalist.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/swiss.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/cyber.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/organic.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/editorial.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/terminal.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/kawaii.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/8bit.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/nes.css"/>
+<link rel="stylesheet" href="../src/build/assets/css/themes/win9x.css"/>
+<style>
+  .theme-grid {
+    display: grid;
+    gap: var(--space-xl);
+    margin-block: var(--space-xl);
+  }
+  .theme-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .theme-card-header {
+    padding: var(--space-sm) var(--space-lg);
+    border-block-end: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+  }
+  .theme-card-body {
+    padding: var(--space-lg);
+  }
+  .theme-card-body h3 {
+    margin-block: 0 var(--space-sm);
+  }
+  .theme-card-body p {
+    margin-block: var(--space-sm);
+  }
+  .theme-card-body button {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-sm) var(--space-lg);
+    border: 1px solid var(--color-accent, var(--color-border));
+    border-radius: var(--radius, 4px);
+    background: var(--color-accent, var(--color-link));
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    margin-block: var(--space-sm);
+  }
+  .theme-card-body button:hover {
+    opacity: 0.9;
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+<nav>
+<a href="index.html" class="site-title">Kitchen Sink</a>
+<a href="typography.html">Typography</a>
+<a href="layout.html">Layout</a>
+<a href="custom-elements.html">Custom Elements</a>
+<a href="web-components.html">Web Components</a>
+<a href="data-attributes.html">Data Attributes</a>
+<a href="forms.html">Forms</a>
+<a href="buttons.html">Buttons</a>
+<a href="themes.html">Themes</a>
+</nav>
+</header>
+<main>
+<header class="doc-header">
+<h1>Themes</h1>
+<p class="site-description">Every Vanilla Breeze theme applied to identical reference content. Each section uses <code>data-theme</code> to scope the theme to that element only. The same markup renders differently under each theme.</p>
+</header>
+
+<div class="theme-grid">
+
+<!-- Default (no data-theme) -->
+<div class="theme-card">
+  <div class="theme-card-header">default (no data-theme attribute)</div>
+  <div class="theme-card-body">
+    <h3>Default</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. The default theme uses system fonts and a neutral blue accent.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout with the default theme styling.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Ocean -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="ocean"</div>
+  <div class="theme-card-body" data-theme="ocean">
+    <h3>Ocean</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. A calm, professional teal-blue palette inspired by the sea.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the ocean theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Forest -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="forest"</div>
+  <div class="theme-card-body" data-theme="forest">
+    <h3>Forest</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Deep greens and earthy tones evoking a dense woodland.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the forest theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Sunset -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="sunset"</div>
+  <div class="theme-card-body" data-theme="sunset">
+    <h3>Sunset</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Warm oranges and golds reminiscent of golden hour.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the sunset theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Rose -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="rose"</div>
+  <div class="theme-card-body" data-theme="rose">
+    <h3>Rose</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Soft pinks and dusty rose for an elegant, warm palette.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the rose theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Lavender -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="lavender"</div>
+  <div class="theme-card-body" data-theme="lavender">
+    <h3>Lavender</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Gentle purples and soft violets for a serene atmosphere.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the lavender theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Coral -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="coral"</div>
+  <div class="theme-card-body" data-theme="coral">
+    <h3>Coral</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Vibrant coral and warm salmon tones.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the coral theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Slate -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="slate"</div>
+  <div class="theme-card-body" data-theme="slate">
+    <h3>Slate</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Cool grays and blue-grays for a professional, understated look.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the slate theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Emerald -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="emerald"</div>
+  <div class="theme-card-body" data-theme="emerald">
+    <h3>Emerald</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Rich jewel-tone greens with sophisticated depth.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the emerald theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Amber -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="amber"</div>
+  <div class="theme-card-body" data-theme="amber">
+    <h3>Amber</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Warm amber and honey tones with a golden glow.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the amber theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Indigo -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="indigo"</div>
+  <div class="theme-card-body" data-theme="indigo">
+    <h3>Indigo</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Deep indigo blues with violet undertones.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the indigo theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Modern -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="modern"</div>
+  <div class="theme-card-body" data-theme="modern">
+    <h3>Modern</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Clean, contemporary design with sharp typography.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the modern theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Minimal -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="minimal"</div>
+  <div class="theme-card-body" data-theme="minimal">
+    <h3>Minimal</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Stripped-down, content-first design with maximum whitespace.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the minimal theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Classic -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="classic"</div>
+  <div class="theme-card-body" data-theme="classic">
+    <h3>Classic</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Traditional, timeless styling with serif typography.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the classic theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Brutalist -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="brutalist"</div>
+  <div class="theme-card-body" data-theme="brutalist">
+    <h3>Brutalist</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Raw, bold, and honest. Monospace type, hard shadows, no curves.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the brutalist theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Swiss -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="swiss"</div>
+  <div class="theme-card-body" data-theme="swiss">
+    <h3>Swiss</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. International typographic style with grid precision and Helvetica.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the swiss theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Cyber -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="cyber"</div>
+  <div class="theme-card-body" data-theme="cyber">
+    <h3>Cyber</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Neon-soaked cyberpunk aesthetic with glowing accents.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the cyber theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Organic -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="organic"</div>
+  <div class="theme-card-body" data-theme="organic">
+    <h3>Organic</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Natural, handcrafted feel with warm tones and soft shapes.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the organic theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Editorial -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="editorial"</div>
+  <div class="theme-card-body" data-theme="editorial">
+    <h3>Editorial</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Magazine-quality typography with refined reading experience.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the editorial theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Terminal -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="terminal"</div>
+  <div class="theme-card-body" data-theme="terminal" style="background: var(--color-background, #0a0a0a);">
+    <h3>Terminal</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Green phosphor on black, CRT scanlines, monospace everything.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the terminal theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Kawaii -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="kawaii"</div>
+  <div class="theme-card-body" data-theme="kawaii" style="background: var(--color-background);">
+    <h3>Kawaii</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Japanese cute aesthetic with pastels, pills, and playful energy.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the kawaii theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- 8bit -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="8bit"</div>
+  <div class="theme-card-body" data-theme="8bit" style="background: var(--color-background);">
+    <h3>8-Bit</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Retro pixel art style with limited palette and blocky shapes.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the 8-bit theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- NES -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="nes"</div>
+  <div class="theme-card-body" data-theme="nes" style="background: var(--color-background);">
+    <h3>NES</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Nintendo Entertainment System aesthetic with the classic 4-color palette.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the NES theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+<!-- Win9x -->
+<div class="theme-card">
+  <div class="theme-card-header">data-theme="win9x"</div>
+  <div class="theme-card-body" data-theme="win9x" style="background: var(--color-background);">
+    <h3>Windows 9x</h3>
+    <p>Sample text with <strong>bold</strong> and <em>italic</em>. Classic Windows 95/98 chrome with beveled buttons and system fonts.</p>
+    <button>Button</button>
+    <ui-callout data-variant="tip"><p>Sample callout in the Windows 9x theme.</p></ui-callout>
+    <code-block data-language="js"><pre><code>const x = 1;</code></pre></code-block>
+  </div>
+</div>
+
+</div><!-- .theme-grid -->
+
+</main>
+<footer class="site-footer">
+<p>Vanilla Breeze Kitchen Sink</p>
+</footer>
+<script src="../src/build/assets/js/main.js" type="module"></script>
+</body>
+</html>

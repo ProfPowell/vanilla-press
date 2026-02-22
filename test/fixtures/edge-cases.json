@@ -1,0 +1,132 @@
+{
+  "id": "doc_edge01",
+  "meta": {
+    "title": "Edge Case Tests",
+    "slug": "edge-case-tests",
+    "collection": "tests",
+    "description": "Boundary conditions & special scenarios",
+    "status": "draft",
+    "created": "2026-02-14",
+    "updated": "2026-02-14"
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": []
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Heading Level 2" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Heading Level 3" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 4 },
+      "children": [
+        { "type": "text", "value": "Heading Level 4" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 5 },
+      "children": [
+        { "type": "text", "value": "Heading Level 5" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 6 },
+      "children": [
+        { "type": "text", "value": "Heading Level 6" }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "blockquote",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Nested blockquote content." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Top-level item" }
+              ]
+            },
+            {
+              "type": "list",
+              "attrs": { "ordered": true },
+              "children": [
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Nested ordered item 1" }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "type": "paragraph",
+                      "children": [
+                        { "type": "text", "value": "Nested ordered item 2" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "html" },
+      "value": "<div class=\"test\">\n  <p>HTML &amp; special \"characters\" in code</p>\n</div>"
+    },
+    {
+      "type": "hr"
+    },
+    {
+      "type": "embed",
+      "attrs": { "url": "https://codepen.io/example/pen/abc123", "type": "codepen" }
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Special chars: <script>alert('xss')</script> & \"quotes\" & 'apostrophes'" }
+      ]
+    }
+  ]
+}

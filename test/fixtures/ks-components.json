@@ -1,0 +1,536 @@
+{
+  "id": "doc_ks_comp",
+  "meta": {
+    "title": "Kitchen Sink: Components",
+    "slug": "ks-components",
+    "collection": "kitchen-sink",
+    "description": "Exercises all component block types: callouts, collapsibles, cards, tabs, steps, and nested combinations.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-17",
+    "updated": "2026-02-17",
+    "published": "2026-02-17",
+    "tags": ["kitchen-sink", "components"]
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Callout Variants" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Note Callout" }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "note" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Custom elements are part of the " },
+            { "type": "text", "value": "Web Components", "marks": ["strong"] },
+            { "type": "text", "value": " specification. They work in all modern browsers without polyfills. The " },
+            { "type": "text", "value": "customElements", "marks": ["code"] },
+            { "type": "text", "value": " registry is a global singleton — once defined, an element is available everywhere in the document." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Tip Callout with Rich Content" }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "tip" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Use the " },
+            { "type": "text", "value": ":defined", "marks": ["code"] },
+            { "type": "text", "value": " CSS pseudo-class to style custom elements only after their JavaScript has loaded:" }
+          ]
+        },
+        {
+          "type": "code_block",
+          "attrs": { "language": "css" },
+          "value": "ui-tabs:not(:defined) {\n  display: none;\n}\n\nui-tabs:defined {\n  display: block;\n}"
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "This prevents a flash of unstyled content (FOUC) while the component definition loads." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Warning Callout with List" }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "warning" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "These APIs are still experimental and may change:" }
+          ]
+        },
+        {
+          "type": "list",
+          "attrs": { "ordered": false },
+          "children": [
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "ElementInternals.states", "marks": ["code"] },
+                    { "type": "text", "value": " — custom state pseudo-classes" }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "CSS @scope", "marks": ["code"] },
+                    { "type": "text", "value": " — proximity-based scoping" }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "list_item",
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "Declarative Shadow DOM streaming", "marks": ["code"] },
+                    { "type": "text", "value": " — server-rendered shadow roots" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Danger Callout" }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "danger" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Never use " },
+            { "type": "text", "value": "innerHTML", "marks": ["code", "strong"] },
+            { "type": "text", "value": " with user-provided content. This opens a direct XSS vector. Use " },
+            { "type": "text", "value": "textContent", "marks": ["code"] },
+            { "type": "text", "value": " for plain text or the DOM API for structured content." }
+          ]
+        },
+        {
+          "type": "code_block",
+          "attrs": { "language": "js" },
+          "value": "// WRONG — XSS vulnerability\nelement.innerHTML = userInput;\n\n// CORRECT — safe text insertion\nelement.textContent = userInput;\n\n// CORRECT — safe structured content\nconst p = document.createElement('p');\np.textContent = userInput;\nelement.appendChild(p);"
+        }
+      ]
+    },
+    {
+      "type": "hr",
+      "attrs": { "variant": "default" }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Collapsible" }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "How does the browser parse custom element names?" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The HTML parser treats any tag containing a hyphen as a custom element. Before its definition is registered, the element is an instance of " },
+            { "type": "text", "value": "HTMLUnknownElement", "marks": ["code"] },
+            { "type": "text", "value": ". After " },
+            { "type": "text", "value": "customElements.define()", "marks": ["code"] },
+            { "type": "text", "value": " is called, the browser upgrades existing instances to the registered class." }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "This upgrade process is what makes custom elements work with server-rendered HTML — the markup is valid and accessible before JavaScript loads." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Cards" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Card with Link" }
+      ]
+    },
+    {
+      "type": "card",
+      "attrs": { "href": "/docs/web-components" },
+      "children": [
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "children": [
+            { "type": "text", "value": "Web Components Guide" }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Learn how to build custom elements, use shadow DOM, and adopt constructable stylesheets for component architecture without a framework." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Card without Link" }
+      ]
+    },
+    {
+      "type": "card",
+      "children": [
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "children": [
+            { "type": "text", "value": "Performance Budget" }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Target: under " },
+            { "type": "text", "value": "50 kB", "marks": ["strong"] },
+            { "type": "text", "value": " total JavaScript. Under " },
+            { "type": "text", "value": "15 kB", "marks": ["strong"] },
+            { "type": "text", "value": " CSS. First contentful paint under " },
+            { "type": "text", "value": "1.2 seconds", "marks": ["strong"] },
+            { "type": "text", "value": " on a 3G connection." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hr",
+      "attrs": { "variant": "default" }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Tabs" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "HTML" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Define the custom element in your markup:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<ui-callout data-variant=\"tip\">\n  <p>Custom elements are valid HTML.</p>\n</ui-callout>"
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "CSS" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Style the element using its tag name as a selector:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "css" },
+              "value": "ui-callout {\n  display: block;\n  padding: var(--space-md);\n  border-inline-start: 4px solid var(--color-accent);\n  background: var(--color-surface-raised);\n}\n\nui-callout[data-variant=\"tip\"] {\n  --color-accent: var(--color-green-500);\n}"
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "JavaScript" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Optionally register a class for interactive behavior:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "js" },
+              "value": "class UICallout extends HTMLElement {\n  connectedCallback() {\n    const variant = this.dataset.variant || 'note';\n    this.setAttribute('role', 'note');\n    this.setAttribute('aria-label', variant);\n  }\n}\n\ncustomElements.define('ui-callout', UICallout);"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Steps" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Create the project structure" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Start with a minimal directory layout. No build tools needed:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "text" },
+              "value": "my-site/\n  src/\n    schema/\n    renderers/\n    store/\n  test/\n  package.json"
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Define your content schema" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Create " },
+                { "type": "text", "value": "content-schema.js", "marks": ["code"] },
+                { "type": "text", "value": " with your block type definitions. This is the single source of truth for your content model." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Write your renderers" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Each renderer is a pure function that takes a block AST and returns a string. Start with the HTML renderer, then add markdown." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Add tests and iterate" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Use fixture files as test inputs. Run them through each renderer and snapshot the output. The Node.js native test runner works well for this:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "node --test test/**/*.test.js"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hr",
+      "attrs": { "variant": "decorative" }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Nested Components" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Callout inside Collapsible" }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Known browser quirks with custom elements" },
+      "children": [
+        {
+          "type": "callout",
+          "attrs": { "variant": "warning" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Safari delays the " },
+                { "type": "text", "value": "connectedCallback", "marks": ["code"] },
+                { "type": "text", "value": " when elements are inside " },
+                { "type": "text", "value": "<template>", "marks": ["code"] },
+                { "type": "text", "value": " elements that are later cloned. Always check " },
+                { "type": "text", "value": "this.isConnected", "marks": ["code"] },
+                { "type": "text", "value": " before accessing DOM properties." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "callout",
+          "attrs": { "variant": "tip" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Use " },
+                { "type": "text", "value": "queueMicrotask()", "marks": ["code"] },
+                { "type": "text", "value": " in " },
+                { "type": "text", "value": "connectedCallback", "marks": ["code"] },
+                { "type": "text", "value": " to ensure child elements are fully parsed before accessing them." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Code Block inside Step inside Tabs" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "Getting Started" },
+          "children": [
+            {
+              "type": "steps",
+              "children": [
+                {
+                  "type": "step",
+                  "attrs": { "title": "Install dependencies" },
+                  "children": [
+                    {
+                      "type": "code_block",
+                      "attrs": { "language": "bash" },
+                      "value": "npm install better-sqlite3"
+                    }
+                  ]
+                },
+                {
+                  "type": "step",
+                  "attrs": { "title": "Initialize the database" },
+                  "children": [
+                    {
+                      "type": "code_block",
+                      "attrs": { "language": "js" },
+                      "value": "import Database from 'better-sqlite3';\nconst db = new Database('content.db');\ndb.pragma('journal_mode = WAL');"
+                    }
+                  ]
+                },
+                {
+                  "type": "step",
+                  "attrs": { "title": "Run the schema migration" },
+                  "children": [
+                    {
+                      "type": "code_block",
+                      "attrs": { "language": "sql" },
+                      "value": "CREATE TABLE IF NOT EXISTS documents (\n  id TEXT PRIMARY KEY,\n  meta TEXT NOT NULL,\n  blocks TEXT NOT NULL,\n  created TEXT NOT NULL,\n  updated TEXT NOT NULL\n);"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Advanced" },
+          "children": [
+            {
+              "type": "callout",
+              "attrs": { "variant": "note" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "For production deployments, use Cloudflare D1 instead of local SQLite. The API is identical — only the connection setup changes." }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

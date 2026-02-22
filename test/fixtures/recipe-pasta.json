@@ -1,0 +1,217 @@
+{
+  "id": "doc_recipe04",
+  "meta": {
+    "title": "Cacio e Pepe (The Right Way)",
+    "slug": "cacio-e-pepe",
+    "collection": "recipes",
+    "description": "Three ingredients, zero margin for error. The deceptively simple Roman pasta that humbles experienced cooks.",
+    "status": "published",
+    "created": "2026-02-06",
+    "updated": "2026-02-08",
+    "published": "2026-02-08",
+    "tags": ["pasta", "italian", "technique"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Cacio e pepe has three ingredients: pasta, Pecorino Romano, and black pepper. No cream. No butter. No parmesan. The sauce comes from emulsifying cheese with starchy pasta water. It sounds trivial. It is not." }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "warning" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Read the entire recipe before cooking. Cacio e pepe fails when the timing is off — you need everything ready before the pasta is done. There is no 'hold' step." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Ingredients (serves 2)" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "200g tonnarelli or spaghetti" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "150g Pecorino Romano, finely grated", "marks": ["strong"] },
+          { "type": "text", "value": " (use a Microplane — the fine powder melts smoothly)" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "2 tsp freshly cracked black pepper (coarse)" }] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [{ "type": "text", "value": "Salt for pasta water" }] }] }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "danger" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Do not substitute pre-grated cheese. The anti-caking agents (cellulose, potato starch) prevent proper emulsification. Your sauce will be grainy instead of creamy. Grate it yourself on a Microplane." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Method" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Boil pasta in less water than usual" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Use a narrower, taller pot with about 2 liters of water for 200g of pasta. This concentrates the starch in the water, which is critical for the sauce. Salt it aggressively — it should taste like the sea." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Toast the pepper" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "While the water heats, add the cracked black pepper to a cold, dry pan (large enough to hold the pasta later). Toast over medium heat for 1-2 minutes until fragrant and slightly smoking. Add a ladle of pasta water and let it simmer to infuse — this blooms the pepper's aromatics." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Make the cheese paste" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Put the grated Pecorino in a bowl. Gradually add " },
+                { "type": "text", "value": "cold", "marks": ["strong"] },
+                { "type": "text", "value": " pasta water (yes, cold — take it before it boils) a tablespoon at a time, stirring constantly until you have a thick, smooth paste like cake frosting. This pre-hydration prevents clumping." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Combine" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Pull the pasta 2 minutes before al dente. Transfer it directly to the pepper pan with tongs (some water clinging to the pasta is good). Toss vigorously over " },
+                { "type": "text", "value": "low heat", "marks": ["strong"] },
+                { "type": "text", "value": " for 1 minute, adding splashes of pasta water to keep it loose." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "The critical moment" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Kill the heat completely", "marks": ["strong"] },
+                { "type": "text", "value": ". Wait 30 seconds for the pan to cool slightly (too hot and the cheese seizes into clumps). Add the cheese paste and toss aggressively, adding tiny splashes of hot pasta water until the sauce is silky and coats each strand. Serve immediately — this sauce waits for no one." }
+              ]
+            },
+            {
+              "type": "callout",
+              "attrs": { "variant": "tip" },
+              "children": [
+                {
+                  "type": "paragraph",
+                  "children": [
+                    { "type": "text", "value": "If the cheese clumps, the pan was too hot. Rescue it by adding more pasta water and tossing off-heat. It won't be perfect but it'll be edible. Next time, wait longer after killing the heat." }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Science" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Cacio e pepe is an emulsion — fat (from the cheese) suspended in water (starchy pasta water) stabilized by protein (also from the cheese). The starch acts as an additional emulsifier, preventing the fat from separating." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is why the details matter:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Concentrated pasta water", "marks": ["strong"] },
+            { "type": "text", "value": " = more starch = better emulsification" }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Finely grated cheese", "marks": ["strong"] },
+            { "type": "text", "value": " = higher surface area = melts evenly" }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Temperature control", "marks": ["strong"] },
+            { "type": "text", "value": " = Pecorino's proteins denature above ~170°F/76°C, causing clumping" }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Aggressive tossing", "marks": ["strong"] },
+            { "type": "text", "value": " = mechanical emulsification, like shaking a vinaigrette" }
+          ] }]
+        }
+      ]
+    },
+    {
+      "type": "hr"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Three ingredients, five minutes of active cooking, a lifetime to master. That's the beauty of Roman pasta." }
+      ]
+    }
+  ]
+}

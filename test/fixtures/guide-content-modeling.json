@@ -1,0 +1,368 @@
+{
+  "id": "doc_guide02",
+  "meta": {
+    "title": "Content Modeling with Block AST",
+    "slug": "content-modeling",
+    "collection": "guides",
+    "description": "How to structure documents using Vanilla Press's typed block system. Covers all block types, inline marks, and nesting rules.",
+    "status": "published",
+    "created": "2026-01-12",
+    "updated": "2026-02-10",
+    "published": "2026-02-10",
+    "tags": ["content-model", "architecture", "reference"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Every document in Vanilla Press is an array of typed blocks. Blocks have a " },
+        { "type": "text", "value": "type", "marks": ["code"] },
+        { "type": "text", "value": ", optional " },
+        { "type": "text", "value": "attrs", "marks": ["code"] },
+        { "type": "text", "value": ", and either " },
+        { "type": "text", "value": "children", "marks": ["code"] },
+        { "type": "text", "value": " (nested blocks or inline content) or a leaf " },
+        { "type": "text", "value": "value", "marks": ["code"] },
+        { "type": "text", "value": " (plain text). The schema is defined once and shared across renderers, the editor, and the storage layer." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Prose Blocks" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Prose blocks are the building blocks of article content. They map directly to standard HTML elements:" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "Paragraph" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "json" },
+              "value": "{\n  \"type\": \"paragraph\",\n  \"children\": [\n    { \"type\": \"text\", \"value\": \"Plain text with \" },\n    { \"type\": \"text\", \"value\": \"bold\", \"marks\": [\"strong\"] },\n    { \"type\": \"text\", \"value\": \" and \" },\n    { \"type\": \"text\", \"value\": \"italic\", \"marks\": [\"em\"] },\n    { \"type\": \"text\", \"value\": \" formatting.\" }\n  ]\n}"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Renders as " },
+                { "type": "text", "value": "<p>", "marks": ["code"] },
+                { "type": "text", "value": ". The " },
+                { "type": "text", "value": "children", "marks": ["code"] },
+                { "type": "text", "value": " array holds inline content: text nodes with optional marks." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Heading" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "json" },
+              "value": "{\n  \"type\": \"heading\",\n  \"attrs\": { \"level\": 2 },\n  \"children\": [\n    { \"type\": \"text\", \"value\": \"Section Title\" }\n  ]\n}"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Levels 2-6. Level 1 is reserved for the document title (rendered from metadata, not the block tree)." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "List" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "json" },
+              "value": "{\n  \"type\": \"list\",\n  \"attrs\": { \"ordered\": true },\n  \"children\": [\n    {\n      \"type\": \"list_item\",\n      \"children\": [\n        {\n          \"type\": \"paragraph\",\n          \"children\": [\n            { \"type\": \"text\", \"value\": \"First item\" }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Set " },
+                { "type": "text", "value": "ordered: true", "marks": ["code"] },
+                { "type": "text", "value": " for " },
+                { "type": "text", "value": "<ol>", "marks": ["code"] },
+                { "type": "text", "value": ", " },
+                { "type": "text", "value": "false", "marks": ["code"] },
+                { "type": "text", "value": " for " },
+                { "type": "text", "value": "<ul>", "marks": ["code"] },
+                { "type": "text", "value": ". Lists can nest by putting a " },
+                { "type": "text", "value": "list", "marks": ["code"] },
+                { "type": "text", "value": " inside a " },
+                { "type": "text", "value": "list_item", "marks": ["code"] },
+                { "type": "text", "value": "." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Component Blocks" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Component blocks map to Vanilla Breeze custom elements. They render as semantic HTML with " },
+        { "type": "text", "value": "<ui-*>", "marks": ["code"] },
+        { "type": "text", "value": " and " },
+        { "type": "text", "value": "<content-*>", "marks": ["code"] },
+        { "type": "text", "value": " element names:" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Callout" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Callouts highlight important information. Four variants:" }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "note" },
+      "children": [
+        { "type": "paragraph", "children": [{ "type": "text", "value": "This is a note — neutral information the reader should be aware of." }] }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "tip" },
+      "children": [
+        { "type": "paragraph", "children": [{ "type": "text", "value": "This is a tip — helpful advice that improves the experience." }] }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "warning" },
+      "children": [
+        { "type": "paragraph", "children": [{ "type": "text", "value": "This is a warning — something that could cause problems if ignored." }] }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "danger" },
+      "children": [
+        { "type": "paragraph", "children": [{ "type": "text", "value": "This is a danger — something that will definitely cause problems. Data loss, security issues, breaking changes." }] }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Steps" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Steps render as a numbered guide with titled sections. Each step can contain any block content:" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Define the step" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Each step has a " },
+                { "type": "text", "value": "title", "marks": ["code"] },
+                { "type": "text", "value": " attribute and children containing the step's content." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Nest any content inside" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Steps can contain paragraphs, code blocks, callouts, lists — any block type." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Render and enjoy" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Steps render as " },
+                { "type": "text", "value": "<ol data-steps>", "marks": ["code"] },
+                { "type": "text", "value": " with accessible, semantic markup." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Tabs, Collapsibles, and Cards" }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Tabs — tabbed content panels" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Tabs contain " },
+            { "type": "text", "value": "tab", "marks": ["code"] },
+            { "type": "text", "value": " children, each with a " },
+            { "type": "text", "value": "label", "marks": ["code"] },
+            { "type": "text", "value": " attribute. Render using CSS-only radio button technique — no JavaScript needed for tab switching." }
+          ]
+        },
+        {
+          "type": "code_block",
+          "attrs": { "language": "json" },
+          "value": "{\n  \"type\": \"tabs\",\n  \"children\": [\n    { \"type\": \"tab\", \"attrs\": { \"label\": \"Tab 1\" }, \"children\": [...] },\n    { \"type\": \"tab\", \"attrs\": { \"label\": \"Tab 2\" }, \"children\": [...] }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Collapsibles — expandable sections" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Collapsibles use the native " },
+            { "type": "text", "value": "<details>", "marks": ["code"] },
+            { "type": "text", "value": " element. The " },
+            { "type": "text", "value": "summary", "marks": ["code"] },
+            { "type": "text", "value": " attribute becomes the visible toggle text." }
+          ]
+        },
+        {
+          "type": "code_block",
+          "attrs": { "language": "json" },
+          "value": "{\n  \"type\": \"collapsible\",\n  \"attrs\": { \"summary\": \"Click to expand\" },\n  \"children\": [...]\n}"
+        }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Cards — linked content previews" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Cards are clickable containers that link to related content. The " },
+            { "type": "text", "value": "href", "marks": ["code"] },
+            { "type": "text", "value": " attribute makes the entire card a link." }
+          ]
+        },
+        {
+          "type": "code_block",
+          "attrs": { "language": "json" },
+          "value": "{\n  \"type\": \"card\",\n  \"attrs\": { \"href\": \"/guides/getting-started\" },\n  \"children\": [\n    { \"type\": \"heading\", \"attrs\": { \"level\": 3 }, \"children\": [...] },\n    { \"type\": \"paragraph\", \"children\": [...] }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Inline Marks" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Text nodes can carry marks for formatting:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "strong", "marks": ["code"] },
+          { "type": "text", "value": " → " },
+          { "type": "text", "value": "bold text", "marks": ["strong"] }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "em", "marks": ["code"] },
+          { "type": "text", "value": " → " },
+          { "type": "text", "value": "italic text", "marks": ["em"] }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "code", "marks": ["code"] },
+          { "type": "text", "value": " → " },
+          { "type": "text", "value": "inline code", "marks": ["code"] }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "strikethrough", "marks": ["code"] },
+          { "type": "text", "value": " → " },
+          { "type": "text", "value": "deleted text", "marks": ["strikethrough"] }
+        ] }] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Marks can combine: " },
+        { "type": "text", "value": "bold and italic", "marks": ["strong", "em"] },
+        { "type": "text", "value": " uses " },
+        { "type": "text", "value": "\"marks\": [\"strong\", \"em\"]", "marks": ["code"] },
+        { "type": "text", "value": "." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Key Insight" }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The block AST is not an intermediate format — it " },
+            { "type": "text", "value": "is", "marks": ["em"] },
+            { "type": "text", "value": " the content. Each block type maps 1:1 to a web component, a markdown construct, and a JSON structure. One concept, multiple serializations, zero lossy conversion." }
+          ]
+        }
+      ]
+    }
+  ]
+}

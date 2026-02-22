@@ -1,0 +1,20 @@
+{
+  "id": "doc_min01",
+  "meta": {
+    "title": "Hello World",
+    "slug": "hello-world",
+    "collection": "posts",
+    "status": "published",
+    "created": "2026-02-14",
+    "updated": "2026-02-14",
+    "published": "2026-02-14"
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is the smallest valid document." }
+      ]
+    }
+  ]
+}

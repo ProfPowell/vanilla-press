@@ -1,0 +1,176 @@
+/* NodeView control overlays (variant selectors, summary inputs, href inputs) */
+
+/* Generic block wrapper */
+.pm-node-view {
+  position: relative;
+  margin-block: var(--space-md);
+}
+
+/* Control bar: appears on hover/focus */
+.pm-node-view .node-controls {
+  position: absolute;
+  inset-block-start: -1.75rem;
+  inset-inline-end: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 5;
+  font-size: var(--font-size-sm);
+}
+
+.pm-node-view:hover .node-controls,
+.pm-node-view:focus-within .node-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.node-controls label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  cursor: default;
+  display: inline;
+  padding: 0;
+  font-weight: normal;
+  border: none;
+}
+
+.node-controls select,
+.node-controls input {
+  height: 1.5rem;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-body);
+}
+
+.node-controls input[type="text"] {
+  width: 12rem;
+}
+
+/* Code block specific */
+.pm-code-block {
+  position: relative;
+}
+
+.pm-code-block .node-controls {
+  inset-block-start: var(--space-xs);
+  inset-inline-end: var(--space-xs);
+  inset-block-end: auto;
+}
+
+.pm-code-block .code-content {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  padding: var(--space-md) var(--space-lg);
+  tab-size: 2;
+  white-space: pre-wrap;
+  outline: none;
+}
+
+/* Collapsible summary input */
+.pm-collapsible .summary-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  padding: var(--space-md) var(--space-lg);
+  outline: none;
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+}
+
+.pm-collapsible .summary-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Card href display */
+.pm-card {
+  position: relative;
+}
+
+/* Tabs controls */
+.pm-tabs .tab-bar {
+  display: flex;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.pm-tabs .tab-btn {
+  padding: var(--space-sm) var(--space-lg);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-block-end: 2px solid transparent;
+}
+
+.pm-tabs .tab-btn.active {
+  color: var(--color-accent);
+  border-block-end-color: var(--color-accent);
+}
+
+.pm-tabs .tab-btn:hover {
+  color: var(--color-text);
+}
+
+.pm-tabs .add-tab-btn {
+  padding: var(--space-sm);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
+}
+
+.pm-tabs .add-tab-btn:hover {
+  color: var(--color-accent);
+}
+
+/* Steps */
+.pm-steps .step-title-input {
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  outline: none;
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+  width: 100%;
+  padding: 0;
+  margin-block-end: var(--space-sm);
+}
+
+.pm-steps .step-title-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Figure */
+.pm-figure .figure-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  background: var(--color-surface);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.pm-figure img {
+  max-width: 100%;
+  border-radius: var(--radius);
+}

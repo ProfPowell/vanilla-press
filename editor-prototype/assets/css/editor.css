@@ -1,0 +1,18 @@
+/* Editor CSS — layer hub: imports Vanilla Breeze + ProseMirror overrides + editor layout */
+@layer reset, tokens, base, layout, components, editor;
+
+@import "../../../src/build/assets/css/_reset.css" layer(reset);
+@import "../../../src/build/assets/css/_tokens.css" layer(tokens);
+@import "../../../src/build/assets/css/_base.css" layer(base);
+@import "../../../src/build/assets/css/_layout.css" layer(layout);
+@import "../../../src/build/assets/css/components/_callout.css" layer(components);
+@import "../../../src/build/assets/css/components/_card.css" layer(components);
+@import "../../../src/build/assets/css/components/_code-block.css" layer(components);
+@import "../../../src/build/assets/css/components/_collapsible.css" layer(components);
+@import "../../../src/build/assets/css/components/_tabs.css" layer(components);
+@import "../../../src/build/assets/css/components/_steps.css" layer(components);
+@import "./_shell.css" layer(editor);
+@import "./_prosemirror.css" layer(editor);
+@import "./_block-controls.css" layer(editor);
+@import "./_palette.css" layer(editor);
+@import "./_meta-panel.css" layer(editor);

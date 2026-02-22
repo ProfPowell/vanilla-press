@@ -1,0 +1,289 @@
+{
+  "id": "doc_cn01",
+  "meta": {
+    "title": "Content Negotiation for the AI Era",
+    "slug": "content-negotiation-ai-era",
+    "collection": "posts",
+    "description": "Same URL, different formats. How content negotiation serves HTML to browsers, markdown to LLMs, and JSON to APIs — without building three separate endpoints.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-10",
+    "updated": "2026-02-14",
+    "published": "2026-02-14",
+    "tags": ["architecture", "ai", "web-standards"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Your content has more readers than humans. LLM agents crawl documentation. RSS readers parse feeds. API consumers fetch JSON. Hypermedia clients request HTML fragments. Each needs the same content in a different shape." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The traditional solution is to build separate endpoints: " },
+        { "type": "text", "value": "/api/posts/123.json", "marks": ["code"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "/posts/123.md", "marks": ["code"] },
+        { "type": "text", "value": ", " },
+        { "type": "text", "value": "/posts/123", "marks": ["code"] },
+        { "type": "text", "value": ". But HTTP already has a mechanism for this — the " },
+        { "type": "text", "value": "Accept", "marks": ["code"] },
+        { "type": "text", "value": " header." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "One URL, Many Formats" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "In Vanilla Press, every document URL responds to the " },
+        { "type": "text", "value": "Accept", "marks": ["code"] },
+        { "type": "text", "value": " header. The same URL — say, " },
+        { "type": "text", "value": "/posts/css-layers/", "marks": ["code"] },
+        { "type": "text", "value": " — serves different representations:" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "HTML" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "curl -H 'Accept: text/html' https://example.com/posts/css-layers/"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Returns a full HTML page with " },
+                { "type": "text", "value": "<head>", "marks": ["code"] },
+                { "type": "text", "value": ", navigation, Open Graph tags, and the rendered article. This is what browsers get by default." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Markdown" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "curl -H 'Accept: text/markdown' https://example.com/posts/css-layers/"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Returns clean markdown with YAML frontmatter. This is what LLM agents and documentation tools prefer — structured text without HTML noise." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "JSON" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "curl -H 'Accept: application/json' https://example.com/posts/css-layers/"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Returns the raw block AST with metadata. Full fidelity, no rendering — ideal for API consumers and content syndication." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Rendering Architecture" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This works because content is stored as a typed block AST — not as HTML, not as markdown, but as a structured tree that can be " },
+        { "type": "text", "value": "rendered", "marks": ["em"] },
+        { "type": "text", "value": " to any format without lossy conversion:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "text" },
+      "value": "Block AST (source of truth)\n    │\n    ├── renderHtml(doc)       → semantic HTML + custom elements\n    ├── renderMarkdown(doc)   → clean markdown + frontmatter\n    ├── renderAtom(docs)      → RSS/Atom feed\n    └── JSON.stringify(doc)   → raw AST as JSON"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Each renderer is a pure function. No side effects, no state, no templates. The block schema in " },
+        { "type": "text", "value": "content-schema.js", "marks": ["code"] },
+        { "type": "text", "value": " is the single source of truth that every renderer implements against." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The LLM-Friendly Web" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "There's a new standard emerging: " },
+        { "type": "text", "value": "llms.txt", "marks": ["code"] },
+        { "type": "text", "value": ". It's like " },
+        { "type": "text", "value": "robots.txt", "marks": ["code"] },
+        { "type": "text", "value": " but for AI agents — a machine-readable index of your site's content in markdown format." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Vanilla Press generates this automatically at build time. The " },
+        { "type": "text", "value": "llms.txt", "marks": ["code"] },
+        { "type": "text", "value": " file lists every published document with its title, description, and markdown URL:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "markdown", "filename": "llms.txt" },
+      "value": "# Vanilla Press\n\n> A platform-first content system built on web standards.\n\n## Posts\n\n- [Getting Started with CSS Layers](/md/posts/getting-started-css-layers/): A practical guide to cascade control.\n- [Content Negotiation for the AI Era](/md/posts/content-negotiation-ai-era/): Same URL, different formats.\n\n## Docs\n\n- [Vanilla Breeze Components](/md/docs/vanilla-breeze-components/): Custom elements as semantic building blocks."
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "note" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The " },
+            { "type": "text", "value": "/md/", "marks": ["code"] },
+            { "type": "text", "value": " prefix serves pre-rendered markdown files — no content negotiation needed. This is a progressive enhancement: agents that understand " },
+            { "type": "text", "value": "Accept", "marks": ["code"] },
+            { "type": "text", "value": " headers use the canonical URL; simpler crawlers follow the " },
+            { "type": "text", "value": "llms.txt", "marks": ["code"] },
+            { "type": "text", "value": " links directly." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "HTML Fragments for Hypermedia" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Beyond format negotiation, there's " },
+        { "type": "text", "value": "scope", "marks": ["em"] },
+        { "type": "text", "value": " negotiation. A hypermedia client (like htmx or html-star) doesn't want a full page — it wants just the content fragment to swap into the existing page:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "bash" },
+      "value": "# Full page (browsers)\ncurl https://example.com/posts/css-layers/\n\n# Content fragment only (hypermedia clients)\ncurl -H 'X-Star-Request: content' https://example.com/posts/css-layers/"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Five rendering scopes cover every use case:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "page", "marks": ["code"] },
+                { "type": "text", "value": " — full HTML document with head, nav, footer" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "content", "marks": ["code"] },
+                { "type": "text", "value": " — article body, no chrome" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "meta", "marks": ["code"] },
+                { "type": "text", "value": " — title, description, tags, date" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "collection", "marks": ["code"] },
+                { "type": "text", "value": " — document list as card grid" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "block", "marks": ["code"] },
+                { "type": "text", "value": " — single block (used by the editor)" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hr"
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Content negotiation isn't new — it's been in HTTP since 1.0. What's new is the audience. When your readers include Claude, GPT, and Gemini alongside human visitors, serving the right format at the right scope isn't a nice-to-have. It's table stakes." }
+      ]
+    }
+  ]
+}

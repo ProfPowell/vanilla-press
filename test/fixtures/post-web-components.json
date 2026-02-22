@@ -1,0 +1,255 @@
+{
+  "id": "doc_wc01",
+  "meta": {
+    "title": "Web Components Without the Framework",
+    "slug": "web-components-without-framework",
+    "collection": "posts",
+    "description": "Custom elements are production-ready. Here's how to use them for real UI components without lit, Stencil, or any framework.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-01-28",
+    "updated": "2026-02-01",
+    "published": "2026-02-01",
+    "tags": ["web-components", "javascript", "html"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The web components pitch has always been compelling: reusable UI elements that work everywhere, no framework required. The reality was messy — shadow DOM quirks, no SSR story, terrible form participation. But in 2026, the platform has fixed almost everything." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Two Styles" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "There are two valid approaches and they're not mutually exclusive:" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "CSS-Only" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Custom elements as " },
+                { "type": "text", "value": "style hooks", "marks": ["strong"] },
+                { "type": "text", "value": ". The browser renders the element, CSS styles it. No JavaScript at all:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "html" },
+              "value": "<ui-callout data-variant=\"warning\">\n  <p>No JS needed. The browser renders this as a block element.</p>\n  <p>CSS targets <code>ui-callout[data-variant='warning']</code>.</p>\n</ui-callout>"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "This works because browsers render unknown elements as inline by default. Set " },
+                { "type": "text", "value": "display: block", "marks": ["code"] },
+                { "type": "text", "value": " in CSS and you have a styled container." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Enhanced" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Full web components with " },
+                { "type": "text", "value": "connectedCallback", "marks": ["code"] },
+                { "type": "text", "value": ", reactivity, and interactivity — but only where JavaScript genuinely adds value:" }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": { "language": "javascript" },
+              "value": "class CopyButton extends HTMLElement {\n  connectedCallback() {\n    this.addEventListener('click', async () => {\n      const code = this.closest('code-block')\n        ?.querySelector('code')?.textContent;\n      if (code) {\n        await navigator.clipboard.writeText(code);\n        this.textContent = 'Copied!';\n        setTimeout(() => this.textContent = 'Copy', 2000);\n      }\n    });\n  }\n}\ncustomElements.define('copy-button', CopyButton);"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "The copy button only works with JS, and that's fine. Without JS, the code block still renders perfectly — you just can't click to copy." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Real-World Component Patterns" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Tabs Without a Library" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Here's the trick: use " },
+        { "type": "text", "value": "<input type=\"radio\">", "marks": ["code"] },
+        { "type": "text", "value": " for tab state. Pure CSS, keyboard accessible, no ARIA hacks:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "html" },
+      "value": "<ui-tabs>\n  <input type=\"radio\" name=\"t1\" id=\"t1-a\" checked/>\n  <label for=\"t1-a\">Setup</label>\n  <div class=\"tab-panel\"><p>First panel content.</p></div>\n\n  <input type=\"radio\" name=\"t1\" id=\"t1-b\"/>\n  <label for=\"t1-b\">Usage</label>\n  <div class=\"tab-panel\"><p>Second panel content.</p></div>\n</ui-tabs>"
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "tip" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The " },
+            { "type": "text", "value": ":has()", "marks": ["code"] },
+            { "type": "text", "value": " selector makes this possible: " },
+            { "type": "text", "value": "ui-tabs:has(#t1-a:checked) .tab-panel:nth-of-type(1)", "marks": ["code"] },
+            { "type": "text", "value": " shows the correct panel without any JavaScript." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Collapsible Sections" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The " },
+        { "type": "text", "value": "<details>", "marks": ["code"] },
+        { "type": "text", "value": " element is criminally underused. It gives you expand/collapse with built-in accessibility:" }
+      ]
+    },
+    {
+      "type": "collapsible",
+      "attrs": { "summary": "Click to see the pattern" },
+      "children": [
+        {
+          "type": "code_block",
+          "attrs": { "language": "html" },
+          "value": "<details>\n  <summary>Advanced Configuration</summary>\n  <p>Content here is hidden by default.</p>\n  <p>No JavaScript. No ARIA attributes. It just works.</p>\n</details>"
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Style it with CSS, animate it with " },
+            { "type": "text", "value": "::details-content", "marks": ["code"] },
+            { "type": "text", "value": " (shipping in all browsers 2025+), and call it done." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "When You Actually Need Shadow DOM" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Shadow DOM is powerful but it comes with trade-offs. Here's when each approach makes sense:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Light DOM", "marks": ["strong"] },
+                { "type": "text", "value": " — content sites, documentation, blogs. Styles should cascade. SEO matters. Server rendering is straightforward." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Shadow DOM", "marks": ["strong"] },
+                { "type": "text", "value": " — third-party widgets, embeddable components, anything that must be visually isolated from host page styles." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "warning" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Shadow DOM breaks " },
+            { "type": "text", "value": "form participation", "marks": ["strong"] },
+            { "type": "text", "value": " unless you use " },
+            { "type": "text", "value": "ElementInternals", "marks": ["code"] },
+            { "type": "text", "value": ". If your component contains " },
+            { "type": "text", "value": "<input>", "marks": ["code"] },
+            { "type": "text", "value": " elements that should submit with a form, avoid Shadow DOM or use the Form Associated Custom Elements API." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Bottom Line" }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The best component framework is the one you don't have to ship to the browser." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Custom elements aren't a React replacement. They're a lower layer — the HTML-level building blocks that any framework (or no framework) can build on. Start there." }
+      ]
+    }
+  ]
+}

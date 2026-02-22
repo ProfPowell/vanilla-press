@@ -1,0 +1,142 @@
+{
+  "id": "doc_marks01",
+  "meta": {
+    "title": "Inline Mark Tests",
+    "slug": "inline-mark-tests",
+    "collection": "tests",
+    "status": "draft",
+    "created": "2026-02-14",
+    "updated": "2026-02-14"
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Individual Marks" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is ", "marks": [] },
+        { "type": "text", "value": "bold text", "marks": ["strong"] },
+        { "type": "text", "value": " in a sentence." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is " },
+        { "type": "text", "value": "italic text", "marks": ["em"] },
+        { "type": "text", "value": " in a sentence." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is " },
+        { "type": "text", "value": "inline code", "marks": ["code"] },
+        { "type": "text", "value": " in a sentence." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is " },
+        { "type": "text", "value": "struck through", "marks": ["strikethrough"] },
+        { "type": "text", "value": " in a sentence." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Combined Marks" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is " },
+        { "type": "text", "value": "bold and italic", "marks": ["strong", "em"] },
+        { "type": "text", "value": " together." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This is " },
+        { "type": "text", "value": "bold code", "marks": ["strong", "code"] },
+        { "type": "text", "value": " together." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Links" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Visit " },
+        {
+          "type": "link",
+          "attrs": { "href": "https://example.com", "title": "Example Site" },
+          "children": [
+            { "type": "text", "value": "this site" }
+          ]
+        },
+        { "type": "text", "value": " for details." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A link with " },
+        {
+          "type": "link",
+          "attrs": { "href": "/docs/api" },
+          "children": [
+            { "type": "text", "value": "bold text", "marks": ["strong"] },
+            { "type": "text", "value": " inside" }
+          ]
+        },
+        { "type": "text", "value": "." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Footnotes" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This claim needs a citation" },
+        { "type": "footnote_ref", "attrs": { "id": "1" } },
+        { "type": "text", "value": " and so does this one" },
+        { "type": "footnote_ref", "attrs": { "id": "2" } },
+        { "type": "text", "value": "." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Empty Text Nodes" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "" },
+        { "type": "text", "value": "Non-empty text after empty." }
+      ]
+    }
+  ]
+}

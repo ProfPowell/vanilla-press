@@ -1,0 +1,307 @@
+{
+  "id": "doc_ks_media",
+  "meta": {
+    "title": "Kitchen Sink: Media",
+    "slug": "ks-media",
+    "collection": "kitchen-sink",
+    "description": "Exercises all media block types: figures with every variant, figcaptions with rich inline marks, and all embed types.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-17",
+    "updated": "2026-02-17",
+    "published": "2026-02-17",
+    "tags": ["kitchen-sink", "media"]
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Figure Variants" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Default Figure" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A figure with no variant specified uses the default layout." }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/css-box-model.svg",
+        "alt": "Diagram of the CSS box model showing content, padding, border, and margin areas",
+        "variant": "default"
+      },
+      "children": [
+        {
+          "type": "figcaption",
+          "children": [
+            { "type": "text", "value": "The CSS box model — every element on the page is a rectangular box." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Full-Width Figure" }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/browser-rendering-pipeline.png",
+        "alt": "Flowchart of the browser rendering pipeline: Parse HTML, Build DOM, Compute Styles, Layout, Paint, Composite",
+        "variant": "full"
+      },
+      "children": [
+        {
+          "type": "figcaption",
+          "children": [
+            { "type": "text", "value": "The browser rendering pipeline from HTML parsing to pixels on screen. Each stage can be a performance bottleneck." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Bordered Figure" }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/devtools-layers-panel.png",
+        "alt": "Screenshot of Chrome DevTools showing the Layers panel with composited layers highlighted",
+        "variant": "bordered"
+      },
+      "children": [
+        {
+          "type": "figcaption",
+          "children": [
+            { "type": "text", "value": "Chrome DevTools " },
+            { "type": "text", "value": "Layers", "marks": ["strong"] },
+            { "type": "text", "value": " panel — use " },
+            { "type": "text", "value": "Ctrl+Shift+J", "marks": ["kbd"] },
+            { "type": "text", "value": " to open DevTools, then navigate to the Layers tab." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Float-Start Figure" }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/web-component-icon.svg",
+        "alt": "Web Components logo: a hexagonal icon with three colored segments",
+        "variant": "float-start"
+      },
+      "children": [
+        {
+          "type": "figcaption",
+          "children": [
+            { "type": "text", "value": "The Web Components logo." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "When a figure floats to the start (left in LTR layouts), surrounding text wraps around it. This is useful for small illustrations, icons, or author photos that complement the adjacent prose without interrupting the reading flow. The float clears automatically after the content moves past the image height." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Float-End Figure" }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/lighthouse-score.png",
+        "alt": "Lighthouse performance audit showing a score of 100 for Performance, Accessibility, Best Practices, and SEO",
+        "variant": "float-end"
+      },
+      "children": [
+        {
+          "type": "figcaption",
+          "children": [
+            { "type": "text", "value": "A perfect Lighthouse score." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Float-end places the figure on the opposite side. In left-to-right layouts, the image appears on the right with text flowing to its left. This variant works well for supplementary data visualizations, badges, or small charts that support the main content without demanding primary attention." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Centered Figure" }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/css-cascade-layers-diagram.svg",
+        "alt": "Diagram showing CSS cascade layer priority: reset, tokens, base, layout, components, pages from lowest to highest",
+        "variant": "centered"
+      },
+      "children": [
+        {
+          "type": "figcaption",
+          "children": [
+            { "type": "text", "value": "CSS cascade layers arranged by priority. Layers declared later in the " },
+            { "type": "text", "value": "@layer", "marks": ["code"] },
+            { "type": "text", "value": " rule have " },
+            { "type": "text", "value": "higher", "marks": ["em", "strong"] },
+            { "type": "text", "value": " priority." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Figure without Caption" }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/decorative-divider.svg",
+        "alt": "Decorative wave divider"
+      },
+      "children": []
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Figcaption with Rich Marks" }
+      ]
+    },
+    {
+      "type": "figure",
+      "attrs": {
+        "src": "/media/dom-tree-visualization.png",
+        "alt": "Visual representation of a DOM tree showing document, html, head, body, and child element nodes",
+        "variant": "bordered"
+      },
+      "children": [
+        {
+          "type": "figcaption",
+          "children": [
+            { "type": "text", "value": "A " },
+            { "type": "text", "value": "DOM tree", "marks": ["strong"] },
+            { "type": "text", "value": " visualized with " },
+            { "type": "text", "value": "document.querySelectorAll('*')", "marks": ["code"] },
+            { "type": "text", "value": ". Nodes shown in " },
+            { "type": "text", "value": "green", "marks": ["mark"] },
+            { "type": "text", "value": " are custom elements. The " },
+            { "type": "text", "value": "O(n)", "marks": ["em"] },
+            { "type": "text", "value": " traversal cost is negligible for typical page sizes (under 1,500 nodes), measured at ~0.3ms on M1 hardware" },
+            { "type": "text", "value": "*", "marks": ["sup"] },
+            { "type": "text", "value": "." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "hr",
+      "attrs": { "variant": "default" }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Embeds" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Video Embed" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A video explaining the CSS cascade algorithm:" }
+      ]
+    },
+    {
+      "type": "embed",
+      "attrs": {
+        "url": "https://www.youtube.com/watch?v=SoMtBFKVMiU",
+        "type": "video"
+      }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "CodePen Embed" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "An interactive demo of CSS grid layout:" }
+      ]
+    },
+    {
+      "type": "embed",
+      "attrs": {
+        "url": "https://codepen.io/una/pen/bGBjzKa",
+        "type": "codepen"
+      }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "children": [
+        { "type": "text", "value": "Observable Embed" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A data visualization notebook showing web performance metrics:" }
+      ]
+    },
+    {
+      "type": "embed",
+      "attrs": {
+        "url": "https://observablehq.com/@d3/bar-chart",
+        "type": "observable"
+      }
+    }
+  ]
+}

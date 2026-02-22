@@ -1,0 +1,84 @@
+/* code-block with dark bg, filename header, language badge */
+code-block {
+  display: block;
+  margin-block: var(--space-md);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  position: relative;
+}
+
+code-block pre {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
+code-block pre code {
+  background: none;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+/* Filename header */
+code-block[data-filename]::before {
+  content: attr(data-filename);
+  display: block;
+  padding: var(--space-sm) var(--space-lg);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: #a6adc8;
+  background: #181825;
+  border-block-end: 1px solid #313244;
+}
+
+/* Language badge */
+code-block[data-language]::after {
+  content: attr(data-language);
+  position: absolute;
+  inset-block-start: var(--space-sm);
+  inset-inline-end: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #6c7086;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* When filename is present, adjust language badge position */
+code-block[data-filename][data-language]::after {
+  inset-block-start: calc(var(--space-sm) + 2rem);
+}
+
+/* Copy button (injected by JS) */
+code-block .copy-btn {
+  position: absolute;
+  inset-block-start: var(--space-sm);
+  inset-inline-end: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #a6adc8;
+  background: #313244;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+code-block:hover .copy-btn {
+  opacity: 1;
+}
+
+code-block .copy-btn:hover {
+  background: #45475a;
+  color: #cdd6f4;
+}

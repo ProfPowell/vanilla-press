@@ -1,0 +1,220 @@
+{
+  "id": "doc_guide03",
+  "meta": {
+    "title": "Deploying to Cloudflare",
+    "slug": "deploying-to-cloudflare",
+    "collection": "guides",
+    "description": "Publish your Vanilla Press site to Cloudflare Pages with a Worker for content negotiation. Static speed, dynamic flexibility.",
+    "status": "published",
+    "created": "2026-01-20",
+    "updated": "2026-02-12",
+    "published": "2026-02-12",
+    "tags": ["deployment", "cloudflare", "tutorial"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Vanilla Press publishes a static site to " },
+        { "type": "text", "value": "_site/", "marks": ["code"] },
+        { "type": "text", "value": ". Cloudflare Pages serves the static files at the edge. A thin Cloudflare Worker sits in front to handle content negotiation — routing " },
+        { "type": "text", "value": "Accept: text/markdown", "marks": ["code"] },
+        { "type": "text", "value": " requests to the markdown output, JSON requests to the API files, and HTML fragment requests to the fragment files." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Architecture" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "text" },
+      "value": "Browser/Agent\n     │\n     ▼\nCloudflare Worker (content negotiation)\n     │\n     ├── Accept: text/html      → /posts/css-layers/index.html\n     ├── Accept: text/markdown   → /md/posts/css-layers/index.md\n     ├── Accept: application/json → /api/posts/css-layers.json\n     └── X-Star-Request: content → /posts/css-layers/_fragment.html\n     │\n     ▼\nCloudflare Pages (static files at edge)"
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "tip" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The Worker adds about 1ms of latency. Every response is still served from static files — the Worker just routes to the right one. No database, no server-side rendering, no cold starts." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Setup" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Install Wrangler" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "npm install -g wrangler\nwrangler login"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "This authenticates with your Cloudflare account. You'll need a free Cloudflare account at minimum." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Publish the static site" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "node src/build/publish.js\nwrangler pages deploy _site/ --project-name=my-site"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "On first deploy, Wrangler creates the Pages project. Subsequent deploys update the static assets. Each deploy gets a unique preview URL." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Deploy the Worker" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "bash" },
+              "value": "wrangler deploy src/worker/index.js"
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "The Worker handles content negotiation by inspecting the " },
+                { "type": "text", "value": "Accept", "marks": ["code"] },
+                { "type": "text", "value": " header and routing to the appropriate static file variant." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Configure custom domain" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "In the Cloudflare dashboard, go to Pages → your project → Custom domains. Add your domain. Cloudflare handles SSL automatically — no certificate configuration needed." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Worker" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The content negotiation Worker is intentionally simple. Here's the core logic:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "javascript", "filename": "src/worker/index.js" },
+      "value": "export default {\n  async fetch(request, env) {\n    const url = new URL(request.url);\n    const accept = request.headers.get('Accept') || '';\n    const starScope = request.headers.get('X-Star-Request');\n\n    // Content negotiation\n    if (accept.includes('text/markdown')) {\n      url.pathname = `/md${url.pathname}index.md`;\n    } else if (accept.includes('application/json')) {\n      url.pathname = `/api${url.pathname.replace(/\\/$/, '')}.json`;\n    } else if (starScope === 'content') {\n      url.pathname = `${url.pathname}_fragment.html`;\n    }\n\n    return env.ASSETS.fetch(new Request(url, request));\n  },\n};"
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "note" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The Worker delegates to " },
+            { "type": "text", "value": "env.ASSETS.fetch()", "marks": ["code"] },
+            { "type": "text", "value": " which serves from Cloudflare Pages. This means the Worker doesn't handle caching, compression, or edge distribution — Pages does all of that." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "CI/CD with GitHub Actions" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Automate publishing on every push to " },
+        { "type": "text", "value": "main", "marks": ["code"] },
+        { "type": "text", "value": ":" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "yaml", "filename": ".github/workflows/deploy.yml" },
+      "value": "name: Deploy\non:\n  push:\n    branches: [main]\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n      - run: npm ci\n      - run: node src/build/publish.js\n      - uses: cloudflare/pages-action@v1\n        with:\n          apiToken: ${{ secrets.CF_API_TOKEN }}\n          accountId: ${{ secrets.CF_ACCOUNT_ID }}\n          projectName: my-site\n          directory: _site"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Performance Results" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A typical Vanilla Press page served from Cloudflare:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Time to First Byte: ", "marks": ["strong"] },
+          { "type": "text", "value": "~20ms (edge-cached static file)" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Total page weight: ", "marks": ["strong"] },
+          { "type": "text", "value": "~25KB (HTML + CSS, no JS required)" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Lighthouse score: ", "marks": ["strong"] },
+          { "type": "text", "value": "100/100 Performance (no framework overhead)" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Global latency: ", "marks": ["strong"] },
+          { "type": "text", "value": "<50ms from 300+ Cloudflare edge locations" }
+        ] }] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "When your output is static HTML and CSS with no JavaScript framework, there's nothing to optimize. The platform does the work." }
+      ]
+    }
+  ]
+}

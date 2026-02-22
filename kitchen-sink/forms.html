@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Forms — Kitchen Sink</title>
+<link rel="stylesheet" href="../src/build/assets/css/main.css"/>
+<style>
+  .demo-section {
+    margin-block: var(--space-2xl);
+    padding-block-start: var(--space-lg);
+    border-block-start: 1px solid var(--color-border);
+  }
+  .demo-section:first-of-type {
+    border-block-start: none;
+    padding-block-start: 0;
+  }
+  .demo-label {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin-block-end: var(--space-sm);
+  }
+  .demo-box {
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-block: var(--space-md);
+  }
+
+  /* Form element base styles */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([data-switch]),
+  textarea,
+  select {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: var(--font-size-base);
+  }
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+  input:invalid:not(:placeholder-shown) {
+    border-color: var(--color-danger);
+  }
+  input:valid:not(:placeholder-shown):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+    border-color: var(--color-tip);
+  }
+
+  label {
+    display: block;
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    margin-block-end: var(--space-xs);
+  }
+  .field {
+    margin-block-end: var(--space-md);
+  }
+  .field-hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin-block-start: var(--space-xs);
+  }
+
+  /* Form layouts */
+  .form-stacked .field {
+    margin-block-end: var(--space-md);
+  }
+  .form-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    align-items: flex-end;
+  }
+  .form-inline .field {
+    flex: 1;
+    min-width: 150px;
+    margin-block-end: 0;
+  }
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: var(--space-md);
+  }
+  .form-grid .field {
+    margin-block-end: 0;
+  }
+
+  fieldset {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-block: var(--space-lg);
+  }
+  legend {
+    font-weight: 700;
+    padding-inline: var(--space-sm);
+  }
+
+  /* Checkbox and radio custom styles */
+  .check-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  .check-group label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-weight: normal;
+    cursor: pointer;
+  }
+
+  /* form-field custom element */
+  form-field {
+    display: block;
+    margin-block-end: var(--space-md);
+  }
+  form-field label {
+    display: block;
+    font-weight: 600;
+    margin-block-end: var(--space-xs);
+    font-size: var(--font-size-sm);
+  }
+  form-field .field-hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin-block-start: var(--space-xs);
+  }
+  form-field input,
+  form-field textarea,
+  form-field select {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+  form-field input:focus,
+  form-field textarea:focus,
+  form-field select:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  input[type="file"] {
+    padding: var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    width: 100%;
+  }
+  input[type="range"] {
+    width: 100%;
+  }
+  input[type="color"] {
+    width: 60px;
+    height: 36px;
+    padding: 2px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+<nav>
+<a href="index.html" class="site-title">Kitchen Sink</a>
+<a href="typography.html">Typography</a>
+<a href="layout.html">Layout</a>
+<a href="custom-elements.html">Custom Elements</a>
+<a href="web-components.html">Web Components</a>
+<a href="data-attributes.html">Data Attributes</a>
+<a href="forms.html">Forms</a>
+<a href="buttons.html">Buttons</a>
+<a href="themes.html">Themes</a>
+</nav>
+</header>
+<main>
+<header class="doc-header">
+<h1>Forms</h1>
+<p class="site-description">Every form element and input type, with validation states and layout variations.</p>
+</header>
+
+<!-- Text inputs -->
+<section class="demo-section">
+<h2>Text Inputs</h2>
+<div class="demo-box">
+<div class="form-stacked">
+  <div class="field">
+    <label for="f-text">Text</label>
+    <input type="text" id="f-text" placeholder="Enter your name"/>
+  </div>
+  <div class="field">
+    <label for="f-email">Email</label>
+    <input type="email" id="f-email" placeholder="user@example.com"/>
+    <p class="field-hint">Must be a valid email address.</p>
+  </div>
+  <div class="field">
+    <label for="f-password">Password</label>
+    <input type="password" id="f-password" placeholder="Minimum 8 characters" minlength="8"/>
+  </div>
+  <div class="field">
+    <label for="f-url">URL</label>
+    <input type="url" id="f-url" placeholder="https://example.com"/>
+  </div>
+  <div class="field">
+    <label for="f-tel">Telephone</label>
+    <input type="tel" id="f-tel" placeholder="+1 (555) 123-4567" pattern="[+]?[\d\s()-]+"/>
+  </div>
+  <div class="field">
+    <label for="f-search">Search</label>
+    <input type="search" id="f-search" placeholder="Search articles..."/>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- Numeric inputs -->
+<section class="demo-section">
+<h2>Numeric Inputs</h2>
+<div class="demo-box">
+<div class="form-stacked">
+  <div class="field">
+    <label for="f-number">Number</label>
+    <input type="number" id="f-number" placeholder="42" min="0" max="100" step="1"/>
+    <p class="field-hint">Between 0 and 100.</p>
+  </div>
+  <div class="field">
+    <label for="f-range">Range</label>
+    <input type="range" id="f-range" min="0" max="100" value="50"/>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- Date and time -->
+<section class="demo-section">
+<h2>Date and Time Inputs</h2>
+<div class="demo-box">
+<div class="form-grid">
+  <div class="field">
+    <label for="f-date">Date</label>
+    <input type="date" id="f-date"/>
+  </div>
+  <div class="field">
+    <label for="f-time">Time</label>
+    <input type="time" id="f-time"/>
+  </div>
+  <div class="field">
+    <label for="f-datetime">Date + Time</label>
+    <input type="datetime-local" id="f-datetime"/>
+  </div>
+  <div class="field">
+    <label for="f-month">Month</label>
+    <input type="month" id="f-month"/>
+  </div>
+  <div class="field">
+    <label for="f-week">Week</label>
+    <input type="week" id="f-week"/>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- Color and file -->
+<section class="demo-section">
+<h2>Color and File Inputs</h2>
+<div class="demo-box">
+<div class="form-stacked">
+  <div class="field">
+    <label for="f-color">Color</label>
+    <input type="color" id="f-color" value="#1a6dd4"/>
+  </div>
+  <div class="field">
+    <label for="f-file">File</label>
+    <input type="file" id="f-file" accept="image/*,.pdf"/>
+    <p class="field-hint">Accepts images and PDF files.</p>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- Checkbox and Radio -->
+<section class="demo-section">
+<h2>Checkbox and Radio</h2>
+<div class="demo-box">
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-xl);">
+  <fieldset style="border: none; padding: 0; margin: 0;">
+    <legend style="font-weight: 700; margin-block-end: var(--space-sm);">Checkboxes</legend>
+    <div class="check-group">
+      <label><input type="checkbox" checked/> HTML</label>
+      <label><input type="checkbox" checked/> CSS</label>
+      <label><input type="checkbox"/> JavaScript</label>
+      <label><input type="checkbox" disabled/> TypeScript (disabled)</label>
+    </div>
+  </fieldset>
+  <fieldset style="border: none; padding: 0; margin: 0;">
+    <legend style="font-weight: 700; margin-block-end: var(--space-sm);">Radio buttons</legend>
+    <div class="check-group">
+      <label><input type="radio" name="framework" value="vanilla" checked/> Vanilla JS</label>
+      <label><input type="radio" name="framework" value="lit"/> Lit</label>
+      <label><input type="radio" name="framework" value="stencil"/> Stencil</label>
+      <label><input type="radio" name="framework" value="none" disabled/> None (disabled)</label>
+    </div>
+  </fieldset>
+</div>
+</div>
+</section>
+
+<!-- Textarea -->
+<section class="demo-section">
+<h2>Textarea</h2>
+<div class="demo-box">
+<div class="field">
+  <label for="f-textarea">Description</label>
+  <textarea id="f-textarea" rows="4" placeholder="Describe your project in detail..."></textarea>
+</div>
+</div>
+</section>
+
+<!-- Select -->
+<section class="demo-section">
+<h2>Select</h2>
+<div class="demo-box">
+<div class="form-grid">
+  <div class="field">
+    <label for="f-select">Single Select</label>
+    <select id="f-select">
+      <option value="" disabled selected>Choose a scope...</option>
+      <option value="page">Page</option>
+      <option value="content">Content</option>
+      <option value="block">Block</option>
+      <option value="collection">Collection</option>
+      <option value="meta">Meta</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-select-multi">Multiple Select</label>
+    <select id="f-select-multi" multiple size="4">
+      <option value="html">HTML</option>
+      <option value="css" selected>CSS</option>
+      <option value="js">JavaScript</option>
+      <option value="md">Markdown</option>
+      <option value="json">JSON</option>
+    </select>
+    <p class="field-hint">Hold Ctrl/Cmd to select multiple.</p>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- Datalist -->
+<section class="demo-section">
+<h2>Datalist</h2>
+<div class="demo-box">
+<div class="field">
+  <label for="f-datalist">Theme</label>
+  <input type="text" id="f-datalist" list="theme-list" placeholder="Start typing a theme name..."/>
+  <datalist id="theme-list">
+    <option value="ocean"/>
+    <option value="forest"/>
+    <option value="sunset"/>
+    <option value="rose"/>
+    <option value="lavender"/>
+    <option value="brutalist"/>
+    <option value="terminal"/>
+    <option value="kawaii"/>
+    <option value="cyber"/>
+  </datalist>
+</div>
+</div>
+</section>
+
+<!-- Fieldset and Legend -->
+<section class="demo-section">
+<h2>Fieldset and Legend</h2>
+<div class="demo-box">
+<fieldset>
+  <legend>Account Settings</legend>
+  <div class="field">
+    <label for="fs-username">Username</label>
+    <input type="text" id="fs-username" value="jdeveloper" required/>
+  </div>
+  <div class="field">
+    <label for="fs-email">Email</label>
+    <input type="email" id="fs-email" value="jane@example.com" required/>
+  </div>
+  <div class="field">
+    <label for="fs-timezone">Timezone</label>
+    <select id="fs-timezone">
+      <option>UTC-8 Pacific</option>
+      <option>UTC-5 Eastern</option>
+      <option selected>UTC+0 London</option>
+      <option>UTC+1 Berlin</option>
+      <option>UTC+9 Tokyo</option>
+    </select>
+  </div>
+</fieldset>
+</div>
+</section>
+
+<!-- Form Layout: Stacked -->
+<section class="demo-section">
+<h2>Form Layout: Stacked</h2>
+<p class="demo-label">.form-stacked</p>
+<p>The default vertical layout where each field takes the full width.</p>
+<div class="demo-box">
+<form class="form-stacked" onsubmit="return false;">
+  <div class="field">
+    <label for="stack-name">Name</label>
+    <input type="text" id="stack-name" required placeholder="Jane Developer"/>
+  </div>
+  <div class="field">
+    <label for="stack-email">Email</label>
+    <input type="email" id="stack-email" required placeholder="jane@example.com"/>
+  </div>
+  <div class="field">
+    <label for="stack-message">Message</label>
+    <textarea id="stack-message" rows="3" placeholder="Your message..."></textarea>
+  </div>
+  <button type="submit">Send Message</button>
+</form>
+</div>
+</section>
+
+<!-- Form Layout: Inline -->
+<section class="demo-section">
+<h2>Form Layout: Inline</h2>
+<p class="demo-label">.form-inline</p>
+<p>Fields arranged horizontally in a single row, wrapping as needed.</p>
+<div class="demo-box">
+<form class="form-inline" onsubmit="return false;">
+  <div class="field">
+    <label for="inline-first">First Name</label>
+    <input type="text" id="inline-first" placeholder="Jane"/>
+  </div>
+  <div class="field">
+    <label for="inline-last">Last Name</label>
+    <input type="text" id="inline-last" placeholder="Developer"/>
+  </div>
+  <div class="field">
+    <label for="inline-email">Email</label>
+    <input type="email" id="inline-email" placeholder="jane@example.com"/>
+  </div>
+  <div class="field" style="flex: 0;">
+    <label>&nbsp;</label>
+    <button type="submit">Subscribe</button>
+  </div>
+</form>
+</div>
+</section>
+
+<!-- Form Layout: Grid -->
+<section class="demo-section">
+<h2>Form Layout: Grid</h2>
+<p class="demo-label">.form-grid</p>
+<p>Fields arranged in an auto-filling grid.</p>
+<div class="demo-box">
+<form class="form-grid" onsubmit="return false;">
+  <div class="field">
+    <label for="grid-first">First Name</label>
+    <input type="text" id="grid-first" placeholder="Jane"/>
+  </div>
+  <div class="field">
+    <label for="grid-last">Last Name</label>
+    <input type="text" id="grid-last" placeholder="Developer"/>
+  </div>
+  <div class="field">
+    <label for="grid-email">Email</label>
+    <input type="email" id="grid-email" placeholder="jane@example.com"/>
+  </div>
+  <div class="field">
+    <label for="grid-phone">Phone</label>
+    <input type="tel" id="grid-phone" placeholder="+1 (555) 123-4567"/>
+  </div>
+  <div class="field">
+    <label for="grid-company">Company</label>
+    <input type="text" id="grid-company" placeholder="Acme Corp"/>
+  </div>
+  <div class="field">
+    <label for="grid-role">Role</label>
+    <select id="grid-role">
+      <option>Developer</option>
+      <option>Designer</option>
+      <option>Manager</option>
+      <option>Other</option>
+    </select>
+  </div>
+</form>
+</div>
+</section>
+
+<!-- Validation States -->
+<section class="demo-section">
+<h2>Validation States</h2>
+<p>Native HTML validation with <code>:valid</code> and <code>:invalid</code> pseudo-class styling. Type in the fields to see the border colors change.</p>
+<div class="demo-box">
+<form onsubmit="return false;">
+  <div class="field">
+    <label for="val-required">Required Field</label>
+    <input type="text" id="val-required" required placeholder="This field is required"/>
+    <p class="field-hint">Cannot be empty.</p>
+  </div>
+  <div class="field">
+    <label for="val-pattern">Pattern (letters only)</label>
+    <input type="text" id="val-pattern" pattern="[A-Za-z]+" placeholder="Only letters allowed" title="Only letters are allowed"/>
+    <p class="field-hint">Must contain only alphabetic characters.</p>
+  </div>
+  <div class="field">
+    <label for="val-minmax">Number (10-99)</label>
+    <input type="number" id="val-minmax" min="10" max="99" placeholder="Enter a number 10-99"/>
+    <p class="field-hint">Must be between 10 and 99.</p>
+  </div>
+  <div class="field">
+    <label for="val-email">Email Validation</label>
+    <input type="email" id="val-email" required placeholder="Enter a valid email"/>
+    <p class="field-hint">Browser validates the email format.</p>
+  </div>
+  <div class="field">
+    <label for="val-minlength">Min Length (5 chars)</label>
+    <input type="text" id="val-minlength" minlength="5" placeholder="At least 5 characters"/>
+  </div>
+</form>
+</div>
+</section>
+
+<!-- form-field custom element -->
+<section class="demo-section">
+<h2>form-field Custom Element</h2>
+<p class="demo-label">&lt;form-field&gt;</p>
+<p>The <code>form-field</code> custom element wraps a label, input, and optional hint text with consistent spacing.</p>
+<div class="demo-box">
+<form-field>
+  <label for="ff-title">Document Title</label>
+  <input type="text" id="ff-title" placeholder="My New Article" required/>
+  <p class="field-hint">The title appears in the page header and browser tab.</p>
+</form-field>
+<form-field>
+  <label for="ff-slug">URL Slug</label>
+  <input type="text" id="ff-slug" placeholder="my-new-article" pattern="[a-z0-9-]+"/>
+  <p class="field-hint">Lowercase letters, numbers, and hyphens only.</p>
+</form-field>
+<form-field>
+  <label for="ff-collection">Collection</label>
+  <select id="ff-collection">
+    <option value="posts">Posts</option>
+    <option value="pages">Pages</option>
+    <option value="docs">Docs</option>
+    <option value="guides">Guides</option>
+  </select>
+  <p class="field-hint">Which collection this document belongs to.</p>
+</form-field>
+<form-field>
+  <label for="ff-excerpt">Excerpt</label>
+  <textarea id="ff-excerpt" rows="3" placeholder="A brief summary for collection listings..."></textarea>
+</form-field>
+</div>
+</section>
+
+</main>
+<footer class="site-footer">
+<p>Vanilla Breeze Kitchen Sink</p>
+</footer>
+<script src="../src/build/assets/js/main.js" type="module"></script>
+</body>
+</html>

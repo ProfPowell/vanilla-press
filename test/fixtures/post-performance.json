@@ -1,0 +1,255 @@
+{
+  "id": "doc_perf01",
+  "meta": {
+    "title": "Performance Budgets That Actually Work",
+    "slug": "performance-budgets-that-work",
+    "collection": "posts",
+    "description": "Most performance budgets fail because they measure the wrong things. Here's a framework built on user-centric metrics.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-05",
+    "updated": "2026-02-08",
+    "published": "2026-02-08",
+    "tags": ["performance", "web-standards", "architecture"]
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Your performance budget is probably wrong. Not because the numbers are bad, but because you're measuring " },
+        { "type": "text", "value": "bundle size", "marks": ["strong"] },
+        { "type": "text", "value": " when you should be measuring " },
+        { "type": "text", "value": "time to interactive", "marks": ["strong"] },
+        { "type": "text", "value": "." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Metrics That Matter" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Google's Core Web Vitals framework gives us three user-centric metrics. Every budget should be anchored to these:" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Largest Contentful Paint (LCP)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "How long until the main content is visible? Target: " },
+                { "type": "text", "value": "under 2.5 seconds", "marks": ["strong"] },
+                { "type": "text", "value": " on a mid-tier mobile device over 4G." }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "This is the most important metric. If users can't see content quickly, nothing else matters." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Interaction to Next Paint (INP)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "How long between a tap/click and the visual response? Target: " },
+                { "type": "text", "value": "under 200ms", "marks": ["strong"] },
+                { "type": "text", "value": "." }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "INP replaced FID in 2024. It measures " },
+                { "type": "text", "value": "all", "marks": ["em"] },
+                { "type": "text", "value": " interactions, not just the first one. This catches the jank that FID missed." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Cumulative Layout Shift (CLS)" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "How much does the page jump around while loading? Target: " },
+                { "type": "text", "value": "under 0.1", "marks": ["strong"] },
+                { "type": "text", "value": "." }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Set explicit " },
+                { "type": "text", "value": "width", "marks": ["code"] },
+                { "type": "text", "value": " and " },
+                { "type": "text", "value": "height", "marks": ["code"] },
+                { "type": "text", "value": " on images and embeds. Use " },
+                { "type": "text", "value": "aspect-ratio", "marks": ["code"] },
+                { "type": "text", "value": " for responsive containers." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "A Practical Budget" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Here's the budget we use for Vanilla Press. It's aggressive but achievable because we don't ship a JavaScript framework:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "json", "filename": "budget.json" },
+      "value": "{\n  \"budgets\": [\n    {\n      \"resourceType\": \"document\",\n      \"budget\": 30,\n      \"unit\": \"KB\"\n    },\n    {\n      \"resourceType\": \"stylesheet\",\n      \"budget\": 20,\n      \"unit\": \"KB\"\n    },\n    {\n      \"resourceType\": \"script\",\n      \"budget\": 15,\n      \"unit\": \"KB\"\n    },\n    {\n      \"resourceType\": \"image\",\n      \"budget\": 200,\n      \"unit\": \"KB\"\n    },\n    {\n      \"resourceType\": \"total\",\n      \"budget\": 300,\n      \"unit\": \"KB\"\n    }\n  ]\n}"
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "danger" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "A single React + Next.js hello world ships ~80KB of JavaScript. That's already 5x our JS budget. Framework choice " },
+            { "type": "text", "value": "is", "marks": ["em"] },
+            { "type": "text", "value": " a performance decision." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Enforcement" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A budget that isn't enforced is a wish list. Here are three layers of enforcement:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": true },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "CI checks", "marks": ["strong"] },
+                { "type": "text", "value": " — Lighthouse CI runs on every PR. Budget violations block merge." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Bundle analysis", "marks": ["strong"] },
+                { "type": "text", "value": " — " },
+                { "type": "text", "value": "bundlewatch", "marks": ["code"] },
+                { "type": "text", "value": " or " },
+                { "type": "text", "value": "size-limit", "marks": ["code"] },
+                { "type": "text", "value": " catches regressions at build time, before they hit staging." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "RUM monitoring", "marks": ["strong"] },
+                { "type": "text", "value": " — Real User Monitoring from Cloudflare Web Analytics catches what lab tests miss: slow networks, old devices, geographic variance." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "The Zero-JS Baseline" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The most radical performance optimization is the simplest: " },
+        { "type": "text", "value": "don't ship JavaScript unless you have to", "marks": ["strong"] },
+        { "type": "text", "value": ". Vanilla Press pages load with zero JS by default. Interactive features (copy buttons, tab switching) enhance progressively." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This isn't possible with React, Vue, or Svelte. It's only possible when your component model is built on the platform — CSS for presentation, HTML for structure, JS only for behavior that HTML can't express natively." }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The fastest code is the code you never ship." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "card",
+      "attrs": { "href": "/posts/building-design-system-native-css" },
+      "children": [
+        {
+          "type": "heading",
+          "attrs": { "level": 3 },
+          "children": [
+            { "type": "text", "value": "Building a Design System with Native CSS" }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "How the token-based architecture enables zero-JS theming and sub-20KB stylesheets." }
+          ]
+        }
+      ]
+    }
+  ]
+}

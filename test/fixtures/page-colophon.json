@@ -1,0 +1,208 @@
+{
+  "id": "doc_page02",
+  "meta": {
+    "title": "Colophon",
+    "slug": "colophon",
+    "collection": "pages",
+    "description": "How this site is built — tools, technologies, and design decisions.",
+    "status": "published",
+    "created": "2026-02-01",
+    "updated": "2026-02-14",
+    "published": "2026-02-14",
+    "tags": []
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "This site is built with Vanilla Press, a content system that treats the web platform as the framework. Here's what's under the hood." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Content Pipeline" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Author" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Content is written in the Vanilla Press editor — a ProseMirror-based visual editor that saves documents as typed block ASTs to a SQLite database." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Store" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Documents live in SQLite with full-text search, tag filtering, and collection grouping. The schema is defined in " },
+                { "type": "text", "value": "content-schema.js", "marks": ["code"] },
+                { "type": "text", "value": " and shared across the entire system." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Render" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Pure function renderers transform block ASTs into HTML (with custom elements), markdown (with frontmatter), Atom XML, sitemap.xml, and llms.txt. No templates, no side effects." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Publish" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "The static publisher reads all published documents, renders every output format, and writes flat files to " },
+                { "type": "text", "value": "_site/", "marks": ["code"] },
+                { "type": "text", "value": ". No server required to serve the output." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Serve" },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Cloudflare Pages serves static files from 300+ edge locations. A thin Worker handles content negotiation — same URL serves HTML to browsers, markdown to LLMs, JSON to API consumers." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Design" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "The visual design uses " },
+        {
+          "type": "link",
+          "attrs": { "href": "https://vanillabreeze.dev" },
+          "children": [{ "type": "text", "value": "Vanilla Breeze" }]
+        },
+        { "type": "text", "value": ", a native CSS design system built on " },
+        { "type": "text", "value": "@layer", "marks": ["code"] },
+        { "type": "text", "value": ", custom properties, and custom elements. Key design tokens:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Typography:", "marks": ["strong"] },
+          { "type": "text", "value": " System font stack for body, monospace for code" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Colors:", "marks": ["strong"] },
+          { "type": "text", "value": " OKLCH color space for perceptual uniformity" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Spacing:", "marks": ["strong"] },
+          { "type": "text", "value": " 4px base scale (xs=4, sm=8, md=16, lg=32, xl=64)" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "Themes:", "marks": ["strong"] },
+          { "type": "text", "value": " 23 swappable themes via custom property overrides" }
+        ] }] }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "What's Not Here" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Conspicuously absent from this site:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "No JavaScript framework", "marks": ["strong"] },
+          { "type": "text", "value": " — pages load and render without React, Vue, Svelte, or Astro" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "No build tooling", "marks": ["strong"] },
+          { "type": "text", "value": " — no Webpack, Vite, Rollup, or esbuild. CSS uses native " },
+          { "type": "text", "value": "@import", "marks": ["code"] },
+          { "type": "text", "value": " and " },
+          { "type": "text", "value": "@layer", "marks": ["code"] }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "No analytics tracker", "marks": ["strong"] },
+          { "type": "text", "value": " — Cloudflare Web Analytics is privacy-first and doesn't use client-side JavaScript" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "No cookie banner", "marks": ["strong"] },
+          { "type": "text", "value": " — because there are no cookies" }
+        ] }] },
+        { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+          { "type": "text", "value": "No web fonts", "marks": ["strong"] },
+          { "type": "text", "value": " — system fonts load instantly and look native on every OS" }
+        ] }] }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": { "variant": "note" },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "Total page weight for a typical article: ~25KB. For comparison, the median web page in 2025 was 2.4MB. We're 99% lighter." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Source" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Vanilla Press is open source. The content system, renderers, editor, and publisher are all in a single repository. The code is vanilla JavaScript — ES modules, no TypeScript, no abstractions for the sake of abstractions." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,242 @@
+{
+  "id": "doc_about01",
+  "meta": {
+    "title": "About Vanilla Press",
+    "slug": "about",
+    "collection": "pages",
+    "description": "Vanilla Press is a platform-first content system built on web standards. No frameworks, no build tools, no compromises.",
+    "status": "published",
+    "created": "2026-01-01",
+    "updated": "2026-02-14",
+    "published": "2026-02-14",
+    "tags": []
+  },
+  "blocks": [
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Vanilla Press is a content system where the component model, the editor, the storage, and the output are all built on web standards. A " },
+        { "type": "text", "value": "callout", "marks": ["code"] },
+        { "type": "text", "value": " block in the content store is the same " },
+        { "type": "text", "value": "callout", "marks": ["code"] },
+        { "type": "text", "value": " that exists as a " },
+        { "type": "text", "value": "<ui-callout>", "marks": ["code"] },
+        { "type": "text", "value": " custom element in the browser. One concept, multiple serializations, no lossy conversion." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Principles" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Platform first", "marks": ["strong"] },
+            { "type": "text", "value": " — CSS custom properties, custom elements, ES modules, SQLite. The web platform is the framework." }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "No build step", "marks": ["strong"] },
+            { "type": "text", "value": " — no Webpack, no Vite, no TypeScript compiler. JavaScript runs as-is." }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Content as data", "marks": ["strong"] },
+            { "type": "text", "value": " — documents are structured block ASTs, not HTML strings or markdown files. The schema is the contract." }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Multiple outputs", "marks": ["strong"] },
+            { "type": "text", "value": " — same content renders to HTML (browsers), markdown (LLMs), JSON (APIs), and HTML fragments (hypermedia)." }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Progressive enhancement", "marks": ["strong"] },
+            { "type": "text", "value": " — everything works without JavaScript. JS adds interactivity, not structure." }
+          ] }]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Tech Stack" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "Content" },
+          "children": [
+            {
+              "type": "list",
+              "attrs": { "ordered": false },
+              "children": [
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Storage:", "marks": ["strong"] },
+                  { "type": "text", "value": " SQLite (local) / Cloudflare D1 (production)" }
+                ] }] },
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Schema:", "marks": ["strong"] },
+                  { "type": "text", "value": " Typed block AST defined in content-schema.js" }
+                ] }] },
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Search:", "marks": ["strong"] },
+                  { "type": "text", "value": " FTS5 full-text search on title, description, and plaintext" }
+                ] }] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Rendering" },
+          "children": [
+            {
+              "type": "list",
+              "attrs": { "ordered": false },
+              "children": [
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "HTML:", "marks": ["strong"] },
+                  { "type": "text", "value": " Semantic markup with Vanilla Breeze custom elements" }
+                ] }] },
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Markdown:", "marks": ["strong"] },
+                  { "type": "text", "value": " Clean output with YAML frontmatter" }
+                ] }] },
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Feeds:", "marks": ["strong"] },
+                  { "type": "text", "value": " Atom XML, sitemap.xml, llms.txt" }
+                ] }] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Editor" },
+          "children": [
+            {
+              "type": "list",
+              "attrs": { "ordered": false },
+              "children": [
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Engine:", "marks": ["strong"] },
+                  { "type": "text", "value": " ProseMirror with custom NodeViews" }
+                ] }] },
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Styling:", "marks": ["strong"] },
+                  { "type": "text", "value": " Vanilla Breeze components render live in the editor" }
+                ] }] },
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Themes:", "marks": ["strong"] },
+                  { "type": "text", "value": " 23 themes from Vanilla Breeze, live preview in content pane" }
+                ] }] }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Deployment" },
+          "children": [
+            {
+              "type": "list",
+              "attrs": { "ordered": false },
+              "children": [
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Hosting:", "marks": ["strong"] },
+                  { "type": "text", "value": " Cloudflare Pages (static) + Workers (content negotiation)" }
+                ] }] },
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "CDN:", "marks": ["strong"] },
+                  { "type": "text", "value": " 300+ edge locations, automatic SSL" }
+                ] }] },
+                { "type": "list_item", "children": [{ "type": "paragraph", "children": [
+                  { "type": "text", "value": "Performance:", "marks": ["strong"] },
+                  { "type": "text", "value": " ~25KB total page weight, 100/100 Lighthouse" }
+                ] }] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Why Not WordPress?" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "WordPress is a PHP application that generates HTML on every request. Vanilla Press is a static publisher that pre-generates every output format at build time. The differences are fundamental:" }
+      ]
+    },
+    {
+      "type": "list",
+      "attrs": { "ordered": false },
+      "children": [
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "No server runtime", "marks": ["strong"] },
+            { "type": "text", "value": " — static files, not PHP processes" }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "No plugin ecosystem", "marks": ["strong"] },
+            { "type": "text", "value": " — and that's a feature. No attack surface, no update treadmill" }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Content is portable", "marks": ["strong"] },
+            { "type": "text", "value": " — JSON block ASTs, not a MySQL database with proprietary shortcodes" }
+          ] }]
+        },
+        {
+          "type": "list_item",
+          "children": [{ "type": "paragraph", "children": [
+            { "type": "text", "value": "Multi-format output", "marks": ["strong"] },
+            { "type": "text", "value": " — WordPress serves HTML. VP serves HTML, markdown, JSON, Atom, and HTML fragments from the same content." }
+          ] }]
+        }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            { "type": "text", "value": "The best CMS is the one that gets out of the way. Vanilla Press stores your content as structured data and renders it with pure functions. Everything else is the web platform." }
+          ]
+        }
+      ]
+    }
+  ]
+}

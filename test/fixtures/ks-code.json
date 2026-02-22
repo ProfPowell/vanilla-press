@@ -1,0 +1,231 @@
+{
+  "id": "doc_ks_code",
+  "meta": {
+    "title": "Kitchen Sink: Code",
+    "slug": "ks-code",
+    "collection": "kitchen-sink",
+    "description": "Exercises code blocks in 8 languages, with filenames, special characters, and code inside tabs and steps.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-17",
+    "updated": "2026-02-17",
+    "published": "2026-02-17",
+    "tags": ["kitchen-sink", "code"]
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "JavaScript" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "js", "filename": "src/renderers/html.js" },
+      "value": "/**\n * Render a block AST to semantic HTML.\n * @param {Block[]} blocks - Array of block nodes\n * @param {RenderOptions} [options] - Rendering options\n * @returns {string} HTML string\n */\nexport function renderHTML(blocks, options = {}) {\n  const { scope = 'content' } = options;\n  return blocks.map(block => renderBlock(block, scope)).join('\\n');\n}\n\nfunction renderBlock(block, scope) {\n  switch (block.type) {\n    case 'paragraph':\n      return `<p>${renderInline(block.children)}</p>`;\n    case 'heading':\n      const tag = `h${block.attrs.level}`;\n      return `<${tag}>${renderInline(block.children)}</${tag}>`;\n    default:\n      return '';\n  }\n}"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "CSS" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "css", "filename": "src/build/assets/css/components.css" },
+      "value": "@layer components {\n  ui-callout {\n    display: block;\n    padding: var(--space-md) var(--space-lg);\n    border-inline-start: 4px solid var(--callout-color, var(--color-blue-500));\n    background: var(--callout-bg, var(--color-blue-50));\n    border-radius: var(--radius-md);\n    margin-block: var(--space-lg);\n  }\n\n  ui-callout[data-variant=\"warning\"] {\n    --callout-color: var(--color-amber-500);\n    --callout-bg: var(--color-amber-50);\n  }\n\n  ui-callout[data-variant=\"danger\"] {\n    --callout-color: var(--color-red-500);\n    --callout-bg: var(--color-red-50);\n  }\n}"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "HTML" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "html", "filename": "editor/index.html" },
+      "value": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Vanilla Press Editor</title>\n  <link rel=\"stylesheet\" href=\"/assets/css/main.css\">\n</head>\n<body>\n  <editor-shell>\n    <nav slot=\"sidebar\">\n      <doc-browser></doc-browser>\n    </nav>\n    <main slot=\"content\">\n      <div id=\"editor\"></div>\n    </main>\n  </editor-shell>\n  <script src=\"/assets/js/main.js\" type=\"module\"></script>\n</body>\n</html>"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Python" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "python" },
+      "value": "import sqlite3\nimport json\nfrom pathlib import Path\n\ndef migrate_wordpress_posts(wp_export_path: str, db_path: str) -> int:\n    \"\"\"Convert WordPress XML export to Vanilla Press SQLite.\"\"\"\n    conn = sqlite3.connect(db_path)\n    cursor = conn.cursor()\n    cursor.execute(\"\"\"\n        CREATE TABLE IF NOT EXISTS documents (\n            id TEXT PRIMARY KEY,\n            meta TEXT NOT NULL,\n            blocks TEXT NOT NULL\n        )\n    \"\"\")\n\n    posts = parse_wp_export(Path(wp_export_path))\n    for post in posts:\n        blocks = html_to_blocks(post[\"content\"])\n        meta = {\"title\": post[\"title\"], \"slug\": post[\"slug\"]}\n        cursor.execute(\n            \"INSERT INTO documents VALUES (?, ?, ?)\",\n            (post[\"id\"], json.dumps(meta), json.dumps(blocks))\n        )\n\n    conn.commit()\n    count = len(posts)\n    conn.close()\n    return count"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Bash" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "bash", "filename": "scripts/deploy.sh" },
+      "value": "#!/usr/bin/env bash\nset -euo pipefail\n\nPROJECT_DIR=\"$(cd \"$(dirname \"$0\")/..\" && pwd)\"\nOUTPUT_DIR=\"$PROJECT_DIR/dist\"\n\necho \"Building static site...\"\nnode \"$PROJECT_DIR/bin/publish.js\" --output \"$OUTPUT_DIR\"\n\necho \"Running tests...\"\nnode --test \"$PROJECT_DIR/test/**/*.test.js\"\n\nif [[ \"${CI:-}\" == \"true\" ]]; then\n  echo \"Deploying to Cloudflare Pages...\"\n  npx wrangler pages deploy \"$OUTPUT_DIR\" \\\n    --project-name vanilla-press \\\n    --branch \"${GITHUB_REF_NAME:-main}\"\nelse\n  echo \"Skipping deploy (not in CI)\"\nfi\n\necho \"Done.\""
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "SQL" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "sql" },
+      "value": "-- Full-text search across documents\nCREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(\n  title,\n  content,\n  content=documents,\n  content_rowid=rowid,\n  tokenize='porter unicode61'\n);\n\n-- Query with ranking\nSELECT\n  d.id,\n  json_extract(d.meta, '$.title') AS title,\n  json_extract(d.meta, '$.slug') AS slug,\n  rank\nFROM documents_fts\nJOIN documents d ON d.rowid = documents_fts.rowid\nWHERE documents_fts MATCH ?\nORDER BY rank\nLIMIT 20;"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "JSON" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "json", "filename": "wrangler.toml" },
+      "value": "{\n  \"name\": \"vanilla-press\",\n  \"main\": \"src/worker/index.js\",\n  \"compatibility_date\": \"2026-02-01\",\n  \"d1_databases\": [\n    {\n      \"binding\": \"DB\",\n      \"database_name\": \"vanilla-press-content\",\n      \"database_id\": \"abc123\"\n    }\n  ],\n  \"routes\": [\n    { \"pattern\": \"example.com/*\", \"zone_name\": \"example.com\" }\n  ]\n}"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Plain Text" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "text" },
+      "value": "Vanilla Press Content Pipeline\n==============================\n\n  JSON fixture  -->  Schema Validator  -->  SQLite Store\n                                              |\n                                              v\n                                        Static Publisher\n                                         /     |     \\\n                                       HTML   MD   RSS\n                                        |      |     |\n                                        v      v     v\n                                      Cloudflare Pages (CDN)"
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Code Block with Special Characters" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Code containing HTML entities, angle brackets, ampersands, and other characters that need careful handling:" }
+      ]
+    },
+    {
+      "type": "code_block",
+      "attrs": { "language": "html" },
+      "value": "<!-- Template with special characters -->\n<template id=\"user-card\">\n  <style>\n    :host { display: block; }\n    .name { font-weight: bold; }\n  </style>\n  <div class=\"card\">\n    <span class=\"name\"><slot name=\"name\">Anonymous</slot></span>\n    <p>Joined &mdash; <time datetime=\"\"></time></p>\n    <p>Score: <span data-bind=\"score\">0</span> &amp; counting</p>\n    <p>Rank: #1 &lt; all others &gt;</p>\n  </div>\n</template>\n\n<script>\n  // Characters: < > & \" ' ` ${}\n  const x = 1 < 2 && 3 > 1;\n  const tpl = `Hello, ${name ?? 'World'}`;\n  console.log('It\\'s working: ' + (x ? '✓' : '✗'));\n</script>"
+    },
+    {
+      "type": "hr",
+      "attrs": { "variant": "default" }
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Code inside Tabs" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "Comparing the same operation across languages:" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab",
+          "attrs": { "label": "JavaScript" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "js" },
+              "value": "const response = await fetch('/api/documents');\nconst documents = await response.json();\nconst published = documents.filter(d => d.meta.status === 'published');"
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "Python" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "python" },
+              "value": "import httpx\n\nresponse = httpx.get('/api/documents')\ndocuments = response.json()\npublished = [d for d in documents if d['meta']['status'] == 'published']"
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "attrs": { "label": "SQL" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "sql" },
+              "value": "SELECT id, json_extract(meta, '$.title') AS title\nFROM documents\nWHERE json_extract(meta, '$.status') = 'published'\nORDER BY json_extract(meta, '$.published') DESC;"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Code inside Steps" }
+      ]
+    },
+    {
+      "type": "steps",
+      "children": [
+        {
+          "type": "step",
+          "attrs": { "title": "Create the schema" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "sql" },
+              "value": "CREATE TABLE documents (\n  id TEXT PRIMARY KEY,\n  meta TEXT NOT NULL,\n  blocks TEXT NOT NULL\n);"
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Insert a document" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "js" },
+              "value": "const stmt = db.prepare(\n  'INSERT INTO documents (id, meta, blocks) VALUES (?, ?, ?)'\n);\nstmt.run('doc_001', JSON.stringify(meta), JSON.stringify(blocks));"
+            }
+          ]
+        },
+        {
+          "type": "step",
+          "attrs": { "title": "Query with full-text search" },
+          "children": [
+            {
+              "type": "code_block",
+              "attrs": { "language": "js" },
+              "value": "const results = db.prepare(`\n  SELECT id, json_extract(meta, '$.title') as title, rank\n  FROM documents_fts\n  WHERE documents_fts MATCH ?\n  ORDER BY rank\n  LIMIT 10\n`).all(searchQuery);"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

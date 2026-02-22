@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Typography — Kitchen Sink</title>
+<link rel="stylesheet" href="../src/build/assets/css/main.css"/>
+<style>
+  .demo-section {
+    margin-block: var(--space-2xl);
+    padding-block-start: var(--space-lg);
+    border-block-start: 1px solid var(--color-border);
+  }
+  .demo-section:first-of-type {
+    border-block-start: none;
+    padding-block-start: 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-block: var(--space-md);
+  }
+  table th, table td {
+    padding: var(--space-sm) var(--space-md);
+    text-align: left;
+  }
+  table.striped tbody tr:nth-child(odd) {
+    background: var(--color-surface);
+  }
+  table.bordered th, table.bordered td {
+    border: 1px solid var(--color-border);
+  }
+  table.compact th, table.compact td {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--font-size-sm);
+  }
+  table caption {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin-block-end: var(--space-sm);
+    text-align: left;
+  }
+  figure.full {
+    margin-inline: calc(-1 * var(--page-padding));
+  }
+  figure.bordered {
+    border: 1px solid var(--color-border);
+    padding: var(--space-md);
+    border-radius: var(--radius-lg);
+  }
+  figure.float-start {
+    float: inline-start;
+    margin-inline-end: var(--space-lg);
+    max-width: 300px;
+  }
+  figure.float-end {
+    float: inline-end;
+    margin-inline-start: var(--space-lg);
+    max-width: 300px;
+  }
+  figure.centered {
+    text-align: center;
+  }
+  figure.centered img {
+    margin-inline: auto;
+  }
+  .placeholder-img {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+  }
+  hr.decorative {
+    border: none;
+    text-align: center;
+    margin-block: var(--space-xl);
+  }
+  hr.decorative::before {
+    content: "* * *";
+    color: var(--color-text-muted);
+    letter-spacing: 0.5em;
+  }
+  .clearfix::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+<nav>
+<a href="index.html" class="site-title">Kitchen Sink</a>
+<a href="typography.html">Typography</a>
+<a href="layout.html">Layout</a>
+<a href="custom-elements.html">Custom Elements</a>
+<a href="web-components.html">Web Components</a>
+<a href="data-attributes.html">Data Attributes</a>
+<a href="forms.html">Forms</a>
+<a href="buttons.html">Buttons</a>
+<a href="themes.html">Themes</a>
+</nav>
+</header>
+<main>
+<header class="doc-header">
+<h1>Typography</h1>
+<p class="site-description">All typographic elements styled by Vanilla Breeze.</p>
+</header>
+
+<!-- Headings -->
+<section class="demo-section">
+<h2>Headings</h2>
+<h1>Heading Level 1</h1>
+<h2>Heading Level 2</h2>
+<h3>Heading Level 3</h3>
+<h4>Heading Level 4</h4>
+<h5>Heading Level 5</h5>
+<h6>Heading Level 6</h6>
+
+<hgroup>
+<h2>Article Title in an hgroup</h2>
+<p>A subtitle or tagline that accompanies the heading</p>
+</hgroup>
+</section>
+
+<!-- Blockquote -->
+<section class="demo-section">
+<h2>Blockquotes</h2>
+<blockquote>
+<p>The web is not a platform. It is a medium. And like any medium, its power lies in its constraints.</p>
+<cite>Jeremy Keith</cite>
+</blockquote>
+
+<blockquote>
+<p>Simplicity is the ultimate sophistication.</p>
+<p>Every piece of technology that survives long enough becomes simple, or it dies.</p>
+<cite>Leonardo da Vinci (paraphrased)</cite>
+</blockquote>
+</section>
+
+<!-- Code and Pre -->
+<section class="demo-section">
+<h2>Code Blocks</h2>
+<p>Inline code looks like <code>const name = "Vanilla Breeze";</code> within a paragraph.</p>
+
+<code-block data-language="js">
+<pre><code>// A simple module pattern
+export function createRenderer(options = {}) {
+  const { format = 'html', scope = 'page' } = options;
+
+  return function render(blocks) {
+    return blocks.map(block => renderBlock(block, format)).join('\n');
+  };
+}</code></pre>
+</code-block>
+
+<code-block data-language="css" data-filename="tokens.css">
+<pre><code>:root {
+  --color-bg: #fdfdfd;
+  --color-surface: #ffffff;
+  --color-text: #1a1a2e;
+  --font-body: system-ui, sans-serif;
+  --space-md: 1rem;
+}</code></pre>
+</code-block>
+
+<code-block data-language="html">
+<pre><code>&lt;ui-callout data-variant="tip"&gt;
+  &lt;p&gt;This component works without JavaScript.&lt;/p&gt;
+&lt;/ui-callout&gt;</code></pre>
+</code-block>
+</section>
+
+<!-- Inline elements -->
+<section class="demo-section">
+<h2>Inline Elements</h2>
+<p>Press <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> to open the command palette.</p>
+<p>This text has <mark>highlighted content</mark> to draw attention.</p>
+<p>The <abbr title="World Wide Web Consortium">W3C</abbr> maintains web standards.</p>
+<p>Water is H<sub>2</sub>O. Einstein's equation is E = mc<sup>2</sup>.</p>
+<p><small>This is small print, typically used for legal disclaimers or fine print.</small></p>
+<p>This is <s>no longer accurate</s> and has been corrected.</p>
+<p>This text is <strong>strongly emphasized</strong> and this is <em>regular emphasis</em>.</p>
+
+<address>
+  Thomas Powell<br/>
+  San Diego, California<br/>
+  <a href="mailto:hello@example.com">hello@example.com</a>
+</address>
+</section>
+
+<!-- Definition list -->
+<section class="demo-section">
+<h2>Definition List</h2>
+<dl>
+<dt>Block AST</dt>
+<dd>A JSON array of typed blocks that represent document content. Each block has a type, optional attributes, and children or a leaf value.</dd>
+
+<dt>Rendering Scope</dt>
+<dd>One of five output modes: page, content, block, collection, or meta. The scope determines how much of the document is rendered.</dd>
+
+<dt>Content Negotiation</dt>
+<dd>The server reads Accept headers to determine the response format. The same URL serves HTML, markdown, or JSON depending on the client.</dd>
+</dl>
+</section>
+
+<!-- Lists -->
+<section class="demo-section">
+<h2>Unordered Lists</h2>
+<ul>
+<li>Vanilla JavaScript with ES modules</li>
+<li>No build step for client code</li>
+<li>CSS layers for cascade control
+  <ul>
+    <li>Reset layer</li>
+    <li>Token layer</li>
+    <li>Base layer
+      <ul>
+        <li>Typography</li>
+        <li>Links</li>
+        <li>Prose elements</li>
+      </ul>
+    </li>
+    <li>Layout layer</li>
+    <li>Component layer</li>
+  </ul>
+</li>
+<li>Custom elements as style hooks</li>
+</ul>
+
+<h2>Ordered Lists</h2>
+<ol>
+<li>Define the content schema</li>
+<li>Write renderer functions
+  <ol>
+    <li>HTML renderer</li>
+    <li>Markdown renderer</li>
+    <li>Feed renderer (RSS/Atom)</li>
+  </ol>
+</li>
+<li>Build the static publisher</li>
+<li>Deploy to Cloudflare Pages</li>
+</ol>
+
+<h2>Steps List</h2>
+<ol data-steps>
+<li>Clone the repository and install dependencies</li>
+<li>Define your content schema in <code>content-schema.js</code></li>
+<li>Create test fixtures and run the test suite</li>
+</ol>
+</section>
+
+<!-- Tables -->
+<section class="demo-section">
+<h2>Tables</h2>
+
+<h3>Striped Table</h3>
+<table class="striped">
+<caption>HTTP Content Negotiation Headers</caption>
+<thead>
+<tr><th>Header</th><th>Value</th><th>Response Format</th></tr>
+</thead>
+<tbody>
+<tr><td>Accept</td><td>text/html</td><td>Full HTML page</td></tr>
+<tr><td>Accept</td><td>text/markdown</td><td>Clean markdown with frontmatter</td></tr>
+<tr><td>Accept</td><td>application/json</td><td>Block AST JSON</td></tr>
+<tr><td>X-Star-Request</td><td>content</td><td>HTML fragment (article body)</td></tr>
+<tr><td>X-Star-Request</td><td>meta</td><td>Document metadata only</td></tr>
+</tbody>
+</table>
+
+<h3>Bordered Table</h3>
+<table class="bordered">
+<caption>Design Token Categories</caption>
+<thead>
+<tr><th>Category</th><th>Example Token</th><th>Default Value</th></tr>
+</thead>
+<tbody>
+<tr><td>Colors</td><td><code>--color-bg</code></td><td>#fdfdfd</td></tr>
+<tr><td>Typography</td><td><code>--font-body</code></td><td>system-ui</td></tr>
+<tr><td>Spacing</td><td><code>--space-md</code></td><td>1rem</td></tr>
+<tr><td>Layout</td><td><code>--content-width</code></td><td>42rem</td></tr>
+<tr><td>Shape</td><td><code>--radius</code></td><td>4px</td></tr>
+</tbody>
+</table>
+
+<h3>Compact Table</h3>
+<table class="compact bordered striped">
+<caption>Block Types in Content Schema</caption>
+<thead>
+<tr><th>Type</th><th>Element</th><th>Leaf?</th><th>Children?</th></tr>
+</thead>
+<tbody>
+<tr><td>paragraph</td><td>&lt;p&gt;</td><td>Yes</td><td>No</td></tr>
+<tr><td>heading</td><td>&lt;h1&gt;-&lt;h6&gt;</td><td>Yes</td><td>No</td></tr>
+<tr><td>callout</td><td>&lt;ui-callout&gt;</td><td>No</td><td>Yes</td></tr>
+<tr><td>code_block</td><td>&lt;code-block&gt;</td><td>Yes</td><td>No</td></tr>
+<tr><td>list</td><td>&lt;ul&gt;/&lt;ol&gt;</td><td>No</td><td>Yes</td></tr>
+<tr><td>image</td><td>&lt;figure&gt;</td><td>Yes</td><td>No</td></tr>
+<tr><td>tabs</td><td>&lt;ui-tabs&gt;</td><td>No</td><td>Yes</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- Figures -->
+<section class="demo-section clearfix">
+<h2>Figures</h2>
+
+<h3>Standard Figure</h3>
+<figure>
+<div class="placeholder-img" style="width: 100%; height: 200px;">640 x 200</div>
+<figcaption>A standard figure with a caption describing the content above.</figcaption>
+</figure>
+
+<h3>Bordered Figure</h3>
+<figure class="bordered">
+<div class="placeholder-img" style="width: 100%; height: 160px;">Bordered figure content</div>
+<figcaption>This figure has a visible border and padding around it.</figcaption>
+</figure>
+
+<h3>Centered Figure</h3>
+<figure class="centered">
+<div class="placeholder-img" style="width: 300px; height: 150px; margin: 0 auto;">300 x 150 centered</div>
+<figcaption>A centered figure with a constrained width.</figcaption>
+</figure>
+
+<h3>Float Start</h3>
+<figure class="float-start">
+<div class="placeholder-img" style="width: 100%; height: 120px;">Float start</div>
+<figcaption>Floated to the start.</figcaption>
+</figure>
+<p>When a figure floats to the start, text wraps around it on the end side. This is useful for small images or diagrams that accompany a paragraph of text. The content should be long enough to demonstrate the wrapping behavior properly, so here is some additional context about how CSS floats interact with the normal document flow. Floats were one of the original layout mechanisms on the web, predating flexbox and grid by many years. They remain useful for this specific pattern of text wrapping around a media element.</p>
+<div style="clear: both;"></div>
+
+<h3>Float End</h3>
+<figure class="float-end">
+<div class="placeholder-img" style="width: 100%; height: 120px;">Float end</div>
+<figcaption>Floated to the end.</figcaption>
+</figure>
+<p>When a figure floats to the end, text wraps around it on the start side. This is the more traditional magazine-style layout where images appear in the right margin. Again, the paragraph needs to be long enough to show the wrapping effect. In a content management system, you might allow authors to choose float direction through a block attribute, which the renderer would then convert to the appropriate CSS class. This keeps the content model clean while providing layout flexibility.</p>
+<div style="clear: both;"></div>
+</section>
+
+<!-- Horizontal Rules -->
+<section class="demo-section">
+<h2>Horizontal Rules</h2>
+<p>Standard horizontal rule:</p>
+<hr/>
+<p>Decorative horizontal rule:</p>
+<hr class="decorative"/>
+<p>Content continues after the decorative rule.</p>
+</section>
+
+</main>
+<footer class="site-footer">
+<p>Vanilla Breeze Kitchen Sink</p>
+</footer>
+<script src="../src/build/assets/js/main.js" type="module"></script>
+</body>
+</html>

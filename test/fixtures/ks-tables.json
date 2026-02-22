@@ -1,0 +1,521 @@
+{
+  "id": "doc_ks_tables",
+  "meta": {
+    "title": "Kitchen Sink: Tables",
+    "slug": "ks-tables",
+    "collection": "kitchen-sink",
+    "description": "Exercises all table variants: simple, striped, bordered, compact, captioned, numeric, aligned, with inline marks, and wide.",
+    "author_id": "author_t1",
+    "status": "published",
+    "created": "2026-02-17",
+    "updated": "2026-02-17",
+    "published": "2026-02-17",
+    "tags": ["kitchen-sink", "tables"]
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Simple Table with Header Row" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "children": [
+        { "type": "text", "value": "A basic table showing CSS length units and their use cases." }
+      ]
+    },
+    {
+      "type": "table",
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Unit" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Type" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Use Case" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "rem", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Relative" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Font sizes, spacing, consistent scaling" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "em", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Relative" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Component-local sizing relative to parent font" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "px", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Absolute" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Borders, shadows, precise pixel alignment" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "vw / vh", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Viewport" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Full-bleed layouts, viewport-relative sizing" }] }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Striped Table" }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": { "striped": true },
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Property" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Inherited" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Initial Value" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "color", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Yes" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "canvastext", "marks": ["code"] }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "display", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "No" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "inline", "marks": ["code"] }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "font-family", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Yes" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "depends on user agent" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "margin", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "No" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "0", "marks": ["code"] }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "opacity", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "No" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "1", "marks": ["code"] }] }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Bordered Table" }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": { "bordered": true },
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Selector" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Specificity" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Example" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Element" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "0-0-1" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "p", "marks": ["code"] }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Class" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "0-1-0" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": ".card", "marks": ["code"] }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "ID" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "1-0-0" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "#main", "marks": ["code"] }] }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Compact Table" }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": { "compact": true },
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Key" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Action" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Ctrl+B", "marks": ["kbd"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Bold" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Ctrl+I", "marks": ["kbd"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Italic" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Ctrl+K", "marks": ["kbd"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Insert link" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Ctrl+Shift+X", "marks": ["kbd"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Strikethrough" }] }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Table with Caption" }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": { "caption": "Browser support for CSS nesting as of February 2026" },
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Browser" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Version" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Status" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Chrome" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "120+" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Full support", "marks": ["strong"] }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Firefox" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "117+" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Full support", "marks": ["strong"] }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Safari" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "17.2+" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Full support", "marks": ["strong"] }] }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Table with Numeric Column" }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": { "striped": true, "bordered": true },
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Framework" }], "attrs": { "align": "left" } },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Bundle Size (kB)" }], "attrs": { "align": "right" } },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Stars (k)" }], "attrs": { "align": "right" } }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Vanilla JS" }], "attrs": { "align": "left" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "0" }], "attrs": { "align": "right", "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "—" }], "attrs": { "align": "right", "numeric": true } }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Preact" }], "attrs": { "align": "left" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "4" }], "attrs": { "align": "right", "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "36.8" }], "attrs": { "align": "right", "numeric": true } }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Vue" }], "attrs": { "align": "left" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "33" }], "attrs": { "align": "right", "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "208.5" }], "attrs": { "align": "right", "numeric": true } }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "React" }], "attrs": { "align": "left" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "42" }], "attrs": { "align": "right", "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "231.2" }], "attrs": { "align": "right", "numeric": true } }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Angular" }], "attrs": { "align": "left" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "143" }], "attrs": { "align": "right", "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "97.4" }], "attrs": { "align": "right", "numeric": true } }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Table with Mixed Alignment" }
+      ]
+    },
+    {
+      "type": "table",
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Property" }], "attrs": { "align": "left" } },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Axis" }], "attrs": { "align": "center" } },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Values" }], "attrs": { "align": "right" } }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "justify-content", "marks": ["code"] }], "attrs": { "align": "left" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Main" }], "attrs": { "align": "center" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "start, center, end, space-between" }], "attrs": { "align": "right" } }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "align-items", "marks": ["code"] }], "attrs": { "align": "left" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Cross" }], "attrs": { "align": "center" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "stretch, start, center, end, baseline" }], "attrs": { "align": "right" } }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "place-items", "marks": ["code"] }], "attrs": { "align": "left" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Both" }], "attrs": { "align": "center" } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "shorthand for align + justify" }], "attrs": { "align": "right" } }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Table with Inline Marks in Cells" }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": { "bordered": true },
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Feature" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Status" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Notes" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "@layer", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Stable", "marks": ["strong", "mark"] }] },
+            { "type": "table_cell", "children": [
+              { "type": "text", "value": "Ship it — " },
+              { "type": "link", "attrs": { "href": "https://caniuse.com/css-cascade-layers" }, "children": [{ "type": "text", "value": "97% global support" }] }
+            ]}
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "@scope", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Emerging", "marks": ["em"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Chromium only as of early 2026" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "@function", "marks": ["code"] }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Proposal", "marks": ["strikethrough"] }] },
+            { "type": "table_cell", "children": [
+              { "type": "text", "value": "Not yet in any browser — use " },
+              { "type": "text", "value": "postcss-functions", "marks": ["code"] },
+              { "type": "text", "value": " as a workaround" }
+            ]}
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "children": [
+        { "type": "text", "value": "Wide Table (6+ Columns)" }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": { "striped": true, "compact": true, "caption": "HTTP response status codes commonly seen in web development" },
+      "children": [
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_header", "children": [{ "type": "text", "value": "Code" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Name" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Method" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Cacheable" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Category" }] },
+            { "type": "table_header", "children": [{ "type": "text", "value": "Common Cause" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "200", "marks": ["code"] }], "attrs": { "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "OK" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Any" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Yes" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Success" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Successful GET or POST" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "301", "marks": ["code"] }], "attrs": { "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Moved Permanently" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "GET" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Yes" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Redirect" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "URL changed permanently" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "304", "marks": ["code"] }], "attrs": { "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Not Modified" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "GET" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "N/A" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Redirect" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Client cache is still valid" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "404", "marks": ["code"] }], "attrs": { "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Not Found" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Any" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "No" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Client Error" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Broken link or mistyped URL" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "500", "marks": ["code"] }], "attrs": { "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Internal Server Error" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Any" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "No" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Server Error" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Unhandled exception in server code" }] }
+          ]
+        },
+        {
+          "type": "table_row",
+          "children": [
+            { "type": "table_cell", "children": [{ "type": "text", "value": "503", "marks": ["code"] }], "attrs": { "numeric": true } },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Service Unavailable" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Any" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "No" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Server Error" }] },
+            { "type": "table_cell", "children": [{ "type": "text", "value": "Server overloaded or under maintenance" }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

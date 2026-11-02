@@ -365,7 +365,7 @@ export function handleSaveError(docId, err) {
     conflicts.set(docId, err.message);
     setSaveStatus('conflict');
     notifyConflict();
-  } else if (err.status === 422) {
+  } else if (err.status === 422 || err.status >= 500) {
     setSaveStatus('error', err.message);
   } else {
     setSaveStatus('unsaved');

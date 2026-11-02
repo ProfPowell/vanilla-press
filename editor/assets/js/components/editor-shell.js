@@ -32,7 +32,18 @@ export class EditorShell extends HTMLElement {
     });
 
     this.addEventListener('doc-delete', async (e) => {
-      await deleteDoc(e.detail.id);
+      try {
+        await deleteDoc(e.detail.id);
+      } catch (err) {
+        // Not deleted (409: its JSON changed on disk; 500: unexpected): say why
+        console.error('Delete error:', err);
+        if (this.saveIndicator) {
+          this.saveIndicator.className = 'save-indicator error';
+          this.saveIndicator.textContent = err.message;
+          this.saveIndicator.title = err.message;
+        }
+        return;
+      }
       this.querySelector('doc-browser')?.refresh();
     });
 

@@ -39,7 +39,7 @@ async function request(path, options = {}) {
   }
 
   const res = await fetch(url, fetchOptions);
-  const data = await res.json();
+  const data = await parseBody(res);
 
   if (!res.ok) {
     const err = new Error(data.error || `API error ${res.status}`);
@@ -49,6 +49,22 @@ async function request(path, options = {}) {
   }
 
   return data;
+}
+
+/**
+ * Parse a response body as JSON. A non-JSON body (e.g. a text/plain 500)
+ * becomes `{ error: <its text> }` when the response is an error.
+ * @param {Response} res
+ * @returns {Promise<*>}
+ */
+async function parseBody(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (res.ok) throw new Error(`API returned invalid JSON (${res.status})`);
+    return { error: text.trim() || `API error ${res.status}` };
+  }
 }
 
 export const api = {
@@ -110,7 +126,7 @@ export const api = {
     if (alt) form.append('alt', alt);
 
     const res = await fetch(`${BASE}/media`, { method: 'POST', body: form });
-    const data = await res.json();
+    const data = await parseBody(res);
     if (!res.ok) throw new Error(data.error || `Upload failed: ${res.status}`);
     return data;
   },

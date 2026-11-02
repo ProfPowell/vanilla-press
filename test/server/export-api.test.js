@@ -3,7 +3,7 @@
  * into the Cook site; without one (fixture mode) nothing is written.
  */
 
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
@@ -23,8 +23,16 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 async function startApi(db, options) {
   const router = createRouter();
   mountApi(router, db, { rootDir: repoRoot, ...options });
+  // Same catch-all as src/server/index.js: an uncaught throw becomes a text/plain 500.
   const server = createServer(async (req, res) => {
-    if (!(await router.handle(req, res))) sendJson(res, 404, { error: 'Not found' });
+    try {
+      if (!(await router.handle(req, res))) sendJson(res, 404, { error: 'Not found' });
+    } catch {
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Internal Server Error');
+      }
+    }
   });
   await new Promise((resolve) => server.listen(0, resolve));
   const { port } = server.address();
@@ -37,7 +45,10 @@ async function startApi(db, options) {
       opts.body = JSON.stringify(body);
     }
     const res = await fetch(`http://localhost:${port}${path}`, opts);
-    return { status: res.status, data: await res.json() };
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { notJson: text }; }
+    return { status: res.status, data };
   }
   return { api, close: () => new Promise((r) => server.close(r)) };
 }
@@ -251,6 +262,59 @@ describe('API refuses saves whose export would be rejected', () => {
   });
 });
 
+describe('API errors are JSON (final fix)', () => {
+  let site, ws, db, api, close, id;
+  const at = (rel) => join(site, rel);
+
+  before(async () => {
+    site = mkdtempSync(join(tmpdir(), 'vp-export-errors-'));
+    ws = resolveWorkspace({ site, repoRoot });
+    db = openWorkspaceDb(ws);
+    ({ api, close } = await startApi(db, { mediaDir: ws.mediaDir, workspace: ws }));
+    id = (await api('/api/documents', { method: 'POST', body: postBody() })).data.id;
+  });
+
+  after(async () => {
+    await close();
+    db.close();
+    rmSync(site, { recursive: true, force: true });
+  });
+
+  it('a reserved collection name is 422 Not saved', async () => {
+    const post = await api('/api/documents', { method: 'POST', body: postBody({ collection: 'layouts', slug: 'x' }) });
+    assert.equal(post.status, 422);
+    assert.match(post.data.error, /^Not saved: Reserved collection name: layouts/);
+  });
+
+  it('a corrupt local manifest makes PUT a JSON 500 naming the manifest, and saves nothing', async () => {
+    const good = readFileSync(at('.vp/manifest.json'), 'utf8');
+    writeFileSync(at('.vp/manifest.json'), '{not json');
+    mock.method(console, 'error', () => {});
+    try {
+      const put = await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { title: 'Lost' } } });
+      assert.equal(put.status, 500);
+      assert.match(put.data.error, /\.vp\/manifest\.json/);
+      assert.equal((await api(`/api/documents/${id}`)).data.meta.title, 'Hello');
+      assert.equal(JSON.parse(readFileSync(at('content/posts/hello.json'), 'utf8')).meta.title, 'Hello');
+
+      const post = await api('/api/documents', { method: 'POST', body: postBody({ slug: 'other' }) });
+      assert.equal(post.status, 500);
+      assert.match(post.data.error, /manifest/);
+
+      const del = await api(`/api/documents/${id}`, { method: 'DELETE' });
+      assert.equal(del.status, 500);
+      assert.match(del.data.error, /manifest/);
+      assert.equal((await api(`/api/documents/${id}`)).status, 200);
+
+      const reload = await api(`/api/documents/${id}/reload`, { method: 'POST' });
+      assert.ok(reload.status >= 400 && typeof reload.data.error === 'string');
+    } finally {
+      mock.restoreAll();
+      writeFileSync(at('.vp/manifest.json'), good);
+    }
+  });
+});
+
 describe('API in fixture mode', () => {
   let db, api, close, mediaDir;
 
@@ -279,6 +343,7 @@ describe('API in fixture mode', () => {
     assert.ok(!existsSync(join(repoRoot, 'content', 'posts', `${slug}.json`)));
     assert.ok(!existsSync(join(repoRoot, 'src', 'posts', `${slug}.html`)));
     assert.ok(!existsSync(join(repoRoot, 'content', '.vp-manifest.json')));
+    assert.ok(!existsSync(join(repoRoot, '.vp', 'manifest.json')));
   });
 
   it('POST /api/publish exports nothing', async () => {

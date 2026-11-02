@@ -205,11 +205,18 @@ export class MetaPanel extends HTMLElement {
       const update = isPublished
         ? { status: 'draft', published: undefined } // Unpublish: set to draft
         : { status: 'published', published: meta.published || new Date().toISOString() };
+      const before = { status: meta.status, published: meta.published };
       setCurrentMeta(update);
       try {
         // Saving exports the document to the site (HTML added or removed)
         await api.updateDocument(docId, { meta: { ...getCurrentMeta() } });
       } catch (err) {
+        // Not saved: put the local status back so auto-save and the panel
+        // agree with the server again.
+        if (getCurrentDocId() === docId) {
+          setCurrentMeta(before);
+          this.syncFromMeta(getCurrentMeta());
+        }
         handleSaveError(docId, err);
         throw err;
       }

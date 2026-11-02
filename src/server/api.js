@@ -64,11 +64,14 @@ export function mountApi(router, db, options) {
     return true;
   }
 
-  /** Export a saved document (preflighted, so failure is unexpected); on failure respond 422. */
-  function exportSaved(res, saved) {
+  /**
+   * Export a saved document (preflighted, so failure is unexpected); on
+   * failure respond 422. `previousDoc` is the stored version before the save.
+   */
+  function exportSaved(res, saved, previousDoc) {
     if (!ws) return true;
     try {
-      exportDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db) });
+      exportDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
       return true;
     } catch (err) {
       const body = { error: `Saved, but not exported: ${err.message}` };
@@ -77,6 +80,19 @@ export function mountApi(router, db, options) {
       return false;
     }
   }
+
+  /**
+   * Wrap a handler so an unexpected throw (e.g. a corrupt local manifest)
+   * becomes a JSON `500 { error }` the editor can show.
+   */
+  const jsonErrors = (handler) => async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (err) {
+      console.error('API error:', err);
+      if (!res.headersSent) sendJson(res, 500, { error: err.message });
+    }
+  };
 
   // --- Workspace ---
 
@@ -122,7 +138,7 @@ export function mountApi(router, db, options) {
     sendJson(res, 200, doc);
   });
 
-  router.add('POST', '/api/documents', (req, res) => {
+  router.add('POST', '/api/documents', jsonErrors((req, res) => {
     const body = req.body;
     if (!body) {
       sendJson(res, 400, { error: 'Request body required' });
@@ -147,12 +163,13 @@ export function mountApi(router, db, options) {
       return;
     }
 
+    const previous = ws ? getDocument(db, doc.id) : null;
     if (rejectSave(res, doc)) return;
     const saved = saveDocument(db, doc);
-    if (exportSaved(res, saved)) sendJson(res, 201, saved);
-  });
+    if (exportSaved(res, saved, previous)) sendJson(res, 201, saved);
+  }));
 
-  router.add('PUT', '/api/documents/:id', (req, res) => {
+  router.add('PUT', '/api/documents/:id', jsonErrors((req, res) => {
     const existing = getDocument(db, req.params.id);
     if (!existing) {
       sendJson(res, 404, { error: 'Document not found' });
@@ -179,11 +196,11 @@ export function mountApi(router, db, options) {
 
     if (rejectSave(res, doc)) return;
     const saved = saveDocument(db, doc);
-    if (exportSaved(res, saved)) sendJson(res, 200, saved);
-  });
+    if (exportSaved(res, saved, existing)) sendJson(res, 200, saved);
+  }));
 
   // Replace the stored document with its version on disk (after a 409).
-  router.add('POST', '/api/documents/:id/reload', (req, res) => {
+  router.add('POST', '/api/documents/:id/reload', jsonErrors((req, res) => {
     if (!ws) {
       sendJson(res, 400, { error: 'Export is not enabled (no site)' });
       return;
@@ -193,9 +210,9 @@ export function mountApi(router, db, options) {
     } catch (err) {
       sendJson(res, err.message.startsWith('No content file') ? 404 : 422, { error: err.message });
     }
-  });
+  }));
 
-  router.add('DELETE', '/api/documents/:id', (req, res) => {
+  router.add('DELETE', '/api/documents/:id', jsonErrors((req, res) => {
     const existing = getDocument(db, req.params.id);
     if (!existing) {
       sendJson(res, 404, { error: 'Document not found' });
@@ -204,7 +221,7 @@ export function mountApi(router, db, options) {
 
     if (ws) {
       try {
-        removeExport(ws, req.params.id);
+        removeExport(ws, req.params.id, { previousDoc: existing, collectionsConfig: getCollectionsConfig(db) });
       } catch (err) {
         const status = err instanceof ExportConflictError ? 409 : 500;
         sendJson(res, status, { error: `Not deleted: ${err.message}`, path: err.path });
@@ -214,7 +231,7 @@ export function mountApi(router, db, options) {
 
     deleteDocument(db, req.params.id);
     sendJson(res, 200, { ok: true });
-  });
+  }));
 
   // --- Collections ---
 
@@ -329,7 +346,7 @@ export function mountApi(router, db, options) {
 
   // --- Publish ---
 
-  router.add('POST', '/api/publish', (req, res) => {
+  router.add('POST', '/api/publish', jsonErrors((req, res) => {
     if (!ws) {
       sendJson(res, 200, { ok: true, exported: 0 });
       return;
@@ -340,7 +357,7 @@ export function mountApi(router, db, options) {
     } catch (err) {
       sendJson(res, 500, { error: `Export failed: ${err.message}` });
     }
-  });
+  }));
 }
 
 /**

@@ -9,9 +9,8 @@
   "scripts": {
     "test": "node --test test/**/*.test.js",
     "test:watch": "node --test --watch test/**/*.test.js",
-    "build": "node src/build/publish.js",
     "seed": "node scripts/seed.js",
-    "setup": "npm run seed && npm run build",
+    "setup": "npm run seed",
     "dev": "node src/server/index.js",
     "serve": "node src/server/index.js"
   },

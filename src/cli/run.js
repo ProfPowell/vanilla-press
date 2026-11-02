@@ -28,7 +28,6 @@ import {
 import { validate } from '../schema/validate.js';
 import { render as renderHtml } from '../renderers/html.js';
 import { render as renderMarkdown } from '../renderers/markdown.js';
-import { publish } from '../build/publish.js';
 import { table, json, success, error } from './format.js';
 import { parseMarkdown } from './markdown-parser.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
@@ -213,10 +212,8 @@ Content:
   unpublish <ref>           Set status to draft
   delete <ref>              Delete a document
 
-Build:
-  build                     Build static site
+Site:
   serve                     Start editor + API dev server
-  deploy                    Build and deploy to Cloudflare Pages
   export                    Export every document to the site (needs --site)
 
 Import:
@@ -433,23 +430,6 @@ async function cmdDelete(args) {
   success(`deleted ${doc.meta.collection}/${doc.meta.slug} (${doc.id})`);
 }
 
-function cmdBuild(args) {
-  const { values } = parseArgs({
-    args,
-    options: {
-      out: { type: 'string' },
-    },
-    allowPositionals: true,
-  });
-
-  const opts = {};
-  if (values.out) opts.outDir = resolve(values.out);
-  if (process.env.VP_DB) opts.dbPath = process.env.VP_DB;
-
-  const result = publish(opts);
-  success(`built ${result.documentCount} documents to ${result.outDir}`);
-}
-
 async function cmdServe(args) {
   const { values } = parseArgs({
     args,
@@ -464,30 +444,6 @@ async function cmdServe(args) {
   // Use the dev server (editor + API)
   const { startServer } = await import('../server/index.js');
   startServer({ port, site: siteOption });
-}
-
-function cmdDeploy(args) {
-  // Build first
-  const buildOpts = {};
-  if (process.env.VP_DB) buildOpts.dbPath = process.env.VP_DB;
-
-  const result = publish(buildOpts);
-  success(`built ${result.documentCount} documents to ${result.outDir}`);
-
-  try {
-    const child = spawnSync('npx', ['wrangler', 'pages', 'deploy', result.outDir], {
-      stdio: 'inherit',
-      cwd: ROOT,
-    });
-    if (child.error) {
-      error(`deploy failed: ${child.error.message}`);
-    }
-    if (child.status !== 0) {
-      error(`deploy exited with code ${child.status}`);
-    }
-  } catch (e) {
-    error(`deploy failed: ${e.message}. Is wrangler installed?`);
-  }
 }
 
 function cmdExport() {
@@ -887,14 +843,8 @@ export async function run(argv) {
     case 'delete':
       await cmdDelete(commandArgs);
       break;
-    case 'build':
-      cmdBuild(commandArgs);
-      break;
     case 'serve':
       cmdServe(commandArgs);
-      break;
-    case 'deploy':
-      cmdDeploy(commandArgs);
       break;
     case 'export':
       cmdExport();

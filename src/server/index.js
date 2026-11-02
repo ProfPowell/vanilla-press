@@ -87,7 +87,6 @@ export function startServer(options = {}) {
     { prefix: '/kitchen-sink/', dir: join(ROOT, 'kitchen-sink') },
     { prefix: '/assets/vb/', dir: join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') },
     { prefix: '/assets/code-block/', dir: join(ROOT, 'node_modules', '@profpowell', 'code-block', 'dist') },
-    { prefix: '/assets/', dir: join(ROOT, 'src', 'build', 'assets') },
   ];
 
   const server = createServer(async (req, res) => {
@@ -120,11 +119,6 @@ export function startServer(options = {}) {
           if (serveFile(res, filePath)) return;
         }
       }
-
-      // Fallback: serve from _site/ for published page previews
-      const siteDir = join(ROOT, '_site');
-      const sitePath = join(siteDir, urlPath);
-      if (serveFile(res, sitePath)) return;
 
       // 404
       res.writeHead(404, { 'Content-Type': 'text/plain' });

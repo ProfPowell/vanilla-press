@@ -106,7 +106,8 @@ describe('vp --help', () => {
     assert.equal(status, 0);
     assert.ok(stdout.includes('Usage: vp'));
     assert.ok(stdout.includes('list'));
-    assert.ok(stdout.includes('build'));
+    assert.ok(stdout.includes('export'));
+    assert.ok(!stdout.includes('deploy'));
   });
 });
 
@@ -413,19 +414,6 @@ describe('vp import:dir', () => {
     const { stderr, status } = vp(['import:dir', tmpDir], { db: dbPath });
     assert.equal(status, 0);
     assert.ok(stderr.includes('imported 2'));
-  });
-});
-
-describe('vp build', () => {
-  it('builds the site', () => {
-    const dbPath = seededDb();
-    const outDir = join(mkdtempSync(join(tmpdir(), 'vp-build-')), '_site');
-    const { stderr, status } = vp(['build', '--out', outDir], { db: dbPath });
-    assert.equal(status, 0);
-    assert.ok(stderr.includes('built'));
-    assert.ok(existsSync(join(outDir, 'index.html')));
-    assert.ok(existsSync(join(outDir, 'posts', 'test-post', 'index.html')));
-    assert.ok(existsSync(join(outDir, 'feed.xml')));
   });
 });
 

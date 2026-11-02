@@ -101,6 +101,11 @@ describe('html renderer', () => {
       assert.ok(!html.includes('role="tab"'));
       assert.ok(!html.includes('type="radio"'));
     });
+
+    it('is deterministic: rendering twice gives equal output', () => {
+      const doc = fixture('component-rich.json');
+      assert.equal(render(doc), render(doc));
+    });
   });
 
   describe('steps', () => {

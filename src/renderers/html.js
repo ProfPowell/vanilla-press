@@ -7,6 +7,7 @@
  * @module renderers/html
  */
 
+import { createHash } from 'node:crypto';
 import { escapeHtml, escapeAttr, formatDate } from './shared.js';
 
 /**
@@ -284,7 +285,10 @@ function renderCard(block) {
 
 function renderTabs(block) {
   const tabs = block.children || [];
-  const groupName = `ts-${Math.random().toString(36).slice(2, 8)}`;
+  // Deterministic group name: hash of the labels plus the tab count.
+  const labels = tabs.map((tab, i) => tab.attrs?.label || `Tab ${i + 1}`);
+  const hash = createHash('sha1').update(`${labels.join('\u0000')}\u0000${tabs.length}`).digest('hex').slice(0, 6);
+  const groupName = `ts-${hash}`;
   const parts = ['<tab-set>'];
 
   tabs.forEach((tab, i) => {

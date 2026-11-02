@@ -66,26 +66,42 @@ export function syncFromContent(ws, db, { replace = false } = {}) {
   const imported = [];
   const skipped = [];
   const removed = [];
-  const seen = new Set();
+  const seen = new Map(); // id -> first file claiming it
+  let unreadable = false;
 
   for (const rel of listJson(ws)) {
     const { doc, error } = readDoc(ws, rel);
-    if (typeof doc?.id === 'string') seen.add(doc.id);
+    const id = typeof doc?.id === 'string' ? doc.id : null;
+    if (id && seen.has(id)) {
+      console.warn(`import:content: skipping ${rel}: duplicate id ${id} (already read from ${seen.get(id)})`);
+      skipped.push(id);
+      continue;
+    }
+    if (id) seen.set(id, rel);
     if (error) {
+      unreadable = true;
       console.warn(`import:content: skipping ${rel}: ${error}`);
-      skipped.push(typeof doc?.id === 'string' ? doc.id : rel);
+      skipped.push(id ?? rel);
       continue;
     }
-    if (getDocument(db, doc.id) && !changedOnDisk(ws, doc.id, rel)) {
-      skipped.push(doc.id);
-      continue;
+    try {
+      if (getDocument(db, id) && !changedOnDisk(ws, id, rel)) {
+        skipped.push(id);
+        continue;
+      }
+      saveDocument(db, doc);
+      recordImported(ws, id, rel);
+      imported.push(id);
+    } catch (err) {
+      unreadable = true;
+      console.warn(`import:content: skipping ${rel}: ${err.message}`);
+      skipped.push(id);
     }
-    saveDocument(db, doc);
-    recordImported(ws, doc.id, rel);
-    imported.push(doc.id);
   }
 
-  if (replace) {
+  if (replace && unreadable) {
+    console.warn('import:content: replace skipped because some content files could not be read or imported');
+  } else if (replace) {
     const ids = db.prepare('SELECT id FROM documents').all().map((r) => r.id);
     for (const id of ids) {
       if (!seen.has(id) && deleteDocument(db, id)) removed.push(id);
@@ -106,7 +122,7 @@ export function syncFromContent(ws, db, { replace = false } = {}) {
 export function importOne(ws, db, docId) {
   let rel = readManifest(ws).documents[docId]?.json;
   let found = rel ? readDoc(ws, rel) : null;
-  if (!found || (found.error && !found.doc)) {
+  if (!found || found.doc?.id !== docId) {
     rel = null;
     found = null;
     for (const candidate of listJson(ws)) {

@@ -101,3 +101,61 @@ describe('importOne', () => {
     assert.throws(() => importOne(ws, db, 'nope'), /No content file for document nope/);
   });
 });
+
+describe('sync safety (fix round 1)', () => {
+  const put = (rel, text) => {
+    mkdirSync(dirname(join(tmp, rel)), { recursive: true });
+    writeFileSync(join(tmp, rel), typeof text === 'string' ? text : JSON.stringify(text, null, 2) + '\n');
+  };
+
+  it('replace removes nothing when a file is unparseable', () => {
+    const doc = simple();
+    saveDocument(db, doc);
+    exportDocument(ws, doc, {});
+    put(REL, '<<<<<<< HEAD\n{}\n=======\n');
+    const res = syncFromContent(ws, db, { replace: true });
+    assert.deepEqual(res.removed, []);
+    assert.ok(getDocument(db, doc.id));
+  });
+
+  it('replace keeps a doc whose file is invalid but has an id', () => {
+    const doc = simple();
+    saveDocument(db, doc);
+    put('content/posts/other.json', { id: doc.id, meta: {} });
+    assert.deepEqual(syncFromContent(ws, db, { replace: true }).removed, []);
+    assert.ok(getDocument(db, doc.id));
+  });
+
+  it('duplicate ids: first imported, duplicate skipped, then stable', () => {
+    const doc = simple();
+    put('content/posts/a.json', doc);
+    put('content/posts/b.json', mk(doc, { slug: 'b' }));
+    const r1 = syncFromContent(ws, db);
+    assert.deepEqual(r1.imported, [doc.id]);
+    assert.deepEqual(r1.skipped, [doc.id]);
+    assert.equal(console.warn.mock.callCount(), 1);
+    assert.deepEqual(syncFromContent(ws, db).imported, []);
+  });
+
+  it('importOne ignores a manifest path holding a different document', () => {
+    const a = simple();
+    const b = { ...mk(fixture('simple-post.json'), { collection: 'posts', slug: 'b' }), id: 'other-id' };
+    exportDocument(ws, a, {});
+    put(REL, b);
+    assert.throws(() => importOne(ws, db, a.id), /No content file for document/);
+    assert.equal(getDocument(db, 'other-id'), null);
+    put('content/posts/real-a.json', a);
+    assert.equal(importOne(ws, db, a.id).id, a.id);
+  });
+
+  it('slug collision with another id is skipped, not thrown', () => {
+    const x = simple();
+    saveDocument(db, x);
+    put('content/posts/hello.json', { ...x, id: 'different-id' });
+    const res = syncFromContent(ws, db);
+    assert.deepEqual(res.imported, []);
+    assert.deepEqual(res.skipped, ['different-id']);
+    assert.equal(getDocument(db, x.id).meta.title, x.meta.title);
+    assert.equal(console.warn.mock.callCount(), 1);
+  });
+});

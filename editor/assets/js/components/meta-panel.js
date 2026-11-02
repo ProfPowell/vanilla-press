@@ -174,10 +174,31 @@ export class MetaPanel extends HTMLElement {
       }
     }).catch(() => {});
     previewBtn.addEventListener('click', async () => {
+      const buildStatus = this.querySelector('[data-build-status]');
+      const say = (text) => {
+        if (!buildStatus) return;
+        buildStatus.textContent = text;
+        buildStatus.className = 'build-status error';
+      };
+      // Open the tab now (still inside the click, so it is not blocked as a
+      // popup), then point it at the page once we know the URL.
+      const tab = window.open('about:blank', '_blank');
+      if (!(await saveDocument())) {
+        tab?.close();
+        say('Preview needs the document saved first');
+        return;
+      }
       const meta = getCurrentMeta();
-      if (!meta.collection || !meta.slug) return;
       const { syncEnabled, previewUrl } = await api.getWorkspace();
-      if (!syncEnabled) return;
+      if (!syncEnabled || !meta.collection || !meta.slug) {
+        tab?.close();
+        return;
+      }
+      if (meta.status !== 'published') {
+        tab?.close();
+        say('Preview shows published pages: publish first');
+        return;
+      }
       let collections = {};
       try {
         const { value } = await api.getConfig('collections');
@@ -186,13 +207,25 @@ export class MetaPanel extends HTMLElement {
       const { path } = collectionOutput(meta.collection, collections);
       const dir = path.replace(/^\/+|\/+$/g, '');
       const base = previewUrl.replace(/\/+$/, '');
-      window.open(`${base}/${dir ? dir + '/' : ''}${meta.slug}/`, '_blank');
+      try {
+        await fetch(base, { mode: 'no-cors' });
+      } catch {
+        tab?.close();
+        say(`Preview needs the site's dev server at ${base}: run "npm run dev" in the site folder`);
+        return;
+      }
+      const url = `${base}/${dir ? dir + '/' : ''}${meta.slug}/`;
+      if (tab) tab.location.href = url;
+      else window.open(url, '_blank');
     });
   }
 
   async togglePublish() {
+    // A page not stored yet is created first (saveDocument creates it).
+    if (!getCurrentDocId() || getCurrentDocId() === 'doc_new') {
+      if (!(await saveDocument())) return;
+    }
     const docId = getCurrentDocId();
-    if (!docId || docId === 'doc_new') return;
 
     const meta = getCurrentMeta();
     const isPublished = meta.status === 'published';

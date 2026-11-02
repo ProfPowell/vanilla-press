@@ -331,7 +331,9 @@ export async function saveDocument() {
   if (!editorView) return false;
 
   const docId = getCurrentDocId();
-  if (!docId || docId === 'doc_new') return false;
+  // The page the editor opens on (or shows after a delete) is not stored
+  // yet: its first save creates the document.
+  if (!docId || docId === 'doc_new') return createFromEditor();
   if (conflicts.has(docId)) {
     setSaveStatus('conflict');
     return false;
@@ -350,6 +352,39 @@ export async function saveDocument() {
     handleSaveError(docId, err);
     return false;
   }
+}
+
+/** The in-flight create, so rapid auto-saves create one document, not several. */
+let creating = null;
+
+/**
+ * Create a document from what is in the editor now (title, meta, blocks),
+ * make it the current document, and list it in the document browser.
+ * @returns {Promise<boolean>} true when created (and synced)
+ */
+function createFromEditor() {
+  if (creating) return creating;
+  creating = (async () => {
+    setSaveStatus('saving');
+    const meta = { ...getCurrentMeta() };
+    if (!meta.slug || meta.slug === 'untitled') meta.slug = 'untitled-' + Date.now().toString(36);
+    if (!meta.collection) meta.collection = 'posts';
+    try {
+      const doc = await api.createDocument({ meta, blocks: toBlockAst(editorView.state.doc) });
+      setCurrentDocId(doc.id);
+      setCurrentMeta({ slug: doc.meta.slug });
+      window.location.hash = `doc-${doc.id}`;
+      setSaveStatus('saved');
+      document.querySelector('doc-browser')?.refresh();
+      return true;
+    } catch (err) {
+      handleSaveError(null, err);
+      return false;
+    } finally {
+      creating = null;
+    }
+  })();
+  return creating;
 }
 
 /**

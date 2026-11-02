@@ -374,12 +374,19 @@ export function handleSaveError(docId, err) {
 
 /**
  * Replace the stored document with its version on disk, load it, and resume
- * auto-save for it.
+ * auto-save for it. If it was deleted on disk, clear it from the editor.
  * @param {string} docId
  */
 export async function loadVersionOnDisk(docId) {
-  await api.reloadDocument(docId);
+  const result = await api.reloadDocument(docId);
   conflicts.delete(docId);
+  // Deleted on disk (e.g. pulled): the server dropped it from the store too.
+  if (result?.deleted) {
+    clearIfCurrent(docId);
+    setSaveStatus('saved');
+    notifyConflict();
+    return;
+  }
   await loadDocument(docId);
 }
 
@@ -425,8 +432,11 @@ export async function createNewDocument(options = {}) {
 export async function deleteDoc(id) {
   await api.deleteDocument(id);
   conflicts.delete(id);
+  clearIfCurrent(id);
+}
 
-  // If we just deleted the current document, clear the editor
+/** If `id` is the open document, clear the editor (it no longer exists). */
+function clearIfCurrent(id) {
   if (id === getCurrentDocId()) {
     setCurrentDocId(null);
     resetCurrentMeta({

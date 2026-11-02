@@ -99,6 +99,16 @@ function jsonOwner(ws, rel) {
 }
 
 /**
+ * True when this machine recorded a JSON for `docId` and that file is gone:
+ * the document was renamed or deleted on disk (e.g. a pull from another
+ * machine), so writing would resurrect the old files.
+ */
+function trackedJsonMissing(ws, manifest, docId) {
+  const rel = manifest.documents[docId]?.json;
+  return Boolean(rel) && !existsSync(join(ws.siteDir, rel));
+}
+
+/**
  * Where the document's files were before this sync: the local manifest
  * entry if there is one, else the paths of the previously stored version.
  * @returns {{ json: string|null, html: string|null } | null}
@@ -121,8 +131,9 @@ const unescapeHtml = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replac
  * after Cook has parsed the page with a DOM (so HTML entities do not help).
  * - `<code-block>` elements get `data-escape` and their raw code: Cook
  *   base64-stores that content before interpolation and HTML-escapes it
- *   itself (scripts/plugins/escape-code-blocks.js). Raw code containing the
- *   text `</code-block>` would end the block early.
+ *   itself (scripts/plugins/escape-code-blocks.js). A block whose code
+ *   contains `</code-block` would end early, so it stays escaped and is
+ *   comment-split like prose.
  * - Everywhere else `${` becomes `$<!---->{`: the empty comment breaks the
  *   placeholder and is invisible on the page.
  * @param {string} html
@@ -134,7 +145,10 @@ export function protectBody(html) {
   let last = 0;
   for (const m of html.matchAll(CODE_BLOCK)) {
     out += split(html.slice(last, m.index));
-    out += `${m[1]} data-escape${m[2]}${unescapeHtml(m[3])}${m[4]}`;
+    const raw = unescapeHtml(m[3]);
+    // Raw code holding `</code-block` would close the element early: keep
+    // that block escaped (and comment-split) instead.
+    out += /<\/code-block/i.test(raw) ? split(m[0]) : `${m[1]} data-escape${m[2]}${raw}${m[4]}`;
     last = m.index + m[0].length;
   }
   return out + split(html.slice(last));
@@ -164,7 +178,7 @@ function removeFile(ws, rel, removed) {
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {Object} doc
  * @param {{ collectionsConfig?: Object, previousDoc?: Object }} [options] - previousDoc: the stored version, for old paths when the local manifest has no entry
- * @throws {SyncConflictError} when a JSON it would write or remove changed on disk
+ * @throws {SyncConflictError} when a JSON it would write or remove changed on disk, or the JSON this machine last recorded for the document is gone (renamed or deleted on disk)
  * @throws {Error} on an invalid or reserved slug/collection, an invalid output path, or an HTML target owned by another document or not written by Vanilla Press
  */
 export function checkSync(ws, doc, { collectionsConfig, previousDoc } = {}) {
@@ -180,6 +194,7 @@ export function checkSync(ws, doc, { collectionsConfig, previousDoc } = {}) {
   const manifest = readManifest(ws);
   const previous = previousPaths(manifest, doc.id, previousDoc, collectionsConfig);
 
+  if (trackedJsonMissing(ws, manifest, doc.id)) throw new SyncConflictError(manifest.documents[doc.id].json);
   if (changedOnDisk(ws, doc.id, paths.json)) throw new SyncConflictError(paths.json);
   if (previous?.json && previous.json !== paths.json &&
       jsonOwner(ws, previous.json) === doc.id && changedOnDisk(ws, doc.id, previous.json)) {
@@ -253,13 +268,14 @@ export function syncDocument(ws, doc, { collectionsConfig, previousDoc, render: 
  * @param {string} docId
  * @param {{ previousDoc?: Object, collectionsConfig?: Object }} [options] - previousDoc: the stored document
  * @returns {{ removed: string[] }}
- * @throws {SyncConflictError} when its JSON changed on disk
+ * @throws {SyncConflictError} when its JSON changed on disk or is gone (renamed or deleted on disk)
  */
 export function unsyncDocument(ws, docId, { previousDoc, collectionsConfig } = {}) {
   const manifest = readManifest(ws);
   const previous = previousPaths(manifest, docId, previousDoc, collectionsConfig);
   const removed = [];
   if (!previous) return { removed };
+  if (trackedJsonMissing(ws, manifest, docId)) throw new SyncConflictError(manifest.documents[docId].json);
   const ownsJson = previous.json && jsonOwner(ws, previous.json) === docId;
   if (ownsJson && changedOnDisk(ws, docId, previous.json)) throw new SyncConflictError(previous.json);
   if (ownsJson) removeFile(ws, previous.json, removed);

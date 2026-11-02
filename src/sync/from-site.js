@@ -10,7 +10,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { validate } from '../schema/validate.js';
 import { getDocument, saveDocument, deleteDocument } from '../store/content.js';
-import { changedOnDisk, recordSynced, readManifest } from './to-site.js';
+import { changedOnDisk, recordSynced, readManifest, writeManifest } from './to-site.js';
 import { getCollectionsConfig } from './site-files.js';
 
 /** Content files that are not documents (`.vp-manifest.json`: obsolete, ignored). */
@@ -118,8 +118,10 @@ export function syncFromSite(ws, db, { replace = false } = {}) {
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {import('better-sqlite3').Database} db
  * @param {string} docId
- * @returns {Object} The saved document
- * @throws {Error} when no content file exists for the document, or it is invalid
+ * When no content file holds the document but it is in the store (deleted on
+ * disk), it is deleted from the store and its manifest entry dropped.
+ * @returns {Object} The saved document, or `{ deleted: true, id }`
+ * @throws {Error} when the document is in neither the site nor the store, or its file is invalid
  */
 export function reloadFromSite(ws, db, docId) {
   let rel = readManifest(ws).documents[docId]?.json;
@@ -132,7 +134,19 @@ export function reloadFromSite(ws, db, docId) {
       if (r.doc?.id === docId) { rel = candidate; found = r; break; }
     }
   }
-  if (!rel || !found) throw new Error(`No content file for document ${docId}`);
+  if (!rel || !found) {
+    // Deleted on disk (e.g. pulled): the site wins, so drop it from the store.
+    const manifest = readManifest(ws);
+    if (getDocument(db, docId)) {
+      deleteDocument(db, docId);
+      if (manifest.documents[docId]) {
+        delete manifest.documents[docId];
+        writeManifest(ws, manifest);
+      }
+      return { deleted: true, id: docId };
+    }
+    throw new Error(`No content file for document ${docId}`);
+  }
   if (found.error) throw new Error(`Invalid content file ${rel}: ${found.error}`);
   const saved = saveDocument(db, found.doc);
   recordSynced(ws, docId, rel, { collectionsConfig: getCollectionsConfig(db) });

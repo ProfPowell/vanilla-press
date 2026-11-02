@@ -113,4 +113,43 @@ describe('two sites sharing tracked files', () => {
     assert.ok(existsSync(B.at('content/posts/renamed.json')));
     assert.ok(existsSync(B.at('src/posts/renamed.html')));
   });
+
+  it('(d) a rename pulled from A is detected on B without a restart', async () => {
+    assert.equal((await A.api(`/api/documents/${ID}`, { method: 'PUT', body: { meta: { slug: 'from-a' } } })).status, 200);
+    pull(A, B);
+
+    const put = await B.api(`/api/documents/${ID}`, { method: 'PUT', body: { meta: { title: 'B stale' } } });
+    assert.equal(put.status, 409, JSON.stringify(put.data));
+    assert.ok(!existsSync(B.at('content/posts/renamed.json')), 'old JSON not re-created');
+    assert.ok(!existsSync(B.at('src/posts/renamed.html')), 'old HTML not re-created');
+
+    const reload = await B.api(`/api/documents/${ID}/reload`, { method: 'POST' });
+    assert.equal(reload.status, 200, JSON.stringify(reload.data));
+    assert.equal(reload.data.meta.slug, 'from-a');
+
+    const again = await B.api(`/api/documents/${ID}`, { method: 'PUT', body: { meta: { title: 'B after rename' } } });
+    assert.equal(again.status, 200, JSON.stringify(again.data));
+    assert.equal(JSON.parse(readFileSync(B.at('content/posts/from-a.json'), 'utf8')).meta.title, 'B after rename');
+    assert.ok(!existsSync(B.at('content/posts/renamed.json')));
+  });
+
+  it('(e) a delete pulled from A is detected on B, and reload removes it from B', async () => {
+    pull(B, A);
+    syncFromSite(A.ws, A.db);
+    assert.equal((await A.api(`/api/documents/${ID}`, { method: 'DELETE' })).status, 200);
+    pull(A, B);
+
+    const put = await B.api(`/api/documents/${ID}`, { method: 'PUT', body: { meta: { title: 'B resurrect' } } });
+    assert.equal(put.status, 409, JSON.stringify(put.data));
+    assert.ok(!existsSync(B.at('content/posts/from-a.json')), 'deleted JSON not re-created');
+    assert.ok(!existsSync(B.at('src/posts/from-a.html')), 'deleted HTML not re-created');
+
+    const del = await B.api(`/api/documents/${ID}`, { method: 'DELETE' });
+    assert.equal(del.status, 409, JSON.stringify(del.data));
+
+    const reload = await B.api(`/api/documents/${ID}/reload`, { method: 'POST' });
+    assert.equal(reload.status, 200, JSON.stringify(reload.data));
+    assert.deepEqual(reload.data, { deleted: true, id: ID });
+    assert.equal((await B.api(`/api/documents/${ID}`)).status, 404);
+  });
 });

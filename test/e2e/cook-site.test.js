@@ -43,6 +43,7 @@ describe('synced site builds with Cook', () => {
       { type: 'paragraph', children: [{ type: 'text', value: 'Write ${siteTitle} in prose.' }] },
       { type: 'code_block', attrs: { language: 'js' }, value: 'const t = `${siteTitle}`;' },
       { type: 'code_block', attrs: { language: 'js' }, value: 'if (a < b && s === "x" || t === \'y\') {}' },
+      { type: 'code_block', attrs: { language: 'html' }, value: '<code-block>x</code-block><script>alert(1)</script>' },
     ];
     for (const d of [older, newer, draft, code]) syncDocument(ws, d, {});
 
@@ -90,12 +91,21 @@ describe('synced site builds with Cook', () => {
   it('a normal code block still shows correctly escaped in dist', () => {
     const html = readFileSync(join(tmp, 'dist/posts/template/index.html'), 'utf8');
     const areas = [...html.matchAll(/<textarea[^>]*>([\s\S]*?)<\/textarea>/g)].map((m) => m[1]);
-    assert.equal(areas.length, 2, html);
+    assert.equal(areas.length, 3, html);
     const code = 'if (a < b && s === "x" || t === \'y\') {}';
     // Escaped (no raw < or &), and the same visible text once decoded.
     assert.ok(!/<|&(?!lt;|gt;|amp;|quot;|#39;)/.test(areas[1]), areas[1]);
     assert.equal(decode(areas[1]), code);
     const shown = [...html.matchAll(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/g)].map((m) => decode(m[1].replace(/<[^>]+>/g, '')));
     assert.equal(shown[1], code);
+  });
+
+  it('a code block containing </code-block> does not leak live HTML into the page', () => {
+    const html = readFileSync(join(tmp, 'dist/posts/template/index.html'), 'utf8');
+    const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
+    assert.ok(!main.includes('<script>alert(1)'), main);
+    assert.ok(main.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), main);
+    const areas = [...main.matchAll(/<textarea[^>]*>([\s\S]*?)<\/textarea>/g)].map((m) => m[1]);
+    assert.equal(decode(areas[2]), '<code-block>x</code-block><script>alert(1)</script>');
   });
 });

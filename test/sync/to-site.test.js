@@ -401,3 +401,38 @@ describe('Cook template safety and minors (final fix)', () => {
     assert.ok(existsSync(p('src/posts/keep.txt')));
   });
 });
+
+describe('merge fixes', () => {
+  it('a code block containing </code-block> stays escaped, without data-escape', () => {
+    const doc = simple();
+    const code = '<code-block>x</code-block><script>alert(1)</script> ${title}';
+    doc.blocks = [{ type: 'code_block', attrs: { language: 'html' }, value: code }];
+    syncDocument(ws, doc, {});
+    const html = readFileSync(p('src/posts/hello.html'), 'utf8');
+    const body = html.slice(html.indexOf('\n---\n', 4) + 5);
+    assert.ok(!body.includes('<script>'), body);
+    assert.ok(!body.includes('data-escape'), body);
+    assert.ok(body.includes('&lt;/code-block&gt;&lt;script&gt;'), body);
+    assert.ok(!body.includes('${'), body);
+    assert.ok(body.includes('$<!---->{title}'), body);
+  });
+
+  it('checkSync: a JSON this machine wrote that is now missing (pulled rename) is a conflict', () => {
+    const doc = simple();
+    syncDocument(ws, doc, {});
+    rmSync(p('content/posts/hello.json'));
+    assert.throws(() => checkSync(ws, mk(doc, { title: 'Edit' }), {}), (err) =>
+      err instanceof SyncConflictError && err.path === 'content/posts/hello.json');
+    assert.throws(() => syncDocument(ws, mk(doc, { title: 'Edit' }), {}), SyncConflictError);
+    assert.ok(!existsSync(p('content/posts/hello.json')));
+  });
+
+  it('unsyncDocument: a missing tracked JSON is a conflict and nothing is removed', () => {
+    const doc = simple();
+    syncDocument(ws, doc, {});
+    rmSync(p('content/posts/hello.json'));
+    assert.throws(() => unsyncDocument(ws, doc.id), SyncConflictError);
+    assert.ok(existsSync(p('src/posts/hello.html')));
+    assert.ok(readManifest(ws).documents[doc.id]);
+  });
+});

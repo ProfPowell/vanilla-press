@@ -6,6 +6,7 @@
  * @module sync/site-files
  */
 
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { getConfig } from '../store/config.js';
 import { getDocument } from '../store/content.js';
@@ -58,7 +59,9 @@ export function preflightSave(ws, db, candidate, collectionsConfig) {
   const existing = getDocument(db, candidate.id);
   if (existing) {
     const rel = manifest.documents[existing.id]?.json || outputPaths(existing, collectionsConfig).json;
-    if (changedOnDisk(ws, existing.id, rel)) {
+    // Changed on disk, or renamed/deleted there (the JSON this machine recorded is gone).
+    const gone = Boolean(manifest.documents[existing.id]?.json) && !existsSync(join(ws.siteDir, rel));
+    if (gone || changedOnDisk(ws, existing.id, rel)) {
       return { status: 409, error: 'This document changed on disk (e.g. git pull).', path: rel };
     }
   }

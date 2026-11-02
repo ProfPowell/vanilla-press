@@ -11,6 +11,7 @@
 import { validStatuses } from '../../../../src/schema/content-schema.js';
 import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.js';
 import { api } from '../api-client.js';
+import { collectionOutput } from '../../../../src/export/paths.js';
 import { saveDocument, loadDocument, handleSaveError, loadVersionOnDisk } from '../editor.js';
 
 export class MetaPanel extends HTMLElement {
@@ -165,12 +166,27 @@ export class MetaPanel extends HTMLElement {
       }
     });
 
-    // Preview
-    previewBtn.addEventListener('click', () => {
-      const meta = getCurrentMeta();
-      if (meta.collection && meta.slug) {
-        window.open(`/${meta.collection}/${meta.slug}/`, '_blank');
+    // Preview: open the page on the Cook dev server (cook dev)
+    api.getWorkspace().then(({ exportEnabled }) => {
+      if (!exportEnabled) {
+        previewBtn.disabled = true;
+        previewBtn.title = 'Preview needs a site (--site)';
       }
+    }).catch(() => {});
+    previewBtn.addEventListener('click', async () => {
+      const meta = getCurrentMeta();
+      if (!meta.collection || !meta.slug) return;
+      const { exportEnabled, previewUrl } = await api.getWorkspace();
+      if (!exportEnabled) return;
+      let collections = {};
+      try {
+        const { value } = await api.getConfig('collections');
+        collections = value ? JSON.parse(value) : {};
+      } catch { /* defaults */ }
+      const { path } = collectionOutput(meta.collection, collections);
+      const dir = path.replace(/^\/+|\/+$/g, '');
+      const base = previewUrl.replace(/\/+$/, '');
+      window.open(`${base}/${dir ? dir + '/' : ''}${meta.slug}/`, '_blank');
     });
   }
 

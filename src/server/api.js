@@ -81,7 +81,11 @@ export function mountApi(router, db, options) {
   // --- Workspace ---
 
   router.add('GET', '/api/workspace', (req, res) => {
-    sendJson(res, 200, { site: ws ? ws.siteDir : null, exportEnabled: Boolean(ws) });
+    sendJson(res, 200, {
+      site: ws ? ws.siteDir : null,
+      exportEnabled: Boolean(ws),
+      previewUrl: getConfig(db, 'preview_url') || 'http://localhost:3000',
+    });
   });
 
   // --- Documents ---

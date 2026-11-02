@@ -77,7 +77,7 @@ export const api = {
     return request(`/documents/${encodeURIComponent(id)}/reload`, { method: 'POST' });
   },
 
-  /** Which site is being edited: { site, exportEnabled }. Cached. */
+  /** Which site is being edited: { site, exportEnabled, previewUrl }. Cached. */
   getWorkspace() {
     workspacePromise ||= request('/workspace');
     return workspacePromise;

@@ -15,6 +15,7 @@ import { migrate } from '../../src/store/migrate.js';
 import { createRouter, sendJson } from '../../src/server/router.js';
 import { mountApi } from '../../src/server/api.js';
 import { resolveWorkspace, openWorkspaceDb } from '../../src/workspace/workspace.js';
+import { setConfig } from '../../src/store/config.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -75,7 +76,14 @@ describe('API with a site workspace', () => {
   it('GET /api/workspace reports the site with export enabled', async () => {
     const { status, data } = await api('/api/workspace');
     assert.equal(status, 200);
-    assert.deepEqual(data, { site, exportEnabled: true });
+    assert.deepEqual(data, { site, exportEnabled: true, previewUrl: 'http://localhost:3000' });
+  });
+
+  it('GET /api/workspace reports a configured preview_url', async () => {
+    setConfig(db, 'preview_url', 'http://localhost:4000');
+    const { data } = await api('/api/workspace');
+    assert.equal(data.previewUrl, 'http://localhost:4000');
+    db.prepare("DELETE FROM config WHERE key = 'preview_url'").run();
   });
 
   it('POST a published doc exports JSON and HTML', async () => {
@@ -261,7 +269,7 @@ describe('API in fixture mode', () => {
 
   it('GET /api/workspace reports export disabled', async () => {
     const { data } = await api('/api/workspace');
-    assert.deepEqual(data, { site: null, exportEnabled: false });
+    assert.deepEqual(data, { site: null, exportEnabled: false, previewUrl: 'http://localhost:3000' });
   });
 
   it('POST writes no export files into the repo', async () => {

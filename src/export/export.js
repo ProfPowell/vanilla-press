@@ -110,6 +110,36 @@ function previousPaths(manifest, docId, previousDoc, collectionsConfig) {
   return null;
 }
 
+/** A rendered <code-block>: open tag, then its HTML-escaped (&, <, >) code. */
+const CODE_BLOCK = /(<code-block\b)([^>]*>)([\s\S]*?)(<\/code-block>)/g;
+
+/** Inverse of renderers/shared.js escapeHtml (& < > only). */
+const unescapeHtml = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/**
+ * Protect a rendered page body from Cook's `${...}` interpolation, which runs
+ * after Cook has parsed the page with a DOM (so HTML entities do not help).
+ * - `<code-block>` elements get `data-escape` and their raw code: Cook
+ *   base64-stores that content before interpolation and HTML-escapes it
+ *   itself (scripts/plugins/escape-code-blocks.js). Raw code containing the
+ *   text `</code-block>` would end the block early.
+ * - Everywhere else `${` becomes `$<!---->{`: the empty comment breaks the
+ *   placeholder and is invisible on the page.
+ * @param {string} html
+ * @returns {string}
+ */
+export function protectBody(html) {
+  const split = (text) => text.replaceAll('${', '$<!---->{');
+  let out = '';
+  let last = 0;
+  for (const m of html.matchAll(CODE_BLOCK)) {
+    out += split(html.slice(last, m.index));
+    out += `${m[1]} data-escape${m[2]}${unescapeHtml(m[3])}${m[4]}`;
+    last = m.index + m[0].length;
+  }
+  return out + split(html.slice(last));
+}
+
 /** Remove a file, then any parent directories it leaves empty, up to (not including) content/ and src/. */
 function removeFile(ws, rel, removed) {
   const abs = join(ws.siteDir, rel);
@@ -170,8 +200,8 @@ export function checkExport(ws, doc, { collectionsConfig, previousDoc } = {}) {
  * entry. Everything that can fail without touching the filesystem
  * (validation, conflict checks, rendering) happens before the first write.
  *
- * Cook interpolates `${...}` in page HTML, so every `${` in the rendered body
- * is written as `&#36;{` (the front matter is left as is).
+ * Cook interpolates `${...}` in page HTML, so the rendered body is protected
+ * (see protectBody); the front matter is left as is.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {Object} doc
  * @param {{ collectionsConfig?: Object, previousDoc?: Object, render?: Function }} [options] - previousDoc: the stored version before this save; `render` overrides the renderer (tests)
@@ -188,7 +218,7 @@ export function exportDocument(ws, doc, { collectionsConfig, previousDoc, render
   const jsonText = JSON.stringify(doc, null, 2) + '\n';
   const htmlText = paths.html
     ? frontMatter(doc, { layout }) +
-      renderFn(doc, { scope: 'content', bare: true }).replaceAll('${', '&#36;{') + '\n'
+      protectBody(renderFn(doc, { scope: 'content', bare: true })) + '\n'
     : null;
 
   const written = [];

@@ -345,21 +345,30 @@ describe('ownership from the files (final fix)', () => {
 });
 
 describe('Cook template safety and minors (final fix)', () => {
-  it('escapes ${ in the HTML body (not the front matter) so Cook does not interpolate it', () => {
+  it('protects ${ from Cook: comment-split in prose, raw data-escape code blocks; front matter as is', () => {
     const doc = mk(simple(), { title: 'Cost ${title}' });
+    const code = 'if (a < b && c > d) say("hi", \'${title}\');';
     doc.blocks = [
-      { type: 'paragraph', children: [{ type: 'text', value: 'Use ${title} here.' }] },
-      { type: 'code_block', attrs: { language: 'js' }, value: 'const s = `${title}`;' },
+      { type: 'paragraph', children: [{ type: 'text', value: 'Use ${title} & <this>.' }] },
+      { type: 'code_block', attrs: { language: 'js', filename: 'a.js' }, value: code },
     ];
     exportDocument(ws, doc, {});
     const html = readFileSync(p('src/posts/hello.html'), 'utf8');
     const end = html.indexOf('\n---\n', 4) + 5;
     const body = html.slice(end);
-    assert.ok(!body.includes('${'), body);
-    assert.equal((body.match(/&#36;\{title\}/g) || []).length, 2, body);
     assert.ok(html.slice(0, end).includes('title: "Cost ${title}"'));
+    assert.ok(body.includes('<p>Use $<!---->{title} &amp; &lt;this&gt;.</p>'), body);
+    assert.ok(body.includes(`<code-block data-escape language="js" label="a.js">${code}</code-block>`), body);
+    assert.ok(!body.replace(/<code-block[\s\S]*?<\/code-block>/g, '').includes('${'), body);
+    assert.ok(!body.includes('&#36;'));
     // The JSON keeps the text as written.
-    assert.equal(JSON.parse(readFileSync(p('content/posts/hello.json'), 'utf8')).blocks[0].children[0].value, 'Use ${title} here.');
+    assert.equal(JSON.parse(readFileSync(p('content/posts/hello.json'), 'utf8')).blocks[0].children[0].value, 'Use ${title} & <this>.');
+  });
+
+  it('the shared renderer output is unchanged (protection is export-only)', async () => {
+    const { render } = await import('../../src/renderers/html.js');
+    const doc = { ...simple(), blocks: [{ type: 'code_block', attrs: { language: 'js' }, value: 'a < b' }] };
+    assert.ok(render(doc, { scope: 'content', bare: true }).includes('<code-block language="js">a &lt; b</code-block>'));
   });
 
   for (const name of ['layouts', 'includes', 'components', 'media', 'assets']) {

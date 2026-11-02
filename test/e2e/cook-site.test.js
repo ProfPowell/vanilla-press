@@ -10,6 +10,7 @@ import { exportDocument } from '../../src/export/export.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const fixture = (n) => JSON.parse(readFileSync(join(repoRoot, 'test', 'fixtures', n), 'utf8'));
+const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#(?:39|x27);/g, "'").replace(/&amp;/g, '&');
 const mk = (base, meta) => ({ ...base, meta: { ...base.meta, ...meta } });
 
 let tmp, build;
@@ -41,6 +42,7 @@ describe('export builds with Cook', () => {
     code.blocks = [
       { type: 'paragraph', children: [{ type: 'text', value: 'Write ${siteTitle} in prose.' }] },
       { type: 'code_block', attrs: { language: 'js' }, value: 'const t = `${siteTitle}`;' },
+      { type: 'code_block', attrs: { language: 'js' }, value: 'if (a < b && s === "x" || t === \'y\') {}' },
     ];
     for (const d of [older, newer, draft, code]) exportDocument(ws, d, {});
 
@@ -75,14 +77,25 @@ describe('export builds with Cook', () => {
     assert.ok(!existsSync(join(tmp, 'dist/posts/secret/index.html')));
   });
 
-  // TODO (needs a decision): Cook 2.4.0 parses the page with JSDOM
-  // (replace-components) BEFORE replace-template-strings, which decodes
-  // `&#36;{` back to `${`, so the escape exportDocument writes does not stop
-  // the interpolation. See the final-fix report.
-  it('${...} in a post body is not interpolated by Cook', { skip: 'Cook decodes &#36; before interpolating (needs a decision)' }, () => {
+  it('${...} in a post body is not interpolated by Cook', () => {
     const html = readFileSync(join(tmp, 'dist/posts/template/index.html'), 'utf8');
     const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
     assert.ok(!main.includes('Interpolated Site Title'), main);
-    assert.equal((main.match(/(&#36;|&#x24;|&dollar;|\$)\{siteTitle\}/g) || []).length, 2, main);
+    const para = /<p>([\s\S]*?)<\/p>/.exec(main)[1].replace(/<!--[\s\S]*?-->/g, '');
+    assert.equal(para, 'Write ${siteTitle} in prose.');
+    const raw = /<textarea[^>]*>([\s\S]*?)<\/textarea>/.exec(main)[1];
+    assert.ok(raw.includes('const t = `${siteTitle}`;'), raw);
+  });
+
+  it('a normal code block still shows correctly escaped in dist', () => {
+    const html = readFileSync(join(tmp, 'dist/posts/template/index.html'), 'utf8');
+    const areas = [...html.matchAll(/<textarea[^>]*>([\s\S]*?)<\/textarea>/g)].map((m) => m[1]);
+    assert.equal(areas.length, 2, html);
+    const code = 'if (a < b && s === "x" || t === \'y\') {}';
+    // Escaped (no raw < or &), and the same visible text once decoded.
+    assert.ok(!/<|&(?!lt;|gt;|amp;|quot;|#39;)/.test(areas[1]), areas[1]);
+    assert.equal(decode(areas[1]), code);
+    const shown = [...html.matchAll(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/g)].map((m) => decode(m[1].replace(/<[^>]+>/g, '')));
+    assert.equal(shown[1], code);
   });
 });

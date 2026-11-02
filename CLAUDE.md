@@ -69,7 +69,7 @@ Vanilla Press no longer builds a site itself. It edits content and exports files
 - Commit `content/` and `src/`. The editor/server syncs the store from `content/` on startup, so pulled edits come in; `vp import:content [--replace]` does the same from the CLI.
 - `vp export` writes every document to the site. Saving in the editor exports that document. Drafts and archived documents get JSON only. Re-run `vp export` after changing the `collections` config.
 - Generated HTML pages are overwritten on export and removed on rename/unpublish/delete; don't hand-edit them. Vanilla Press only overwrites or removes a page whose `vp_id` is the document's own id (a JSON file: whose `id` is), so hand-written pages are never touched (saving onto one is refused).
-- Cook interpolates `${...}` in page HTML, so the exported body writes `${` as `&#36;{` (the JSON keeps the text as written).
+- Cook interpolates `${...}` in page HTML, so the exported body is protected (the JSON keeps the text as written): code blocks are written as `<code-block data-escape>` with their raw code (Cook stores it before interpolation and escapes it itself), and elsewhere `${` is written as `$<!---->{`. Known limitation: a code sample containing the literal text `</code-block>` ends the block early.
 - Collection names `layouts`, `includes`, `components`, `media` and `assets` are reserved.
 - If a JSON file changed on disk (git pull, hand edit), saving returns a conflict; use "Load the version on disk" in the editor.
 - `vp serve` (and `npm run dev`) default to port 3007; `cook dev` defaults to 3000. Preview with `cook dev` in the site: the editor's Preview button opens the `preview_url` config value (default `http://localhost:3000`).

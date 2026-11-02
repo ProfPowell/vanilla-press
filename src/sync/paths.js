@@ -1,7 +1,7 @@
 /**
- * Output paths for exported documents (pure, no filesystem access).
+ * Output paths for synced documents (pure, no filesystem access).
  *
- * @module export/paths
+ * @module sync/paths
  */
 
 /**

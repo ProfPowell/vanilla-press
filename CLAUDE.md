@@ -6,7 +6,7 @@ A platform-first content system where the component model, the editor, the stora
 
 Vanilla Press stores content as a typed block AST that maps 1:1 to a web component model. A `callout` block in the content store is the same `callout` that exists as a Vanilla Breeze `<status-message>` element in the browser, for example, the same `callout` that renders as `> **Warning:**` in markdown output. One concept, multiple serializations, no lossy conversion.
 
-Vanilla Press edits content and exports it into a Cook site; Cook builds the static output served from Cloudflare Pages. A thin Cloudflare Worker handles content negotiation — same URL serves HTML to browsers, markdown to LLM agents, JSON to API consumers, and HTML fragments to html-star (hypermedia) requests.
+Vanilla Press edits content and syncs it into a Cook site; Cook builds the static output served from Cloudflare Pages. A thin Cloudflare Worker handles content negotiation — same URL serves HTML to browsers, markdown to LLM agents, JSON to API consumers, and HTML fragments to html-star (hypermedia) requests.
 
 ## Architecture
 
@@ -21,8 +21,9 @@ content-schema.js          ← single source of truth for block types
         ├── store/         ← SQLite/D1 content API
         │   └── content.js
         │
-        ├── export/        ← writes JSON + HTML pages into a Cook site
-        │   └── export.js
+        ├── sync/          ← syncs JSON + HTML pages to and from a Cook site
+        │   ├── to-site.js ← store → site (one document)
+        │   └── from-site.js ← site → store (startup, sync --from-site, reload)
         │
         └── worker/        ← Cloudflare Worker
             └── index.js   ← content negotiation + scope routing
@@ -57,23 +58,25 @@ content-schema.js          ← single source of truth for block types
 
 ## Using Vanilla Press with a Cook site
 
-Vanilla Press no longer builds a site itself. It edits content and exports files into a [Cook](https://github.com/ProfPowell/cook) site; Cook builds and serves it.
+Words, used the same in code, CLI and UI: **sync** = VP writes a document's files into the site (or, `--from-site`, loads the site's JSON into the store); **publish** = a document's status (published documents get an HTML page); **build** = Cook turns `src/` into `dist/`; **deploy** = shipping `dist/` to hosting (not VP's job).
 
-- Point at a site with `--site <path>` or `VP_SITE=<path>`. Without one, Vanilla Press runs in fixture mode (the repo's own `content.db` and `media/`) and export is disabled.
+Vanilla Press no longer builds a site itself. It edits content and syncs files into a [Cook](https://github.com/ProfPowell/cook) site; Cook builds and serves it.
+
+- Point at a site with `--site <path>` or `VP_SITE=<path>`. Without one, Vanilla Press runs in fixture mode (the repo's own `content.db` and `media/`) and sync is disabled.
 - Layout inside the site:
   - `.vp/content.db` (store) and `.vp/manifest.json` (what this machine last wrote or imported: JSON hashes plus path hints). Both are machine-local: add `.vp/` to the site's `.gitignore`.
   - `src/media/<file>` (uploads)
   - `content/<collection>/<slug>.json` (document source), `content/media.json`
   - `src/<path>/<slug>.html` (published pages: front matter plus bare block HTML; posts use `layout: "post"`; the last front-matter key, `vp_id`, names the document that owns the page)
   - `config/vp.json` (settings)
-- Commit `content/` and `src/`. The editor/server syncs the store from `content/` on startup, so pulled edits come in; `vp import:content [--replace]` does the same from the CLI.
-- `vp export` writes every document to the site. Saving in the editor exports that document. Drafts and archived documents get JSON only. Re-run `vp export` after changing the `collections` config.
-- Generated HTML pages are overwritten on export and removed on rename/unpublish/delete; don't hand-edit them. Vanilla Press only overwrites or removes a page whose `vp_id` is the document's own id (a JSON file: whose `id` is), so hand-written pages are never touched (saving onto one is refused).
-- Cook interpolates `${...}` in page HTML, so the exported body is protected (the JSON keeps the text as written): code blocks are written as `<code-block data-escape>` with their raw code (Cook stores it before interpolation and escapes it itself), and elsewhere `${` is written as `$<!---->{`. Known limitation: a code sample containing the literal text `</code-block>` ends the block early.
+- Commit `content/` and `src/`. The editor/server syncs the store from `content/` on startup, so pulled edits come in; `vp sync --from-site [--replace]` does the same from the CLI.
+- `vp sync` writes every document to the site (`POST /api/sync` does the same). Saving in the editor syncs that document. Drafts and archived documents get JSON only. Re-run `vp sync` after changing the `collections` config.
+- Generated HTML pages are overwritten on sync and removed on rename/unpublish/delete; don't hand-edit them. Vanilla Press only overwrites or removes a page whose `vp_id` is the document's own id (a JSON file: whose `id` is), so hand-written pages are never touched (saving onto one is refused).
+- Cook interpolates `${...}` in page HTML, so the synced body is protected (the JSON keeps the text as written): code blocks are written as `<code-block data-escape>` with their raw code (Cook stores it before interpolation and escapes it itself), and elsewhere `${` is written as `$<!---->{`. Known limitation: a code sample containing the literal text `</code-block>` ends the block early.
 - Collection names `layouts`, `includes`, `components`, `media` and `assets` are reserved.
 - If a JSON file changed on disk (git pull, hand edit), saving returns a conflict; use "Load the version on disk" in the editor.
 - `vp serve` (and `npm run dev`) default to port 3007; `cook dev` defaults to 3000. Preview with `cook dev` in the site: the editor's Preview button opens the `preview_url` config value (default `http://localhost:3000`).
-- Old `content/.vp-manifest.json` files are obsolete and ignored; delete them. Pages exported before `vp_id` existed have no owner: delete them and run `vp export`.
+- Old `content/.vp-manifest.json` files are obsolete and ignored; delete them. Pages synced before `vp_id` existed have no owner: delete them and run `vp sync`.
 - Site layouts (`src/layouts/post.html`, `page.html`) and `collections: { html: true }` in the Cook config are the site's responsibility.
 
 ## Project Phases
@@ -82,7 +85,7 @@ See `docs/IMPLEMENTATION.md` for the full plan. The current phase determines wha
 
 - **Phase 1:** Content schema + renderers + test fixtures
 - **Phase 1E:** Editor prototype (runs in parallel — standalone ProseMirror + Vanilla Breeze components)
-- **Phase 2:** SQLite store + export to a Cook site + Cloudflare Worker
+- **Phase 2:** SQLite store + sync to a Cook site + Cloudflare Worker
 - **Phase 3:** CLI for content management
 - **Phase 4:** Editor integration (merges prototype into CMS pipeline)
 - **Phase 5:** WordPress migration tooling

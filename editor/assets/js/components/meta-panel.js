@@ -2,7 +2,7 @@
  * <meta-panel> — sidebar form for document metadata.
  *
  * Fields: title, slug (auto-derived), collection, description, status, tags.
- * Actions: publish/unpublish, preview, export.
+ * Actions: publish/unpublish, preview.
  * Updates the current document metadata stored in meta-state.js.
  *
  * @module editor/components/meta-panel
@@ -11,7 +11,7 @@
 import { validStatuses } from '../../../../src/schema/content-schema.js';
 import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.js';
 import { api } from '../api-client.js';
-import { collectionOutput } from '../../../../src/export/paths.js';
+import { collectionOutput } from '../../../../src/sync/paths.js';
 import { saveDocument, loadDocument, handleSaveError, loadVersionOnDisk } from '../editor.js';
 
 export class MetaPanel extends HTMLElement {
@@ -167,8 +167,8 @@ export class MetaPanel extends HTMLElement {
     });
 
     // Preview: open the page on the Cook dev server (cook dev)
-    api.getWorkspace().then(({ exportEnabled }) => {
-      if (!exportEnabled) {
+    api.getWorkspace().then(({ syncEnabled }) => {
+      if (!syncEnabled) {
         previewBtn.disabled = true;
         previewBtn.title = 'Preview needs a site (--site)';
       }
@@ -176,8 +176,8 @@ export class MetaPanel extends HTMLElement {
     previewBtn.addEventListener('click', async () => {
       const meta = getCurrentMeta();
       if (!meta.collection || !meta.slug) return;
-      const { exportEnabled, previewUrl } = await api.getWorkspace();
-      if (!exportEnabled) return;
+      const { syncEnabled, previewUrl } = await api.getWorkspace();
+      if (!syncEnabled) return;
       let collections = {};
       try {
         const { value } = await api.getConfig('collections');
@@ -208,7 +208,7 @@ export class MetaPanel extends HTMLElement {
       const before = { status: meta.status, published: meta.published };
       setCurrentMeta(update);
       try {
-        // Saving exports the document to the site (HTML added or removed)
+        // Saving syncs the document to the site (HTML added or removed)
         await api.updateDocument(docId, { meta: { ...getCurrentMeta() } });
       } catch (err) {
         // Not saved: put the local status back so auto-save and the panel
@@ -221,9 +221,9 @@ export class MetaPanel extends HTMLElement {
         throw err;
       }
 
-      const { exportEnabled } = await api.getWorkspace();
+      const { syncEnabled } = await api.getWorkspace();
       if (buildStatus) {
-        buildStatus.textContent = exportEnabled ? 'Exported' : 'Saved (demo content, not exported)';
+        buildStatus.textContent = syncEnabled ? 'Synced to site' : 'Saved (demo content, not synced)';
         buildStatus.className = 'build-status done';
         setTimeout(() => {
           buildStatus.textContent = '';

@@ -93,7 +93,7 @@ export const api = {
     return request(`/documents/${encodeURIComponent(id)}/reload`, { method: 'POST' });
   },
 
-  /** Which site is being edited: { site, exportEnabled, previewUrl }. Cached. */
+  /** Which site is being edited: { site, syncEnabled, previewUrl }. Cached. */
   getWorkspace() {
     workspacePromise ||= request('/workspace');
     return workspacePromise;
@@ -114,9 +114,9 @@ export const api = {
     return request('/search', { query: { q: query } });
   },
 
-  /** Re-export every document to the site. */
-  publish() {
-    return request('/publish', { method: 'POST' });
+  /** Sync every document to the site. */
+  syncAll() {
+    return request('/sync', { method: 'POST' });
   },
 
   /** Upload a media file. */

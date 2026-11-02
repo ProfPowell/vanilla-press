@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import matter from 'gray-matter';
-import { frontMatter, localDay } from '../../src/export/front-matter.js';
+import { frontMatter, localDay } from '../../src/sync/front-matter.js';
 
 const base = {
   id: '1',

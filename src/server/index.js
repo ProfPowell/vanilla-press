@@ -19,7 +19,7 @@ import { migrate } from '../store/migrate.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { createRouter } from './router.js';
 import { mountApi } from './api.js';
-import { syncFromContent } from '../export/sync.js';
+import { syncFromSite } from '../sync/from-site.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -69,9 +69,9 @@ export function startServer(options = {}) {
   }
 
   // The site's committed JSON wins: bring on-disk changes into the store first.
-  if (ws.exportEnabled) {
-    const { imported, skipped, removed } = syncFromContent(ws, db);
-    console.log(`Synced from ${ws.contentDir}: ${imported.length} imported, ${skipped.length} skipped, ${removed.length} removed`);
+  if (ws.syncEnabled) {
+    const { imported, skipped, removed } = syncFromSite(ws, db);
+    console.log(`Synced from ${ws.contentDir}: ${imported.length} loaded, ${skipped.length} skipped, ${removed.length} removed`);
   }
 
   // Set up router with API routes
@@ -136,7 +136,7 @@ export function startServer(options = {}) {
     console.log(`Vanilla Press dev server running at http://localhost:${port}/editor/`);
     console.log(`API: http://localhost:${port}/api/`);
     console.log(`DB: ${dbPath}`);
-    console.log(ws.exportEnabled ? `Site: ${ws.siteDir} (exporting)` : 'Fixture mode: demo content, not exported');
+    console.log(ws.syncEnabled ? `Site: ${ws.siteDir} (syncing)` : 'Fixture mode: demo content, not synced');
   });
 
   // Clean shutdown

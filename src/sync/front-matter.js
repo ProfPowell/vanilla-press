@@ -1,7 +1,7 @@
 /**
- * YAML front matter for exported HTML pages (pure).
+ * YAML front matter for synced HTML pages (pure).
  *
- * @module export/front-matter
+ * @module sync/front-matter
  */
 
 const pad = (n) => String(n).padStart(2, '0');

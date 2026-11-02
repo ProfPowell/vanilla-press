@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { createRouter, sendJson } from '../../src/server/router.js';
 import { mountApi } from '../../src/server/api.js';
 import { resolveWorkspace, openWorkspaceDb } from '../../src/workspace/workspace.js';
-import { syncFromContent } from '../../src/export/sync.js';
+import { syncFromSite } from '../../src/sync/from-site.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -79,7 +79,7 @@ describe('two sites sharing tracked files', () => {
   it('(a) B can edit a post A published', async () => {
     assert.equal((await A.api('/api/documents', { method: 'POST', body })).status, 201);
     pull(A, B);
-    assert.deepEqual(syncFromContent(B.ws, B.db).imported, [ID]);
+    assert.deepEqual(syncFromSite(B.ws, B.db).imported, [ID]);
 
     const put = await B.api(`/api/documents/${ID}`, { method: 'PUT', body: { meta: { title: 'B edit' } } });
     assert.equal(put.status, 200, JSON.stringify(put.data));

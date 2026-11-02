@@ -3,14 +3,14 @@
  * Cook site are the source of truth; this brings changes made on disk (git
  * pull, another machine, hand edits) back into SQLite.
  *
- * @module export/sync
+ * @module sync/from-site
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { validate } from '../schema/validate.js';
 import { getDocument, saveDocument, deleteDocument } from '../store/content.js';
-import { changedOnDisk, recordImported, readManifest } from './export.js';
+import { changedOnDisk, recordSynced, readManifest } from './to-site.js';
 import { getCollectionsConfig } from './site-files.js';
 
 /** Content files that are not documents (`.vp-manifest.json`: obsolete, ignored). */
@@ -63,7 +63,7 @@ function readDoc(ws, rel) {
  * @param {{ replace?: boolean }} [options]
  * @returns {{ imported: string[], skipped: string[], removed: string[] }} document ids (a file's path when it has no usable id)
  */
-export function syncFromContent(ws, db, { replace = false } = {}) {
+export function syncFromSite(ws, db, { replace = false } = {}) {
   const imported = [];
   const skipped = [];
   const removed = [];
@@ -75,14 +75,14 @@ export function syncFromContent(ws, db, { replace = false } = {}) {
     const { doc, error } = readDoc(ws, rel);
     const id = typeof doc?.id === 'string' ? doc.id : null;
     if (id && seen.has(id)) {
-      console.warn(`import:content: skipping ${rel}: duplicate id ${id} (already read from ${seen.get(id)})`);
+      console.warn(`sync --from-site: skipping ${rel}: duplicate id ${id} (already read from ${seen.get(id)})`);
       skipped.push(id);
       continue;
     }
     if (id) seen.set(id, rel);
     if (error) {
       unreadable = true;
-      console.warn(`import:content: skipping ${rel}: ${error}`);
+      console.warn(`sync --from-site: skipping ${rel}: ${error}`);
       skipped.push(id ?? rel);
       continue;
     }
@@ -92,17 +92,17 @@ export function syncFromContent(ws, db, { replace = false } = {}) {
         continue;
       }
       saveDocument(db, doc);
-      recordImported(ws, id, rel, { collectionsConfig });
+      recordSynced(ws, id, rel, { collectionsConfig });
       imported.push(id);
     } catch (err) {
       unreadable = true;
-      console.warn(`import:content: skipping ${rel}: ${err.message}`);
+      console.warn(`sync --from-site: skipping ${rel}: ${err.message}`);
       skipped.push(id);
     }
   }
 
   if (replace && unreadable) {
-    console.warn('import:content: replace skipped because some content files could not be read or imported');
+    console.warn('sync --from-site: replace skipped because some content files could not be read or imported');
   } else if (replace) {
     const ids = db.prepare('SELECT id FROM documents').all().map((r) => r.id);
     for (const id of ids) {
@@ -121,7 +121,7 @@ export function syncFromContent(ws, db, { replace = false } = {}) {
  * @returns {Object} The saved document
  * @throws {Error} when no content file exists for the document, or it is invalid
  */
-export function importOne(ws, db, docId) {
+export function reloadFromSite(ws, db, docId) {
   let rel = readManifest(ws).documents[docId]?.json;
   let found = rel ? readDoc(ws, rel) : null;
   if (!found || found.doc?.id !== docId) {
@@ -135,6 +135,6 @@ export function importOne(ws, db, docId) {
   if (!rel || !found) throw new Error(`No content file for document ${docId}`);
   if (found.error) throw new Error(`Invalid content file ${rel}: ${found.error}`);
   const saved = saveDocument(db, found.doc);
-  recordImported(ws, docId, rel, { collectionsConfig: getCollectionsConfig(db) });
+  recordSynced(ws, docId, rel, { collectionsConfig: getCollectionsConfig(db) });
   return saved;
 }

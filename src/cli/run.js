@@ -31,9 +31,9 @@ import { render as renderMarkdown } from '../renderers/markdown.js';
 import { table, json, success, error } from './format.js';
 import { parseMarkdown } from './markdown-parser.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
-import { exportDocument, removeExport } from '../export/export.js';
-import { syncFromContent } from '../export/sync.js';
-import { getCollectionsConfig, preflightSave, exportAll } from '../export/site-files.js';
+import { syncDocument, unsyncDocument } from '../sync/to-site.js';
+import { syncFromSite } from '../sync/from-site.js';
+import { getCollectionsConfig, preflightSave, syncAll } from '../sync/site-files.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -78,17 +78,17 @@ function openDb() {
 }
 
 /**
- * Save a document and, when a site is set, export it, without exiting.
+ * Save a document and, when a site is set, sync it to the site, without exiting.
  * Refuses (not saved) when the stored version's JSON changed on disk or the
- * export would be rejected.
+ * sync would be rejected.
  * @param {import('better-sqlite3').Database} db
  * @param {Object} doc
  * @returns {{ saved: Object } | { problem: string }} problem: a message for the user
  */
-function trySaveAndExport(db, doc) {
+function trySaveAndSync(db, doc) {
   const ws = getWorkspace();
   let previousDoc = null;
-  if (ws.exportEnabled) {
+  if (ws.syncEnabled) {
     previousDoc = getDocument(db, doc.id);
     let problem;
     try {
@@ -97,29 +97,29 @@ function trySaveAndExport(db, doc) {
       return { problem: `not saved: ${err.message}` };
     }
     if (problem?.status === 409) {
-      return { problem: `${problem.path} changed on disk (e.g. git pull); not saved. Run 'vp import:content' to load it.` };
+      return { problem: `${problem.path} changed on disk (e.g. git pull); not saved. Run 'vp sync --from-site' to load it.` };
     }
     if (problem) return { problem: problem.error.replace(/^Not saved/, 'not saved') };
   }
   const saved = saveDocument(db, doc);
-  if (ws.exportEnabled) {
+  if (ws.syncEnabled) {
     try {
-      exportDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
+      syncDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
     } catch (err) {
-      return { problem: `saved, but not exported: ${err.message}` };
+      return { problem: `saved, but not synced: ${err.message}` };
     }
   }
   return { saved };
 }
 
 /**
- * Save and export (see trySaveAndExport); on a problem, exit 1 with its message.
+ * Save and sync (see trySaveAndSync); on a problem, exit 1 with its message.
  * @param {import('better-sqlite3').Database} db
  * @param {Object} doc
  * @returns {Object} saved document
  */
-function saveAndExport(db, doc) {
-  const result = trySaveAndExport(db, doc);
+function saveAndSync(db, doc) {
+  const result = trySaveAndSync(db, doc);
   if (result.problem) {
     db.close();
     error(result.problem);
@@ -130,7 +130,7 @@ function saveAndExport(db, doc) {
 /** Workspace for a command that needs a site; exits with an error without one. */
 function requireSite(command) {
   const ws = getWorkspace();
-  if (!ws.exportEnabled) error(`${command} needs a site: pass --site <path> or set VP_SITE`);
+  if (!ws.syncEnabled) error(`${command} needs a site: pass --site <path> or set VP_SITE`);
   return ws;
 }
 
@@ -234,10 +234,10 @@ Content:
 
 Site:
   serve [--port <n>]        Start editor + API dev server (default ${DEFAULT_PORT})
-  export                    Export every document to the site (needs --site)
+  sync                      Sync every document to the site (needs --site)
+  sync --from-site [--replace]  Load the site's content JSON into the store (needs --site)
 
 Import:
-  import:content [--replace]  Load the site's content JSON into the store (needs --site)
   import:json <file>        Import a JSON document
   import:markdown <file>    Import a markdown file
   import:dir <path>         Bulk import .json and .md files
@@ -343,7 +343,7 @@ function cmdNew(args) {
     if (!result.valid) error(`validation failed:\n  ${result.errors.join('\n  ')}`);
 
     const db = openDb();
-    const saved = saveAndExport(db, doc);
+    const saved = saveAndSync(db, doc);
     db.close();
     success(`created ${saved.meta.collection}/${saved.meta.slug} (${saved.id})`);
   } else {
@@ -355,7 +355,7 @@ function cmdNew(args) {
     if (!result.valid) error(`validation failed:\n  ${result.errors.join('\n  ')}`);
 
     const db = openDb();
-    const saved = saveAndExport(db, edited);
+    const saved = saveAndSync(db, edited);
     db.close();
     success(`created ${saved.meta.collection}/${saved.meta.slug} (${saved.id})`);
   }
@@ -376,7 +376,7 @@ function cmdEdit(args) {
   }
 
   edited.meta.updated = new Date().toISOString();
-  saveAndExport(db, edited);
+  saveAndSync(db, edited);
   db.close();
   success(`updated ${edited.meta.collection}/${edited.meta.slug}`);
 }
@@ -392,7 +392,7 @@ function cmdPublish(args) {
   doc.meta.status = 'published';
   doc.meta.published = doc.meta.published || now;
   doc.meta.updated = now;
-  saveAndExport(db, doc);
+  saveAndSync(db, doc);
   db.close();
   success(`published ${doc.meta.collection}/${doc.meta.slug}`);
 }
@@ -407,7 +407,7 @@ function cmdUnpublish(args) {
   doc.meta.status = 'draft';
   doc.meta.published = undefined;
   doc.meta.updated = new Date().toISOString();
-  saveAndExport(db, doc);
+  saveAndSync(db, doc);
   db.close();
   success(`unpublished ${doc.meta.collection}/${doc.meta.slug}`);
 }
@@ -436,9 +436,9 @@ async function cmdDelete(args) {
   }
 
   const ws = getWorkspace();
-  if (ws.exportEnabled) {
+  if (ws.syncEnabled) {
     try {
-      removeExport(ws, doc.id, { previousDoc: doc, collectionsConfig: getCollectionsConfig(db) });
+      unsyncDocument(ws, doc.id, { previousDoc: doc, collectionsConfig: getCollectionsConfig(db) });
     } catch (err) {
       db.close();
       error(`not deleted: ${err.message}`);
@@ -466,33 +466,41 @@ async function cmdServe(args) {
   startServer({ port, site: siteOption });
 }
 
-function cmdExport() {
-  const ws = requireSite('export');
+/** `vp sync`: store → site (every document). `vp sync --from-site`: site → store. */
+function cmdSync(args) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      'from-site': { type: 'boolean', default: false },
+      replace: { type: 'boolean', default: false },
+    },
+    allowPositionals: true,
+  });
+  const ws = requireSite('sync');
   const db = openDb();
+
+  if (values['from-site']) {
+    const { imported, skipped, removed } = syncFromSite(ws, db, { replace: values.replace });
+    db.close();
+    success(`synced from ${ws.contentDir}: ${imported.length} loaded, ${skipped.length} skipped, ${removed.length} removed`);
+    return;
+  }
+  if (values.replace) {
+    db.close();
+    error('--replace only applies with --from-site');
+  }
+
   let result;
   try {
-    result = exportAll(ws, db);
+    result = syncAll(ws, db);
   } catch (err) {
     db.close();
-    error(`export failed: ${err.message}`);
+    error(`sync failed: ${err.message}`);
   }
   db.close();
   for (const c of result.conflicts) console.error(`skipped: ${c}`);
-  success(`exported ${result.exported} documents to ${ws.siteDir}` +
+  success(`synced ${result.synced} documents to ${ws.siteDir}` +
     (result.conflicts.length ? ` (${result.conflicts.length} skipped)` : ''));
-}
-
-function cmdImportContent(args) {
-  const { values } = parseArgs({
-    args,
-    options: { replace: { type: 'boolean', default: false } },
-    allowPositionals: true,
-  });
-  const ws = requireSite('import:content');
-  const db = openDb();
-  const { imported, skipped, removed } = syncFromContent(ws, db, { replace: values.replace });
-  db.close();
-  success(`imported ${imported.length}, skipped ${skipped.length}, removed ${removed.length} from ${ws.contentDir}`);
 }
 
 function cmdImportJson(args) {
@@ -509,7 +517,7 @@ function cmdImportJson(args) {
   if (!result.valid) error(`validation failed:\n  ${result.errors.join('\n  ')}`);
 
   const db = openDb();
-  const saved = saveAndExport(db, doc);
+  const saved = saveAndSync(db, doc);
   db.close();
   success(`imported ${saved.meta.collection}/${saved.meta.slug} (${saved.id})`);
 }
@@ -528,7 +536,7 @@ function cmdImportMarkdown(args) {
   if (!result.valid) error(`validation failed:\n  ${result.errors.join('\n  ')}`);
 
   const db = openDb();
-  const saved = saveAndExport(db, doc);
+  const saved = saveAndSync(db, doc);
   db.close();
   success(`imported ${saved.meta.collection}/${saved.meta.slug} (${saved.id})`);
 }
@@ -572,7 +580,7 @@ function cmdImportDir(args) {
         continue;
       }
 
-      const { problem } = trySaveAndExport(db, doc);
+      const { problem } = trySaveAndSync(db, doc);
       if (problem) {
         console.error(`  skip: ${file} (${problem})`);
         failed++;
@@ -872,11 +880,8 @@ export async function run(argv) {
     case 'serve':
       cmdServe(commandArgs);
       break;
-    case 'export':
-      cmdExport();
-      break;
-    case 'import:content':
-      cmdImportContent(commandArgs);
+    case 'sync':
+      cmdSync(commandArgs);
       break;
     case 'import:json':
       cmdImportJson(commandArgs);

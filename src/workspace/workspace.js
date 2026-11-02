@@ -2,8 +2,8 @@
  * Workspace resolution: which Cook site Vanilla Press is editing.
  *
  * With a site (`--site <path>` or `VP_SITE`), the store lives in
- * `<site>/.vp/content.db` and export is enabled. Without one, Vanilla Press
- * runs in fixture mode: the repo's own content.db and media/, export disabled.
+ * `<site>/.vp/content.db` and sync is enabled. Without one, Vanilla Press
+ * runs in fixture mode: the repo's own content.db and media/, sync disabled.
  *
  * @module workspace/workspace
  */
@@ -21,7 +21,7 @@ import { migrate } from '../store/migrate.js';
  * @property {string|null} contentDir
  * @property {string|null} srcDir
  * @property {string|null} configDir
- * @property {boolean} exportEnabled
+ * @property {boolean} syncEnabled
  */
 
 /**
@@ -43,7 +43,7 @@ export function resolveWorkspace({ site, env = process.env, repoRoot }) {
       contentDir: null,
       srcDir: null,
       configDir: null,
-      exportEnabled: false,
+      syncEnabled: false,
     };
   }
 
@@ -58,7 +58,7 @@ export function resolveWorkspace({ site, env = process.env, repoRoot }) {
     contentDir: join(siteDir, 'content'),
     srcDir: join(siteDir, 'src'),
     configDir: join(siteDir, 'config'),
-    exportEnabled: true,
+    syncEnabled: true,
   };
 }
 

@@ -9,12 +9,12 @@ function tmp() {
   return mkdtempSync(join(tmpdir(), 'vp-ws-'));
 }
 
-test('no site: fixture mode with repo db and media, export disabled', () => {
+test('no site: fixture mode with repo db and media, sync disabled', () => {
   const ws = resolveWorkspace({ repoRoot: '/repo', env: {} });
   assert.equal(ws.siteDir, null);
   assert.equal(ws.dbPath, join('/repo', 'content.db'));
   assert.equal(ws.mediaDir, join('/repo', 'media'));
-  assert.equal(ws.exportEnabled, false);
+  assert.equal(ws.syncEnabled, false);
   assert.equal(ws.contentDir, null);
   assert.equal(ws.srcDir, null);
   assert.equal(ws.configDir, null);
@@ -30,7 +30,7 @@ test('site: workspace paths live under the site', () => {
     assert.equal(ws.contentDir, dir + '/content');
     assert.equal(ws.srcDir, dir + '/src');
     assert.equal(ws.configDir, dir + '/config');
-    assert.equal(ws.exportEnabled, true);
+    assert.equal(ws.syncEnabled, true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

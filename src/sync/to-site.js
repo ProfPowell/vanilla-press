@@ -1,5 +1,5 @@
 /**
- * Export one document into a Cook site: a JSON source file plus, when
+ * Sync one document into a Cook site: a JSON source file plus, when
  * published, a front-matter HTML page.
  *
  * Ownership comes from the files themselves, so it survives git: an HTML page
@@ -9,7 +9,7 @@
  * of each JSON this machine wrote or imported (to detect edits pulled or made
  * on disk) and the last paths written (a hint for removing old paths).
  *
- * @module export/export
+ * @module sync/to-site
  */
 
 import { existsSync, readFileSync, readdirSync, rmSync, rmdirSync } from 'node:fs';
@@ -24,11 +24,11 @@ export { readManifest, writeManifest } from './manifest.js';
 export { writeFileAtomic } from './atomic-write.js';
 
 /** Thrown when the JSON on disk was changed outside Vanilla Press. */
-export class ExportConflictError extends Error {
+export class SyncConflictError extends Error {
   /** @param {string} path - Site-relative path of the conflicting file */
   constructor(path) {
     super(`${path} changed on disk`);
-    this.name = 'ExportConflictError';
+    this.name = 'SyncConflictError';
     this.path = path;
   }
 }
@@ -99,7 +99,7 @@ function jsonOwner(ws, rel) {
 }
 
 /**
- * Where the document's files were before this export: the local manifest
+ * Where the document's files were before this sync: the local manifest
  * entry if there is one, else the paths of the previously stored version.
  * @returns {{ json: string|null, html: string|null } | null}
  */
@@ -156,7 +156,7 @@ function removeFile(ws, rel, removed) {
 }
 
 /**
- * Every check exportDocument makes before its first write: valid
+ * Every check syncDocument makes before its first write: valid
  * slug/collection (not a reserved name) and output path; the target JSON
  * (and, on a rename, the old JSON this document owns) unchanged on disk; and
  * an HTML target that is either absent or this document's own page (its
@@ -164,10 +164,10 @@ function removeFile(ws, rel, removed) {
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {Object} doc
  * @param {{ collectionsConfig?: Object, previousDoc?: Object }} [options] - previousDoc: the stored version, for old paths when the local manifest has no entry
- * @throws {ExportConflictError} when a JSON it would write or remove changed on disk
+ * @throws {SyncConflictError} when a JSON it would write or remove changed on disk
  * @throws {Error} on an invalid or reserved slug/collection, an invalid output path, or an HTML target owned by another document or not written by Vanilla Press
  */
-export function checkExport(ws, doc, { collectionsConfig, previousDoc } = {}) {
+export function checkSync(ws, doc, { collectionsConfig, previousDoc } = {}) {
   const { slug, collection } = doc.meta;
   for (const v of [slug, collection]) {
     if (!validSegment(v)) throw new Error(`Invalid slug/collection: ${v}`);
@@ -180,10 +180,10 @@ export function checkExport(ws, doc, { collectionsConfig, previousDoc } = {}) {
   const manifest = readManifest(ws);
   const previous = previousPaths(manifest, doc.id, previousDoc, collectionsConfig);
 
-  if (changedOnDisk(ws, doc.id, paths.json)) throw new ExportConflictError(paths.json);
+  if (changedOnDisk(ws, doc.id, paths.json)) throw new SyncConflictError(paths.json);
   if (previous?.json && previous.json !== paths.json &&
       jsonOwner(ws, previous.json) === doc.id && changedOnDisk(ws, doc.id, previous.json)) {
-    throw new ExportConflictError(previous.json);
+    throw new SyncConflictError(previous.json);
   }
 
   if (paths.html) {
@@ -195,7 +195,7 @@ export function checkExport(ws, doc, { collectionsConfig, previousDoc } = {}) {
 }
 
 /**
- * Export a document. Writes the JSON; if published, the HTML page; removes
+ * Sync a document. Writes the JSON; if published, the HTML page; removes
  * this document's own files at its old paths; records the local manifest
  * entry. Everything that can fail without touching the filesystem
  * (validation, conflict checks, rendering) happens before the first write.
@@ -206,10 +206,10 @@ export function checkExport(ws, doc, { collectionsConfig, previousDoc } = {}) {
  * @param {Object} doc
  * @param {{ collectionsConfig?: Object, previousDoc?: Object, render?: Function }} [options] - previousDoc: the stored version before this save; `render` overrides the renderer (tests)
  * @returns {{ written: string[], removed: string[] }}
- * @throws {ExportConflictError} when the target JSON (or the JSON a rename would delete) changed on disk
+ * @throws {SyncConflictError} when the target JSON (or the JSON a rename would delete) changed on disk
  */
-export function exportDocument(ws, doc, { collectionsConfig, previousDoc, render: renderFn = render } = {}) {
-  checkExport(ws, doc, { collectionsConfig, previousDoc });
+export function syncDocument(ws, doc, { collectionsConfig, previousDoc, render: renderFn = render } = {}) {
+  checkSync(ws, doc, { collectionsConfig, previousDoc });
   const { layout } = collectionOutput(doc.meta.collection, collectionsConfig);
   const paths = outputPaths(doc, collectionsConfig);
   const manifest = readManifest(ws);
@@ -246,22 +246,22 @@ export function exportDocument(ws, doc, { collectionsConfig, previousDoc, render
 }
 
 /**
- * Delete a document's exported files (missing files are fine) and its local
+ * Delete a document's synced files (missing files are fine) and its local
  * manifest entry. Files are found at the manifest entry's paths, else at the
  * stored version's paths; only files this document owns are removed.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {string} docId
  * @param {{ previousDoc?: Object, collectionsConfig?: Object }} [options] - previousDoc: the stored document
  * @returns {{ removed: string[] }}
- * @throws {ExportConflictError} when its JSON changed on disk
+ * @throws {SyncConflictError} when its JSON changed on disk
  */
-export function removeExport(ws, docId, { previousDoc, collectionsConfig } = {}) {
+export function unsyncDocument(ws, docId, { previousDoc, collectionsConfig } = {}) {
   const manifest = readManifest(ws);
   const previous = previousPaths(manifest, docId, previousDoc, collectionsConfig);
   const removed = [];
   if (!previous) return { removed };
   const ownsJson = previous.json && jsonOwner(ws, previous.json) === docId;
-  if (ownsJson && changedOnDisk(ws, docId, previous.json)) throw new ExportConflictError(previous.json);
+  if (ownsJson && changedOnDisk(ws, docId, previous.json)) throw new SyncConflictError(previous.json);
   if (ownsJson) removeFile(ws, previous.json, removed);
   if (previous.html && htmlOwner(ws, previous.html) === docId) removeFile(ws, previous.html, removed);
   if (manifest.documents[docId]) {
@@ -280,7 +280,7 @@ export function removeExport(ws, docId, { previousDoc, collectionsConfig } = {})
  * @param {string} jsonRelPath - Site-relative
  * @param {{ collectionsConfig?: Object }} [options]
  */
-export function recordImported(ws, docId, jsonRelPath, { collectionsConfig } = {}) {
+export function recordSynced(ws, docId, jsonRelPath, { collectionsConfig } = {}) {
   const manifest = readManifest(ws);
   const text = readFileSync(join(ws.siteDir, jsonRelPath));
   const entry = manifest.documents[docId] || { json: jsonRelPath, html: null, jsonHash: '' };

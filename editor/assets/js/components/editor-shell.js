@@ -70,11 +70,11 @@ export class EditorShell extends HTMLElement {
     const label = this.querySelector('[data-site-label]');
     if (!label) return;
     try {
-      const { site, exportEnabled } = await api.getWorkspace();
+      const { site, syncEnabled } = await api.getWorkspace();
       const name = site ? site.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : '';
-      label.textContent = exportEnabled ? `Site: ${name}` : 'Demo content (not exported)';
+      label.textContent = syncEnabled ? `Site: ${name}` : 'Demo content (not synced)';
       label.title = site || '';
-      label.classList.toggle('demo', !exportEnabled);
+      label.classList.toggle('demo', !syncEnabled);
     } catch (err) {
       console.error('Error loading workspace:', err);
     }

@@ -125,7 +125,9 @@ All endpoints return JSON. Errors return `{ error: "message" }`.
 | `GET` | `/api/search?q=` | Full-text search |
 | `POST` | `/api/media` | Upload file (multipart/form-data) |
 | `GET` | `/api/media` | List uploaded media |
-| `POST` | `/api/publish` | Trigger site build |
+| `POST` | `/api/sync` | Sync every document to the Cook site (`{ ok, synced, conflicts }`) |
+| `POST` | `/api/documents/:id/reload` | Replace the stored document with its JSON on disk (after a conflict) |
+| `GET` | `/api/workspace` | Which site is being edited (`{ site, syncEnabled }`) |
 
 ### Editor files
 
@@ -149,7 +151,7 @@ The editor lives in `editor/` and is served as static files. No build step — P
 - Documents auto-save to the API 500ms after each edit
 - The URL hash (`#doc-{id}`) tracks the current document
 - Refreshing the page restores the last document from the hash
-- Publishing triggers a full static site build via `POST /api/publish`
+- Every save syncs the document into the Cook site (publishing adds its HTML page, unpublishing removes it); Cook builds the site
 
 ## CLI
 

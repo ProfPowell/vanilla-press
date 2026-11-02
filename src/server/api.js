@@ -20,11 +20,11 @@ import {
   getAllPublished,
 } from '../store/content.js';
 import { validate } from '../schema/validate.js';
-import { exportDocument, removeExport, ExportConflictError } from '../export/export.js';
-import { importOne } from '../export/sync.js';
+import { syncDocument, unsyncDocument, SyncConflictError } from '../sync/to-site.js';
+import { reloadFromSite } from '../sync/from-site.js';
 import {
-  getCollectionsConfig, preflightSave, writeMediaJson, writeVpConfig, exportAll,
-} from '../export/site-files.js';
+  getCollectionsConfig, preflightSave, writeMediaJson, writeVpConfig, syncAll,
+} from '../sync/site-files.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
 import { sendJson, readRawBody } from './router.js';
@@ -44,16 +44,16 @@ function generateId() {
  * @param {Object} options
  * @param {string} options.rootDir - Project root directory
  * @param {string} options.mediaDir - Media upload directory
- * @param {import('../workspace/workspace.js').Workspace} [options.workspace] - Absent means fixture mode (export disabled)
+ * @param {import('../workspace/workspace.js').Workspace} [options.workspace] - Absent means fixture mode (sync disabled)
  */
 export function mountApi(router, db, options) {
   const { rootDir } = options;
-  const ws = options.workspace?.exportEnabled ? options.workspace : null;
+  const ws = options.workspace?.syncEnabled ? options.workspace : null;
   const mediaDir = ws ? ws.mediaDir : options.mediaDir;
 
   /**
    * Respond (and return true) when `candidate` must not be saved: 409 if the
-   * stored version changed on disk, 422 if its export would be rejected.
+   * stored version changed on disk, 422 if its sync would be rejected.
    */
   function rejectSave(res, candidate) {
     if (!ws) return false;
@@ -65,17 +65,17 @@ export function mountApi(router, db, options) {
   }
 
   /**
-   * Export a saved document (preflighted, so failure is unexpected); on
+   * Sync a saved document (preflighted, so failure is unexpected); on
    * failure respond 422. `previousDoc` is the stored version before the save.
    */
-  function exportSaved(res, saved, previousDoc) {
+  function syncSaved(res, saved, previousDoc) {
     if (!ws) return true;
     try {
-      exportDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
+      syncDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
       return true;
     } catch (err) {
-      const body = { error: `Saved, but not exported: ${err.message}` };
-      if (err instanceof ExportConflictError) body.path = err.path;
+      const body = { error: `Saved, but not synced: ${err.message}` };
+      if (err instanceof SyncConflictError) body.path = err.path;
       sendJson(res, 422, body);
       return false;
     }
@@ -99,7 +99,7 @@ export function mountApi(router, db, options) {
   router.add('GET', '/api/workspace', (req, res) => {
     sendJson(res, 200, {
       site: ws ? ws.siteDir : null,
-      exportEnabled: Boolean(ws),
+      syncEnabled: Boolean(ws),
       previewUrl: getConfig(db, 'preview_url') || 'http://localhost:3000',
     });
   });
@@ -166,7 +166,7 @@ export function mountApi(router, db, options) {
     const previous = ws ? getDocument(db, doc.id) : null;
     if (rejectSave(res, doc)) return;
     const saved = saveDocument(db, doc);
-    if (exportSaved(res, saved, previous)) sendJson(res, 201, saved);
+    if (syncSaved(res, saved, previous)) sendJson(res, 201, saved);
   }));
 
   router.add('PUT', '/api/documents/:id', jsonErrors((req, res) => {
@@ -196,17 +196,17 @@ export function mountApi(router, db, options) {
 
     if (rejectSave(res, doc)) return;
     const saved = saveDocument(db, doc);
-    if (exportSaved(res, saved, existing)) sendJson(res, 200, saved);
+    if (syncSaved(res, saved, existing)) sendJson(res, 200, saved);
   }));
 
   // Replace the stored document with its version on disk (after a 409).
   router.add('POST', '/api/documents/:id/reload', jsonErrors((req, res) => {
     if (!ws) {
-      sendJson(res, 400, { error: 'Export is not enabled (no site)' });
+      sendJson(res, 400, { error: 'Sync is not enabled (no site)' });
       return;
     }
     try {
-      sendJson(res, 200, importOne(ws, db, req.params.id));
+      sendJson(res, 200, reloadFromSite(ws, db, req.params.id));
     } catch (err) {
       sendJson(res, err.message.startsWith('No content file') ? 404 : 422, { error: err.message });
     }
@@ -221,9 +221,9 @@ export function mountApi(router, db, options) {
 
     if (ws) {
       try {
-        removeExport(ws, req.params.id, { previousDoc: existing, collectionsConfig: getCollectionsConfig(db) });
+        unsyncDocument(ws, req.params.id, { previousDoc: existing, collectionsConfig: getCollectionsConfig(db) });
       } catch (err) {
-        const status = err instanceof ExportConflictError ? 409 : 500;
+        const status = err instanceof SyncConflictError ? 409 : 500;
         sendJson(res, status, { error: `Not deleted: ${err.message}`, path: err.path });
         return;
       }
@@ -346,16 +346,16 @@ export function mountApi(router, db, options) {
 
   // --- Publish ---
 
-  router.add('POST', '/api/publish', jsonErrors((req, res) => {
+  router.add('POST', '/api/sync', jsonErrors((req, res) => {
     if (!ws) {
-      sendJson(res, 200, { ok: true, exported: 0 });
+      sendJson(res, 200, { ok: true, synced: 0 });
       return;
     }
     try {
-      const { exported, conflicts } = exportAll(ws, db);
-      sendJson(res, 200, { ok: true, exported, conflicts });
+      const { synced, conflicts } = syncAll(ws, db);
+      sendJson(res, 200, { ok: true, synced, conflicts });
     } catch (err) {
-      sendJson(res, 500, { error: `Export failed: ${err.message}` });
+      sendJson(res, 500, { error: `Sync failed: ${err.message}` });
     }
   }));
 }

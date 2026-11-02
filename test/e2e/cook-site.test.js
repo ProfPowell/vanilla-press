@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { resolveWorkspace } from '../../src/workspace/workspace.js';
-import { exportDocument } from '../../src/export/export.js';
+import { syncDocument } from '../../src/sync/to-site.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const fixture = (n) => JSON.parse(readFileSync(join(repoRoot, 'test', 'fixtures', n), 'utf8'));
@@ -19,7 +19,7 @@ const write = (rel, body) => {
   writeFileSync(join(tmp, rel), body);
 };
 
-describe('export builds with Cook', () => {
+describe('synced site builds with Cook', () => {
   before(() => {
     tmp = mkdtempSync(join(tmpdir(), 'vp-e2e-'));
     write('config/main.js', `export default { buildOnlyPaths: ['layouts'], collections: { html: true }, formats: { feed: { collection: 'posts' }, json: false, markdown: false, llmsTxt: false } };\n`);
@@ -44,7 +44,7 @@ describe('export builds with Cook', () => {
       { type: 'code_block', attrs: { language: 'js' }, value: 'const t = `${siteTitle}`;' },
       { type: 'code_block', attrs: { language: 'js' }, value: 'if (a < b && s === "x" || t === \'y\') {}' },
     ];
-    for (const d of [older, newer, draft, code]) exportDocument(ws, d, {});
+    for (const d of [older, newer, draft, code]) syncDocument(ws, d, {});
 
     build = spawnSync(process.execPath, ['node_modules/cook-ssg/bin/cook.js', 'build'], {
       cwd: tmp, env: { ...process.env, NODE_ENV: 'production' }, stdio: 'pipe', encoding: 'utf8',

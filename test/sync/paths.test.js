@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { collectionOutput, outputPaths } from '../../src/export/paths.js';
+import { collectionOutput, outputPaths } from '../../src/sync/paths.js';
 
 const doc = (collection, slug, status) => ({ id: '1', meta: { title: 'T', slug, collection, status }, blocks: [] });
 

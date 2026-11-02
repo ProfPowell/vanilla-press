@@ -325,7 +325,7 @@ export async function loadDocument(id) {
 /**
  * Save the current document to the API.
  * Does nothing while the document is in conflict with its file on disk.
- * @returns {Promise<boolean>} true when saved (and exported)
+ * @returns {Promise<boolean>} true when saved (and synced)
  */
 export async function saveDocument() {
   if (!editorView) return false;
@@ -355,7 +355,7 @@ export async function saveDocument() {
 /**
  * Show a failed save: a 409 puts the document in conflict (auto-save paused
  * until the on-disk version is loaded); a 422 (not saved, or saved but not
- * exported) shows its message in the save indicator and auto-save continues.
+ * synced) shows its message in the save indicator and auto-save continues.
  * @param {string} docId
  * @param {Error & { status?: number }} err
  */

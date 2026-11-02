@@ -1,5 +1,5 @@
 /**
- * Export manifest: records which files Vanilla Press wrote for each document,
+ * Sync manifest: records which files Vanilla Press wrote for each document,
  * and the sha1 of each JSON it wrote (used to detect edits made on disk).
  *
  * Stored at `<site>/.vp/manifest.json`: machine-local (the site gitignores
@@ -8,7 +8,7 @@
  * front matter; the `html` field is only a hint for removing old paths. An
  * old `content/.vp-manifest.json` is obsolete and ignored.
  *
- * @module export/manifest
+ * @module sync/manifest
  */
 
 import { createHash } from 'node:crypto';

@@ -1,7 +1,7 @@
 /**
  * Atomic file writes: write a temp file beside the target, then rename.
  *
- * @module export/atomic-write
+ * @module sync/atomic-write
  */
 
 import { mkdirSync, renameSync, writeFileSync, rmSync } from 'node:fs';

@@ -1,17 +1,17 @@
 /**
  * Site-wide files Vanilla Press writes into a Cook site besides documents
  * (`content/media.json`, `config/vp.json`), plus the helpers shared by the
- * API and CLI to export after a save and to export everything.
+ * API and CLI to sync after a save and to sync everything.
  *
- * @module export/site-files
+ * @module sync/site-files
  */
 
 import { join } from 'node:path';
 import { getConfig } from '../store/config.js';
 import { getDocument } from '../store/content.js';
 import {
-  exportDocument, checkExport, changedOnDisk, ExportConflictError, readManifest, writeFileAtomic,
-} from './export.js';
+  syncDocument, checkSync, changedOnDisk, SyncConflictError, readManifest, writeFileAtomic,
+} from './to-site.js';
 import { outputPaths } from './paths.js';
 
 let warnedCollections = false;
@@ -43,7 +43,7 @@ export function getCollectionsConfig(db) {
  * ahead. Nothing is written.
  * - The stored version's JSON (as recorded in the local manifest, else
  *   derived) changed on disk → 409: the file wins, offer to load it.
- * - The candidate's export would be rejected (HTML owned by another document
+ * - The candidate's sync would be rejected (HTML owned by another document
  *   or hand-written, unowned target JSON, invalid or reserved path) → 422:
  *   not saved, no reload offered.
  * Throws (e.g. a corrupt local manifest) are left to the caller.
@@ -63,7 +63,7 @@ export function preflightSave(ws, db, candidate, collectionsConfig) {
     }
   }
   try {
-    checkExport(ws, candidate, { collectionsConfig, previousDoc: existing });
+    checkSync(ws, candidate, { collectionsConfig, previousDoc: existing });
   } catch (err) {
     return { status: 422, error: `Not saved: ${err.message}` };
   }
@@ -91,29 +91,29 @@ export function writeVpConfig(ws, db) {
 }
 
 /**
- * Export every document (skipping, not overwriting, any that conflict or
+ * Sync every document (skipping, not overwriting, any that conflict or
  * collide), then write media.json and vp.json.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {import('better-sqlite3').Database} db
- * @returns {{ exported: number, conflicts: string[] }} conflicts: site-relative paths or error messages
+ * @returns {{ synced: number, conflicts: string[] }} conflicts: site-relative paths or error messages
  * @throws {Error} when the manifest is corrupt
  */
-export function exportAll(ws, db) {
-  readManifest(ws); // a corrupt manifest fails the whole export up front
+export function syncAll(ws, db) {
+  readManifest(ws); // a corrupt manifest fails the whole sync up front
   const collectionsConfig = getCollectionsConfig(db);
   const ids = db.prepare('SELECT id FROM documents ORDER BY id').all().map((r) => r.id);
-  let exported = 0;
+  let synced = 0;
   const conflicts = [];
   for (const id of ids) {
     const doc = getDocument(db, id);
     try {
-      exportDocument(ws, doc, { collectionsConfig, previousDoc: doc });
-      exported++;
+      syncDocument(ws, doc, { collectionsConfig, previousDoc: doc });
+      synced++;
     } catch (err) {
-      conflicts.push(err instanceof ExportConflictError ? err.path : `${id}: ${err.message}`);
+      conflicts.push(err instanceof SyncConflictError ? err.path : `${id}: ${err.message}`);
     }
   }
   writeMediaJson(ws, db);
   writeVpConfig(ws, db);
-  return { exported, conflicts };
+  return { synced, conflicts };
 }

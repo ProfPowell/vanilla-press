@@ -106,7 +106,7 @@ describe('vp --help', () => {
     assert.equal(status, 0);
     assert.ok(stdout.includes('Usage: vp'));
     assert.ok(stdout.includes('list'));
-    assert.ok(stdout.includes('export'));
+    assert.ok(stdout.includes('sync'));
     assert.ok(!stdout.includes('deploy'));
   });
 
@@ -443,23 +443,23 @@ describe('vp with --site', () => {
     return site;
   }
 
-  it('import:content imports content JSON, and list shows it', (t) => {
+  it('sync --from-site loads content JSON, and list shows it', (t) => {
     const site = siteWithContent();
     t.after(() => rmSync(site, { recursive: true, force: true }));
 
-    const imp = vp(['import:content', '--site', site]);
+    const imp = vp(['sync', '--from-site', '--site', site]);
     assert.equal(imp.status, 0, imp.stderr);
-    assert.ok(imp.stderr.includes('imported 1'), imp.stderr);
+    assert.ok(imp.stderr.includes('1 loaded'), imp.stderr);
 
     const list = vp(['list', '--site', site]);
     assert.equal(list.status, 0, list.stderr);
     assert.ok(list.stdout.includes('from-disk'), list.stdout);
   });
 
-  it('publish, unpublish and delete export to the site', (t) => {
+  it('publish, unpublish and delete sync to the site', (t) => {
     const site = siteWithContent();
     t.after(() => rmSync(site, { recursive: true, force: true }));
-    vp(['import:content', '--site', site]);
+    vp(['sync', '--from-site', '--site', site]);
     const html = join(site, 'src', 'posts', 'from-disk.html');
     const jsonFile = join(site, 'content', 'posts', 'from-disk.json');
 
@@ -472,14 +472,14 @@ describe('vp with --site', () => {
     assert.ok(!existsSync(jsonFile));
   });
 
-  it('export writes every document plus media.json and vp.json', (t) => {
+  it('sync writes every document plus media.json and vp.json', (t) => {
     const site = siteWithContent();
     t.after(() => rmSync(site, { recursive: true, force: true }));
-    vp(['import:content', '--site', site]);
+    vp(['sync', '--from-site', '--site', site]);
 
-    const res = vp(['export', '--site', site]);
+    const res = vp(['sync', '--site', site]);
     assert.equal(res.status, 0, res.stderr);
-    assert.ok(res.stderr.includes('exported 1'), res.stderr);
+    assert.ok(res.stderr.includes('synced 1'), res.stderr);
     assert.ok(existsSync(join(site, 'content', 'media.json')));
     assert.ok(existsSync(join(site, 'config', 'vp.json')));
   });
@@ -497,7 +497,7 @@ describe('vp with --site', () => {
   it('edit renaming onto a hand-written HTML page fails without saving', (t) => {
     const site = siteWithContent();
     t.after(() => rmSync(site, { recursive: true, force: true }));
-    vp(['import:content', '--site', site]);
+    vp(['sync', '--from-site', '--site', site]);
     assert.equal(vp(['publish', 'posts/from-disk', '--site', site]).status, 0);
     writeFileSync(join(site, 'src', 'posts', 'taken.html'), '<p>mine</p>\n');
 
@@ -513,14 +513,14 @@ describe('vp with --site', () => {
     assert.ok(!existsSync(join(site, 'content', 'posts', 'taken.json')));
   });
 
-  it('import:dir preflights and exports each file; a conflicting one is skipped', (t) => {
+  it('import:dir preflights and syncs each file; a conflicting one is skipped', (t) => {
     const site = siteWithContent();
     const dir = mkdtempSync(join(tmpdir(), 'vp-dir-site-'));
     t.after(() => {
       rmSync(site, { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     });
-    assert.equal(vp(['import:content', '--site', site]).status, 0);
+    assert.equal(vp(['sync', '--from-site', '--site', site]).status, 0);
     // The committed JSON changes on disk (e.g. git pull) after the import.
     const committed = join(site, 'content', 'posts', 'from-disk.json');
     const pulled = JSON.parse(readFileSync(committed, 'utf8'));
@@ -538,15 +538,15 @@ describe('vp with --site', () => {
     assert.equal(res.status, 1, res.stderr);
     assert.match(res.stderr, /a\.json.*changed on disk/);
     assert.match(res.stderr, /imported: b\.json/);
-    // The conflicting doc is unchanged in the store and on disk; the other is imported and exported.
+    // The conflicting doc is unchanged in the store and on disk; the other is imported and synced.
     assert.ok(vp(['get', 'posts/from-disk', '--site', site]).stdout.includes('"title": "From Disk"'));
     assert.equal(JSON.parse(readFileSync(committed, 'utf8')).meta.title, 'Pulled');
     assert.ok(existsSync(join(site, 'content', 'posts', 'dir-b.json')));
     assert.ok(existsSync(join(site, 'src', 'posts', 'dir-b.html')));
   });
 
-  it('export without a site is an error', () => {
-    const res = vp(['export'], { db: freshDbPath() });
+  it('sync without a site is an error', () => {
+    const res = vp(['sync'], { db: freshDbPath() });
     assert.equal(res.status, 1);
   });
 });

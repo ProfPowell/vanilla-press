@@ -1,13 +1,16 @@
 /**
- * CalloutView — NodeView for <ui-callout> elements.
+ * CalloutView — NodeView for callouts, shown as VB <status-message>.
  *
  * Features:
  * - Variant selector overlay (note, tip, warning, danger)
  * - Rich text editing inside (block+ content)
- * - Matches HTML renderer: <ui-callout data-variant="...">block+</ui-callout>
+ * - Matches HTML renderer: <status-message data-variant="info|success|warning|error">
+ *   <div data-content>block+</div></status-message> (VP variant names map to VB's)
  *
  * @module editor/blocks/callout-view
  */
+
+import { CALLOUT_TO_VB } from '../schema.js';
 
 const VARIANTS = ['note', 'tip', 'warning', 'danger'];
 
@@ -17,10 +20,10 @@ export class CalloutView {
     this.view = view;
     this.getPos = getPos;
 
-    // Match HTML renderer: <ui-callout data-variant="...">
-    this.dom = document.createElement('ui-callout');
+    // Match HTML renderer: <status-message data-variant="...">
+    this.dom = document.createElement('status-message');
     this.dom.classList.add('pm-node-view');
-    this.dom.setAttribute('data-variant', node.attrs.variant || 'note');
+    this.setVariant(node.attrs.variant);
 
     // Controls overlay
     this.controls = document.createElement('div');
@@ -48,19 +51,24 @@ export class CalloutView {
     // Content area — PM edits inside this div
     this.contentDOM = document.createElement('div');
     this.contentDOM.className = 'callout-content';
+    this.contentDOM.setAttribute('data-content', '');
     this.dom.appendChild(this.contentDOM);
   }
 
   update(node) {
     if (node.type.name !== 'callout') return false;
     this.node = node;
-    this.dom.setAttribute('data-variant', node.attrs.variant || 'note');
+    this.setVariant(node.attrs.variant);
 
     const variantSelect = this.controls.querySelector('.variant-select');
     if (variantSelect.value !== node.attrs.variant) {
       variantSelect.value = node.attrs.variant;
     }
     return true;
+  }
+
+  setVariant(variant) {
+    this.dom.setAttribute('data-variant', CALLOUT_TO_VB[variant] || 'info');
   }
 
   stopEvent(event) {

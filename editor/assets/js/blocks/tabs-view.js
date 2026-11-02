@@ -1,5 +1,5 @@
 /**
- * TabsView — NodeView for <ui-tabs> elements.
+ * TabsView — editor-only NodeView for tabs (published as VB <tab-set>).
  *
  * Design: All tab children exist in the DOM simultaneously.
  * CSS toggles visibility (display: block/none). ProseMirror sees
@@ -14,6 +14,8 @@
  * @module editor/blocks/tabs-view
  */
 
+let tabsCounter = 0;
+
 export class TabsView {
   constructor(node, view, getPos) {
     this.node = node;
@@ -21,9 +23,16 @@ export class TabsView {
     this.getPos = getPos;
     this.activeTab = 0;
 
-    // Outer wrapper: <ui-tabs>
-    this.dom = document.createElement('ui-tabs');
+    // Neutral wrapper: VB's <tab-set> would take over the panels
+    this.dom = document.createElement('div');
     this.dom.classList.add('pm-node-view', 'pm-tabs');
+    this.uid = `tabs-${++tabsCounter}`;
+    this.dom.setAttribute('data-tabs-id', this.uid);
+
+    // Inactive panels are hidden by this stylesheet, not by styling the
+    // panels: they are ProseMirror-managed nodes, and changing them made
+    // PM re-render the tabs, which re-applied the styles, in an endless loop.
+    this.styleEl = document.createElement('style');
 
     // Tab bar
     this.tabBar = document.createElement('div');
@@ -103,8 +112,9 @@ export class TabsView {
     });
     this.tabBar.appendChild(addBtn);
 
-    // Set initial visibility after a tick (content may not be rendered yet)
-    requestAnimationFrame(() => this.updateTabVisibility());
+    // The stylesheet lives in the tab bar, whose mutations PM ignores
+    this.tabBar.appendChild(this.styleEl);
+    this.updateTabVisibility();
   }
 
   updateTabBarActive() {
@@ -116,10 +126,8 @@ export class TabsView {
 
   updateTabVisibility() {
     // Each tab child in contentDOM is a div.tab-panel (from tab toDOM)
-    const panels = this.contentDOM.children;
-    for (let i = 0; i < panels.length; i++) {
-      panels[i].style.display = i === this.activeTab ? 'block' : 'none';
-    }
+    this.styleEl.textContent =
+      `[data-tabs-id="${this.uid}"] > .tabs-content > .tab-panel:not(:nth-child(${this.activeTab + 1})) { display: none; }`;
   }
 
   update(node) {
@@ -141,3 +149,4 @@ export class TabsView {
       (mutation.type === 'attributes' && mutation.attributeName === 'style');
   }
 }
+

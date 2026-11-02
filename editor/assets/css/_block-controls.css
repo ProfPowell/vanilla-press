@@ -3,7 +3,7 @@
 /* Generic block wrapper */
 .pm-node-view {
   position: relative;
-  margin-block: var(--space-md);
+  margin-block: var(--size-m);
 }
 
 /* Control bar: appears on hover/focus */
@@ -13,17 +13,17 @@
   inset-inline-end: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
+  gap: var(--size-xs);
+  padding: var(--size-xs) var(--size-s);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease;
   z-index: 5;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 .pm-node-view:hover .node-controls,
@@ -34,7 +34,7 @@
 
 .node-controls label {
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   white-space: nowrap;
   cursor: default;
   display: inline;
@@ -46,12 +46,12 @@
 .node-controls select,
 .node-controls input {
   height: 1.5rem;
-  padding: 0 var(--space-xs);
+  padding: 0 var(--size-xs);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   font-family: var(--font-body);
 }
 
@@ -65,16 +65,21 @@
 }
 
 .pm-code-block .node-controls {
-  inset-block-start: var(--space-xs);
-  inset-inline-end: var(--space-xs);
+  inset-block-start: var(--size-xs);
+  inset-inline-end: var(--size-xs);
   inset-block-end: auto;
 }
 
 .pm-code-block .code-content {
+  display: block;
+  /* undo VB's inline <code> chip (background, border, radius) */
+  background: none;
+  border: 0;
+  border-radius: 0;
   font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   line-height: 1.6;
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--size-m) var(--size-l);
   tab-size: 2;
   white-space: pre-wrap;
   outline: none;
@@ -86,10 +91,10 @@
   border: none;
   background: transparent;
   font-weight: 600;
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--size-m) var(--size-l);
   outline: none;
   font-family: var(--font-body);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-m);
 }
 
 .pm-collapsible .summary-input::placeholder {
@@ -108,11 +113,11 @@
 }
 
 .pm-tabs .tab-btn {
-  padding: var(--space-sm) var(--space-lg);
+  padding: var(--size-s) var(--size-l);
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   font-weight: 600;
   color: var(--color-text-muted);
   border-block-end: 2px solid transparent;
@@ -128,12 +133,12 @@
 }
 
 .pm-tabs .add-tab-btn {
-  padding: var(--space-sm);
+  padding: var(--size-s);
   border: none;
   background: transparent;
   cursor: pointer;
   color: var(--color-text-muted);
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-l);
 }
 
 .pm-tabs .add-tab-btn:hover {
@@ -147,10 +152,10 @@
   font-weight: 700;
   outline: none;
   font-family: var(--font-body);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-m);
   width: 100%;
   padding: 0;
-  margin-block-end: var(--space-sm);
+  margin-block-end: var(--size-s);
 }
 
 .pm-steps .step-title-input::placeholder {
@@ -165,12 +170,12 @@
   min-height: 120px;
   background: var(--color-surface);
   border: 2px dashed var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-l);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 .pm-figure img {
   max-width: 100%;
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
 }

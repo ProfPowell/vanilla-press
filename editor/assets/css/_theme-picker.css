@@ -1,18 +1,18 @@
 /* Theme picker styles */
 theme-picker {
   display: block;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--size-s) var(--size-m);
   border-bottom: 1px solid var(--color-border);
 }
 
 .theme-picker-field {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--size-s);
 }
 
 .theme-picker-field label {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   font-weight: 600;
   color: var(--color-text-muted);
   white-space: nowrap;
@@ -20,11 +20,11 @@ theme-picker {
 
 .theme-picker-field select {
   flex: 1;
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--size-xs) var(--size-s);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   font-family: inherit;
 }

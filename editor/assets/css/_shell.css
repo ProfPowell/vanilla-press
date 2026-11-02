@@ -38,8 +38,8 @@ editor-shell .editor-toolbar {
   grid-area: toolbar;
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding-inline: var(--space-md);
+  gap: var(--size-xs);
+  padding-inline: var(--size-m);
   background: var(--color-surface);
   border-block-end: 1px solid var(--color-border);
   overflow-x: auto;
@@ -50,7 +50,7 @@ editor-shell .editor-toolbar {
   width: 1px;
   height: 1.5rem;
   background: var(--color-border);
-  margin-inline: var(--space-xs);
+  margin-inline: var(--size-xs);
   flex-shrink: 0;
 }
 
@@ -60,19 +60,19 @@ editor-shell .editor-toolbar {
   justify-content: center;
   min-width: 2rem;
   height: 2rem;
-  padding: 0 var(--space-sm);
+  padding: 0 var(--size-s);
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   background: transparent;
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .editor-toolbar button:hover {
-  background: var(--color-bg);
+  background: var(--color-background);
   border-color: var(--color-border);
 }
 
@@ -89,19 +89,19 @@ editor-shell .editor-toolbar {
 .editor-toolbar .toolbar-utils {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--size-xs);
   flex: 1;
   min-width: 0;
 }
 
 .editor-toolbar select {
   height: 2rem;
-  padding: 0 var(--space-sm);
+  padding: 0 var(--size-s);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   cursor: pointer;
 }
 
@@ -109,15 +109,15 @@ editor-shell .editor-toolbar {
 editor-shell .editor-pane {
   grid-area: editor;
   overflow-y: auto;
-  padding: var(--space-xl);
+  padding: var(--size-xl);
   display: flex;
   justify-content: center;
-  background: var(--color-bg);
+  background: var(--color-background);
   color: var(--color-text);
 }
 
 editor-shell .editor-content {
-  max-width: var(--content-width);
+  max-width: var(--content-normal);
   width: 100%;
 }
 
@@ -127,15 +127,15 @@ editor-shell .editor-sidebar {
   overflow-y: auto;
   border-inline-start: 1px solid var(--color-border);
   background: var(--color-surface);
-  padding: var(--space-md);
+  padding: var(--size-m);
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--size-m);
 }
 
 /* Save status indicator in toolbar */
 .save-indicator {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   color: var(--color-text-muted);
   white-space: nowrap;
 }
@@ -155,9 +155,9 @@ editor-shell .editor-inspector {
   border-inline-start: 1px solid var(--color-border);
   background: #1e1e2e;
   color: #cdd6f4;
-  padding: var(--space-md);
+  padding: var(--size-m);
   font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   display: none;
 }
 

@@ -9,11 +9,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-block-end: var(--space-sm);
+  padding-block-end: var(--size-s);
 }
 
 .browser-header h3 {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -27,46 +27,46 @@
   cursor: pointer;
   color: var(--color-text-muted);
   font-size: 0.75rem;
-  padding: 0 var(--space-xs);
+  padding: 0 var(--size-xs);
 }
 
 .browser-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--size-s);
 }
 
 .browser-controls {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--size-xs);
 }
 
 .browser-collection {
   width: 100%;
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--size-xs) var(--size-s);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 .browser-status-tabs {
   display: flex;
   gap: 0;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   overflow: hidden;
 }
 
 .status-tab {
   flex: 1;
-  padding: var(--space-xs) 0;
+  padding: var(--size-xs) 0;
   border: none;
-  background: var(--color-bg);
+  background: var(--color-background);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   cursor: pointer;
   text-align: center;
 }
@@ -86,12 +86,12 @@
 
 .browser-search {
   width: 100%;
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--size-xs) var(--size-s);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 .browser-search:focus {
@@ -106,18 +106,18 @@
 
 .browser-new-btn {
   width: 100%;
-  padding: var(--space-sm);
+  padding: var(--size-s);
   border: 1px dashed var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   background: transparent;
   color: var(--color-accent);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   cursor: pointer;
   font-family: var(--font-body);
 }
 
 .browser-new-btn:hover {
-  background: var(--color-bg);
+  background: var(--color-background);
   border-style: solid;
   border-color: var(--color-accent);
 }
@@ -132,19 +132,19 @@
 }
 
 .browser-empty {
-  padding: var(--space-md);
+  padding: var(--size-m);
   text-align: center;
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 .browser-item {
   position: relative;
-  padding: var(--space-sm);
+  padding: var(--size-s);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   cursor: pointer;
-  background: var(--color-bg);
+  background: var(--color-background);
 }
 
 .browser-item:hover {
@@ -154,11 +154,11 @@
 
 .browser-item.active {
   border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-background));
 }
 
 .browser-item-title {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   font-weight: 500;
   color: var(--color-text);
   white-space: nowrap;
@@ -169,7 +169,7 @@
 
 .browser-item-meta {
   display: flex;
-  gap: var(--space-sm);
+  gap: var(--size-s);
   margin-block-start: 2px;
   font-size: 0.7rem;
   color: var(--color-text-muted);
@@ -196,8 +196,8 @@
 
 .browser-item-delete {
   position: absolute;
-  top: var(--space-xs);
-  right: var(--space-xs);
+  top: var(--size-xs);
+  right: var(--size-xs);
   border: none;
   background: none;
   cursor: pointer;
@@ -213,5 +213,5 @@
 }
 
 .browser-item-delete:hover {
-  color: var(--color-danger, #d9534f);
+  color: var(--color-error, #d9534f);
 }

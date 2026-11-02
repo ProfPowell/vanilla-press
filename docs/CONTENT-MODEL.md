@@ -224,7 +224,7 @@ These map directly to Vanilla Breeze custom elements.
 ```
 Variants: `note`, `tip`, `warning`, `danger`
 
-HTML: `<ui-callout data-variant="warning">...</ui-callout>`
+HTML: `<status-message data-variant="warning"><div data-content>...</div></status-message>`
 Markdown: `> **Warning:** This API is deprecated.`
 
 **collapsible** — Expandable content section.

@@ -1,11 +1,11 @@
 /* Meta panel sidebar form fields */
 .meta-panel h3 {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-text-muted);
-  margin-block: var(--space-md) var(--space-sm);
+  margin-block: var(--size-m) var(--size-s);
 }
 
 .meta-panel h3:first-child {
@@ -13,14 +13,14 @@
 }
 
 .meta-panel .field {
-  margin-block-end: var(--space-md);
+  margin-block-end: var(--size-m);
 }
 
 .meta-panel label {
   display: block;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   color: var(--color-text-muted);
-  margin-block-end: var(--space-xs);
+  margin-block-end: var(--size-xs);
   cursor: default;
   padding: 0;
   font-weight: normal;
@@ -31,13 +31,13 @@
 .meta-panel select,
 .meta-panel textarea {
   width: 100%;
-  padding: var(--space-sm);
+  padding: var(--size-s);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-body);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 .meta-panel textarea {
@@ -56,19 +56,19 @@
 .meta-panel .tag-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
-  margin-block-start: var(--space-xs);
+  gap: var(--size-xs);
+  margin-block-start: var(--size-xs);
 }
 
 .meta-panel .tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--size-xs);
   padding: 0.15em 0.5em;
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   color: var(--color-text-muted);
 }
 
@@ -83,16 +83,16 @@
 }
 
 .meta-panel .tag-chip button:hover {
-  color: var(--color-danger);
+  color: var(--color-error);
 }
 
 /* Action buttons in sidebar */
 .meta-panel .actions {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  margin-block-start: var(--space-lg);
-  padding-block-start: var(--space-lg);
+  gap: var(--size-s);
+  margin-block-start: var(--size-l);
+  padding-block-start: var(--size-l);
   border-block-start: 1px solid var(--color-border);
 }
 
@@ -100,12 +100,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--size-s) var(--size-m);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   cursor: pointer;
   font-family: var(--font-body);
 }
@@ -146,7 +146,7 @@
 
 /* Build status feedback */
 .build-status {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   text-align: center;
   min-height: 1.2em;
 }
@@ -160,5 +160,5 @@
 }
 
 .build-status.error {
-  color: var(--color-danger, #d9534f);
+  color: var(--color-error, #d9534f);
 }

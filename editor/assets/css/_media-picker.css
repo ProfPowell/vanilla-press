@@ -11,7 +11,7 @@
 
 .media-picker-dialog {
   background: var(--color-surface);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   border: 1px solid var(--color-border);
   width: 90vw;
   max-width: 640px;
@@ -26,13 +26,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-md);
+  padding: var(--size-m);
   border-block-end: 1px solid var(--color-border);
 }
 
 .media-picker-header h3 {
   margin: 0;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-m);
   font-weight: 600;
 }
 
@@ -51,22 +51,22 @@
 
 /* Upload zone */
 .media-picker-upload {
-  padding: var(--space-md);
+  padding: var(--size-m);
   border-block-end: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--size-s);
 }
 
 .upload-zone {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-lg);
+  padding: var(--size-l);
   border: 2px dashed var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   cursor: pointer;
   text-align: center;
 }
@@ -80,37 +80,37 @@
 
 .upload-alt .alt-input {
   width: 100%;
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--size-xs) var(--size-s);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 /* Media grid */
 .media-picker-grid {
-  padding: var(--space-md);
+  padding: var(--size-m);
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: var(--space-sm);
+  gap: var(--size-s);
 }
 
 .media-picker-empty {
   grid-column: 1 / -1;
   text-align: center;
-  padding: var(--space-lg);
+  padding: var(--size-l);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 .media-item {
   border: 2px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-m);
   overflow: hidden;
   cursor: pointer;
-  background: var(--color-bg);
+  background: var(--color-background);
 }
 
 .media-item:hover {
@@ -125,7 +125,7 @@
 }
 
 .media-item-name {
-  padding: var(--space-xs);
+  padding: var(--size-xs);
   font-size: 0.65rem;
   color: var(--color-text-muted);
   white-space: nowrap;

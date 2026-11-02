@@ -17,7 +17,7 @@ export class AstInspector extends HTMLElement {
 
   connectedCallback() {
     this.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-block-end: var(--space-sm);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-block-end: var(--size-s);">
         <strong style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">AST Inspector</strong>
         <span class="ast-block-count" style="font-size: 0.75rem; opacity: 0.6;"></span>
       </div>

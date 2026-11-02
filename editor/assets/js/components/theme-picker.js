@@ -1,56 +1,57 @@
 /**
- * <theme-picker> — dropdown to select and preview themes.
+ * <theme-picker> — dropdown to select and preview Vanilla Breeze themes.
  *
- * Loads current theme from the config API, sets `data-theme` on the
- * editor content pane (not the whole page), loads the theme stylesheet
- * + bridge CSS, and persists the choice.
+ * Lists themes from GET /api/themes, sets `data-theme` on the editor
+ * content pane (not the whole page), loads the theme's stylesheet from
+ * /assets/vb/themes/ when it isn't built into vanilla-breeze.css, and
+ * persists the choice in the `theme` config key (which the publisher
+ * writes to <html data-theme>).
  *
  * Only the content preview area is themed — the editor chrome
- * (toolbar, sidebar, inspector) stays consistent.
+ * (toolbar, sidebar, inspector) stays consistent. VB theme selectors
+ * match any [data-theme~=id] element, so scoping to the pane works.
  *
  * @module editor/components/theme-picker
  */
 
 import { api } from '../api-client.js';
-import { themes } from '../../../../src/build/assets/css/themes/_registry.js';
 
-const CATEGORY_LABELS = {
-  default: '',
+const TIER_LABELS = {
+  core: '',
   color: 'Color',
-  personality: 'Personality',
-  extreme: 'Extreme',
+  showcase: 'Showcase',
+  community: 'Community',
 };
 
 export class ThemePicker extends HTMLElement {
-  connectedCallback() {
-    // Group themes by category for <optgroup>
-    const groups = {};
-    for (const t of themes) {
-      const cat = t.category || 'default';
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(t);
-    }
-
-    const optionsHtml = Object.entries(groups).map(([cat, items]) => {
-      const label = CATEGORY_LABELS[cat];
-      const options = items.map(t =>
-        `<option value="${t.id}">${t.name}</option>`
-      ).join('');
-      if (!label) return options;
-      return `<optgroup label="${label}">${options}</optgroup>`;
-    }).join('');
-
+  async connectedCallback() {
     this.innerHTML = `
       <div class="theme-picker-field">
         <label for="theme-select">Theme</label>
-        <select id="theme-select">${optionsHtml}</select>
+        <select id="theme-select"><option value="default">Default</option></select>
       </div>
     `;
-
     this._select = this.querySelector('#theme-select');
     this._select.addEventListener('change', () => this.applyTheme(this._select.value));
 
+    try {
+      this._themes = await api.listThemes();
+    } catch (err) {
+      console.error('Failed to load themes:', err);
+      this._themes = [{ id: 'default', name: 'Default', tier: 'core', file: null }];
+    }
+    this.renderOptions();
     this.loadCurrent();
+  }
+
+  renderOptions() {
+    const groups = {};
+    for (const t of this._themes) (groups[t.tier] ||= []).push(t);
+    this._select.innerHTML = Object.entries(groups).map(([tier, items]) => {
+      const options = items.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+      const label = TIER_LABELS[tier] ?? tier;
+      return label ? `<optgroup label="${label}">${options}</optgroup>` : options;
+    }).join('');
   }
 
   async loadCurrent() {
@@ -75,38 +76,28 @@ export class ThemePicker extends HTMLElement {
   }
 
   setTheme(themeId) {
-    const theme = themes.find(t => t.id === themeId);
+    const theme = (this._themes || []).find(t => t.id === themeId);
+    const isDefault = !theme || theme.id === 'default';
 
     // Scope data-theme to the content pane only — editor chrome stays unthemed
     const pane = document.querySelector('.editor-pane');
     if (pane) {
-      if (!theme || !theme.file) {
-        pane.removeAttribute('data-theme');
-      } else {
-        pane.setAttribute('data-theme', themeId);
-      }
+      if (isDefault) pane.removeAttribute('data-theme');
+      else pane.setAttribute('data-theme', themeId);
     }
 
-    // Load theme stylesheet
-    const themeLink = document.getElementById('theme-link');
-    if (themeLink) {
-      themeLink.href = theme && theme.file
-        ? `/src/build/assets/css/themes/${theme.file}`
-        : '';
-    }
-
-    // Load bridge stylesheet (maps VB tokens → VP tokens)
-    let bridgeLink = document.getElementById('theme-bridge');
+    // Load the theme stylesheet unless it's built into vanilla-breeze.css
+    let link = document.getElementById('theme-link');
     if (theme && theme.file) {
-      if (!bridgeLink) {
-        bridgeLink = document.createElement('link');
-        bridgeLink.id = 'theme-bridge';
-        bridgeLink.rel = 'stylesheet';
-        bridgeLink.href = '/src/build/assets/css/themes/_bridge.css';
-        document.head.appendChild(bridgeLink);
+      if (!link) {
+        link = document.createElement('link');
+        link.id = 'theme-link';
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
       }
-    } else if (bridgeLink) {
-      bridgeLink.remove();
+      link.href = `/assets/vb/themes/${theme.file}`;
+    } else if (link) {
+      link.remove();
     }
   }
 }

@@ -104,11 +104,11 @@ Component blocks render as Vanilla Breeze custom elements:
 
 | Block Type | HTML Output |
 |-----------|-------------|
-| `callout` | `<ui-callout data-variant="...">` |
+| `callout` | `<status-message data-variant="info\|success\|warning\|error">` with a `<div data-content>` body (note→info, tip→success, danger→error) |
 | `collapsible` | `<details><summary>...</summary>` |
-| `card` | `<content-card href="...">` |
+| `card` | `<layout-card data-variant="elevated"><section>…</section></layout-card>`, wrapped in `<a class="card-link" href>` when linked |
 | `code_block` | `<code-block data-language="...">` |
-| `tabs` | `<ui-tabs>` with radio-button CSS pattern |
+| `tabs` | `<tab-set>` of `<details name><summary>label</summary><div>…</div></details>` |
 | `steps` | `<ol data-steps="">` |
 
 Standard prose blocks use semantic HTML: `<p>`, `<h2>`–`<h6>`, `<blockquote>`, `<ul>`/`<ol>`, `<figure>`, `<hr/>`.
@@ -126,4 +126,4 @@ Component blocks that have no markdown equivalent degrade gracefully:
 | `tabs` | `### Tab Label\n\ncontent` per tab (sequential sections) |
 | `steps` | `1. **Step title**\n\ncontent` (numbered list) |
 
-The degradation is lossy but preserves semantic intent. An LLM reading `> **Warning:**` understands the content is cautionary even without the `<ui-callout>` wrapper.
+The degradation is lossy but preserves semantic intent. An LLM reading `> **Warning:**` understands the content is cautionary even without the `<status-message>` wrapper.

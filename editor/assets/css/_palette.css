@@ -8,9 +8,9 @@
   overflow-y: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-l);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  padding: var(--space-xs);
+  padding: var(--size-xs);
   display: none;
 }
 
@@ -19,7 +19,7 @@
 }
 
 .block-palette .palette-category {
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--size-xs) var(--size-s);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -30,23 +30,23 @@
 .block-palette .palette-item {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-sm);
-  border-radius: var(--radius);
+  gap: var(--size-s);
+  padding: var(--size-s) var(--size-s);
+  border-radius: var(--radius-m);
   cursor: pointer;
   color: var(--color-text);
 }
 
 .block-palette .palette-item:hover,
 .block-palette .palette-item.selected {
-  background: var(--color-bg);
+  background: var(--color-background);
 }
 
 .block-palette .palette-item .palette-icon {
   width: 1.5rem;
   text-align: center;
   flex-shrink: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }
 
 .block-palette .palette-item .palette-text {
@@ -57,7 +57,7 @@
 }
 
 .block-palette .palette-item .palette-label {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
   font-weight: 500;
 }
 
@@ -70,8 +70,8 @@
 }
 
 .block-palette .palette-empty {
-  padding: var(--space-md);
+  padding: var(--size-m);
   text-align: center;
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-s);
 }

@@ -1,16 +1,8 @@
-/* Editor CSS — layer hub: imports Vanilla Breeze + ProseMirror overrides + editor layout */
-@layer reset, tokens, base, layout, components, editor;
-
-@import "../../../src/build/assets/css/_reset.css" layer(reset);
-@import "../../../src/build/assets/css/_tokens.css" layer(tokens);
-@import "../../../src/build/assets/css/_base.css" layer(base);
-@import "../../../src/build/assets/css/_layout.css" layer(layout);
-@import "../../../src/build/assets/css/components/_callout.css" layer(components);
-@import "../../../src/build/assets/css/components/_card.css" layer(components);
-@import "../../../src/build/assets/css/components/_code-block.css" layer(components);
-@import "../../../src/build/assets/css/components/_collapsible.css" layer(components);
-@import "../../../src/build/assets/css/components/_tabs.css" layer(components);
-@import "../../../src/build/assets/css/components/_steps.css" layer(components);
+/* Editor CSS: editor chrome and ProseMirror overrides.
+ * Vanilla Breeze (reset, tokens, base, components) is loaded first by
+ * index.html from /assets/vb/; the editor layer is declared after VB's
+ * layers so it wins where they overlap. */
+@layer editor;
 @import "./_shell.css" layer(editor);
 @import "./_prosemirror.css" layer(editor);
 @import "./_block-controls.css" layer(editor);

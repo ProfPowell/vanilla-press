@@ -25,10 +25,10 @@ A comprehensive inventory of every Vanilla Breeze (VB) capability and how it map
 | `figcaption` | media | inline | — | `<figcaption>` | ks-media |
 | `embed` | media | leaf | url, type | `<div data-embed>` | ks-media |
 | `code_block` | code | leaf (value) | language, filename | `<code-block>` | ks-code |
-| `callout` | component | block | variant (note, tip, warning, danger) | `<ui-callout>` | ks-components |
+| `callout` | component | block | variant (note, tip, warning, danger) | `<status-message>` | ks-components |
 | `collapsible` | component | block | summary | `<details>` | ks-components |
-| `card` | component | block | href | `<content-card>` | ks-components |
-| `tabs` | component | tab | — | `<ui-tabs>` | ks-components |
+| `card` | component | block | href | `<layout-card>` | ks-components |
+| `tabs` | component | tab | — | `<tab-set>` | ks-components |
 | `tab` | component | block | label | `.tab-panel` | ks-components |
 | `steps` | component | step | — | `<ol data-steps>` | ks-components |
 | `step` | component | block | title | `<li data-step-title>` | ks-components |
@@ -261,10 +261,10 @@ These VP blocks have direct VB counterparts:
 
 | VP Block | VB Component |
 |---|---|
-| callout | `<ui-callout>` |
+| callout | `<status-message>` |
 | collapsible | `<details>` (native + VB styling) |
-| card | `<content-card>` |
-| tabs | `<ui-tabs>` / `tabs-wc` |
+| card | `<layout-card>` |
+| tabs | `<tab-set>` |
 | steps | `<ol data-steps>` |
 | code_block | `<code-block>` |
 | table | `<table>` (with VB classes) |

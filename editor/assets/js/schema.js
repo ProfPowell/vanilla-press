@@ -127,6 +127,10 @@ const code_block = {
   },
 };
 
+// VP callout variants ↔ VB status-message variants (mirrors html.js)
+export const CALLOUT_TO_VB = { note: 'info', tip: 'success', warning: 'warning', danger: 'error' };
+const VB_TO_CALLOUT = Object.fromEntries(Object.entries(CALLOUT_TO_VB).map(([k, v]) => [v, k]));
+
 const callout = {
   content: 'block+',
   group: 'block',
@@ -135,14 +139,27 @@ const callout = {
   attrs: {
     variant: { default: 'note' },
   },
+  // Published as VB <status-message data-variant="info|success|warning|error">
+  // with a <div data-content> body (src/renderers/html.js renderCallout).
+  // The AST keeps VP variant names (note/tip/warning/danger).
   parseDOM: [{
+    tag: 'status-message',
+    getAttrs(dom) {
+      return { variant: VB_TO_CALLOUT[dom.getAttribute('data-variant')] || 'note' };
+    },
+    contentElement(dom) {
+      return dom.querySelector(':scope > [data-content]') || dom;
+    },
+  }, {
+    // Legacy pre-VB markup
     tag: 'ui-callout',
     getAttrs(dom) {
       return { variant: dom.getAttribute('data-variant') || 'note' };
     },
   }],
   toDOM(node) {
-    return ['ui-callout', { 'data-variant': node.attrs.variant }, 0];
+    return ['status-message', { 'data-variant': CALLOUT_TO_VB[node.attrs.variant] || 'info' },
+      ['div', { 'data-content': '' }, 0]];
   },
 };
 
@@ -184,16 +201,29 @@ const card = {
   attrs: {
     href: { default: '' },
   },
+  // Published as <layout-card data-variant="elevated"><section>…</section></layout-card>,
+  // wrapped in <a class="card-link" href> when linked (renderCard). The
+  // editor carries the link as data-href so pasted cards keep it.
   parseDOM: [{
+    tag: 'layout-card',
+    getAttrs(dom) {
+      const link = dom.closest('a.card-link');
+      return { href: dom.getAttribute('data-href') || (link && link.getAttribute('href')) || '' };
+    },
+    contentElement(dom) {
+      return dom.querySelector(':scope > section') || dom;
+    },
+  }, {
+    // Legacy pre-VB markup
     tag: 'content-card',
     getAttrs(dom) {
       return { href: dom.getAttribute('href') || '' };
     },
   }],
   toDOM(node) {
-    const attrs = {};
-    if (node.attrs.href) attrs.href = node.attrs.href;
-    return ['content-card', attrs, 0];
+    const attrs = { 'data-variant': 'elevated' };
+    if (node.attrs.href) attrs['data-href'] = node.attrs.href;
+    return ['layout-card', attrs, ['section', 0]];
   },
 };
 
@@ -201,8 +231,13 @@ const tabs = {
   content: 'tab+',
   group: 'block',
   isolating: true,
-  parseDOM: [{ tag: 'ui-tabs' }],
-  toDOM() { return ['ui-tabs', 0]; },
+  // Published as <tab-set> of <details name><summary>label</summary><div>…</div></details>
+  // (renderTabs). The editor renders TabsView over plain div.tab-panel
+  // children instead of VB's tab-set, which takes over its <details>
+  // children and would fight ProseMirror. parseDOM also accepts the
+  // published markup so pasted VB tabs come in as tabs.
+  parseDOM: [{ tag: 'div.pm-tabs' }, { tag: 'tab-set' }, { tag: 'ui-tabs' }],
+  toDOM() { return ['div', { class: 'pm-tabs' }, 0]; },
 };
 
 const tab = {
@@ -212,8 +247,19 @@ const tab = {
     label: { default: 'Tab' },
   },
   parseDOM: [{
+    tag: 'tab-set > details',
+    priority: 60, // ahead of the generic collapsible <details> rule
+    getAttrs(dom) {
+      const summary = dom.querySelector(':scope > summary');
+      return { label: summary ? summary.textContent : 'Tab' };
+    },
+    contentElement(dom) {
+      return dom.querySelector(':scope > div') || dom;
+    },
+  }, {
     tag: 'div.tab-panel',
     getAttrs(dom) {
+      if (dom.hasAttribute('data-label')) return { label: dom.getAttribute('data-label') };
       // Get the label from the preceding <label> element
       const label = dom.previousElementSibling;
       return { label: label && label.tagName === 'LABEL' ? label.textContent : 'Tab' };
@@ -228,7 +274,8 @@ const steps = {
   content: 'step+',
   group: 'block',
   isolating: true,
-  parseDOM: [{ tag: 'ol[data-steps]' }],
+  // priority: ahead of the generic ordered_list 'ol' rule
+  parseDOM: [{ tag: 'ol[data-steps]', priority: 60 }],
   toDOM() { return ['ol', { 'data-steps': '' }, 0]; },
 };
 
@@ -240,6 +287,7 @@ const step = {
   },
   parseDOM: [{
     tag: 'li[data-step-title]',
+    priority: 60, // ahead of list_item's generic 'li'
     getAttrs(dom) {
       return { title: dom.getAttribute('data-step-title') || '' };
     },
@@ -270,16 +318,25 @@ const figure = {
         variant,
       };
     },
-    contentElement: 'figcaption',
+    // Content is an optional figcaption node, so hand the parser only the
+    // <figcaption> element (skipping the <img>, which lives in attrs)
+    contentElement(dom) {
+      const wrapper = document.createElement('div');
+      const caption = dom.querySelector('figcaption');
+      if (caption) wrapper.appendChild(caption.cloneNode(true));
+      return wrapper;
+    },
   }],
   toDOM(node) {
     const attrs = {};
     if (node.attrs.variant && node.attrs.variant !== 'default') {
       attrs.class = node.attrs.variant;
     }
+    // A content hole must be its parent's only child, so the caption
+    // node renders inside a wrapper next to the <img>
     return ['figure', attrs,
       ['img', { src: node.attrs.src, alt: node.attrs.alt }],
-      0,
+      ['div', { 'data-figure-caption': '' }, 0],
     ];
   },
 };
@@ -338,6 +395,12 @@ const table = {
         caption: dom.querySelector('caption')?.textContent || '',
       };
     },
+    // The caption is an attr, not content: parse the rows without it
+    contentElement(dom) {
+      const clone = dom.cloneNode(true);
+      clone.querySelector(':scope > caption')?.remove();
+      return clone;
+    },
   }],
   toDOM(node) {
     const classes = [];
@@ -346,9 +409,10 @@ const table = {
     if (node.attrs.compact) classes.push('compact');
     const attrs = classes.length ? { class: classes.join(' ') } : {};
     if (node.attrs.caption) {
-      return ['table', attrs, ['caption', node.attrs.caption], 0];
+      // A content hole must be its parent's only child: rows go in <tbody>
+      return ['table', attrs, ['caption', node.attrs.caption], ['tbody', 0]];
     }
-    return ['table', attrs, 0];
+    return ['table', attrs, ['tbody', 0]];
   },
 };
 

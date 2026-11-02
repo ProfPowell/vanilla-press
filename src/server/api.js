@@ -22,6 +22,7 @@ import {
 import { validate } from '../schema/validate.js';
 import { publish } from '../build/publish.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
+import { listThemes } from '../themes/list-themes.js';
 import { sendJson, readRawBody } from './router.js';
 
 /**
@@ -219,6 +220,13 @@ export function mountApi(router, db, options) {
     } catch (err) {
       sendJson(res, 500, { error: `Upload failed: ${err.message}` });
     }
+  });
+
+  // --- Themes ---
+
+  // Available VB themes (from node_modules/vanilla-breeze/dist/cdn)
+  router.add('GET', '/api/themes', (req, res) => {
+    sendJson(res, 200, listThemes(join(rootDir, 'node_modules', 'vanilla-breeze', 'dist', 'cdn')));
   });
 
   // --- Config ---

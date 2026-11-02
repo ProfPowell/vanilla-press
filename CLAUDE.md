@@ -4,7 +4,7 @@ A platform-first content system where the component model, the editor, the stora
 
 ## What This Is
 
-Vanilla Press stores content as a typed block AST that maps 1:1 to a web component model. A `callout` block in the content store is the same `callout` that exists as a `<ui-callout>` custom element in the browser for example, the same `callout` that renders as `> **Warning:**` in markdown output. One concept, multiple serializations, no lossy conversion.
+Vanilla Press stores content as a typed block AST that maps 1:1 to a web component model. A `callout` block in the content store is the same `callout` that exists as a Vanilla Breeze `<status-message>` element in the browser, for example, the same `callout` that renders as `> **Warning:**` in markdown output. One concept, multiple serializations, no lossy conversion.
 
 The system produces static output served from Cloudflare Pages. A thin Cloudflare Worker handles content negotiation — same URL serves HTML to browsers, markdown to LLM agents, JSON to API consumers, and HTML fragments to html-star (hypermedia) requests.
 

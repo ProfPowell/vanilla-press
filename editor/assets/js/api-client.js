@@ -105,6 +105,11 @@ export const api = {
     return request('/media');
   },
 
+  /** List available Vanilla Breeze themes: [{ id, name, tier, file }]. */
+  listThemes() {
+    return request('/themes');
+  },
+
   /** Get a config value. Returns { key, value }. */
   getConfig(key) {
     return request(`/config/${encodeURIComponent(key)}`);

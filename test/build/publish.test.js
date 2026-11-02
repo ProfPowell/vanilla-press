@@ -241,7 +241,8 @@ describe('publish', () => {
   it('creates bare collection card fragments', () => {
     assert.ok(existsSync(join(outDir, '_collections', 'posts.html')));
     const html = readFileSync(join(outDir, '_collections', 'posts.html'), 'utf-8');
-    assert.ok(html.includes('content-card'));
+    assert.ok(html.includes('data-layout="grid"'));
+    assert.ok(html.includes('<article data-layout="stack"'));
     assert.ok(!html.includes('<!doctype'));
   });
 
@@ -260,13 +261,12 @@ describe('publish', () => {
 
   // --- Assets ---
 
-  it('copies CSS assets', () => {
-    assert.ok(existsSync(join(outDir, 'assets', 'css', 'main.css')));
-    assert.ok(existsSync(join(outDir, 'assets', 'css', '_tokens.css')));
-    assert.ok(existsSync(join(outDir, 'assets', 'css', 'components', '_callout.css')));
+  it('vendors Vanilla Breeze CSS and JS into /assets/vb/', () => {
+    assert.ok(existsSync(join(outDir, 'assets', 'vb', 'vanilla-breeze.css')));
+    assert.ok(existsSync(join(outDir, 'assets', 'vb', 'vanilla-breeze.js')));
   });
 
-  it('copies JS assets', () => {
-    assert.ok(existsSync(join(outDir, 'assets', 'js', 'main.js')));
+  it('vendors @profpowell/code-block JS into /assets/code-block/', () => {
+    assert.ok(existsSync(join(outDir, 'assets', 'code-block', 'code-block.js')));
   });
 });

@@ -17,11 +17,11 @@
       "children": [
         { "type": "text", "value": "Vanilla Press is a content system where the component model, the editor, the storage, and the output are all built on web standards. A " },
         { "type": "text", "value": "callout", "marks": ["code"] },
-        { "type": "text", "value": " block in the content store is the same " },
-        { "type": "text", "value": "callout", "marks": ["code"] },
-        { "type": "text", "value": " that exists as a " },
-        { "type": "text", "value": "<ui-callout>", "marks": ["code"] },
-        { "type": "text", "value": " custom element in the browser. One concept, multiple serializations, no lossy conversion." }
+        { "type": "text", "value": " block in the content store renders as a " },
+        { "type": "text", "value": "<status-message>", "marks": ["code"] },
+        { "type": "text", "value": " in HTML, a " },
+        { "type": "text", "value": "> **Warning:**", "marks": ["code"] },
+        { "type": "text", "value": " line in Markdown, and a typed JSON node over the API. One concept, multiple serializations, no lossy conversion." }
       ]
     },
     {
@@ -148,7 +148,9 @@
                 ] }] },
                 { "type": "list_item", "children": [{ "type": "paragraph", "children": [
                   { "type": "text", "value": "Themes:", "marks": ["strong"] },
-                  { "type": "text", "value": " 23 themes from Vanilla Breeze, live preview in content pane" }
+                  { "type": "text", "value": " ~50 themes from Vanilla Breeze, applied via " },
+                  { "type": "text", "value": "data-theme", "marks": ["code"] },
+                  { "type": "text", "value": " on the html element" }
                 ] }] }
               ]
             }

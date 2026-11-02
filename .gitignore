@@ -4,3 +4,8 @@ content.db
 *.db-wal
 *.db-shm
 .DS_Store
+
+# Local tooling and screenshots
+.idea/
+.playwright-mcp/
+/*.png

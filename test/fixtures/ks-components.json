@@ -65,7 +65,7 @@
         {
           "type": "code_block",
           "attrs": { "language": "css" },
-          "value": "ui-tabs:not(:defined) {\n  display: none;\n}\n\nui-tabs:defined {\n  display: block;\n}"
+          "value": "tab-set:not(:defined) {\n  display: none;\n}\n\ntab-set:defined {\n  display: block;\n}"
         },
         {
           "type": "paragraph",
@@ -288,7 +288,7 @@
             {
               "type": "code_block",
               "attrs": { "language": "html" },
-              "value": "<ui-callout data-variant=\"tip\">\n  <p>Custom elements are valid HTML.</p>\n</ui-callout>"
+              "value": "<status-message data-variant=\"success\">\n  <div data-content>\n    <p>Custom elements are valid HTML.</p>\n  </div>\n</status-message>"
             }
           ]
         },
@@ -305,7 +305,7 @@
             {
               "type": "code_block",
               "attrs": { "language": "css" },
-              "value": "ui-callout {\n  display: block;\n  padding: var(--space-md);\n  border-inline-start: 4px solid var(--color-accent);\n  background: var(--color-surface-raised);\n}\n\nui-callout[data-variant=\"tip\"] {\n  --color-accent: var(--color-green-500);\n}"
+              "value": "app-callout {\n  display: block;\n  padding: var(--size-m);\n  border-inline-start: 4px solid var(--accent-color, var(--color-info));\n  background: var(--color-surface-raised);\n}\n\napp-callout[data-variant=\"tip\"] {\n  --accent-color: var(--color-success);\n}"
             }
           ]
         },
@@ -322,7 +322,7 @@
             {
               "type": "code_block",
               "attrs": { "language": "js" },
-              "value": "class UICallout extends HTMLElement {\n  connectedCallback() {\n    const variant = this.dataset.variant || 'note';\n    this.setAttribute('role', 'note');\n    this.setAttribute('aria-label', variant);\n  }\n}\n\ncustomElements.define('ui-callout', UICallout);"
+              "value": "class AppCallout extends HTMLElement {\n  connectedCallback() {\n    const variant = this.dataset.variant || 'note';\n    this.setAttribute('role', 'note');\n    this.setAttribute('aria-label', variant);\n  }\n}\n\ncustomElements.define('app-callout', AppCallout);"
             }
           ]
         }

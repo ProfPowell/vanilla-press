@@ -18,13 +18,13 @@ import { escapeHtml, escapeAttr, formatDate } from './shared.js';
  * @returns {string}
  */
 export function render(doc, options = {}) {
-  const { scope = 'content', site = {} } = options;
+  const { scope = 'content', site = {}, bare = false } = options;
 
   switch (scope) {
     case 'block':
       return renderBlock(doc);
     case 'content':
-      return renderContent(doc);
+      return renderContent(doc, { bare });
     case 'meta':
       return renderMeta(doc);
     case 'collection':
@@ -32,20 +32,24 @@ export function render(doc, options = {}) {
     case 'page':
       return renderPage(doc, site);
     default:
-      return renderContent(doc);
+      return renderContent(doc, { bare });
   }
 }
 
 // --- Scope renderers ---
 
 /**
- * Render content scope: article wrapping rendered blocks.
+ * Render content scope: article wrapping rendered blocks. With { bare: true },
+ * returns just the joined blocks so the caller can supply its own article wrapper.
  * @param {Object} doc
+ * @param {Object} [options]
+ * @param {boolean} [options.bare]
  * @returns {string}
  */
-function renderContent(doc) {
+function renderContent(doc, options = {}) {
   const blocks = (doc.blocks || []).map(renderBlock).join('\n');
-  return `<article data-doc="${escapeAttr(doc.id)}">\n${blocks}\n</article>`;
+  if (options.bare) return blocks;
+  return `<article data-layout="stack" data-layout-gap="m" data-doc="${escapeAttr(doc.id)}">\n${blocks}\n</article>`;
 }
 
 /**
@@ -81,20 +85,19 @@ function renderCollection(docs) {
   const list = Array.isArray(docs) ? docs : [docs];
   const cards = list.map(doc => {
     const m = doc.meta || {};
-    const href = `/${m.collection}/${m.slug}`;
-    const parts = [];
-    parts.push(`<content-card href="${escapeAttr(href)}">`);
-    parts.push(`<h3>${escapeHtml(m.title)}</h3>`);
+    const href = `/${m.collection}/${m.slug}/`;
+    const parts = [`<article data-layout="stack" data-layout-gap="xs">`];
+    parts.push(`<h3><a href="${escapeAttr(href)}">${escapeHtml(m.title)}</a></h3>`);
+    if (m.published || m.created) {
+      parts.push(`<p><small><time datetime="${escapeAttr(m.published || m.created)}">${formatDate(m.published || m.created)}</time></small></p>`);
+    }
     if (m.description) {
       parts.push(`<p>${escapeHtml(m.description)}</p>`);
     }
-    if (m.published || m.created) {
-      parts.push(`<time datetime="${escapeAttr(m.published || m.created)}">${formatDate(m.published || m.created)}</time>`);
-    }
-    parts.push(`</content-card>`);
+    parts.push(`</article>`);
     return parts.join('\n');
   });
-  return `<div data-collection>\n${cards.join('\n')}\n</div>`;
+  return `<div data-layout="grid" data-layout-min="20rem" data-layout-gap="l">\n${cards.join('\n')}\n</div>`;
 }
 
 /**
@@ -223,20 +226,44 @@ function renderFigcaption(block) {
 
 function renderEmbed(block) {
   const { url, type } = block.attrs || {};
-  return `<div data-embed data-url="${escapeAttr(url)}" data-type="${escapeAttr(type)}"></div>`;
+  if (type === 'video') {
+    const ytId = extractYouTubeId(url);
+    if (ytId) {
+      return `<youtube-player video-id="${escapeAttr(ytId)}"></youtube-player>`;
+    }
+    // Self-hosted video: wrap native <video> per VB's video-player static fallback.
+    return `<video-player>\n<video controls>\n<source src="${escapeAttr(url)}"/>\n<p>Your browser does not support video. <a href="${escapeAttr(url)}">Download</a>.</p>\n</video>\n</video-player>`;
+  }
+  // codepen, observable, twitter, etc — VB's social-embed auto-detects provider.
+  return `<social-embed url="${escapeAttr(url)}"></social-embed>`;
+}
+
+function extractYouTubeId(url) {
+  if (!url) return null;
+  // youtu.be/<id>, youtube.com/watch?v=<id>, youtube.com/embed/<id>, youtube.com/shorts/<id>
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+  return m ? m[1] : null;
 }
 
 function renderCodeBlock(block) {
   const { language, filename } = block.attrs || {};
-  const langAttr = language ? ` data-language="${escapeAttr(language)}"` : '';
-  const fileAttr = filename ? ` data-filename="${escapeAttr(filename)}"` : '';
-  return `<code-block${langAttr}${fileAttr}><pre><code>${escapeHtml(block.value || '')}</code></pre></code-block>`;
+  const langAttr = language ? ` language="${escapeAttr(language)}"` : '';
+  const labelAttr = filename ? ` label="${escapeAttr(filename)}"` : '';
+  return `<code-block${langAttr}${labelAttr}>${escapeHtml(block.value || '')}</code-block>`;
 }
+
+const CALLOUT_VARIANT_MAP = {
+  note:    'info',
+  tip:     'success',
+  warning: 'warning',
+  danger:  'error',
+};
 
 function renderCallout(block) {
   const variant = block.attrs?.variant || 'note';
+  const vbVariant = CALLOUT_VARIANT_MAP[variant] || 'info';
   const inner = (block.children || []).map(renderBlock).join('\n');
-  return `<ui-callout data-variant="${escapeAttr(variant)}">\n${inner}\n</ui-callout>`;
+  return `<status-message data-variant="${escapeAttr(vbVariant)}">\n<div data-content>\n${inner}\n</div>\n</status-message>`;
 }
 
 function renderCollapsible(block) {
@@ -248,39 +275,42 @@ function renderCollapsible(block) {
 function renderCard(block) {
   const href = block.attrs?.href || '';
   const inner = (block.children || []).map(renderBlock).join('\n');
-  const hrefAttr = href ? ` href="${escapeAttr(href)}"` : '';
-  return `<content-card${hrefAttr}>\n${inner}\n</content-card>`;
+  const card = `<layout-card data-variant="elevated">\n<section>\n${inner}\n</section>\n</layout-card>`;
+  if (href) {
+    return `<a href="${escapeAttr(href)}" class="card-link">\n${card}\n</a>`;
+  }
+  return card;
 }
 
 function renderTabs(block) {
   const tabs = block.children || [];
-  const groupId = `tabs-${Math.random().toString(36).slice(2, 8)}`;
-  const parts = [];
-  parts.push(`<ui-tabs>`);
+  const groupName = `ts-${Math.random().toString(36).slice(2, 8)}`;
+  const parts = ['<tab-set>'];
 
   tabs.forEach((tab, i) => {
     const label = tab.attrs?.label || `Tab ${i + 1}`;
-    const tabId = `${groupId}-${i}`;
-    const checked = i === 0 ? ' checked' : '';
-    parts.push(`<input type="radio" name="${groupId}" id="${tabId}"${checked}/>`);
-    parts.push(`<label for="${tabId}">${escapeHtml(label)}</label>`);
+    const open = i === 0 ? ' open' : '';
     const inner = (tab.children || []).map(renderBlock).join('\n');
-    parts.push(`<div class="tab-panel">\n${inner}\n</div>`);
+    parts.push(`<details name="${groupName}"${open}>`);
+    parts.push(`<summary>${escapeHtml(label)}</summary>`);
+    parts.push(`<div>\n${inner}\n</div>`);
+    parts.push(`</details>`);
   });
 
-  parts.push(`</ui-tabs>`);
+  parts.push('</tab-set>');
   return parts.join('\n');
 }
 
 function renderSteps(block) {
   const steps = (block.children || []).map(renderBlock).join('\n');
-  return `<ol data-steps>\n${steps}\n</ol>`;
+  return `<ol class="steps">\n${steps}\n</ol>`;
 }
 
 function renderStep(block) {
   const title = block.attrs?.title || '';
   const inner = (block.children || []).map(renderBlock).join('\n');
-  return `<li data-step-title="${escapeAttr(title)}">\n${inner}\n</li>`;
+  const titleHtml = title ? `<strong class="step-title">${escapeHtml(title)}</strong>\n` : '';
+  return `<li>\n${titleHtml}${inner}\n</li>`;
 }
 
 function renderTable(block) {

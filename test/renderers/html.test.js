@@ -22,12 +22,20 @@ describe('html renderer', () => {
   });
 
   describe('content scope', () => {
-    it('wraps output in <article>', () => {
+    it('wraps output in <article> with stack layout', () => {
       const doc = fixture('minimal.json');
       const html = render(doc, { scope: 'content' });
       assert.ok(html.startsWith('<article'));
+      assert.ok(html.includes('data-layout="stack"'));
       assert.ok(html.includes('data-doc="doc_min01"'));
       assert.ok(html.endsWith('</article>'));
+    });
+
+    it('with bare:true returns blocks without article wrapper', () => {
+      const doc = fixture('minimal.json');
+      const html = render(doc, { scope: 'content', bare: true });
+      assert.ok(!html.includes('<article'));
+      assert.ok(html.includes('<p>'));
     });
   });
 
@@ -59,43 +67,50 @@ describe('html renderer', () => {
   });
 
   describe('code blocks', () => {
-    it('produces <code-block> custom elements', () => {
+    it('produces <code-block> with language and label attrs (@profpowell/code-block)', () => {
       const doc = fixture('simple-post.json');
       const html = render(doc);
-      assert.ok(html.includes('<code-block'));
-      assert.ok(html.includes('data-language="css"'));
-      assert.ok(html.includes('data-filename="main.css"'));
-      assert.ok(html.includes('<pre><code>'));
+      assert.ok(html.includes('<code-block language="css" label="main.css">'));
+      assert.ok(html.includes('</code-block>'));
+      assert.ok(!html.includes('<pre data-language='));
     });
   });
 
   describe('callouts', () => {
-    it('produces <ui-callout> with variant', () => {
+    it('produces <status-message> with mapped variant and content slot', () => {
       const doc = fixture('component-rich.json');
       const html = render(doc);
-      assert.ok(html.includes('<ui-callout data-variant="tip">'));
-      assert.ok(html.includes('<ui-callout data-variant="warning">'));
+      // tip → success, warning → warning
+      assert.ok(html.includes('<status-message data-variant="success">'));
+      assert.ok(html.includes('<status-message data-variant="warning">'));
+      assert.ok(html.includes('<div data-content>'));
+      assert.ok(!html.includes('<ui-callout'));
     });
   });
 
   describe('tabs', () => {
-    it('produces <ui-tabs> with radio inputs', () => {
+    it('produces <tab-set> wrapping <details name>/<summary> siblings (per VB api)', () => {
       const doc = fixture('component-rich.json');
       const html = render(doc);
-      assert.ok(html.includes('<ui-tabs>'));
-      assert.ok(html.includes('</ui-tabs>'));
-      assert.ok(html.includes('type="radio"'));
-      assert.ok(html.includes('class="tab-panel"'));
-      assert.ok(html.includes('checked'));
+      assert.ok(html.includes('<tab-set>'));
+      assert.ok(html.includes('</tab-set>'));
+      assert.match(html, /<details name="ts-[a-z0-9]+" open>/);
+      assert.match(html, /<details name="ts-[a-z0-9]+">/);
+      assert.ok(html.includes('<summary>'));
+      assert.ok(!html.includes('<ui-tabs'));
+      assert.ok(!html.includes('role="tab"'));
+      assert.ok(!html.includes('type="radio"'));
     });
   });
 
   describe('steps', () => {
-    it('produces <ol data-steps>', () => {
+    it('produces <ol class="steps"> with title in <strong>', () => {
       const doc = fixture('component-rich.json');
       const html = render(doc);
-      assert.ok(html.includes('<ol data-steps>'));
-      assert.ok(html.includes('data-step-title='));
+      assert.ok(html.includes('<ol class="steps">'));
+      assert.ok(html.includes('<strong class="step-title">'));
+      assert.ok(!html.includes('data-steps'));
+      assert.ok(!html.includes('data-step-title'));
     });
   });
 
@@ -190,11 +205,12 @@ describe('html renderer', () => {
       assert.ok(html.includes('<hr/>'));
     });
 
-    it('renders embed', () => {
+    it('renders codepen embed as <social-embed>', () => {
       const doc = fixture('edge-cases.json');
       const html = render(doc);
-      assert.ok(html.includes('data-embed'));
-      assert.ok(html.includes('data-url="https://codepen.io/example/pen/abc123"'));
+      assert.ok(html.includes('<social-embed url="https://codepen.io/example/pen/abc123">'));
+      assert.ok(!html.includes('data-embed'));
+      assert.ok(!html.includes('<iframe'));
     });
 
     it('renders collapsible as <details>', () => {
@@ -204,10 +220,13 @@ describe('html renderer', () => {
       assert.ok(html.includes('<summary>'));
     });
 
-    it('renders card as <content-card>', () => {
+    it('renders card as <layout-card> wrapped in anchor when href present', () => {
       const doc = fixture('component-rich.json');
       const html = render(doc);
-      assert.ok(html.includes('<content-card href='));
+      assert.ok(html.includes('<a href='));
+      assert.ok(html.includes('class="card-link"'));
+      assert.ok(html.includes('<layout-card data-variant="elevated">'));
+      assert.ok(!html.includes('<content-card'));
     });
 
     it('renders footnote refs', () => {
@@ -233,13 +252,16 @@ describe('html renderer', () => {
   });
 
   describe('collection scope', () => {
-    it('produces card list for array of docs', () => {
+    it('produces a responsive grid of <article> entries with linked title', () => {
       const docs = [fixture('minimal.json'), fixture('simple-post.json')];
       const html = render(docs, { scope: 'collection' });
-      assert.ok(html.includes('data-collection'));
-      assert.ok(html.includes('<content-card'));
-      assert.ok(html.includes('Hello World'));
+      assert.ok(html.includes('data-layout="grid"'));
+      assert.ok(html.includes('data-layout-min='));
+      assert.ok(html.includes('<article data-layout="stack"'));
+      assert.match(html, /<h3><a href="\/[^"]+\/">Hello World<\/a><\/h3>/);
       assert.ok(html.includes('Getting Started'));
+      assert.ok(!html.includes('<content-card'));
+      assert.ok(!html.includes('<layout-card'));
     });
   });
 

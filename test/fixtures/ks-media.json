@@ -59,7 +59,7 @@
     {
       "type": "figure",
       "attrs": {
-        "src": "/media/browser-rendering-pipeline.png",
+        "src": "/media/browser-rendering-pipeline.svg",
         "alt": "Flowchart of the browser rendering pipeline: Parse HTML, Build DOM, Compute Styles, Layout, Paint, Composite",
         "variant": "full"
       },
@@ -82,7 +82,7 @@
     {
       "type": "figure",
       "attrs": {
-        "src": "/media/devtools-layers-panel.png",
+        "src": "/media/devtools-layers-panel.svg",
         "alt": "Screenshot of Chrome DevTools showing the Layers panel with composited layers highlighted",
         "variant": "bordered"
       },
@@ -138,7 +138,7 @@
     {
       "type": "figure",
       "attrs": {
-        "src": "/media/lighthouse-score.png",
+        "src": "/media/lighthouse-score.svg",
         "alt": "Lighthouse performance audit showing a score of 100 for Performance, Accessibility, Best Practices, and SEO",
         "variant": "float-end"
       },
@@ -209,7 +209,7 @@
     {
       "type": "figure",
       "attrs": {
-        "src": "/media/dom-tree-visualization.png",
+        "src": "/media/dom-tree-visualization.svg",
         "alt": "Visual representation of a DOM tree showing document, html, head, body, and child element nodes",
         "variant": "bordered"
       },

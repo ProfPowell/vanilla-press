@@ -124,7 +124,7 @@
             {
               "type": "code_block",
               "attrs": { "language": "html" },
-              "value": "<ui-callout data-variant=\"warning\">\n  <p>This API is deprecated and will be removed in v3.</p>\n</ui-callout>\n\n<content-card href=\"/docs/migration\">\n  <h3>Migration Guide</h3>\n  <p>Step-by-step upgrade instructions.</p>\n</content-card>"
+              "value": "<status-message data-variant=\"warning\">\n  <div data-content>\n    <p>This API is deprecated and will be removed in v3.</p>\n  </div>\n</status-message>\n\n<a href=\"/docs/migration\" class=\"card-link\">\n  <layout-card data-variant=\"elevated\">\n    <section>\n      <h3>Migration Guide</h3>\n      <p>Step-by-step upgrade instructions.</p>\n    </section>\n  </layout-card>\n</a>"
             }
           ]
         },
@@ -135,7 +135,7 @@
             {
               "type": "code_block",
               "attrs": { "language": "css" },
-              "value": "@layer components {\n  ui-callout {\n    display: block;\n    padding: var(--space-md);\n    border-radius: var(--radius);\n    border-left: 4px solid var(--callout-color);\n    background: var(--callout-bg);\n  }\n\n  ui-callout[data-variant='warning'] {\n    --callout-color: var(--color-warning);\n    --callout-bg: oklch(from var(--color-warning) l c h / 0.1);\n  }\n}"
+              "value": "@layer components {\n  /* Author your own custom element with the same pattern: */\n  my-banner {\n    display: block;\n    padding: var(--size-m);\n    border-radius: var(--radius-m);\n    border-inline-start: 4px solid var(--banner-color);\n    background: var(--banner-bg);\n  }\n\n  my-banner[data-variant='warning'] {\n    --banner-color: var(--color-warning);\n    --banner-bg: oklch(from var(--color-warning) l c h / 0.1);\n  }\n}"
             }
           ]
         },
@@ -192,7 +192,7 @@
         {
           "type": "paragraph",
           "children": [
-            { "type": "text", "value": "Vanilla Breeze ships 23 themes out of the box — from color swaps like Ocean and Forest to dramatic personality themes like Brutalist, Terminal, and Kawaii. All built on the same token override pattern." }
+            { "type": "text", "value": "Vanilla Breeze ships ~50 themes out of the box — from color accents like Ocean and Forest to dramatic personality themes like Brutalist, Terminal, Vaporwave, and Catppuccin. All built on the same token override pattern." }
           ]
         }
       ]

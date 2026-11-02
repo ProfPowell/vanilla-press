@@ -50,7 +50,7 @@
             {
               "type": "code_block",
               "attrs": { "language": "html" },
-              "value": "<ui-callout data-variant=\"warning\">\n  <p>No JS needed. The browser renders this as a block element.</p>\n  <p>CSS targets <code>ui-callout[data-variant='warning']</code>.</p>\n</ui-callout>"
+              "value": "<app-callout data-variant=\"warning\">\n  <p>No JS needed. The browser renders this as a block element.</p>\n  <p>CSS targets <code>app-callout[data-variant='warning']</code>.</p>\n</app-callout>"
             },
             {
               "type": "paragraph",
@@ -114,7 +114,7 @@
     {
       "type": "code_block",
       "attrs": { "language": "html" },
-      "value": "<ui-tabs>\n  <input type=\"radio\" name=\"t1\" id=\"t1-a\" checked/>\n  <label for=\"t1-a\">Setup</label>\n  <div class=\"tab-panel\"><p>First panel content.</p></div>\n\n  <input type=\"radio\" name=\"t1\" id=\"t1-b\"/>\n  <label for=\"t1-b\">Usage</label>\n  <div class=\"tab-panel\"><p>Second panel content.</p></div>\n</ui-tabs>"
+      "value": "<details name=\"setup-tabs\" open>\n  <summary>Setup</summary>\n  <div><p>First panel content.</p></div>\n</details>\n<details name=\"setup-tabs\">\n  <summary>Usage</summary>\n  <div><p>Second panel content.</p></div>\n</details>"
     },
     {
       "type": "callout",
@@ -123,11 +123,13 @@
         {
           "type": "paragraph",
           "children": [
-            { "type": "text", "value": "The " },
-            { "type": "text", "value": ":has()", "marks": ["code"] },
-            { "type": "text", "value": " selector makes this possible: " },
-            { "type": "text", "value": "ui-tabs:has(#t1-a:checked) .tab-panel:nth-of-type(1)", "marks": ["code"] },
-            { "type": "text", "value": " shows the correct panel without any JavaScript." }
+            { "type": "text", "value": "The shared " },
+            { "type": "text", "value": "name", "marks": ["code"] },
+            { "type": "text", "value": " attribute on " },
+            { "type": "text", "value": "<details>", "marks": ["code"] },
+            { "type": "text", "value": " (Chrome 120+, Safari 17.2+, Firefox 130+) makes the browser auto-close siblings when one opens — exclusive disclosure with zero JavaScript. Wrap the group in " },
+            { "type": "text", "value": "<tab-set>", "marks": ["code"] },
+            { "type": "text", "value": " and Vanilla Breeze upgrades it visually into a horizontal tab strip." }
           ]
         }
       ]

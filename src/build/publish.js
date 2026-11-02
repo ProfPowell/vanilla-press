@@ -15,7 +15,6 @@ import Database from 'better-sqlite3';
 import { migrate } from '../store/migrate.js';
 import { getAllPublished, listCollection, getCollections, getAllTags } from '../store/content.js';
 import { getConfig } from '../store/config.js';
-import { themes } from './assets/css/themes/_registry.js';
 import { render as renderHtml } from '../renderers/html.js';
 import { render as renderMarkdown } from '../renderers/markdown.js';
 import { renderAtom, renderSitemap, renderLlmsTxt } from '../renderers/feed.js';
@@ -54,11 +53,9 @@ export function publish(options = {}) {
   const collections = getCollections(db);
   site.collections = collections;
 
-  // Resolve theme CSS file
+  // Theme is applied via data-theme on <html>; VB ships the styles.
   const themeId = getConfig(db, 'theme');
-  const theme = themeId ? themes.find(t => t.id === themeId) : null;
-  site.themeFile = theme && theme.file ? theme.file : null;
-  site.themeId = theme && theme.file ? themeId : null;
+  site.themeId = themeId && themeId !== 'default' ? themeId : null;
 
   const allDocs = getAllPublished(db);
 
@@ -142,6 +139,20 @@ export function publish(options = {}) {
   const assetsDest = join(outDir, 'assets');
   if (existsSync(assetsSource)) {
     cpSync(assetsSource, assetsDest, { recursive: true });
+  }
+
+  // --- Vanilla Breeze (vendored from node_modules) ---
+  const vbSource = join(rootDir, 'node_modules', 'vanilla-breeze', 'dist', 'cdn');
+  const vbDest = join(outDir, 'assets', 'vb');
+  if (existsSync(vbSource)) {
+    cpSync(vbSource, vbDest, { recursive: true });
+  }
+
+  // --- @profpowell/code-block (vendored from node_modules) ---
+  const cbSource = join(rootDir, 'node_modules', '@profpowell', 'code-block', 'dist');
+  const cbDest = join(outDir, 'assets', 'code-block');
+  if (existsSync(cbSource)) {
+    cpSync(cbSource, cbDest, { recursive: true });
   }
 
   // --- Media ---

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" role="img" aria-label="CSS cascade layers stacked from lowest to highest priority">
+  <style>
+    .name { font: 600 14px ui-monospace, monospace; fill: #1a1a2e; }
+    .note { font: 500 11px system-ui, sans-serif; fill: #555; }
+    .arrow { fill: none; stroke: #1a1a2e; stroke-width: 2; marker-end: url(#a); }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#1a1a2e"/>
+    </marker>
+  </defs>
+  <text class="note" x="240" y="24" text-anchor="middle">cascade priority — later layers win</text>
+  <g transform="translate(60,40)">
+    <rect width="360" height="40" fill="#fee2e2" stroke="#dc2626"/>
+    <text class="name" x="180" y="26" text-anchor="middle">pages</text>
+  </g>
+  <g transform="translate(60,90)">
+    <rect width="360" height="40" fill="#fed7aa" stroke="#ea580c"/>
+    <text class="name" x="180" y="26" text-anchor="middle">components</text>
+  </g>
+  <g transform="translate(60,140)">
+    <rect width="360" height="40" fill="#fef3c7" stroke="#ca8a04"/>
+    <text class="name" x="180" y="26" text-anchor="middle">layout</text>
+  </g>
+  <g transform="translate(60,190)">
+    <rect width="360" height="40" fill="#dcfce7" stroke="#16a34a"/>
+    <text class="name" x="180" y="26" text-anchor="middle">base</text>
+  </g>
+  <g transform="translate(60,240)">
+    <rect width="360" height="40" fill="#dbeafe" stroke="#2563eb"/>
+    <text class="name" x="180" y="26" text-anchor="middle">tokens</text>
+  </g>
+  <g transform="translate(60,290)">
+    <rect width="360" height="40" fill="#e9d5ff" stroke="#7e22ce"/>
+    <text class="name" x="180" y="26" text-anchor="middle">reset</text>
+  </g>
+  <line class="arrow" x1="30" y1="320" x2="30" y2="50"/>
+  <text class="note" x="20" y="186" text-anchor="middle" transform="rotate(-90 20 186)">priority increases</text>
+</svg>

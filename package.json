@@ -27,6 +27,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "better-sqlite3": "^11.8.1"
+    "@profpowell/code-block": "^2.7.2",
+    "better-sqlite3": "^11.8.1",
+    "vanilla-breeze": "file:../vanilla-breeze"
   }
 }

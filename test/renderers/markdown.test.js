@@ -94,9 +94,9 @@ describe('markdown renderer', () => {
     it('degrades to sequential sections', () => {
       const doc = fixture('component-rich.json');
       const md = render(doc);
-      assert.ok(md.includes('### Callout'));
-      assert.ok(md.includes('### Collapsible'));
-      assert.ok(md.includes('### Card'));
+      assert.ok(md.includes('### Block AST'));
+      assert.ok(md.includes('### Vanilla Breeze HTML'));
+      assert.ok(md.includes('### Markdown'));
     });
   });
 
@@ -104,9 +104,9 @@ describe('markdown renderer', () => {
     it('degrades to numbered list', () => {
       const doc = fixture('component-rich.json');
       const md = render(doc);
-      assert.ok(md.includes('1. **Link the stylesheet**'));
-      assert.ok(md.includes('2. **Use components in your markup**'));
-      assert.ok(md.includes('3. **Optionally load JavaScript'));
+      assert.ok(md.includes('1. **Author the block AST**'));
+      assert.ok(md.includes('2. **Render to HTML with Vanilla Breeze tags**'));
+      assert.ok(md.includes('3. **Browser upgrades the elements**'));
     });
   });
 
@@ -179,13 +179,13 @@ describe('markdown renderer', () => {
     it('renders collapsible as bold summary + content', () => {
       const doc = fixture('component-rich.json');
       const md = render(doc);
-      assert.ok(md.includes('**Why custom elements instead of CSS classes?**'));
+      assert.ok(md.includes('**Why a typed block AST instead of HTML strings?**'));
     });
 
     it('renders card with link title', () => {
       const doc = fixture('component-rich.json');
       const md = render(doc);
-      assert.ok(md.includes('### [Progressive Enhancement Guide](/docs/progressive-enhancement)'));
+      assert.ok(md.includes('### [Getting Started Guide](/guides/getting-started/)'));
     });
 
     it('renders footnote refs', () => {

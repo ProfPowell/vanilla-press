@@ -626,7 +626,7 @@
             {
               "type": "code_block",
               "attrs": { "language": "js" },
-              "value": "customElements.define('ui-tabs', UiTabs);"
+              "value": "customElements.define('app-tabs', AppTabs);"
             }
           ]
         }

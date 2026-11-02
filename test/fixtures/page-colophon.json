@@ -133,7 +133,9 @@
         ] }] },
         { "type": "list_item", "children": [{ "type": "paragraph", "children": [
           { "type": "text", "value": "Themes:", "marks": ["strong"] },
-          { "type": "text", "value": " 23 swappable themes via custom property overrides" }
+          { "type": "text", "value": " ~50 swappable themes via " },
+          { "type": "text", "value": "data-theme", "marks": ["code"] },
+          { "type": "text", "value": " — color accents, personality themes, accessibility variants, and dramatic extremes (Brutalist, Vaporwave, Catppuccin, Memphis)" }
         ] }] }
       ]
     },

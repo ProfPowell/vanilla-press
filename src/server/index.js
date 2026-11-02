@@ -69,6 +69,9 @@ export function startServer(options = {}) {
     { prefix: '/media/', dir: mediaDir },
     { prefix: '/test/', dir: join(ROOT, 'test') },
     { prefix: '/kitchen-sink/', dir: join(ROOT, 'kitchen-sink') },
+    { prefix: '/assets/vb/', dir: join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') },
+    { prefix: '/assets/code-block/', dir: join(ROOT, 'node_modules', '@profpowell', 'code-block', 'dist') },
+    { prefix: '/assets/', dir: join(ROOT, 'src', 'build', 'assets') },
   ];
 
   const server = createServer(async (req, res) => {

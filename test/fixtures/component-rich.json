@@ -4,19 +4,25 @@
     "title": "Building with Vanilla Breeze Components",
     "slug": "vanilla-breeze-components",
     "collection": "docs",
-    "description": "How to use custom elements as semantic building blocks in your markup.",
+    "description": "How VanillaPress block types map to Vanilla Breeze's HTML elements and custom components.",
     "author_id": "author_t1",
     "status": "published",
     "created": "2026-02-14",
-    "updated": "2026-02-14",
+    "updated": "2026-04-24",
     "published": "2026-02-14",
-    "tags": ["web-components", "css", "html"]
+    "tags": ["vanilla-breeze", "rendering", "html"]
   },
   "blocks": [
     {
       "type": "paragraph",
       "children": [
-        { "type": "text", "value": "Vanilla Breeze components work in two modes: as CSS-only custom elements (no JavaScript required) or as full web components with progressive enhancement." }
+        { "type": "text", "value": "VanillaPress stores content as a typed block AST and renders each block to an HTML element that " },
+        {
+          "type": "link",
+          "attrs": { "href": "https://vanilla-breeze.com" },
+          "children": [{ "type": "text", "value": "Vanilla Breeze" }]
+        },
+        { "type": "text", "value": " styles. The block names are stable (callout, tabs, card, code_block); the HTML output tracks VB's vocabulary." }
       ]
     },
     {
@@ -26,7 +32,9 @@
         {
           "type": "paragraph",
           "children": [
-            { "type": "text", "value": "Most components work without JavaScript. The browser renders the custom element, CSS styles it. JS only adds interactivity like copy buttons or keyboard handling." }
+            { "type": "text", "value": "VB ships a complete CSS reset, tokens, typography, layout primitives, and ~60 web components. VanillaPress ships zero project-local CSS — the only stylesheet on the page is " },
+            { "type": "text", "value": "vanilla-breeze.css", "marks": ["code"] },
+            { "type": "text", "value": "." }
           ]
         }
       ]
@@ -35,7 +43,7 @@
       "type": "heading",
       "attrs": { "level": 2 },
       "children": [
-        { "type": "text", "value": "Installation" }
+        { "type": "text", "value": "How a page is assembled" }
       ]
     },
     {
@@ -43,34 +51,53 @@
       "children": [
         {
           "type": "step",
-          "attrs": { "title": "Link the stylesheet" },
+          "attrs": { "title": "Author the block AST" },
           "children": [
             {
-              "type": "code_block",
-              "attrs": { "language": "html" },
-              "value": "<link rel=\"stylesheet\" href=\"/assets/css/main.css\"/>"
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "Each document is a JSON tree of typed blocks defined in " },
+                { "type": "text", "value": "src/schema/content-schema.js", "marks": ["code"] },
+                { "type": "text", "value": ". Blocks have a type, optional attrs, and children or a leaf value." }
+              ]
             }
           ]
         },
         {
           "type": "step",
-          "attrs": { "title": "Use components in your markup" },
+          "attrs": { "title": "Render to HTML with Vanilla Breeze tags" },
           "children": [
             {
-              "type": "code_block",
-              "attrs": { "language": "html" },
-              "value": "<ui-callout data-variant=\"warning\">\n  <p>This API is experimental.</p>\n</ui-callout>"
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "The HTML renderer maps each block to its VB equivalent: callout → " },
+                { "type": "text", "value": "<status-message>", "marks": ["code"] },
+                { "type": "text", "value": ", tabs → " },
+                { "type": "text", "value": "<tab-set>", "marks": ["code"] },
+                { "type": "text", "value": " (wrapping " },
+                { "type": "text", "value": "<details>", "marks": ["code"] },
+                { "type": "text", "value": "), card → " },
+                { "type": "text", "value": "<layout-card>", "marks": ["code"] },
+                { "type": "text", "value": ", code_block → " },
+                { "type": "text", "value": "<code-block>", "marks": ["code"] },
+                { "type": "text", "value": " (the @profpowell/code-block element)." }
+              ]
             }
           ]
         },
         {
           "type": "step",
-          "attrs": { "title": "Optionally load JavaScript for enhanced components" },
+          "attrs": { "title": "Browser upgrades the elements" },
           "children": [
             {
-              "type": "code_block",
-              "attrs": { "language": "html" },
-              "value": "<script src=\"/assets/js/main.js\" type=\"module\"></script>"
+              "type": "paragraph",
+              "children": [
+                { "type": "text", "value": "VB's JS module upgrades the custom elements: " },
+                { "type": "text", "value": "<tab-set>", "marks": ["code"] },
+                { "type": "text", "value": " becomes a horizontal tab strip with keyboard navigation, " },
+                { "type": "text", "value": "<page-info>", "marks": ["code"] },
+                { "type": "text", "value": " synthesizes a provenance panel from meta tags, and so on. Without JS the markup degrades to native HTML." }
+              ]
             }
           ]
         }
@@ -80,7 +107,7 @@
       "type": "heading",
       "attrs": { "level": 2 },
       "children": [
-        { "type": "text", "value": "Component Examples" }
+        { "type": "text", "value": "Same content, three serializations" }
       ]
     },
     {
@@ -88,54 +115,56 @@
       "children": [
         {
           "type": "tab",
-          "attrs": { "label": "Callout" },
+          "attrs": { "label": "Block AST" },
           "children": [
             {
               "type": "paragraph",
               "children": [
-                { "type": "text", "value": "Use callouts to highlight important information:" }
+                { "type": "text", "value": "What the editor stores and the API serves over " },
+                { "type": "text", "value": "Accept: application/json", "marks": ["code"] },
+                { "type": "text", "value": ":" }
               ]
             },
             {
               "type": "code_block",
-              "attrs": { "language": "html" },
-              "value": "<ui-callout data-variant=\"warning\">\n  <p>Breaking change in v2.0.</p>\n</ui-callout>"
+              "attrs": { "language": "json" },
+              "value": "{\n  \"type\": \"callout\",\n  \"attrs\": { \"variant\": \"warning\" },\n  \"children\": [\n    { \"type\": \"paragraph\",\n      \"children\": [\n        { \"type\": \"text\", \"value\": \"This API is experimental.\" }\n      ]\n    }\n  ]\n}"
             }
           ]
         },
         {
           "type": "tab",
-          "attrs": { "label": "Collapsible" },
+          "attrs": { "label": "Vanilla Breeze HTML" },
           "children": [
             {
               "type": "paragraph",
               "children": [
-                { "type": "text", "value": "Collapsible sections use the native " },
-                { "type": "text", "value": "<details>", "marks": ["code"] },
-                { "type": "text", "value": " element:" }
+                { "type": "text", "value": "What renders for a browser request:" }
               ]
             },
             {
               "type": "code_block",
               "attrs": { "language": "html" },
-              "value": "<details>\n  <summary>Advanced options</summary>\n  <p>Configure token overrides here.</p>\n</details>"
+              "value": "<status-message data-variant=\"warning\">\n  <div data-content>\n    <p>This API is experimental.</p>\n  </div>\n</status-message>"
             }
           ]
         },
         {
           "type": "tab",
-          "attrs": { "label": "Card" },
+          "attrs": { "label": "Markdown" },
           "children": [
             {
               "type": "paragraph",
               "children": [
-                { "type": "text", "value": "Cards link to related content:" }
+                { "type": "text", "value": "What renders for an LLM request (" },
+                { "type": "text", "value": "Accept: text/markdown", "marks": ["code"] },
+                { "type": "text", "value": "):" }
               ]
             },
             {
               "type": "code_block",
-              "attrs": { "language": "html" },
-              "value": "<content-card href=\"/docs/css-layers\">\n  <h3>CSS Layers Guide</h3>\n  <p>Learn cascade control.</p>\n</content-card>"
+              "attrs": { "language": "markdown" },
+              "value": "> **Warning:** This API is experimental."
             }
           ]
         }
@@ -148,46 +177,56 @@
         {
           "type": "paragraph",
           "children": [
-            { "type": "text", "value": "Custom elements require a hyphen in the name. " },
-            { "type": "text", "value": "<callout>", "marks": ["code"] },
-            { "type": "text", "value": " is invalid; " },
-            { "type": "text", "value": "<ui-callout>", "marks": ["code"] },
-            { "type": "text", "value": " is correct." }
+            { "type": "text", "value": "Variant names live in VanillaPress's schema (" },
+            { "type": "text", "value": "note", "marks": ["code"] },
+            { "type": "text", "value": ", " },
+            { "type": "text", "value": "tip", "marks": ["code"] },
+            { "type": "text", "value": ", " },
+            { "type": "text", "value": "warning", "marks": ["code"] },
+            { "type": "text", "value": ", " },
+            { "type": "text", "value": "danger", "marks": ["code"] },
+            { "type": "text", "value": ") and map to VB's " },
+            { "type": "text", "value": "data-variant", "marks": ["code"] },
+            { "type": "text", "value": " values (" },
+            { "type": "text", "value": "info", "marks": ["code"] },
+            { "type": "text", "value": ", " },
+            { "type": "text", "value": "success", "marks": ["code"] },
+            { "type": "text", "value": ", " },
+            { "type": "text", "value": "warning", "marks": ["code"] },
+            { "type": "text", "value": ", " },
+            { "type": "text", "value": "error", "marks": ["code"] },
+            { "type": "text", "value": ") at render time." }
           ]
         }
       ]
     },
     {
       "type": "collapsible",
-      "attrs": { "summary": "Why custom elements instead of CSS classes?" },
+      "attrs": { "summary": "Why a typed block AST instead of HTML strings?" },
       "children": [
         {
           "type": "paragraph",
           "children": [
-            { "type": "text", "value": "Custom elements are semantic. A " },
-            { "type": "text", "value": "<ui-callout>", "marks": ["code"] },
-            { "type": "text", "value": " communicates intent to browsers, screen readers, and developers. A " },
-            { "type": "text", "value": "<div class=\"callout\">", "marks": ["code"] },
-            { "type": "text", "value": " communicates nothing — the class name is a convention, not a contract." }
+            { "type": "text", "value": "Storing HTML couples authoring to one rendering target. A block AST lets the same content render as a full HTML page, an HTML fragment, clean Markdown for LLMs, JSON for APIs, or an Atom entry — all from one source. The schema is the contract; the renderers are pure functions." }
           ]
         }
       ]
     },
     {
       "type": "card",
-      "attrs": { "href": "/docs/progressive-enhancement" },
+      "attrs": { "href": "/guides/getting-started/" },
       "children": [
         {
           "type": "heading",
           "attrs": { "level": 3 },
           "children": [
-            { "type": "text", "value": "Progressive Enhancement Guide" }
+            { "type": "text", "value": "Getting Started Guide" }
           ]
         },
         {
           "type": "paragraph",
           "children": [
-            { "type": "text", "value": "Learn how components work without JavaScript and enhance with it." }
+            { "type": "text", "value": "Install Vanilla Press, seed the database, and publish your first page." }
           ]
         }
       ]

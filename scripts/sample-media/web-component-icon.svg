@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Web Components hexagonal icon">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1e40af"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+  </defs>
+  <polygon points="100,20 173,60 173,140 100,180 27,140 27,60" fill="none" stroke="#1a1a2e" stroke-width="3"/>
+  <polygon points="100,20 173,60 100,100 27,60" fill="url(#g1)" opacity="0.85"/>
+  <polygon points="173,60 173,140 100,100" fill="url(#g2)" opacity="0.85"/>
+  <polygon points="100,180 173,140 100,100" fill="url(#g3)" opacity="0.85"/>
+  <text x="100" y="106" text-anchor="middle" font="700 22px system-ui, sans-serif" fill="white">&lt;/&gt;</text>
+</svg>

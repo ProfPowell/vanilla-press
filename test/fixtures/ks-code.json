@@ -35,7 +35,7 @@
     {
       "type": "code_block",
       "attrs": { "language": "css", "filename": "src/build/assets/css/components.css" },
-      "value": "@layer components {\n  ui-callout {\n    display: block;\n    padding: var(--space-md) var(--space-lg);\n    border-inline-start: 4px solid var(--callout-color, var(--color-blue-500));\n    background: var(--callout-bg, var(--color-blue-50));\n    border-radius: var(--radius-md);\n    margin-block: var(--space-lg);\n  }\n\n  ui-callout[data-variant=\"warning\"] {\n    --callout-color: var(--color-amber-500);\n    --callout-bg: var(--color-amber-50);\n  }\n\n  ui-callout[data-variant=\"danger\"] {\n    --callout-color: var(--color-red-500);\n    --callout-bg: var(--color-red-50);\n  }\n}"
+      "value": "@layer components {\n  app-callout {\n    display: block;\n    padding: var(--size-m) var(--size-l);\n    border-inline-start: 4px solid var(--callout-color, var(--color-info));\n    background: var(--callout-bg, oklch(from var(--color-info) l c h / 0.1));\n    border-radius: var(--radius-m);\n    margin-block: var(--size-l);\n  }\n\n  app-callout[data-variant=\"warning\"] {\n    --callout-color: var(--color-warning);\n    --callout-bg: oklch(from var(--color-warning) l c h / 0.1);\n  }\n\n  app-callout[data-variant=\"danger\"] {\n    --callout-color: var(--color-error);\n    --callout-bg: oklch(from var(--color-error) l c h / 0.1);\n  }\n}"
     },
     {
       "type": "heading",

@@ -161,14 +161,13 @@ describe('fix round 1', () => {
     assert.ok(!existsSync(p('content/notes/about.json')));
   });
 
-  it('removal skips a path another entry claims', () => {
+  it('removal skips an HTML file another document owns (its vp_id)', () => {
     const doc = simple();
     exportDocument(ws, doc, {});
-    const m = readManifest(ws);
-    m.documents.other = { json: 'content/x/y.json', html: 'src/posts/hello.html', jsonHash: 'z' };
-    writeFileSync(p('content/.vp-manifest.json'), JSON.stringify(m));
+    const f = p('src/posts/hello.html');
+    writeFileSync(f, readFileSync(f, 'utf8').replace('vp_id: "doc_simple01"', 'vp_id: "doc_other"'));
     const res = removeExport(ws, doc.id);
-    assert.ok(existsSync(p('src/posts/hello.html')));
+    assert.ok(existsSync(f));
     assert.deepEqual(res.removed, ['content/posts/hello.json']);
   });
 
@@ -182,11 +181,11 @@ describe('fix round 1', () => {
   });
 
   it('corrupt manifest refuses to write and is left unchanged', () => {
-    mkdirSync(p('content'), { recursive: true });
-    writeFileSync(p('content/.vp-manifest.json'), '{not json');
-    assert.throws(() => exportDocument(ws, simple(), {}), /Cannot read content\/\.vp-manifest\.json/);
+    mkdirSync(p('.vp'), { recursive: true });
+    writeFileSync(p('.vp/manifest.json'), '{not json');
+    assert.throws(() => exportDocument(ws, simple(), {}), /Cannot read \.vp\/manifest\.json/);
     assert.throws(() => removeExport(ws, 'x'), /Cannot read/);
-    assert.equal(readFileSync(p('content/.vp-manifest.json'), 'utf8'), '{not json');
+    assert.equal(readFileSync(p('.vp/manifest.json'), 'utf8'), '{not json');
     assert.ok(!existsSync(p('content/posts')));
   });
 
@@ -252,5 +251,144 @@ describe('checkExport', () => {
 
   it('rejects an invalid slug', () => {
     assert.throws(() => checkExport(ws, mk(simple(), { slug: '../x' }), {}), /Invalid slug/);
+  });
+});
+
+describe('ownership from the files (final fix)', () => {
+  it('the manifest is machine-local in .vp/; an old content/.vp-manifest.json is ignored', () => {
+    mkdirSync(p('content'), { recursive: true });
+    writeFileSync(p('content/.vp-manifest.json'), '{not json');
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    assert.ok(existsSync(p('.vp/manifest.json')));
+    assert.ok(readManifest(ws).documents[doc.id]);
+    assert.equal(readFileSync(p('content/.vp-manifest.json'), 'utf8'), '{not json');
+  });
+
+  it('exported HTML carries vp_id in its front matter', () => {
+    exportDocument(ws, simple(), {});
+    assert.match(readFileSync(p('src/posts/hello.html'), 'utf8'), /\nslug: "hello"\nvp_id: "doc_simple01"\n---\n/);
+  });
+
+  it('a target HTML owned by another vp_id is "already used" and is left unchanged', () => {
+    const other = { ...simple(), id: 'doc_other' };
+    exportDocument(ws, other, {});
+    rmSync(p('.vp'), { recursive: true }); // no local record of either document
+    const html = readFileSync(p('src/posts/hello.html'), 'utf8');
+    rmSync(p('content/posts/hello.json'));
+    assert.throws(() => checkExport(ws, simple(), {}), /Output path src\/posts\/hello\.html is already used by document doc_other/);
+    assert.throws(() => exportDocument(ws, simple(), {}), /already used by document doc_other/);
+    assert.equal(readFileSync(p('src/posts/hello.html'), 'utf8'), html);
+  });
+
+  it('a hand-written HTML (no vp_id) is refused, even with front matter', () => {
+    mkdirSync(p('src/posts'), { recursive: true });
+    writeFileSync(p('src/posts/hello.html'), '---\ntitle: "Mine"\n---\n<p>mine</p>\n');
+    assert.throws(() => checkExport(ws, simple(), {}), /Refusing to overwrite src\/posts\/hello\.html: not written by Vanilla Press/);
+  });
+
+  it('a target HTML with our vp_id is owned even with no local manifest entry', () => {
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    rmSync(p('.vp'), { recursive: true });
+    rmSync(p('content/posts/hello.json'));
+    const res = exportDocument(ws, mk(doc, { title: 'Again' }), {});
+    assert.ok(res.written.includes('src/posts/hello.html'));
+    assert.match(readFileSync(p('src/posts/hello.html'), 'utf8'), /title: "Again"/);
+  });
+
+  it('with no local entry, old paths come from previousDoc', () => {
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    rmSync(p('.vp'), { recursive: true });
+    rmSync(p('content/posts/hello.json'));
+    let res = exportDocument(ws, mk(doc, { status: 'draft' }), {});
+    assert.deepEqual(res.removed, []);
+    assert.ok(existsSync(p('src/posts/hello.html')), 'no record of the old path without previousDoc');
+
+    exportDocument(ws, doc, {}); // publish again (owned via vp_id)
+    rmSync(p('.vp'), { recursive: true });
+    rmSync(p('content/posts/hello.json'));
+    res = exportDocument(ws, mk(doc, { status: 'draft' }), { previousDoc: doc });
+    assert.deepEqual(res.removed, ['src/posts/hello.html']);
+  });
+
+  it('cleanup never removes an old HTML whose vp_id is another document', () => {
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    const html = readFileSync(p('src/posts/hello.html'), 'utf8').replace('vp_id: "doc_simple01"', 'vp_id: "doc_other"');
+    writeFileSync(p('src/posts/hello.html'), html);
+    const res = exportDocument(ws, mk(doc, { slug: 'moved' }), {});
+    assert.ok(existsSync(p('src/posts/hello.html')));
+    assert.deepEqual(res.removed, ['content/posts/hello.json']);
+  });
+
+  it('cleanup never removes an old JSON holding another id', () => {
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    rmSync(p('.vp'), { recursive: true });
+    const theirs = { ...simple(), id: 'doc_other' };
+    writeFileSync(p('content/posts/hello.json'), JSON.stringify(theirs, null, 2) + '\n');
+    const res = removeExport(ws, doc.id, { previousDoc: doc });
+    assert.ok(existsSync(p('content/posts/hello.json')));
+    assert.deepEqual(res.removed, ['src/posts/hello.html']);
+  });
+
+  it('recordImported records the html hint when the page is ours', () => {
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    rmSync(p('.vp'), { recursive: true });
+    recordImported(ws, doc.id, 'content/posts/hello.json');
+    assert.deepEqual(readManifest(ws).documents[doc.id].html, 'src/posts/hello.html');
+    assert.equal(changedOnDisk(ws, doc.id, 'content/posts/hello.json'), false);
+  });
+});
+
+describe('Cook template safety and minors (final fix)', () => {
+  it('escapes ${ in the HTML body (not the front matter) so Cook does not interpolate it', () => {
+    const doc = mk(simple(), { title: 'Cost ${title}' });
+    doc.blocks = [
+      { type: 'paragraph', children: [{ type: 'text', value: 'Use ${title} here.' }] },
+      { type: 'code_block', attrs: { language: 'js' }, value: 'const s = `${title}`;' },
+    ];
+    exportDocument(ws, doc, {});
+    const html = readFileSync(p('src/posts/hello.html'), 'utf8');
+    const end = html.indexOf('\n---\n', 4) + 5;
+    const body = html.slice(end);
+    assert.ok(!body.includes('${'), body);
+    assert.equal((body.match(/&#36;\{title\}/g) || []).length, 2, body);
+    assert.ok(html.slice(0, end).includes('title: "Cost ${title}"'));
+    // The JSON keeps the text as written.
+    assert.equal(JSON.parse(readFileSync(p('content/posts/hello.json'), 'utf8')).blocks[0].children[0].value, 'Use ${title} here.');
+  });
+
+  for (const name of ['layouts', 'includes', 'components', 'media', 'assets']) {
+    it(`reserved collection name ${name} is rejected`, () => {
+      assert.throws(() => checkExport(ws, mk(simple(), { collection: name }), {}), new RegExp(`Reserved collection name: ${name}`));
+    });
+  }
+
+  it('moving a post out of a collection prunes the emptied directories', () => {
+    const doc = mk(simple(), { collection: 'new' });
+    exportDocument(ws, doc, {});
+    assert.ok(existsSync(p('src/new/hello.html')));
+    exportDocument(ws, mk(doc, { collection: 'posts' }), {});
+    assert.ok(!existsSync(p('content/new')));
+    assert.ok(!existsSync(p('src/new')));
+    assert.ok(existsSync(p('content/posts/hello.json')));
+    assert.ok(existsSync(p('src/posts/hello.html')));
+  });
+
+  it('pruning stops at content/ and src/ and keeps non-empty directories', () => {
+    const doc = mk(simple(), { collection: 'pages' });
+    exportDocument(ws, doc, {});
+    mkdirSync(p('src/posts'), { recursive: true });
+    writeFileSync(p('src/posts/keep.txt'), 'x');
+    removeExport(ws, doc.id);
+    assert.ok(existsSync(p('content')));
+    assert.ok(existsSync(p('src')));
+    exportDocument(ws, simple(), {});
+    removeExport(ws, simple().id);
+    assert.ok(existsSync(p('src/posts/keep.txt')));
   });
 });

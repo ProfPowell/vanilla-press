@@ -11,8 +11,9 @@ import { join, relative, sep } from 'node:path';
 import { validate } from '../schema/validate.js';
 import { getDocument, saveDocument, deleteDocument } from '../store/content.js';
 import { changedOnDisk, recordImported, readManifest } from './export.js';
+import { getCollectionsConfig } from './site-files.js';
 
-/** Content files that are not documents. */
+/** Content files that are not documents (`.vp-manifest.json`: obsolete, ignored). */
 const NON_DOCUMENTS = new Set(['media.json', '.vp-manifest.json']);
 
 /** Site-relative (posix) paths of every document JSON under contentDir. */
@@ -68,6 +69,7 @@ export function syncFromContent(ws, db, { replace = false } = {}) {
   const removed = [];
   const seen = new Map(); // id -> first file claiming it
   let unreadable = false;
+  const collectionsConfig = getCollectionsConfig(db);
 
   for (const rel of listJson(ws)) {
     const { doc, error } = readDoc(ws, rel);
@@ -90,7 +92,7 @@ export function syncFromContent(ws, db, { replace = false } = {}) {
         continue;
       }
       saveDocument(db, doc);
-      recordImported(ws, id, rel);
+      recordImported(ws, id, rel, { collectionsConfig });
       imported.push(id);
     } catch (err) {
       unreadable = true;
@@ -133,6 +135,6 @@ export function importOne(ws, db, docId) {
   if (!rel || !found) throw new Error(`No content file for document ${docId}`);
   if (found.error) throw new Error(`Invalid content file ${rel}: ${found.error}`);
   const saved = saveDocument(db, found.doc);
-  recordImported(ws, docId, rel);
+  recordImported(ws, docId, rel, { collectionsConfig: getCollectionsConfig(db) });
   return saved;
 }

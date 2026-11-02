@@ -41,10 +41,12 @@ export function getCollectionsConfig(db) {
 /**
  * Decide, before saving `candidate` to the store, whether the save may go
  * ahead. Nothing is written.
- * - The stored version's JSON (as recorded in the manifest, else derived)
- *   changed on disk → 409: the file wins, offer to load it.
- * - The candidate's export would be rejected (collision, foreign file,
- *   unowned target JSON, invalid path) → 422: not saved, no reload offered.
+ * - The stored version's JSON (as recorded in the local manifest, else
+ *   derived) changed on disk → 409: the file wins, offer to load it.
+ * - The candidate's export would be rejected (HTML owned by another document
+ *   or hand-written, unowned target JSON, invalid or reserved path) → 422:
+ *   not saved, no reload offered.
+ * Throws (e.g. a corrupt local manifest) are left to the caller.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {import('better-sqlite3').Database} db
  * @param {Object} candidate - The document exactly as it would be saved
@@ -52,15 +54,16 @@ export function getCollectionsConfig(db) {
  * @returns {null | { status: 409|422, error: string, path?: string }}
  */
 export function preflightSave(ws, db, candidate, collectionsConfig) {
+  const manifest = readManifest(ws); // a corrupt manifest throws: unexpected, not a rejected save
   const existing = getDocument(db, candidate.id);
   if (existing) {
-    const rel = readManifest(ws).documents[existing.id]?.json || outputPaths(existing, collectionsConfig).json;
+    const rel = manifest.documents[existing.id]?.json || outputPaths(existing, collectionsConfig).json;
     if (changedOnDisk(ws, existing.id, rel)) {
       return { status: 409, error: 'This document changed on disk (e.g. git pull).', path: rel };
     }
   }
   try {
-    checkExport(ws, candidate, { collectionsConfig });
+    checkExport(ws, candidate, { collectionsConfig, previousDoc: existing });
   } catch (err) {
     return { status: 422, error: `Not saved: ${err.message}` };
   }
@@ -104,7 +107,7 @@ export function exportAll(ws, db) {
   for (const id of ids) {
     const doc = getDocument(db, id);
     try {
-      exportDocument(ws, doc, { collectionsConfig });
+      exportDocument(ws, doc, { collectionsConfig, previousDoc: doc });
       exported++;
     } catch (err) {
       conflicts.push(err instanceof ExportConflictError ? err.path : `${id}: ${err.message}`);

@@ -18,8 +18,10 @@ export function localDay(iso) {
 
 /**
  * Build front matter for a document. Keys in fixed order; empty values omitted.
- * Strings use JSON.stringify (valid YAML double-quoted scalars).
- * @param {{ meta: Object }} doc
+ * Strings use JSON.stringify (valid YAML double-quoted scalars). The last key,
+ * `vp_id`, marks the page as written by Vanilla Press for that document (see
+ * readVpId).
+ * @param {{ id: string, meta: Object }} doc
  * @param {{ layout: string }} options
  * @returns {string} `---\n...\n---\n`
  */
@@ -37,9 +39,29 @@ export function frontMatter(doc, { layout }) {
     ['tags', tags.length ? `[${tags.map((t) => JSON.stringify(t)).join(',')}]` : ''],
     ['layout', layout],
     ['slug', m.slug],
+    ['vp_id', doc.id],
   ];
   const lines = entries
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
     .map(([k, v]) => `${k}: ${k === 'tags' ? v : JSON.stringify(String(v))}`);
   return `---\n${lines.join('\n')}\n---\n`;
+}
+
+/**
+ * The `vp_id` that frontMatter wrote into an HTML page's leading front
+ * matter, or null when the text has no front matter or no readable `vp_id`.
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function readVpId(text) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(text);
+  if (!m) return null;
+  const line = /^vp_id:[ \t]*(.*?)[ \t]*$/m.exec(m[1]);
+  if (!line) return null;
+  try {
+    const v = JSON.parse(line[1]);
+    return typeof v === 'string' && v !== '' ? v : null;
+  } catch {
+    return null;
+  }
 }

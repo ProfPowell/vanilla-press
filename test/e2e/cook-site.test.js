@@ -22,7 +22,7 @@ describe('export builds with Cook', () => {
   before(() => {
     tmp = mkdtempSync(join(tmpdir(), 'vp-e2e-'));
     write('config/main.js', `export default { buildOnlyPaths: ['layouts'], collections: { html: true }, formats: { feed: { collection: 'posts' }, json: false, markdown: false, llmsTxt: false } };\n`);
-    write('config/data.js', `export default { siteUrl: 'https://example.com', siteTitle: 'T' };\n`);
+    write('config/data.js', `export default { siteUrl: 'https://example.com', siteTitle: 'Interpolated Site Title' };\n`);
     write('src/layouts/post.html', '<!doctype html><html><head><title>${title}</title></head><body><main class="post-layout"><article>${content}</article></main></body></html>\n');
     write('src/layouts/page.html', '<!doctype html><html><head><title>${title}</title></head><body><main class="page-layout">${content}</main></body></html>\n');
     write('src/index.html', '<!doctype html><html><head><title>Home</title></head><body>\n<ul>\n<li data-repeat="collections.posts as post"><a href="${post.url}">${post.title}</a></li>\n</ul>\n</body></html>\n');
@@ -36,7 +36,13 @@ describe('export builds with Cook', () => {
     newer.id = 'doc_new';
     const draft = mk(fixture('simple-post.json'), { title: 'Secret Draft', slug: 'secret', collection: 'posts', status: 'draft' });
     draft.id = 'doc_draft';
-    for (const d of [older, newer, draft]) exportDocument(ws, d, {});
+    const code = mk(fixture('simple-post.json'), { title: 'Template Literal Post', slug: 'template', collection: 'posts', status: 'published', published: '2026-02-05T10:00:00.000Z' });
+    code.id = 'doc_code';
+    code.blocks = [
+      { type: 'paragraph', children: [{ type: 'text', value: 'Write ${siteTitle} in prose.' }] },
+      { type: 'code_block', attrs: { language: 'js' }, value: 'const t = `${siteTitle}`;' },
+    ];
+    for (const d of [older, newer, draft, code]) exportDocument(ws, d, {});
 
     build = spawnSync(process.execPath, ['node_modules/cook-ssg/bin/cook.js', 'build'], {
       cwd: tmp, env: { ...process.env, NODE_ENV: 'production' }, stdio: 'pipe', encoding: 'utf8',
@@ -56,9 +62,9 @@ describe('export builds with Cook', () => {
     assert.ok(!html.includes('Secret Draft'));
   });
 
-  it('feed has two entries', () => {
+  it('feed has three entries', () => {
     const xml = readFileSync(join(tmp, 'dist/feed.xml'), 'utf8');
-    assert.equal((xml.match(/<entry>|<item>/g) || []).length, 2, xml);
+    assert.equal((xml.match(/<entry>|<item>/g) || []).length, 3, xml);
     assert.ok(!xml.includes('Secret Draft'));
   });
 
@@ -67,5 +73,16 @@ describe('export builds with Cook', () => {
     assert.ok(html.includes('<tab-set'));
     assert.ok(html.includes('class="post-layout"'));
     assert.ok(!existsSync(join(tmp, 'dist/posts/secret/index.html')));
+  });
+
+  // TODO (needs a decision): Cook 2.4.0 parses the page with JSDOM
+  // (replace-components) BEFORE replace-template-strings, which decodes
+  // `&#36;{` back to `${`, so the escape exportDocument writes does not stop
+  // the interpolation. See the final-fix report.
+  it('${...} in a post body is not interpolated by Cook', { skip: 'Cook decodes &#36; before interpolating (needs a decision)' }, () => {
+    const html = readFileSync(join(tmp, 'dist/posts/template/index.html'), 'utf8');
+    const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
+    assert.ok(!main.includes('Interpolated Site Title'), main);
+    assert.equal((main.match(/(&#36;|&#x24;|&dollar;|\$)\{siteTitle\}/g) || []).length, 2, main);
   });
 });

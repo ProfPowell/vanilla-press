@@ -27,17 +27,17 @@ describe('localDay', () => {
 
 describe('frontMatter', () => {
   it('full doc, exact output', () => {
-    const expected = `---\ntitle: "Hello"\ndescription: "D"\ndate: "${localDay('2026-10-02T12:00:00Z')}"\npublished: "2026-10-02T12:00:00Z"\nupdated: "2026-10-03T12:00:00Z"\nauthor: "tp"\ntags: ["a","b"]\nlayout: "post"\nslug: "hello"\n---\n`;
+    const expected = `---\ntitle: "Hello"\ndescription: "D"\ndate: "${localDay('2026-10-02T12:00:00Z')}"\npublished: "2026-10-02T12:00:00Z"\nupdated: "2026-10-03T12:00:00Z"\nauthor: "tp"\ntags: ["a","b"]\nlayout: "post"\nslug: "hello"\nvp_id: "1"\n---\n`;
     assert.equal(frontMatter(base, { layout: 'post' }), expected);
   });
   it('omits empty values and falls back to created for date', () => {
-    const d = { ...base, meta: { title: 'X', slug: 'x', created: '2026-10-01T12:00:00Z', tags: [], description: '' } };
+    const d = { ...base, id: 'doc_x', meta: { title: 'X', slug: 'x', created: '2026-10-01T12:00:00Z', tags: [], description: '' } };
     const out = frontMatter(d, { layout: 'page' });
-    assert.equal(out, `---\ntitle: "X"\ndate: "${localDay('2026-10-01T12:00:00Z')}"\nlayout: "page"\nslug: "x"\n---\n`);
+    assert.equal(out, `---\ntitle: "X"\ndate: "${localDay('2026-10-01T12:00:00Z')}"\nlayout: "page"\nslug: "x"\nvp_id: "doc_x"\n---\n`);
   });
   for (const title of ['He said "hi": yes', 'a\nb', '--- x', '#hash']) {
     it(`round-trips title ${JSON.stringify(title)}`, () => {
-      const d = { ...base, meta: { ...base.meta, title } };
+      const d = { ...base, id: 'doc_x', meta: { ...base.meta, title } };
       assert.equal(matter(frontMatter(d, { layout: 'post' }) + '<p>x</p>').data.title, title);
     });
   }

@@ -15,7 +15,7 @@ npm run seed
 npm run dev
 
 # 4. Open the editor
-open http://localhost:3000/editor/
+open http://localhost:3007/editor/
 ```
 
 The editor opens with the document browser in the sidebar showing all seeded documents. Click any document to load it into the editor.
@@ -108,7 +108,7 @@ The dev server (`src/server/index.js`) is a plain `node:http` server — no fram
 - **API routes**: JSON endpoints for document CRUD, collections, search, media upload, and publish
 - **No CORS**: Editor and API are on the same origin
 
-Start with `npm run dev` or `node src/server/index.js --port 3000`.
+Start with `npm run dev` or `node src/server/index.js --port 3007`.
 
 ### API
 
@@ -156,7 +156,7 @@ The editor lives in `editor/` and is served as static files. No build step — P
 The `vp serve` command also starts the editor server:
 
 ```bash
-vp serve              # Start on default port 3000
+vp serve              # Start on default port 3007
 vp serve --port 8080  # Custom port
 ```
 

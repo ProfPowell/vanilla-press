@@ -109,6 +109,11 @@ describe('vp --help', () => {
     assert.ok(stdout.includes('export'));
     assert.ok(!stdout.includes('deploy'));
   });
+
+  it('documents the serve default port 3007 (3000 is left for cook dev)', () => {
+    const { stdout } = vp(['--help'], { db: freshDbPath() });
+    assert.match(stdout, /serve \[--port <n>\].*default 3007/);
+  });
 });
 
 describe('vp --version', () => {
@@ -506,6 +511,38 @@ describe('vp with --site', () => {
     assert.ok(vp(['get', 'posts/from-disk', '--site', site]).stdout.includes('"slug": "from-disk"'));
     assert.equal(readFileSync(join(site, 'src', 'posts', 'taken.html'), 'utf8'), '<p>mine</p>\n');
     assert.ok(!existsSync(join(site, 'content', 'posts', 'taken.json')));
+  });
+
+  it('import:dir preflights and exports each file; a conflicting one is skipped', (t) => {
+    const site = siteWithContent();
+    const dir = mkdtempSync(join(tmpdir(), 'vp-dir-site-'));
+    t.after(() => {
+      rmSync(site, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    });
+    assert.equal(vp(['import:content', '--site', site]).status, 0);
+    // The committed JSON changes on disk (e.g. git pull) after the import.
+    const committed = join(site, 'content', 'posts', 'from-disk.json');
+    const pulled = JSON.parse(readFileSync(committed, 'utf8'));
+    pulled.meta.title = 'Pulled';
+    writeFileSync(committed, JSON.stringify(pulled, null, 2) + '\n');
+
+    writeFileSync(join(dir, 'a.json'), JSON.stringify({ ...pulled, meta: { ...pulled.meta, title: 'From dir' } }));
+    writeFileSync(join(dir, 'b.json'), JSON.stringify({
+      id: 'doc_dirb01',
+      meta: { title: 'Dir B', slug: 'dir-b', collection: 'posts', status: 'published', created: '2026-01-01', updated: '2026-01-01', published: '2026-01-01' },
+      blocks: [{ type: 'paragraph', children: [{ type: 'text', value: 'B.' }] }],
+    }));
+
+    const res = vp(['import:dir', dir, '--site', site]);
+    assert.equal(res.status, 1, res.stderr);
+    assert.match(res.stderr, /a\.json.*changed on disk/);
+    assert.match(res.stderr, /imported: b\.json/);
+    // The conflicting doc is unchanged in the store and on disk; the other is imported and exported.
+    assert.ok(vp(['get', 'posts/from-disk', '--site', site]).stdout.includes('"title": "From Disk"'));
+    assert.equal(JSON.parse(readFileSync(committed, 'utf8')).meta.title, 'Pulled');
+    assert.ok(existsSync(join(site, 'content', 'posts', 'dir-b.json')));
+    assert.ok(existsSync(join(site, 'src', 'posts', 'dir-b.html')));
   });
 
   it('export without a site is an error', () => {

@@ -4,7 +4,7 @@
  * Serves the editor UI, API endpoints, media files, and shared source files
  * from a single origin (no CORS needed).
  *
- * Usage: node src/server/index.js [--port 3000]
+ * Usage: node src/server/index.js [--port 3007]
  *
  * @module server/index
  */
@@ -47,7 +47,7 @@ const MIME_TYPES = {
 /**
  * Start the dev server.
  * @param {Object} [options]
- * @param {number} [options.port=3000]
+ * @param {number} [options.port=3007]
  * @param {string} [options.dbPath] - Fixture-mode DB override (also VP_DB)
  * @param {string} [options.site] - Cook site directory (also VP_SITE)
  * @returns {import('node:http').Server}

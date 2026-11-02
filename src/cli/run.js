@@ -38,6 +38,8 @@ import { getCollectionsConfig, preflightSave, exportAll } from '../export/site-f
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
 const VERSION = '0.1.0';
+/** `vp serve` port; Cook's dev server (`cook dev`, the preview) keeps 3000. */
+const DEFAULT_PORT = '3007';
 
 // --- Helpers ---
 
@@ -76,35 +78,53 @@ function openDb() {
 }
 
 /**
- * Save a document and, when a site is set, export it. Refuses (exit 1, not
- * saved) when the stored version's JSON changed on disk or the export would
- * be rejected.
+ * Save a document and, when a site is set, export it, without exiting.
+ * Refuses (not saved) when the stored version's JSON changed on disk or the
+ * export would be rejected.
+ * @param {import('better-sqlite3').Database} db
+ * @param {Object} doc
+ * @returns {{ saved: Object } | { problem: string }} problem: a message for the user
+ */
+function trySaveAndExport(db, doc) {
+  const ws = getWorkspace();
+  let previousDoc = null;
+  if (ws.exportEnabled) {
+    previousDoc = getDocument(db, doc.id);
+    let problem;
+    try {
+      problem = preflightSave(ws, db, doc, getCollectionsConfig(db));
+    } catch (err) {
+      return { problem: `not saved: ${err.message}` };
+    }
+    if (problem?.status === 409) {
+      return { problem: `${problem.path} changed on disk (e.g. git pull); not saved. Run 'vp import:content' to load it.` };
+    }
+    if (problem) return { problem: problem.error.replace(/^Not saved/, 'not saved') };
+  }
+  const saved = saveDocument(db, doc);
+  if (ws.exportEnabled) {
+    try {
+      exportDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
+    } catch (err) {
+      return { problem: `saved, but not exported: ${err.message}` };
+    }
+  }
+  return { saved };
+}
+
+/**
+ * Save and export (see trySaveAndExport); on a problem, exit 1 with its message.
  * @param {import('better-sqlite3').Database} db
  * @param {Object} doc
  * @returns {Object} saved document
  */
 function saveAndExport(db, doc) {
-  const ws = getWorkspace();
-  if (ws.exportEnabled) {
-    const problem = preflightSave(ws, db, doc, getCollectionsConfig(db));
-    if (problem?.status === 409) {
-      db.close();
-      error(`${problem.path} changed on disk (e.g. git pull); not saved. Run 'vp import:content' to load it.`);
-    } else if (problem) {
-      db.close();
-      error(problem.error.replace(/^Not saved/, 'not saved'));
-    }
+  const result = trySaveAndExport(db, doc);
+  if (result.problem) {
+    db.close();
+    error(result.problem);
   }
-  const saved = saveDocument(db, doc);
-  if (ws.exportEnabled) {
-    try {
-      exportDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db) });
-    } catch (err) {
-      db.close();
-      error(`saved, but not exported: ${err.message}`);
-    }
-  }
-  return saved;
+  return result.saved;
 }
 
 /** Workspace for a command that needs a site; exits with an error without one. */
@@ -213,7 +233,7 @@ Content:
   delete <ref>              Delete a document
 
 Site:
-  serve                     Start editor + API dev server
+  serve [--port <n>]        Start editor + API dev server (default ${DEFAULT_PORT})
   export                    Export every document to the site (needs --site)
 
 Import:
@@ -418,7 +438,7 @@ async function cmdDelete(args) {
   const ws = getWorkspace();
   if (ws.exportEnabled) {
     try {
-      removeExport(ws, doc.id);
+      removeExport(ws, doc.id, { previousDoc: doc, collectionsConfig: getCollectionsConfig(db) });
     } catch (err) {
       db.close();
       error(`not deleted: ${err.message}`);
@@ -434,7 +454,7 @@ async function cmdServe(args) {
   const { values } = parseArgs({
     args,
     options: {
-      port: { type: 'string', default: '3000' },
+      port: { type: 'string', default: DEFAULT_PORT },
     },
     allowPositionals: true,
   });
@@ -552,7 +572,12 @@ function cmdImportDir(args) {
         continue;
       }
 
-      saveDocument(db, doc);
+      const { problem } = trySaveAndExport(db, doc);
+      if (problem) {
+        console.error(`  skip: ${file} (${problem})`);
+        failed++;
+        continue;
+      }
       console.error(`  imported: ${file}`);
       imported++;
     } catch (e) {
@@ -562,7 +587,8 @@ function cmdImportDir(args) {
   }
 
   db.close();
-  success(`imported ${imported} files${failed ? `, ${failed} failed` : ''}`);
+  if (failed) error(`imported ${imported} files, ${failed} skipped`);
+  success(`imported ${imported} files`);
 }
 
 function cmdValidate(args) {

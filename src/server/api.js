@@ -20,7 +20,10 @@ import {
   getAllPublished,
 } from '../store/content.js';
 import { validate } from '../schema/validate.js';
-import { publish } from '../build/publish.js';
+import { outputPaths } from '../export/paths.js';
+import { exportDocument, removeExport, changedOnDisk, ExportConflictError } from '../export/export.js';
+import { importOne } from '../export/sync.js';
+import { getCollectionsConfig, writeMediaJson, writeVpConfig, exportAll } from '../export/site-files.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
 import { sendJson, readRawBody } from './router.js';
@@ -43,8 +46,41 @@ function generateId() {
  * @param {import('../workspace/workspace.js').Workspace} [options.workspace] - Absent means fixture mode (export disabled)
  */
 export function mountApi(router, db, options) {
-  const { rootDir, mediaDir } = options;
-  const workspace = options.workspace || null; // eslint-disable-line no-unused-vars
+  const { rootDir } = options;
+  const ws = options.workspace?.exportEnabled ? options.workspace : null;
+  const mediaDir = ws ? ws.mediaDir : options.mediaDir;
+
+  /**
+   * Respond 409 (and return true) if `existing`'s exported JSON changed on disk.
+   * Checked before saving so the on-disk edit is never overwritten.
+   */
+  function rejectIfChangedOnDisk(res, existing) {
+    if (!ws || !existing) return false;
+    const { json } = outputPaths(existing, getCollectionsConfig(db));
+    if (!changedOnDisk(ws, existing.id, json)) return false;
+    sendJson(res, 409, { error: 'This document changed on disk (e.g. git pull).', path: json });
+    return true;
+  }
+
+  /** Export a saved document; on failure respond 422 and return false. */
+  function exportSaved(res, saved) {
+    if (!ws) return true;
+    try {
+      exportDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db) });
+      return true;
+    } catch (err) {
+      const body = { error: `Saved, but not exported: ${err.message}` };
+      if (err instanceof ExportConflictError) body.path = err.path;
+      sendJson(res, 422, body);
+      return false;
+    }
+  }
+
+  // --- Workspace ---
+
+  router.add('GET', '/api/workspace', (req, res) => {
+    sendJson(res, 200, { site: ws ? ws.siteDir : null, exportEnabled: Boolean(ws) });
+  });
 
   // --- Documents ---
 
@@ -105,8 +141,9 @@ export function mountApi(router, db, options) {
       return;
     }
 
+    if (rejectIfChangedOnDisk(res, getDocument(db, doc.id))) return;
     const saved = saveDocument(db, doc);
-    sendJson(res, 201, saved);
+    if (exportSaved(res, saved)) sendJson(res, 201, saved);
   });
 
   router.add('PUT', '/api/documents/:id', (req, res) => {
@@ -134,8 +171,22 @@ export function mountApi(router, db, options) {
       return;
     }
 
+    if (rejectIfChangedOnDisk(res, existing)) return;
     const saved = saveDocument(db, doc);
-    sendJson(res, 200, saved);
+    if (exportSaved(res, saved)) sendJson(res, 200, saved);
+  });
+
+  // Replace the stored document with its version on disk (after a 409).
+  router.add('POST', '/api/documents/:id/reload', (req, res) => {
+    if (!ws) {
+      sendJson(res, 400, { error: 'Export is not enabled (no site)' });
+      return;
+    }
+    try {
+      sendJson(res, 200, importOne(ws, db, req.params.id));
+    } catch (err) {
+      sendJson(res, err.message.startsWith('No content file') ? 404 : 422, { error: err.message });
+    }
   });
 
   router.add('DELETE', '/api/documents/:id', (req, res) => {
@@ -143,6 +194,16 @@ export function mountApi(router, db, options) {
     if (!existing) {
       sendJson(res, 404, { error: 'Document not found' });
       return;
+    }
+
+    if (ws) {
+      try {
+        removeExport(ws, req.params.id);
+      } catch (err) {
+        const status = err instanceof ExportConflictError ? 409 : 500;
+        sendJson(res, status, { error: `Not deleted: ${err.message}`, path: err.path });
+        return;
+      }
     }
 
     deleteDocument(db, req.params.id);
@@ -210,6 +271,7 @@ export function mountApi(router, db, options) {
         INSERT INTO media (id, filename, mime_type, size, alt, created)
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(id, filename, file.mimeType, file.data.length, alt, new Date().toISOString());
+      if (ws) writeMediaJson(ws, db);
 
       sendJson(res, 201, {
         id,
@@ -255,22 +317,22 @@ export function mountApi(router, db, options) {
     }
 
     setConfig(db, req.params.key, String(body.value));
+    if (ws && req.params.key === 'theme') writeVpConfig(ws, db);
     sendJson(res, 200, { key: req.params.key, value: String(body.value) });
   });
 
   // --- Publish ---
 
   router.add('POST', '/api/publish', (req, res) => {
+    if (!ws) {
+      sendJson(res, 200, { ok: true, exported: 0 });
+      return;
+    }
     try {
-      const result = publish({ db, rootDir });
-      sendJson(res, 200, {
-        ok: true,
-        documentCount: result.documentCount,
-        collections: result.collections,
-        outDir: result.outDir,
-      });
+      const { exported, conflicts } = exportAll(ws, db);
+      sendJson(res, 200, { ok: true, exported, conflicts });
     } catch (err) {
-      sendJson(res, 500, { error: `Publish failed: ${err.message}` });
+      sendJson(res, 500, { error: `Export failed: ${err.message}` });
     }
   });
 }

@@ -19,6 +19,7 @@ import { migrate } from '../store/migrate.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { createRouter } from './router.js';
 import { mountApi } from './api.js';
+import { syncFromContent } from '../export/sync.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -65,6 +66,12 @@ export function startServer(options = {}) {
     dbPath = options.dbPath || process.env.VP_DB || ws.dbPath;
     db = new Database(dbPath);
     migrate(db);
+  }
+
+  // The site's committed JSON wins: bring on-disk changes into the store first.
+  if (ws.exportEnabled) {
+    const { imported, skipped, removed } = syncFromContent(ws, db);
+    console.log(`Synced from ${ws.contentDir}: ${imported.length} imported, ${skipped.length} skipped, ${removed.length} removed`);
   }
 
   // Set up router with API routes
@@ -135,6 +142,7 @@ export function startServer(options = {}) {
     console.log(`Vanilla Press dev server running at http://localhost:${port}/editor/`);
     console.log(`API: http://localhost:${port}/api/`);
     console.log(`DB: ${dbPath}`);
+    console.log(ws.exportEnabled ? `Site: ${ws.siteDir} (exporting)` : 'Fixture mode: demo content, not exported');
   });
 
   // Clean shutdown

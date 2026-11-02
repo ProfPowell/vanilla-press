@@ -9,6 +9,8 @@
 
 const BASE = '/api';
 
+let workspacePromise = null;
+
 /**
  * Make an API request.
  * @param {string} path
@@ -40,8 +42,10 @@ async function request(path, options = {}) {
   const data = await res.json();
 
   if (!res.ok) {
-    const msg = data.error || `API error ${res.status}`;
-    throw new Error(msg);
+    const err = new Error(data.error || `API error ${res.status}`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
 
   return data;
@@ -68,6 +72,17 @@ export const api = {
     return request(`/documents/${encodeURIComponent(id)}`, { method: 'PUT', body: doc });
   },
 
+  /** Replace the stored document with its version on disk (after a 409). */
+  reloadDocument(id) {
+    return request(`/documents/${encodeURIComponent(id)}/reload`, { method: 'POST' });
+  },
+
+  /** Which site is being edited: { site, exportEnabled }. Cached. */
+  getWorkspace() {
+    workspacePromise ||= request('/workspace');
+    return workspacePromise;
+  },
+
   /** Delete a document. */
   deleteDocument(id) {
     return request(`/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -83,7 +98,7 @@ export const api = {
     return request('/search', { query: { q: query } });
   },
 
-  /** Trigger site build. */
+  /** Re-export every document to the site. */
   publish() {
     return request('/publish', { method: 'POST' });
   },

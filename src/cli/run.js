@@ -32,6 +32,10 @@ import { publish } from '../build/publish.js';
 import { table, json, success, error } from './format.js';
 import { parseMarkdown } from './markdown-parser.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
+import { outputPaths } from '../export/paths.js';
+import { exportDocument, removeExport, changedOnDisk } from '../export/export.js';
+import { syncFromContent } from '../export/sync.js';
+import { getCollectionsConfig, exportAll } from '../export/site-files.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -71,6 +75,42 @@ function openDb() {
     return db;
   }
   return openWorkspaceDb(ws);
+}
+
+/**
+ * Save a document and, when a site is set, export it. Refuses (exit 1, not
+ * saved) when the stored version's JSON changed on disk.
+ * @param {import('better-sqlite3').Database} db
+ * @param {Object} doc
+ * @returns {Object} saved document
+ */
+function saveAndExport(db, doc) {
+  const ws = getWorkspace();
+  if (ws.exportEnabled) {
+    const existing = getDocument(db, doc.id);
+    const rel = existing && outputPaths(existing, getCollectionsConfig(db)).json;
+    if (rel && changedOnDisk(ws, doc.id, rel)) {
+      db.close();
+      error(`${rel} changed on disk (e.g. git pull); not saved. Run 'vp import:content' to load it.`);
+    }
+  }
+  const saved = saveDocument(db, doc);
+  if (ws.exportEnabled) {
+    try {
+      exportDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db) });
+    } catch (err) {
+      db.close();
+      error(`saved, but not exported: ${err.message}`);
+    }
+  }
+  return saved;
+}
+
+/** Workspace for a command that needs a site; exits with an error without one. */
+function requireSite(command) {
+  const ws = getWorkspace();
+  if (!ws.exportEnabled) error(`${command} needs a site: pass --site <path> or set VP_SITE`);
+  return ws;
 }
 
 /**
@@ -175,8 +215,10 @@ Build:
   build                     Build static site
   serve                     Start editor + API dev server
   deploy                    Build and deploy to Cloudflare Pages
+  export                    Export every document to the site (needs --site)
 
 Import:
+  import:content [--replace]  Load the site's content JSON into the store (needs --site)
   import:json <file>        Import a JSON document
   import:markdown <file>    Import a markdown file
   import:dir <path>         Bulk import .json and .md files
@@ -282,7 +324,7 @@ function cmdNew(args) {
     if (!result.valid) error(`validation failed:\n  ${result.errors.join('\n  ')}`);
 
     const db = openDb();
-    const saved = saveDocument(db, doc);
+    const saved = saveAndExport(db, doc);
     db.close();
     success(`created ${saved.meta.collection}/${saved.meta.slug} (${saved.id})`);
   } else {
@@ -294,7 +336,7 @@ function cmdNew(args) {
     if (!result.valid) error(`validation failed:\n  ${result.errors.join('\n  ')}`);
 
     const db = openDb();
-    const saved = saveDocument(db, edited);
+    const saved = saveAndExport(db, edited);
     db.close();
     success(`created ${saved.meta.collection}/${saved.meta.slug} (${saved.id})`);
   }
@@ -315,7 +357,7 @@ function cmdEdit(args) {
   }
 
   edited.meta.updated = new Date().toISOString();
-  saveDocument(db, edited);
+  saveAndExport(db, edited);
   db.close();
   success(`updated ${edited.meta.collection}/${edited.meta.slug}`);
 }
@@ -331,7 +373,7 @@ function cmdPublish(args) {
   doc.meta.status = 'published';
   doc.meta.published = doc.meta.published || now;
   doc.meta.updated = now;
-  saveDocument(db, doc);
+  saveAndExport(db, doc);
   db.close();
   success(`published ${doc.meta.collection}/${doc.meta.slug}`);
 }
@@ -346,7 +388,7 @@ function cmdUnpublish(args) {
   doc.meta.status = 'draft';
   doc.meta.published = undefined;
   doc.meta.updated = new Date().toISOString();
-  saveDocument(db, doc);
+  saveAndExport(db, doc);
   db.close();
   success(`unpublished ${doc.meta.collection}/${doc.meta.slug}`);
 }
@@ -371,6 +413,16 @@ async function cmdDelete(args) {
       db.close();
       console.error('cancelled');
       return;
+    }
+  }
+
+  const ws = getWorkspace();
+  if (ws.exportEnabled) {
+    try {
+      removeExport(ws, doc.id);
+    } catch (err) {
+      db.close();
+      error(`not deleted: ${err.message}`);
     }
   }
 
@@ -436,6 +488,35 @@ function cmdDeploy(args) {
   }
 }
 
+function cmdExport() {
+  const ws = requireSite('export');
+  const db = openDb();
+  let result;
+  try {
+    result = exportAll(ws, db);
+  } catch (err) {
+    db.close();
+    error(`export failed: ${err.message}`);
+  }
+  db.close();
+  for (const c of result.conflicts) console.error(`skipped: ${c}`);
+  success(`exported ${result.exported} documents to ${ws.siteDir}` +
+    (result.conflicts.length ? ` (${result.conflicts.length} skipped)` : ''));
+}
+
+function cmdImportContent(args) {
+  const { values } = parseArgs({
+    args,
+    options: { replace: { type: 'boolean', default: false } },
+    allowPositionals: true,
+  });
+  const ws = requireSite('import:content');
+  const db = openDb();
+  const { imported, skipped, removed } = syncFromContent(ws, db, { replace: values.replace });
+  db.close();
+  success(`imported ${imported.length}, skipped ${skipped.length}, removed ${removed.length} from ${ws.contentDir}`);
+}
+
 function cmdImportJson(args) {
   const { positionals } = parseArgs({ args, allowPositionals: true });
   if (positionals.length === 0) error('usage: vp import:json <file>');
@@ -450,7 +531,7 @@ function cmdImportJson(args) {
   if (!result.valid) error(`validation failed:\n  ${result.errors.join('\n  ')}`);
 
   const db = openDb();
-  const saved = saveDocument(db, doc);
+  const saved = saveAndExport(db, doc);
   db.close();
   success(`imported ${saved.meta.collection}/${saved.meta.slug} (${saved.id})`);
 }
@@ -469,7 +550,7 @@ function cmdImportMarkdown(args) {
   if (!result.valid) error(`validation failed:\n  ${result.errors.join('\n  ')}`);
 
   const db = openDb();
-  const saved = saveDocument(db, doc);
+  const saved = saveAndExport(db, doc);
   db.close();
   success(`imported ${saved.meta.collection}/${saved.meta.slug} (${saved.id})`);
 }
@@ -812,6 +893,12 @@ export async function run(argv) {
       break;
     case 'deploy':
       cmdDeploy(commandArgs);
+      break;
+    case 'export':
+      cmdExport();
+      break;
+    case 'import:content':
+      cmdImportContent(commandArgs);
       break;
     case 'import:json':
       cmdImportJson(commandArgs);

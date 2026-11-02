@@ -43,7 +43,9 @@ export { getCurrentMeta, setCurrentMeta, getCurrentDocId } from './meta-state.js
 let editorView = null;
 let toolbar = null;
 let saveTimer = null;
-let saveStatus = 'saved'; // 'saved' | 'saving' | 'unsaved'
+let saveStatus = 'saved'; // 'saved' | 'saving' | 'unsaved' | 'conflict' | 'error'
+/** Documents whose JSON changed on disk: id → message. Auto-save is paused for these. */
+const conflicts = new Map();
 
 function createToolbarPlugin() {
   return new Plugin({
@@ -312,7 +314,8 @@ export async function loadDocument(id) {
       window.__onMetaUpdate(getCurrentMeta());
     }
 
-    setSaveStatus('saved');
+    setSaveStatus(conflicts.has(doc.id) ? 'conflict' : 'saved');
+    notifyConflict();
   } catch (err) {
     console.error('Error loading document:', err);
     alert(`Error loading document: ${err.message}`);
@@ -321,12 +324,18 @@ export async function loadDocument(id) {
 
 /**
  * Save the current document to the API.
+ * Does nothing while the document is in conflict with its file on disk.
+ * @returns {Promise<boolean>} true when saved (and exported)
  */
 export async function saveDocument() {
-  if (!editorView) return;
+  if (!editorView) return false;
 
   const docId = getCurrentDocId();
-  if (!docId || docId === 'doc_new') return;
+  if (!docId || docId === 'doc_new') return false;
+  if (conflicts.has(docId)) {
+    setSaveStatus('conflict');
+    return false;
+  }
 
   setSaveStatus('saving');
 
@@ -336,9 +345,47 @@ export async function saveDocument() {
 
     await api.updateDocument(docId, { meta, blocks });
     setSaveStatus('saved');
+    return true;
   } catch (err) {
-    console.error('Error saving document:', err);
+    handleSaveError(docId, err);
+    return false;
+  }
+}
+
+/**
+ * Show a failed save: a 409 puts the document in conflict (auto-save paused
+ * until the on-disk version is loaded); a 422 means saved but not exported.
+ * @param {string} docId
+ * @param {Error & { status?: number }} err
+ */
+export function handleSaveError(docId, err) {
+  console.error('Error saving document:', err);
+  if (err.status === 409) {
+    conflicts.set(docId, err.message);
+    setSaveStatus('conflict');
+    notifyConflict();
+  } else if (err.status === 422) {
+    setSaveStatus('error', err.message);
+  } else {
     setSaveStatus('unsaved');
+  }
+}
+
+/**
+ * Replace the stored document with its version on disk, load it, and resume
+ * auto-save for it.
+ * @param {string} docId
+ */
+export async function loadVersionOnDisk(docId) {
+  await api.reloadDocument(docId);
+  conflicts.delete(docId);
+  await loadDocument(docId);
+}
+
+function notifyConflict() {
+  const docId = getCurrentDocId();
+  if (window.__onConflictChange) {
+    window.__onConflictChange(docId, conflicts.get(docId) ?? null);
   }
 }
 
@@ -376,6 +423,7 @@ export async function createNewDocument(options = {}) {
  */
 export async function deleteDoc(id) {
   await api.deleteDocument(id);
+  conflicts.delete(id);
 
   // If we just deleted the current document, clear the editor
   if (id === getCurrentDocId()) {
@@ -404,10 +452,10 @@ function debouncedSave() {
 
 // --- Save status ---
 
-function setSaveStatus(status) {
+function setSaveStatus(status, message) {
   saveStatus = status;
   if (window.__onSaveStatusChange) {
-    window.__onSaveStatusChange(status);
+    window.__onSaveStatusChange(status, message);
   }
 }
 

@@ -10,6 +10,7 @@
  */
 
 import { loadDocument, createNewDocument, deleteDoc, getSaveStatus } from '../editor.js';
+import { api } from '../api-client.js';
 
 export class EditorShell extends HTMLElement {
   connectedCallback() {
@@ -37,13 +38,34 @@ export class EditorShell extends HTMLElement {
 
     // Save status indicator
     this.saveIndicator = this.querySelector('.save-indicator');
-    window.__onSaveStatusChange = (status) => {
+    window.__onSaveStatusChange = (status, message) => {
       if (this.saveIndicator) {
         this.saveIndicator.className = `save-indicator ${status}`;
-        const labels = { saved: 'Saved', saving: 'Saving...', unsaved: 'Unsaved' };
+        const labels = {
+          saved: 'Saved', saving: 'Saving...', unsaved: 'Unsaved',
+          conflict: 'Changed on disk', error: 'Not exported',
+        };
         this.saveIndicator.textContent = labels[status] || '';
+        this.saveIndicator.title = message || '';
       }
     };
+
+    this.showSite();
+  }
+
+  /** Label the sidebar with the site being edited (or demo mode). */
+  async showSite() {
+    const label = this.querySelector('[data-site-label]');
+    if (!label) return;
+    try {
+      const { site, exportEnabled } = await api.getWorkspace();
+      const name = site ? site.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : '';
+      label.textContent = exportEnabled ? `Site: ${name}` : 'Demo content (not exported)';
+      label.title = site || '';
+      label.classList.toggle('demo', !exportEnabled);
+    } catch (err) {
+      console.error('Error loading workspace:', err);
+    }
   }
 
   toggleInspector() {

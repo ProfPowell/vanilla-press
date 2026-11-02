@@ -11,7 +11,7 @@
 import { validStatuses } from '../../../../src/schema/content-schema.js';
 import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.js';
 import { api } from '../api-client.js';
-import { saveDocument, loadDocument } from '../editor.js';
+import { saveDocument, loadDocument, handleSaveError, loadVersionOnDisk } from '../editor.js';
 
 export class MetaPanel extends HTMLElement {
   connectedCallback() {
@@ -19,6 +19,21 @@ export class MetaPanel extends HTMLElement {
 
     // Listen for meta updates (e.g. from doc loading)
     window.__onMetaUpdate = (meta) => this.syncFromMeta(meta);
+    // Show / hide the "changed on disk" notice for the current document
+    window.__onConflictChange = (docId, message) => this.showConflict(docId, message);
+  }
+
+  /**
+   * Show the conflict notice for `docId`, or hide it when `message` is null.
+   * @param {string} docId
+   * @param {string|null} message
+   */
+  showConflict(docId, message) {
+    const notice = this.querySelector('[data-conflict]');
+    if (!notice) return;
+    notice.hidden = !message;
+    notice.dataset.docId = docId || '';
+    notice.querySelector('[data-conflict-message]').textContent = message || '';
   }
 
   render() {
@@ -57,6 +72,12 @@ export class MetaPanel extends HTMLElement {
         <label for="meta-tags">Tags</label>
         <div class="tag-chips" id="meta-tag-chips"></div>
         <input type="text" id="meta-tags" placeholder="Add tag + Enter"/>
+      </div>
+
+      <div class="conflict-notice" data-conflict hidden role="alert">
+        <p data-conflict-message></p>
+        <p>Auto-save is paused for this document.</p>
+        <button class="btn" data-load-disk>Load the version on disk</button>
       </div>
 
       <div class="actions">
@@ -130,6 +151,20 @@ export class MetaPanel extends HTMLElement {
     // Publish / Unpublish
     publishBtn.addEventListener('click', () => this.togglePublish());
 
+    // Resolve a conflict by taking the version on disk
+    this.querySelector('[data-load-disk]').addEventListener('click', async () => {
+      const notice = this.querySelector('[data-conflict]');
+      const docId = notice.dataset.docId;
+      if (!docId) return;
+      try {
+        await loadVersionOnDisk(docId);
+        document.querySelector('doc-browser')?.refresh();
+      } catch (err) {
+        console.error('Reload error:', err);
+        notice.querySelector('[data-conflict-message]').textContent = `Could not load: ${err.message}`;
+      }
+    });
+
     // Preview
     previewBtn.addEventListener('click', () => {
       const meta = getCurrentMeta();
@@ -148,37 +183,24 @@ export class MetaPanel extends HTMLElement {
     const buildStatus = this.querySelector('[data-build-status]');
 
     try {
-      // Save current state first
-      await saveDocument();
+      // Save current state first (stops here if it is in conflict with disk)
+      if (!(await saveDocument())) return;
 
-      if (isPublished) {
-        // Unpublish: set to draft
-        setCurrentMeta({ status: 'draft', published: undefined });
-        await api.updateDocument(docId, {
-          meta: { ...getCurrentMeta() },
-        });
-      } else {
-        // Publish: set status + published date
-        const now = new Date().toISOString();
-        setCurrentMeta({
-          status: 'published',
-          published: meta.published || now,
-        });
-        await api.updateDocument(docId, {
-          meta: { ...getCurrentMeta() },
-        });
+      const update = isPublished
+        ? { status: 'draft', published: undefined } // Unpublish: set to draft
+        : { status: 'published', published: meta.published || new Date().toISOString() };
+      setCurrentMeta(update);
+      try {
+        // Saving exports the document to the site (HTML added or removed)
+        await api.updateDocument(docId, { meta: { ...getCurrentMeta() } });
+      } catch (err) {
+        handleSaveError(docId, err);
+        throw err;
       }
 
-      // Trigger site build
+      const { exportEnabled } = await api.getWorkspace();
       if (buildStatus) {
-        buildStatus.textContent = 'Building...';
-        buildStatus.className = 'build-status building';
-      }
-
-      await api.publish();
-
-      if (buildStatus) {
-        buildStatus.textContent = 'Build complete';
+        buildStatus.textContent = exportEnabled ? 'Exported' : 'Saved (demo content, not exported)';
         buildStatus.className = 'build-status done';
         setTimeout(() => {
           buildStatus.textContent = '';

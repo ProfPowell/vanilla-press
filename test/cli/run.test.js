@@ -436,3 +436,63 @@ describe('vp unknown', () => {
     assert.ok(stderr.includes('unknown command'));
   });
 });
+
+describe('vp with --site', () => {
+  /** A temp Cook site with one committed content JSON. */
+  function siteWithContent() {
+    const site = mkdtempSync(join(tmpdir(), 'vp-site-'));
+    mkdirSync(join(site, 'content', 'posts'), { recursive: true });
+    writeFileSync(join(site, 'content', 'posts', 'from-disk.json'), JSON.stringify({
+      id: 'doc_disk01',
+      meta: { title: 'From Disk', slug: 'from-disk', collection: 'posts', status: 'draft', created: '2026-03-01', updated: '2026-03-01' },
+      blocks: [{ type: 'paragraph', children: [{ type: 'text', value: 'Committed.' }] }],
+    }, null, 2) + '\n');
+    return site;
+  }
+
+  it('import:content imports content JSON, and list shows it', (t) => {
+    const site = siteWithContent();
+    t.after(() => rmSync(site, { recursive: true, force: true }));
+
+    const imp = vp(['import:content', '--site', site]);
+    assert.equal(imp.status, 0, imp.stderr);
+    assert.ok(imp.stderr.includes('imported 1'), imp.stderr);
+
+    const list = vp(['list', '--site', site]);
+    assert.equal(list.status, 0, list.stderr);
+    assert.ok(list.stdout.includes('from-disk'), list.stdout);
+  });
+
+  it('publish, unpublish and delete export to the site', (t) => {
+    const site = siteWithContent();
+    t.after(() => rmSync(site, { recursive: true, force: true }));
+    vp(['import:content', '--site', site]);
+    const html = join(site, 'src', 'posts', 'from-disk.html');
+    const jsonFile = join(site, 'content', 'posts', 'from-disk.json');
+
+    assert.equal(vp(['publish', 'posts/from-disk', '--site', site]).status, 0);
+    assert.ok(existsSync(html));
+    assert.equal(vp(['unpublish', 'posts/from-disk', '--site', site]).status, 0);
+    assert.ok(!existsSync(html));
+    assert.ok(existsSync(jsonFile));
+    assert.equal(vp(['delete', 'posts/from-disk', '--force', '--site', site]).status, 0);
+    assert.ok(!existsSync(jsonFile));
+  });
+
+  it('export writes every document plus media.json and vp.json', (t) => {
+    const site = siteWithContent();
+    t.after(() => rmSync(site, { recursive: true, force: true }));
+    vp(['import:content', '--site', site]);
+
+    const res = vp(['export', '--site', site]);
+    assert.equal(res.status, 0, res.stderr);
+    assert.ok(res.stderr.includes('exported 1'), res.stderr);
+    assert.ok(existsSync(join(site, 'content', 'media.json')));
+    assert.ok(existsSync(join(site, 'config', 'vp.json')));
+  });
+
+  it('export without a site is an error', () => {
+    const res = vp(['export'], { db: freshDbPath() });
+    assert.equal(res.status, 1);
+  });
+});

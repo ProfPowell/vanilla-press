@@ -162,3 +162,22 @@
 .build-status.error {
   color: var(--color-error, #d9534f);
 }
+
+/* Document changed on disk (save returned 409) */
+.conflict-notice {
+  padding: var(--size-s);
+  border: 1px solid var(--color-warning, #f0ad4e);
+  border-radius: var(--radius-s, 4px);
+  font-size: var(--font-size-s);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-xs, 0.25rem);
+}
+
+.conflict-notice p {
+  margin: 0;
+}
+
+.conflict-notice[hidden] {
+  display: none;
+}

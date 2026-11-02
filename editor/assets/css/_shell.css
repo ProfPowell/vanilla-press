@@ -164,3 +164,20 @@ editor-shell .editor-inspector {
 editor-shell.inspector-open .editor-inspector {
   display: block;
 }
+
+.save-indicator.conflict,
+.save-indicator.error {
+  color: var(--color-error, #d9534f);
+}
+
+/* Which site the editor is exporting to */
+.site-label {
+  margin: 0;
+  font-size: var(--font-size-s);
+  font-weight: 600;
+}
+
+.site-label.demo {
+  color: var(--color-text-muted);
+  font-weight: normal;
+}

@@ -61,14 +61,19 @@ Vanilla Press no longer builds a site itself. It edits content and exports files
 
 - Point at a site with `--site <path>` or `VP_SITE=<path>`. Without one, Vanilla Press runs in fixture mode (the repo's own `content.db` and `media/`) and export is disabled.
 - Layout inside the site:
-  - `.vp/content.db` (store), `src/media/<file>` (uploads)
-  - `content/<collection>/<slug>.json` (document source), `content/.vp-manifest.json`, `content/media.json`
-  - `src/<path>/<slug>.html` (published pages: front matter plus bare block HTML; posts use `layout: "post"`)
+  - `.vp/content.db` (store) and `.vp/manifest.json` (what this machine last wrote or imported: JSON hashes plus path hints). Both are machine-local: add `.vp/` to the site's `.gitignore`.
+  - `src/media/<file>` (uploads)
+  - `content/<collection>/<slug>.json` (document source), `content/media.json`
+  - `src/<path>/<slug>.html` (published pages: front matter plus bare block HTML; posts use `layout: "post"`; the last front-matter key, `vp_id`, names the document that owns the page)
   - `config/vp.json` (settings)
-- `vp export` writes every document to the site. Saving in the editor exports that document. Drafts and archived documents get JSON only.
-- `vp import:content [--replace]` loads the site's `content/` JSON into the store (for example after a `git pull`).
-- If a JSON file changed on disk, saving returns a conflict; use "Load the version on disk" in the editor.
-- Preview with `cook dev` in the site. The editor's Preview button opens the `preview_url` config value (default `http://localhost:3000`).
+- Commit `content/` and `src/`. The editor/server syncs the store from `content/` on startup, so pulled edits come in; `vp import:content [--replace]` does the same from the CLI.
+- `vp export` writes every document to the site. Saving in the editor exports that document. Drafts and archived documents get JSON only. Re-run `vp export` after changing the `collections` config.
+- Generated HTML pages are overwritten on export and removed on rename/unpublish/delete; don't hand-edit them. Vanilla Press only overwrites or removes a page whose `vp_id` is the document's own id (a JSON file: whose `id` is), so hand-written pages are never touched (saving onto one is refused).
+- Cook interpolates `${...}` in page HTML, so the exported body writes `${` as `&#36;{` (the JSON keeps the text as written).
+- Collection names `layouts`, `includes`, `components`, `media` and `assets` are reserved.
+- If a JSON file changed on disk (git pull, hand edit), saving returns a conflict; use "Load the version on disk" in the editor.
+- `vp serve` (and `npm run dev`) default to port 3007; `cook dev` defaults to 3000. Preview with `cook dev` in the site: the editor's Preview button opens the `preview_url` config value (default `http://localhost:3000`).
+- Old `content/.vp-manifest.json` files are obsolete and ignored; delete them. Pages exported before `vp_id` existed have no owner: delete them and run `vp export`.
 - Site layouts (`src/layouts/post.html`, `page.html`) and `collections: { html: true }` in the Cook config are the site's responsibility.
 
 ## Project Phases

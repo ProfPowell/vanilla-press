@@ -8,7 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeFileAtomic } from './atomic-write.js';
 
@@ -36,19 +36,28 @@ export function manifestPath(ws) {
 }
 
 /**
- * Read the manifest (an empty one if missing or unreadable).
+ * Read the manifest (an empty one only if the file does not exist; throws if unreadable or corrupt).
  * @param {{ contentDir: string }} ws
  * @returns {Manifest}
  */
 export function readManifest(ws) {
-  const file = manifestPath(ws);
-  if (existsSync(file)) {
-    try {
-      const m = JSON.parse(readFileSync(file, 'utf8'));
-      if (m && typeof m.documents === 'object' && m.documents) return { version: 1, documents: m.documents };
-    } catch { /* fall through to empty */ }
+  let text;
+  try {
+    text = readFileSync(manifestPath(ws), 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return { version: 1, documents: {} };
+    throw new Error(`Cannot read content/.vp-manifest.json: ${err.message}`);
   }
-  return { version: 1, documents: {} };
+  let m;
+  try {
+    m = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Cannot read content/.vp-manifest.json: ${err.message}`);
+  }
+  if (!m || typeof m.documents !== 'object' || !m.documents) {
+    throw new Error('Cannot read content/.vp-manifest.json: missing "documents"');
+  }
+  return { version: 1, documents: m.documents };
 }
 
 /**

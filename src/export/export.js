@@ -58,50 +58,75 @@ function removeFile(ws, rel, removed) {
   }
 }
 
+/** Another manifest entry (not `docId`) that claims `rel`, or undefined. */
+function claimant(manifest, docId, rel) {
+  return Object.keys(manifest.documents).find(
+    (id) => id !== docId && (manifest.documents[id].json === rel || manifest.documents[id].html === rel),
+  );
+}
+
+function validOutputPath(path) {
+  const dir = path.replace(/^\/+|\/+$/g, '');
+  if (dir === '') return true;
+  return dir.split('/').every((seg) => seg !== '' && seg !== '..' && !seg.includes('\\') && !seg.startsWith('.'));
+}
+
 /**
  * Export a document. Writes the JSON; if published, the HTML page; removes
  * paths this document owned before that are no longer wanted; records the
- * manifest entry.
+ * manifest entry. Everything that can fail without touching the filesystem
+ * (validation, conflict checks, rendering) happens before the first write.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {Object} doc
- * @param {{ collectionsConfig?: Object }} [options]
+ * @param {{ collectionsConfig?: Object, render?: Function }} [options] - `render` overrides the renderer (tests)
  * @returns {{ written: string[], removed: string[] }}
- * @throws {ExportConflictError} when the target JSON changed on disk
+ * @throws {ExportConflictError} when the target JSON (or the JSON a rename would delete) changed on disk
  */
-export function exportDocument(ws, doc, { collectionsConfig } = {}) {
+export function exportDocument(ws, doc, { collectionsConfig, render: renderFn = render } = {}) {
   const { slug, collection } = doc.meta;
   for (const v of [slug, collection]) {
     if (!validSegment(v)) throw new Error(`Invalid slug/collection: ${v}`);
   }
+  const { path: outPath, layout } = collectionOutput(collection, collectionsConfig);
+  if (!validOutputPath(outPath)) throw new Error(`Invalid output path: ${outPath}`);
 
   const paths = outputPaths(doc, collectionsConfig);
   const manifest = readManifest(ws);
   const previous = manifest.documents[doc.id];
 
   if (changedOnDisk(ws, doc.id, paths.json)) throw new ExportConflictError(paths.json);
+  if (previous && previous.json !== paths.json && changedOnDisk(ws, doc.id, previous.json)) {
+    throw new ExportConflictError(previous.json);
+  }
 
-  if (paths.html && existsSync(join(ws.siteDir, paths.html))) {
-    const owned = Object.values(manifest.documents).some((e) => e.html === paths.html);
-    if (!owned) throw new Error(`Refusing to overwrite ${paths.html}: not written by Vanilla Press`);
+  if (paths.html) {
+    const other = claimant(manifest, doc.id, paths.html);
+    if (other) throw new Error(`Output path ${paths.html} is already used by document ${other}`);
+    if (existsSync(join(ws.siteDir, paths.html)) && previous?.html !== paths.html) {
+      throw new Error(`Refusing to overwrite ${paths.html}: not written by Vanilla Press`);
+    }
   }
 
   const jsonText = JSON.stringify(doc, null, 2) + '\n';
+  const htmlText = paths.html
+    ? frontMatter(doc, { layout }) + renderFn(doc, { scope: 'content', bare: true }) + '\n'
+    : null;
+
   const written = [];
   const removed = [];
 
   writeFileAtomic(join(ws.siteDir, paths.json), jsonText);
   written.push(paths.json);
-
   if (paths.html) {
-    const { layout } = collectionOutput(collection, collectionsConfig);
-    const html = frontMatter(doc, { layout }) + render(doc, { scope: 'content', bare: true }) + '\n';
-    writeFileAtomic(join(ws.siteDir, paths.html), html);
+    writeFileAtomic(join(ws.siteDir, paths.html), htmlText);
     written.push(paths.html);
   }
 
   if (previous) {
     for (const old of [previous.json, previous.html]) {
-      if (old && old !== paths.json && old !== paths.html) removeFile(ws, old, removed);
+      if (old && old !== paths.json && old !== paths.html && !claimant(manifest, doc.id, old)) {
+        removeFile(ws, old, removed);
+      }
     }
   }
 
@@ -112,17 +137,21 @@ export function exportDocument(ws, doc, { collectionsConfig } = {}) {
 
 /**
  * Delete a document's exported files (missing files are fine) and its
- * manifest entry.
+ * manifest entry. Paths another entry still claims are left alone.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {string} docId
  * @returns {{ removed: string[] }}
+ * @throws {ExportConflictError} when the recorded JSON changed on disk
  */
 export function removeExport(ws, docId) {
   const manifest = readManifest(ws);
   const entry = manifest.documents[docId];
   const removed = [];
   if (!entry) return { removed };
-  for (const rel of [entry.json, entry.html]) if (rel) removeFile(ws, rel, removed);
+  if (changedOnDisk(ws, docId, entry.json)) throw new ExportConflictError(entry.json);
+  for (const rel of [entry.json, entry.html]) {
+    if (rel && !claimant(manifest, docId, rel)) removeFile(ws, rel, removed);
+  }
   delete manifest.documents[docId];
   writeManifest(ws, manifest);
   return { removed };

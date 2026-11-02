@@ -119,6 +119,87 @@ describe('exportDocument', () => {
   });
 });
 
+describe('fix round 1', () => {
+  const edit = (rel) => {
+    const f = p(rel);
+    const j = JSON.parse(readFileSync(f, 'utf8'));
+    j.meta.title = 'By hand';
+    writeFileSync(f, JSON.stringify(j, null, 2) + '\n');
+    return readFileSync(f, 'utf8');
+  };
+
+  it('rename with hand-edited old JSON throws and writes nothing', () => {
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    const before = edit('content/posts/hello.json');
+    assert.throws(() => exportDocument(ws, mk(doc, { slug: 'renamed' }), {}),
+      (e) => e instanceof ExportConflictError && e.path === 'content/posts/hello.json');
+    assert.equal(readFileSync(p('content/posts/hello.json'), 'utf8'), before);
+    assert.ok(!existsSync(p('content/posts/renamed.json')));
+    assert.ok(!existsSync(p('src/posts/renamed.html')));
+    assert.ok(existsSync(p('src/posts/hello.html')));
+  });
+
+  it('removeExport with hand-edited JSON throws and removes nothing', () => {
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    const before = edit('content/posts/hello.json');
+    assert.throws(() => removeExport(ws, doc.id), ExportConflictError);
+    assert.equal(readFileSync(p('content/posts/hello.json'), 'utf8'), before);
+    assert.ok(existsSync(p('src/posts/hello.html')));
+    assert.ok(readManifest(ws).documents[doc.id]);
+  });
+
+  it('another document claiming the HTML path is a collision', () => {
+    const a = mk(simple(), { collection: 'pages', slug: 'about' });
+    exportDocument(ws, a, {});
+    const html = readFileSync(p('src/about.html'), 'utf8');
+    const b = { ...mk(simple(), { collection: 'notes', slug: 'about' }), id: 'doc_other' };
+    const cfg = { notes: { path: '' } };
+    assert.throws(() => exportDocument(ws, b, { collectionsConfig: cfg }), /already used by document doc_simple01/);
+    assert.equal(readFileSync(p('src/about.html'), 'utf8'), html);
+    assert.ok(!existsSync(p('content/notes/about.json')));
+  });
+
+  it('removal skips a path another entry claims', () => {
+    const doc = simple();
+    exportDocument(ws, doc, {});
+    const m = readManifest(ws);
+    m.documents.other = { json: 'content/x/y.json', html: 'src/posts/hello.html', jsonHash: 'z' };
+    writeFileSync(p('content/.vp-manifest.json'), JSON.stringify(m));
+    const res = removeExport(ws, doc.id);
+    assert.ok(existsSync(p('src/posts/hello.html')));
+    assert.deepEqual(res.removed, ['content/posts/hello.json']);
+  });
+
+  it('a failing render writes nothing and leaves no conflict behind', () => {
+    const doc = simple();
+    const boom = () => { throw new Error('render boom'); };
+    assert.throws(() => exportDocument(ws, doc, { render: boom }), /render boom/);
+    assert.ok(!existsSync(p('content')));
+    exportDocument(ws, doc, {});
+    assert.ok(existsSync(p('src/posts/hello.html')));
+  });
+
+  it('corrupt manifest refuses to write and is left unchanged', () => {
+    mkdirSync(p('content'), { recursive: true });
+    writeFileSync(p('content/.vp-manifest.json'), '{not json');
+    assert.throws(() => exportDocument(ws, simple(), {}), /Cannot read content\/\.vp-manifest\.json/);
+    assert.throws(() => removeExport(ws, 'x'), /Cannot read/);
+    assert.equal(readFileSync(p('content/.vp-manifest.json'), 'utf8'), '{not json');
+    assert.ok(!existsSync(p('content/posts')));
+  });
+
+  it('rejects configured output paths that escape', () => {
+    for (const path of ['../../x', 'a/../b', '.hidden', 'a\\b']) {
+      assert.throws(() => exportDocument(ws, simple(), { collectionsConfig: { posts: { path } } }), /Invalid output path/);
+    }
+    assert.ok(!existsSync(p('content')));
+    exportDocument(ws, simple(), { collectionsConfig: { posts: { path: 'a/b' } } });
+    assert.ok(existsSync(p('src/a/b/hello.html')));
+  });
+});
+
 describe('removeExport', () => {
   it('removes files and entry; a missing file is a no-op', () => {
     const doc = simple();

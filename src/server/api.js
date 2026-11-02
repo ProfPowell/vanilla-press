@@ -40,9 +40,11 @@ function generateId() {
  * @param {Object} options
  * @param {string} options.rootDir - Project root directory
  * @param {string} options.mediaDir - Media upload directory
+ * @param {import('../workspace/workspace.js').Workspace} [options.workspace] - Absent means fixture mode (export disabled)
  */
 export function mountApi(router, db, options) {
   const { rootDir, mediaDir } = options;
+  const workspace = options.workspace || null; // eslint-disable-line no-unused-vars
 
   // --- Documents ---
 

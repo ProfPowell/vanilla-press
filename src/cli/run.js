@@ -31,6 +31,7 @@ import { render as renderMarkdown } from '../renderers/markdown.js';
 import { publish } from '../build/publish.js';
 import { table, json, success, error } from './format.js';
 import { parseMarkdown } from './markdown-parser.js';
+import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -46,16 +47,30 @@ function generateId() {
   return 'doc_' + crypto.randomUUID().slice(0, 8);
 }
 
+/** Site directory from the global --site flag (falls back to VP_SITE). */
+let siteOption;
+
+/**
+ * Resolve the workspace for this invocation (--site / VP_SITE, else fixture mode).
+ * @returns {import('../workspace/workspace.js').Workspace}
+ */
+function getWorkspace() {
+  return resolveWorkspace({ site: siteOption, repoRoot: ROOT });
+}
+
 /**
  * Open the database, running migrations.
- * Respects VP_DB env var for custom DB path.
+ * Uses the site workspace when set; in fixture mode VP_DB overrides the DB path.
  * @returns {import('better-sqlite3').Database}
  */
 function openDb() {
-  const dbPath = process.env.VP_DB || join(ROOT, 'content.db');
-  const db = new Database(dbPath);
-  migrate(db);
-  return db;
+  const ws = getWorkspace();
+  if (!ws.siteDir && process.env.VP_DB) {
+    const db = new Database(process.env.VP_DB);
+    migrate(db);
+    return db;
+  }
+  return openWorkspaceDb(ws);
 }
 
 /**
@@ -173,6 +188,7 @@ Utility:
   stats                     Show database statistics
 
 Options:
+  --site <path>             Edit the Cook site at <path> (or set VP_SITE)
   --help, -h                Show this help
   --version, -v             Show version`);
 }
@@ -393,7 +409,7 @@ async function cmdServe(args) {
 
   // Use the dev server (editor + API)
   const { startServer } = await import('../server/index.js');
-  startServer({ port });
+  startServer({ port, site: siteOption });
 }
 
 function cmdDeploy(args) {
@@ -623,7 +639,8 @@ function cmdStats(args) {
   });
 
   const db = openDb();
-  const dbPath = process.env.VP_DB || join(ROOT, 'content.db');
+  const ws = getWorkspace();
+  const dbPath = ws.siteDir ? ws.dbPath : process.env.VP_DB || ws.dbPath;
 
   // Count by status
   const statusCounts = {};
@@ -726,6 +743,23 @@ function slugify(title) {
  * @param {string[]} argv
  */
 export async function run(argv) {
+  // Global --site <path> / --site=<path>, accepted anywhere in argv
+  siteOption = undefined;
+  argv = [...argv];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--site') {
+      siteOption = argv[i + 1];
+      if (!siteOption) error('--site requires a path');
+      argv.splice(i, 2);
+      break;
+    }
+    if (argv[i].startsWith('--site=')) {
+      siteOption = argv[i].slice('--site='.length);
+      argv.splice(i, 1);
+      break;
+    }
+  }
+
   // Handle top-level flags
   if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
     if (argv.length === 0 || argv[0] === '--help' || argv[0] === '-h') {

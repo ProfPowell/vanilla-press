@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { migrate } from '../store/migrate.js';
+import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { createRouter } from './router.js';
 import { mountApi } from './api.js';
 
@@ -46,21 +47,29 @@ const MIME_TYPES = {
  * Start the dev server.
  * @param {Object} [options]
  * @param {number} [options.port=3000]
- * @param {string} [options.dbPath]
+ * @param {string} [options.dbPath] - Fixture-mode DB override (also VP_DB)
+ * @param {string} [options.site] - Cook site directory (also VP_SITE)
  * @returns {import('node:http').Server}
  */
 export function startServer(options = {}) {
   const port = options.port || 3007;
-  const dbPath = options.dbPath || process.env.VP_DB || join(ROOT, 'content.db');
-  const mediaDir = join(ROOT, 'media');
+  const ws = resolveWorkspace({ site: options.site, repoRoot: ROOT });
+  const mediaDir = ws.mediaDir;
 
-  // Open database
-  const db = new Database(dbPath);
-  migrate(db);
+  // Open database. Fixture mode keeps the dbPath / VP_DB overrides.
+  let dbPath = ws.dbPath;
+  let db;
+  if (ws.siteDir) {
+    db = openWorkspaceDb(ws);
+  } else {
+    dbPath = options.dbPath || process.env.VP_DB || ws.dbPath;
+    db = new Database(dbPath);
+    migrate(db);
+  }
 
   // Set up router with API routes
   const router = createRouter();
-  mountApi(router, db, { rootDir: ROOT, mediaDir });
+  mountApi(router, db, { rootDir: ROOT, mediaDir, workspace: ws });
 
   // Static file mount points: URL prefix → filesystem path
   const staticMounts = [
@@ -185,9 +194,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const { values } = parseArgs({
     options: {
       port: { type: 'string', default: '3007' },
+      site: { type: 'string' },
     },
     allowPositionals: true,
   });
 
-  startServer({ port: parseInt(values.port, 10) });
+  startServer({ port: parseInt(values.port, 10), site: values.site });
 }

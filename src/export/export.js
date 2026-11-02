@@ -72,22 +72,22 @@ function validOutputPath(path) {
 }
 
 /**
- * Export a document. Writes the JSON; if published, the HTML page; removes
- * paths this document owned before that are no longer wanted; records the
- * manifest entry. Everything that can fail without touching the filesystem
- * (validation, conflict checks, rendering) happens before the first write.
+ * Every check exportDocument makes before its first write: valid
+ * slug/collection and output path, the target JSON (and, on a rename, the old
+ * JSON) unchanged on disk, and an HTML target that no other document claims
+ * and that is not a file Vanilla Press did not write. Writes nothing.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {Object} doc
- * @param {{ collectionsConfig?: Object, render?: Function }} [options] - `render` overrides the renderer (tests)
- * @returns {{ written: string[], removed: string[] }}
- * @throws {ExportConflictError} when the target JSON (or the JSON a rename would delete) changed on disk
+ * @param {{ collectionsConfig?: Object }} [options]
+ * @throws {ExportConflictError} when a JSON it would write or remove changed on disk
+ * @throws {Error} on an invalid slug/collection/output path, or an HTML collision / foreign file
  */
-export function exportDocument(ws, doc, { collectionsConfig, render: renderFn = render } = {}) {
+export function checkExport(ws, doc, { collectionsConfig } = {}) {
   const { slug, collection } = doc.meta;
   for (const v of [slug, collection]) {
     if (!validSegment(v)) throw new Error(`Invalid slug/collection: ${v}`);
   }
-  const { path: outPath, layout } = collectionOutput(collection, collectionsConfig);
+  const { path: outPath } = collectionOutput(collection, collectionsConfig);
   if (!validOutputPath(outPath)) throw new Error(`Invalid output path: ${outPath}`);
 
   const paths = outputPaths(doc, collectionsConfig);
@@ -106,6 +106,25 @@ export function exportDocument(ws, doc, { collectionsConfig, render: renderFn = 
       throw new Error(`Refusing to overwrite ${paths.html}: not written by Vanilla Press`);
     }
   }
+}
+
+/**
+ * Export a document. Writes the JSON; if published, the HTML page; removes
+ * paths this document owned before that are no longer wanted; records the
+ * manifest entry. Everything that can fail without touching the filesystem
+ * (validation, conflict checks, rendering) happens before the first write.
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @param {Object} doc
+ * @param {{ collectionsConfig?: Object, render?: Function }} [options] - `render` overrides the renderer (tests)
+ * @returns {{ written: string[], removed: string[] }}
+ * @throws {ExportConflictError} when the target JSON (or the JSON a rename would delete) changed on disk
+ */
+export function exportDocument(ws, doc, { collectionsConfig, render: renderFn = render } = {}) {
+  checkExport(ws, doc, { collectionsConfig });
+  const { layout } = collectionOutput(doc.meta.collection, collectionsConfig);
+  const paths = outputPaths(doc, collectionsConfig);
+  const manifest = readManifest(ws);
+  const previous = manifest.documents[doc.id];
 
   const jsonText = JSON.stringify(doc, null, 2) + '\n';
   const htmlText = paths.html

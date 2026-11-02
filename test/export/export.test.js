@@ -1,12 +1,12 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveWorkspace } from '../../src/workspace/workspace.js';
 import {
-  exportDocument, removeExport, changedOnDisk, recordImported, readManifest, ExportConflictError,
+  exportDocument, removeExport, changedOnDisk, recordImported, readManifest, ExportConflictError, checkExport,
 } from '../../src/export/export.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -213,5 +213,44 @@ describe('removeExport', () => {
 
   it('unknown id is a no-op', () => {
     assert.deepEqual(removeExport(ws, 'nope'), { removed: [] });
+  });
+});
+
+describe('checkExport', () => {
+  const listAll = () => {
+    const out = [];
+    const walk = (d) => {
+      for (const e of (existsSync(d) ? readdirSync(d, { withFileTypes: true }) : [])) {
+        const abs = join(d, e.name);
+        if (e.isDirectory()) walk(abs); else out.push(abs + ':' + readFileSync(abs, 'utf8'));
+      }
+    };
+    walk(tmp);
+    return out.sort();
+  };
+
+  it('throws on a foreign HTML target and writes nothing', () => {
+    mkdirSync(p('src/posts'), { recursive: true });
+    writeFileSync(p('src/posts/hello.html'), '<p>hand written</p>\n');
+    const before = listAll();
+    assert.throws(() => checkExport(ws, simple(), {}), /Refusing to overwrite src\/posts\/hello.html/);
+    assert.deepEqual(listAll(), before);
+  });
+
+  it('throws ExportConflictError on an unowned JSON target and writes nothing', () => {
+    mkdirSync(p('content/posts'), { recursive: true });
+    writeFileSync(p('content/posts/hello.json'), '{}\n');
+    const before = listAll();
+    assert.throws(() => checkExport(ws, simple(), {}), ExportConflictError);
+    assert.deepEqual(listAll(), before);
+  });
+
+  it('passes for a clean target and writes nothing', () => {
+    assert.equal(checkExport(ws, simple(), {}), undefined);
+    assert.deepEqual(listAll(), []);
+  });
+
+  it('rejects an invalid slug', () => {
+    assert.throws(() => checkExport(ws, mk(simple(), { slug: '../x' }), {}), /Invalid slug/);
   });
 });

@@ -32,10 +32,9 @@ import { publish } from '../build/publish.js';
 import { table, json, success, error } from './format.js';
 import { parseMarkdown } from './markdown-parser.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
-import { outputPaths } from '../export/paths.js';
-import { exportDocument, removeExport, changedOnDisk } from '../export/export.js';
+import { exportDocument, removeExport } from '../export/export.js';
 import { syncFromContent } from '../export/sync.js';
-import { getCollectionsConfig, exportAll } from '../export/site-files.js';
+import { getCollectionsConfig, preflightSave, exportAll } from '../export/site-files.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -79,7 +78,8 @@ function openDb() {
 
 /**
  * Save a document and, when a site is set, export it. Refuses (exit 1, not
- * saved) when the stored version's JSON changed on disk.
+ * saved) when the stored version's JSON changed on disk or the export would
+ * be rejected.
  * @param {import('better-sqlite3').Database} db
  * @param {Object} doc
  * @returns {Object} saved document
@@ -87,11 +87,13 @@ function openDb() {
 function saveAndExport(db, doc) {
   const ws = getWorkspace();
   if (ws.exportEnabled) {
-    const existing = getDocument(db, doc.id);
-    const rel = existing && outputPaths(existing, getCollectionsConfig(db)).json;
-    if (rel && changedOnDisk(ws, doc.id, rel)) {
+    const problem = preflightSave(ws, db, doc, getCollectionsConfig(db));
+    if (problem?.status === 409) {
       db.close();
-      error(`${rel} changed on disk (e.g. git pull); not saved. Run 'vp import:content' to load it.`);
+      error(`${problem.path} changed on disk (e.g. git pull); not saved. Run 'vp import:content' to load it.`);
+    } else if (problem) {
+      db.close();
+      error(problem.error.replace(/^Not saved/, 'not saved'));
     }
   }
   const saved = saveDocument(db, doc);

@@ -43,9 +43,10 @@ export class EditorShell extends HTMLElement {
         this.saveIndicator.className = `save-indicator ${status}`;
         const labels = {
           saved: 'Saved', saving: 'Saving...', unsaved: 'Unsaved',
-          conflict: 'Changed on disk', error: 'Not exported',
+          conflict: 'Changed on disk', error: 'Not saved',
         };
-        this.saveIndicator.textContent = labels[status] || '';
+        // A rejected save (422) shows its message; auto-save keeps running
+        this.saveIndicator.textContent = (status === 'error' && message) || labels[status] || '';
         this.saveIndicator.title = message || '';
       }
     };

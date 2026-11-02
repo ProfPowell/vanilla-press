@@ -6,7 +6,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -169,6 +169,77 @@ describe('API with a site workspace', () => {
     const { status } = await api('/api/config/theme', { method: 'PUT', body: { value: 'amber' } });
     assert.equal(status, 200);
     assert.deepEqual(JSON.parse(readFileSync(at('config/vp.json'), 'utf8')), { theme: 'amber' });
+  });
+});
+
+describe('API refuses saves whose export would be rejected', () => {
+  let site, ws, db, api, close, id;
+  const at = (rel) => join(site, rel);
+  /** Every file under the site (except the store) with its contents. */
+  const snapshot = () => {
+    const out = [];
+    const walk = (d) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const abs = join(d, e.name);
+        if (e.name === '.vp') continue;
+        if (e.isDirectory()) walk(abs); else out.push(`${abs}:${readFileSync(abs, 'utf8')}`);
+      }
+    };
+    walk(site);
+    return out.sort();
+  };
+
+  before(async () => {
+    site = mkdtempSync(join(tmpdir(), 'vp-export-preflight-'));
+    ws = resolveWorkspace({ site, repoRoot });
+    db = openWorkspaceDb(ws);
+    ({ api, close } = await startApi(db, { mediaDir: ws.mediaDir, workspace: ws }));
+    const { data } = await api('/api/documents', { method: 'POST', body: postBody() });
+    id = data.id;
+  });
+
+  after(async () => {
+    await close();
+    db.close();
+    rmSync(site, { recursive: true, force: true });
+  });
+
+  it('renaming onto a hand-written HTML page is 422 Not saved, with nothing changed', async () => {
+    mkdirSync(at('src/posts'), { recursive: true });
+    writeFileSync(at('src/posts/foreign.html'), '<p>mine</p>\n');
+    const before = snapshot();
+
+    const put = await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { slug: 'foreign' } } });
+    assert.equal(put.status, 422);
+    assert.match(put.data.error, /^Not saved: /);
+    assert.equal(put.data.path, undefined);
+    assert.equal((await api(`/api/documents/${id}`)).data.meta.slug, 'hello');
+    assert.deepEqual(snapshot(), before);
+  });
+
+  it('renaming onto an unowned JSON file is 422 Not saved, with nothing changed', async () => {
+    mkdirSync(at('content/posts'), { recursive: true });
+    writeFileSync(at('content/posts/unowned.json'), '{"not":"vp"}\n');
+    const before = snapshot();
+
+    const put = await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { slug: 'unowned' } } });
+    assert.equal(put.status, 422);
+    assert.match(put.data.error, /^Not saved: /);
+    assert.equal((await api(`/api/documents/${id}`)).data.meta.slug, 'hello');
+    assert.deepEqual(snapshot(), before);
+  });
+
+  it('creating a new doc onto an unowned JSON file is 422 and saves nothing', async () => {
+    const post = await api('/api/documents', { method: 'POST', body: { id: 'doc_newone1', ...postBody({ slug: 'unowned' }) } });
+    assert.equal(post.status, 422);
+    assert.match(post.data.error, /^Not saved: /);
+    assert.equal((await api('/api/documents/doc_newone1')).status, 404);
+  });
+
+  it('a normal edit afterwards still saves and exports', async () => {
+    const put = await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { title: 'Still fine' } } });
+    assert.equal(put.status, 200);
+    assert.equal(JSON.parse(readFileSync(at('content/posts/hello.json'), 'utf8')).meta.title, 'Still fine');
   });
 });
 

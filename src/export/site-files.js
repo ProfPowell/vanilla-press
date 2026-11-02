@@ -9,7 +9,10 @@
 import { join } from 'node:path';
 import { getConfig } from '../store/config.js';
 import { getDocument } from '../store/content.js';
-import { exportDocument, ExportConflictError, readManifest, writeFileAtomic } from './export.js';
+import {
+  exportDocument, checkExport, changedOnDisk, ExportConflictError, readManifest, writeFileAtomic,
+} from './export.js';
+import { outputPaths } from './paths.js';
 
 let warnedCollections = false;
 
@@ -33,6 +36,35 @@ export function getCollectionsConfig(db) {
     }
     return {};
   }
+}
+
+/**
+ * Decide, before saving `candidate` to the store, whether the save may go
+ * ahead. Nothing is written.
+ * - The stored version's JSON (as recorded in the manifest, else derived)
+ *   changed on disk → 409: the file wins, offer to load it.
+ * - The candidate's export would be rejected (collision, foreign file,
+ *   unowned target JSON, invalid path) → 422: not saved, no reload offered.
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @param {import('better-sqlite3').Database} db
+ * @param {Object} candidate - The document exactly as it would be saved
+ * @param {Object} collectionsConfig
+ * @returns {null | { status: 409|422, error: string, path?: string }}
+ */
+export function preflightSave(ws, db, candidate, collectionsConfig) {
+  const existing = getDocument(db, candidate.id);
+  if (existing) {
+    const rel = readManifest(ws).documents[existing.id]?.json || outputPaths(existing, collectionsConfig).json;
+    if (changedOnDisk(ws, existing.id, rel)) {
+      return { status: 409, error: 'This document changed on disk (e.g. git pull).', path: rel };
+    }
+  }
+  try {
+    checkExport(ws, candidate, { collectionsConfig });
+  } catch (err) {
+    return { status: 422, error: `Not saved: ${err.message}` };
+  }
+  return null;
 }
 
 /**

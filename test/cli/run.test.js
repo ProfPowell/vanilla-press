@@ -7,7 +7,7 @@
 import { describe, it, before, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import Database from 'better-sqlite3';
@@ -19,7 +19,7 @@ const FIXTURES = join(import.meta.dirname, '..', 'fixtures');
 
 /** Run the CLI with given args and return { stdout, stderr, status }. */
 function vp(args, opts = {}) {
-  const env = { ...process.env, VP_DB: opts.db || process.env.VP_DB };
+  const env = { ...process.env, VP_DB: opts.db || process.env.VP_DB, ...opts.env };
   const result = spawnSync('node', [BIN, ...args], {
     encoding: 'utf-8',
     env,
@@ -489,6 +489,35 @@ describe('vp with --site', () => {
     assert.ok(res.stderr.includes('exported 1'), res.stderr);
     assert.ok(existsSync(join(site, 'content', 'media.json')));
     assert.ok(existsSync(join(site, 'config', 'vp.json')));
+  });
+
+  it('new onto an unowned JSON file fails without saving', (t) => {
+    const site = siteWithContent();
+    t.after(() => rmSync(site, { recursive: true, force: true }));
+
+    const res = vp(['new', 'posts', 'from-disk', '--title', 'Dup', '--site', site]);
+    assert.equal(res.status, 1, res.stderr);
+    assert.match(res.stderr, /not saved/);
+    assert.ok(vp(['list', '--site', site]).stdout.includes('(no results)'));
+  });
+
+  it('edit renaming onto a hand-written HTML page fails without saving', (t) => {
+    const site = siteWithContent();
+    t.after(() => rmSync(site, { recursive: true, force: true }));
+    vp(['import:content', '--site', site]);
+    assert.equal(vp(['publish', 'posts/from-disk', '--site', site]).status, 0);
+    writeFileSync(join(site, 'src', 'posts', 'taken.html'), '<p>mine</p>\n');
+
+    // $EDITOR: a script that renames the slug in the temp file
+    const editor = join(site, 'rename-editor.sh');
+    writeFileSync(editor, '#!/bin/sh\nsed -i.bak \'s/"slug": "from-disk"/"slug": "taken"/\' "$1"\n', { mode: 0o755 });
+
+    const res = vp(['edit', 'posts/from-disk', '--site', site], { env: { EDITOR: editor } });
+    assert.equal(res.status, 1, res.stderr);
+    assert.match(res.stderr, /not saved/);
+    assert.ok(vp(['get', 'posts/from-disk', '--site', site]).stdout.includes('"slug": "from-disk"'));
+    assert.equal(readFileSync(join(site, 'src', 'posts', 'taken.html'), 'utf8'), '<p>mine</p>\n');
+    assert.ok(!existsSync(join(site, 'content', 'posts', 'taken.json')));
   });
 
   it('export without a site is an error', () => {

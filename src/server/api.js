@@ -20,10 +20,11 @@ import {
   getAllPublished,
 } from '../store/content.js';
 import { validate } from '../schema/validate.js';
-import { outputPaths } from '../export/paths.js';
-import { exportDocument, removeExport, changedOnDisk, ExportConflictError } from '../export/export.js';
+import { exportDocument, removeExport, ExportConflictError } from '../export/export.js';
 import { importOne } from '../export/sync.js';
-import { getCollectionsConfig, writeMediaJson, writeVpConfig, exportAll } from '../export/site-files.js';
+import {
+  getCollectionsConfig, preflightSave, writeMediaJson, writeVpConfig, exportAll,
+} from '../export/site-files.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
 import { sendJson, readRawBody } from './router.js';
@@ -51,18 +52,19 @@ export function mountApi(router, db, options) {
   const mediaDir = ws ? ws.mediaDir : options.mediaDir;
 
   /**
-   * Respond 409 (and return true) if `existing`'s exported JSON changed on disk.
-   * Checked before saving so the on-disk edit is never overwritten.
+   * Respond (and return true) when `candidate` must not be saved: 409 if the
+   * stored version changed on disk, 422 if its export would be rejected.
    */
-  function rejectIfChangedOnDisk(res, existing) {
-    if (!ws || !existing) return false;
-    const { json } = outputPaths(existing, getCollectionsConfig(db));
-    if (!changedOnDisk(ws, existing.id, json)) return false;
-    sendJson(res, 409, { error: 'This document changed on disk (e.g. git pull).', path: json });
+  function rejectSave(res, candidate) {
+    if (!ws) return false;
+    const problem = preflightSave(ws, db, candidate, getCollectionsConfig(db));
+    if (!problem) return false;
+    const { status, ...body } = problem;
+    sendJson(res, status, body);
     return true;
   }
 
-  /** Export a saved document; on failure respond 422 and return false. */
+  /** Export a saved document (preflighted, so failure is unexpected); on failure respond 422. */
   function exportSaved(res, saved) {
     if (!ws) return true;
     try {
@@ -141,7 +143,7 @@ export function mountApi(router, db, options) {
       return;
     }
 
-    if (rejectIfChangedOnDisk(res, getDocument(db, doc.id))) return;
+    if (rejectSave(res, doc)) return;
     const saved = saveDocument(db, doc);
     if (exportSaved(res, saved)) sendJson(res, 201, saved);
   });
@@ -171,7 +173,7 @@ export function mountApi(router, db, options) {
       return;
     }
 
-    if (rejectIfChangedOnDisk(res, existing)) return;
+    if (rejectSave(res, doc)) return;
     const saved = saveDocument(db, doc);
     if (exportSaved(res, saved)) sendJson(res, 200, saved);
   });

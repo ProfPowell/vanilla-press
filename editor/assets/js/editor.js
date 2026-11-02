@@ -354,7 +354,8 @@ export async function saveDocument() {
 
 /**
  * Show a failed save: a 409 puts the document in conflict (auto-save paused
- * until the on-disk version is loaded); a 422 means saved but not exported.
+ * until the on-disk version is loaded); a 422 (not saved, or saved but not
+ * exported) shows its message in the save indicator and auto-save continues.
  * @param {string} docId
  * @param {Error & { status?: number }} err
  */

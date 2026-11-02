@@ -30,5 +30,8 @@
     "@profpowell/code-block": "^2.7.2",
     "better-sqlite3": "^11.8.1",
     "vanilla-breeze": "file:../vanilla-breeze"
+  },
+  "devDependencies": {
+    "gray-matter": "^4.0.3"
   }
 }

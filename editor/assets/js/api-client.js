@@ -169,8 +169,8 @@ export const api = {
     return request(`/documents/${encodeURIComponent(id)}/publish`, { method: 'POST' });
   },
 
-  /** Update a published post: its saved edits go live. Same shape as publishDocument. */
-  updateDocument(id) {
+  /** Update a published post: its saved edits go live. Same shape as publishDocument. (Not updateDocument: that is the save.) */
+  updatePost(id) {
     return request(`/documents/${encodeURIComponent(id)}/update`, { method: 'POST' });
   },
 

@@ -336,7 +336,7 @@ async function runAction(action) {
     show(els.actionState, actionPendingText(action));
     let result;
     try {
-      const call = { publish: api.publishDocument, update: api.updateDocument, unpublish: api.unpublishDocument }[action];
+      const call = { publish: api.publishDocument, update: api.updatePost, unpublish: api.unpublishDocument }[action];
       result = await call.call(api, docId);
     } catch (err) {
       return await showPublishError(err, action, docId, savesAtAction);

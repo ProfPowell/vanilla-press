@@ -72,3 +72,15 @@ test('freePort skips a busy port', async () => {
     await new Promise((r) => srv.close(r));
   }
 });
+
+test('freePort skips a port held on the wildcard address', async () => {
+  const srv = createServer();
+  await new Promise((r) => srv.listen(0, r));
+  const busy = srv.address().port;
+  try {
+    const port = await freePort(busy);
+    assert.notEqual(port, busy);
+  } finally {
+    await new Promise((r) => srv.close(r));
+  }
+});

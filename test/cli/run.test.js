@@ -609,26 +609,33 @@ require('node:http').createServer((q,s)=>s.end('ok')).listen(p,'127.0.0.1');`);
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
-    const url = await new Promise((resolve, reject) => {
-      let out = '';
-      const timer = setTimeout(() => reject(new Error(`no URL in 10s; output: ${out}`)), 10000);
-      child.stdout.on('data', (d) => {
-        out += d;
-        const m = out.match(/Vanilla Press is running at (http:\/\/127\.0\.0\.1:\d+)/);
-        if (m) { clearTimeout(timer); resolve(m[1]); }
-      });
-    });
-    const post = async (path, body) => (await fetch(`${url}${path}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}),
-    })).json();
-    const { id } = await post('/api/sites', { path: site });
-    const { url: previewUrl } = await post(`/api/sites/${id}/preview`);
-    const pid = Number(readFileSync(join(site, 'pid'), 'utf8'));
+    let pid = 0;
+    let previewUrl;
     const cleanup = () => {
       child.kill('SIGKILL');
-      try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+      if (pid) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
       rmSync(root, { recursive: true, force: true });
     };
+    try {
+      const url = await new Promise((resolve, reject) => {
+        let out = '';
+        const timer = setTimeout(() => reject(new Error(`no URL in 10s; output: ${out}`)), 10000);
+        child.stdout.on('data', (d) => {
+          out += d;
+          const m = out.match(/Vanilla Press is running at (http:\/\/127\.0\.0\.1:\d+)/);
+          if (m) { clearTimeout(timer); resolve(m[1]); }
+        });
+      });
+      const post = async (path, body) => (await fetch(`${url}${path}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}),
+      })).json();
+      const { id } = await post('/api/sites', { path: site });
+      ({ url: previewUrl } = await post(`/api/sites/${id}/preview`));
+      pid = Number(readFileSync(join(site, 'pid'), 'utf8'));
+    } catch (err) {
+      cleanup();
+      throw err;
+    }
     return { child, exited, previewUrl, pid, cleanup };
   }
 

@@ -100,16 +100,24 @@ export function runBuild(dir, { timeoutMs = BUILD_TIMEOUT_MS } = {}) {
   return runNpm(dir, ['run', 'build'], { NODE_ENV: 'production' }, { timeoutMs });
 }
 
-function isFree(port) {
+function canListen(port, host) {
   return new Promise((resolve) => {
     const srv = createServer();
     srv.once('error', () => resolve(false));
-    srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(true)));
+    const onListening = () => srv.close(() => resolve(true));
+    if (host) srv.listen(port, host, onListening);
+    else srv.listen(port, onListening);
   });
 }
 
+// Both probes are needed: on macOS a loopback bind succeeds even when another
+// server holds the wildcard address (*:port).
+async function isFree(port) {
+  return (await canListen(port, '127.0.0.1')) && (await canListen(port));
+}
+
 /**
- * First port at or above `start` that can be listened on at 127.0.0.1.
+ * First port at or above `start` that can be listened on at both 127.0.0.1 and the wildcard address.
  * @param {number} [start]
  * @returns {Promise<number>}
  */

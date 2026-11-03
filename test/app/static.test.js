@@ -28,6 +28,13 @@ describe('app static pages', () => {
     assert.match(await res.text(), /<title>Site/);
   });
 
+  it('both pages load Vanilla Breeze as a module', async () => {
+    for (const page of ['/', '/app/site.html']) {
+      const html = await (await fetch(`${app.url}${page}`)).text();
+      assert.match(html, /<script type="module" src="\/assets\/vb\/vanilla-breeze\.js"/, page);
+    }
+  });
+
   it('serves the page scripts and styles', async () => {
     for (const p of ['app.css', 'js/app-api.js', 'js/sites-page.js', 'js/site-page.js']) {
       const res = await fetch(`${app.url}/app/assets/${p}`);

@@ -130,7 +130,8 @@ export function createBackup({
   let timer = null;
   let lastPushAt = null;
   let error = null;
-  let connected = true;
+  let connected = false; // until init() reads git status; pushed() sets it true
+  let initPromise = null;
   let queue = Promise.resolve();
   // Owned paths seen this session: a page VP removed is no longer listed by ownedPaths, but its deletion must be staged.
   const known = new Set();
@@ -262,10 +263,28 @@ export function createBackup({
     });
   }
 
+  /**
+   * Read git status once so state().connected is right before any push:
+   * connected means a repo with a remote and an upstream. Never rejects.
+   * @returns {Promise<BackupState>}
+   */
+  function init() {
+    initPromise ??= serial(async () => {
+      try {
+        const status = await git.gitStatus(ws.siteDir);
+        connected = Boolean(status.isRepo && status.hasRemote && status.hasUpstream);
+      } catch {
+        connected = false;
+      }
+      return state();
+    });
+    return initPromise.then(() => state());
+  }
+
   /** Cancel the timer without flushing (the app is closing). */
   function dispose() {
     cancel();
   }
 
-  return { noteSaved, flush, state, exclusive, dispose, paths };
+  return { noteSaved, flush, state, exclusive, dispose, paths, init };
 }

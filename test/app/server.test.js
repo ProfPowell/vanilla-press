@@ -136,6 +136,13 @@ describe('app server', () => {
     rmSync(join(siteA, 'config'), { recursive: true, force: true });
   });
 
+  it('GET /status is not connected for a site without an upstream, before any save', async () => {
+    const res = await api(`/api/sites/${idB}/status`);
+    assert.equal(res.status, 200);
+    assert.equal(res.data.connected, false);
+    assert.equal(res.data.pending, 0);
+  });
+
   it('unknown site id is 404', async () => {
     const res = await api('/api/sites/nope/documents');
     assert.equal(res.status, 404);

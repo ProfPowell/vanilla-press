@@ -254,3 +254,12 @@ test('a save during a publish stays pending', async () => {
   assert.equal(lastRemote(), 'Draft: B [CI Skip]');
   assert.equal(backup.state().pending, 0);
 });
+
+test('init: connected comes from git status before any push', async () => {
+  fx = makeGitSite();
+  const mk = (status) => createBackup({ ws: wsOf(fx.site), git: { gitStatus: async () => status } });
+  assert.equal(mk({ isRepo: false }).state().connected, false);
+  assert.equal((await mk({ isRepo: false }).init()).connected, false);
+  assert.equal((await mk({ isRepo: true, hasRemote: true, hasUpstream: false }).init()).connected, false);
+  assert.equal((await mk({ isRepo: true, hasRemote: true, hasUpstream: true }).init()).connected, true);
+});

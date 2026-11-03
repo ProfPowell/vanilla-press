@@ -161,7 +161,7 @@ export async function startApp({
     router.add('POST', `${prefix}/documents/:id/unpublish`, publishRoute(false));
 
     router.add('GET', `${prefix}/info`, async (req, res) => sendJson(res, 200, { siteUrl: await readSiteUrl(ws.siteDir) }));
-    router.add('GET', `${prefix}/status`, (req, res) => sendJson(res, 200, backup.state()));
+    router.add('GET', `${prefix}/status`, async (req, res) => { await backup.init(); sendJson(res, 200, backup.state()); });
     router.add('POST', `${prefix}/backup`, async (req, res) => sendJson(res, 200, await backup.flush()));
 
     router.add('GET', `${prefix}/documents/:id/live`, async (req, res) => {

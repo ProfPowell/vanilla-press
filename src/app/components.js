@@ -143,11 +143,12 @@ function tail(log) {
  * `npm install <pkg>@<VP's range> --save` (or `npm uninstall <pkg>`); when npm
  * fails both files are put back byte for byte (502 with npm's last lines).
  * On success commits only the package files, `Components: turn on|off <pkg> [CI Skip]`,
- * and flushes the backup, which pushes it.
+ * and flushes the backup, which pushes it. When that commit fails, both files are put
+ * back (npm then re-syncs node_modules, best effort) and a 502 says to retry.
  *
  * The change runs in the backup's git queue, then the site's `writes` queue
  * (the order a publish takes them), so no save, backup or publish runs meanwhile.
- * Already in the requested state: nothing runs.
+ * Already in the requested state with the package files committed: nothing runs.
  * @param {{
  *   ws: { siteDir: string },
  *   db: import('better-sqlite3').Database,
@@ -176,7 +177,12 @@ export async function setComponent({ ws, db, pkg, enabled, deps }) {
   const stateOf = () => describeComponents(roots).find((s) => s.package === pkg);
 
   const change = async () => {
-    if (stateOf().enabled === enabled) return null;
+    const status = await deps.gitStatus(siteDir);
+    const tracked = status.isRepo && await deps.hasHead(siteDir);
+    const dirty = tracked ? await deps.changedSinceHead(siteDir, PACKAGE_FILES) : [];
+    // Already in the requested state, and committed: nothing to do. An uncommitted
+    // change to the package files falls through to the dirty guard below.
+    if (stateOf().enabled === enabled && dirty.length === 0) return null;
 
     if (!enabled) {
       const posts = postsUsing(db, entry.elements.map((el) => el.tag));
@@ -188,11 +194,7 @@ export async function setComponent({ ws, db, pkg, enabled, deps }) {
       }
     }
 
-    const status = await deps.gitStatus(siteDir);
-    if (status.isRepo && await deps.hasHead(siteDir)) {
-      const dirty = await deps.changedSinceHead(siteDir, PACKAGE_FILES);
-      if (dirty.length > 0) throw new ComponentError(409, { error: DIRTY_MESSAGE, files: dirty });
-    }
+    if (dirty.length > 0) throw new ComponentError(409, { error: DIRTY_MESSAGE, files: dirty });
 
     const snapshot = PACKAGE_FILES.map((f) => {
       const file = join(siteDir, f);
@@ -219,7 +221,22 @@ export async function setComponent({ ws, db, pkg, enabled, deps }) {
     }
 
     if (!status.isRepo) return null;
-    return deps.commitPaths(siteDir, PACKAGE_FILES, `Components: turn ${enabled ? 'on' : 'off'} ${pkg} [CI Skip]`);
+    try {
+      return await deps.commitPaths(siteDir, PACKAGE_FILES, `Components: turn ${enabled ? 'on' : 'off'} ${pkg} [CI Skip]`);
+    } catch (err) {
+      // Undo npm's edit so the files match HEAD again (a later toggle then works),
+      // then let npm bring node_modules back in line with them (best effort).
+      restore();
+      try {
+        await deps.runNpm(siteDir, ['install'], {}, { timeoutMs: NPM_TIMEOUT_MS });
+      } catch { /* node_modules may keep the package; package.json decides what is on */ }
+      restore();
+      throw new ComponentError(502, {
+        error: `Couldn't commit turning ${enabled ? 'on' : 'off'} ${pkg}, so the change was undone. `
+          + `Git said: ${String(err?.message || err).trim()} `
+          + 'Another program may be using the site\'s git repository. Close other git tools and try again.',
+      });
+    }
   };
 
   const sha = await deps.backup.commitOther(() => deps.writes(change));

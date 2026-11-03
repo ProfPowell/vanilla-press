@@ -8,6 +8,7 @@ import { migrate } from '../../src/store/migrate.js';
 import { saveDocument } from '../../src/store/content.js';
 import { startApp } from '../../src/app/server.js';
 import { postsUsing, cookSupportsPackages } from '../../src/app/components.js';
+import { commitPaths as realCommitPaths } from '../../src/git/git.js';
 import { makeGitSite, fakeClock, git, write } from './git-site-fixture.js';
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), '../fixtures/components');
@@ -76,7 +77,7 @@ describe('site components API', () => {
   }
 
   /** A git site plus a VP root with x-widgets installed; `prepare(site)` runs before the commit. */
-  async function open({ npmOpts, prepare } = {}) {
+  async function open({ npmOpts, prepare, gitOverrides } = {}) {
     fx = makeGitSite();
     vpRoot = join(fx.root, 'vp');
     mkdirSync(vpRoot);
@@ -96,6 +97,7 @@ describe('site components API', () => {
       env: { VP_CONFIG_DIR: join(fx.root, 'vp-config') },
       previews: { start() {}, stop: async () => {}, stopAll: async () => {} },
       siteProcess: { runNpm: npm.run },
+      git: gitOverrides,
       backup: { now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer },
       components: { catalog, vpRoot },
     });
@@ -175,6 +177,50 @@ describe('site components API', () => {
     assert.equal(readFileSync(join(fx.site, 'package-lock.json'), 'utf8'), lock);
     assert.equal(head(fx.site), before);
     assert.equal(git(fx.site, 'status', '--porcelain', '--', 'package.json', 'package-lock.json'), '');
+  });
+
+  it('a failed commit after npm puts the package files back, says what to do, and a later toggle works', async () => {
+    let failCommit = true;
+    const commitPaths = async (dir, paths, message) => {
+      if (failCommit && typeof message === 'string' && message.startsWith('Components:')) {
+        const err = new Error("fatal: Unable to create '.git/index.lock': File exists.");
+        err.name = 'GitError';
+        throw err;
+      }
+      return realCommitPaths(dir, paths, message);
+    };
+    const lock = '{"name":"site","lockfileVersion":3}\n';
+    await open({ prepare: (site) => write(site, 'package-lock.json', lock), gitOverrides: { commitPaths } });
+    const pkgBefore = readFileSync(join(fx.site, 'package.json'));
+    const before = head(fx.site);
+    const res = await put('x-widgets', true);
+    assert.equal(res.status, 502, JSON.stringify(res.data));
+    assert.match(res.data.error, /couldn't commit/i);
+    assert.match(res.data.error, /index\.lock/);
+    assert.match(res.data.error, /Close other git tools and try again\./);
+    assert.deepEqual(readFileSync(join(fx.site, 'package.json')), pkgBefore);
+    assert.equal(readFileSync(join(fx.site, 'package-lock.json'), 'utf8'), lock);
+    assert.equal(head(fx.site), before);
+    assert.equal(git(fx.site, 'status', '--porcelain', '--', 'package.json', 'package-lock.json'), '');
+    const state = await api(`/api/sites/${siteId}/components`);
+    assert.equal(state.data.packages.find((p) => p.package === 'x-widgets').enabled, false);
+
+    failCommit = false;
+    const again = await put('x-widgets', true);
+    assert.equal(again.status, 200, JSON.stringify(again.data));
+    assert.equal(again.data.enabled, true);
+    assert.equal(componentsCommit(fx.site).split(' ').slice(1).join(' '), 'Components: turn on x-widgets [CI Skip]');
+  });
+
+  it('a dependency in package.json but not committed is not "already on": the dirty guard answers', async () => {
+    await open();
+    writePkg(fx.site, { ...readPkg(fx.site), dependencies: { 'x-widgets': '^1.2.0' } });
+    const before = head(fx.site);
+    const res = await put('x-widgets', true);
+    assert.equal(res.status, 409, JSON.stringify(res.data));
+    assert.equal(res.data.error, "package.json has changes that aren't committed. Commit or discard them, then try again.");
+    assert.deepEqual(npm.calls, []);
+    assert.equal(head(fx.site), before);
   });
 
   it('a failed install with no lock before leaves no lock', async () => {

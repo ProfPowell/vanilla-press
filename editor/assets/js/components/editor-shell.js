@@ -11,6 +11,7 @@
 
 import { loadDocument, createNewDocument, deleteDoc, getSaveStatus } from '../editor.js';
 import { api } from '../api-client.js';
+import { isSiteMode, onSaveStatus } from '../site-mode.js';
 
 export class EditorShell extends HTMLElement {
   connectedCallback() {
@@ -37,7 +38,9 @@ export class EditorShell extends HTMLElement {
       } catch (err) {
         // Not deleted (409: its JSON changed on disk; 500: unexpected): say why
         console.error('Delete error:', err);
-        if (this.saveIndicator) {
+        if (isSiteMode) {
+          onSaveStatus('error', err.message);
+        } else if (this.saveIndicator) {
           this.saveIndicator.className = 'save-indicator error';
           this.saveIndicator.textContent = err.message;
           this.saveIndicator.title = err.message;
@@ -50,6 +53,8 @@ export class EditorShell extends HTMLElement {
     // Save status indicator
     this.saveIndicator = this.querySelector('.save-indicator');
     window.__onSaveStatusChange = (status, message) => {
+      // In the app (?site=) the header shows the save state
+      if (isSiteMode) return onSaveStatus(status, message);
       if (this.saveIndicator) {
         this.saveIndicator.className = `save-indicator ${status}`;
         const labels = {

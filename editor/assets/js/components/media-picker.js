@@ -8,6 +8,7 @@
  */
 
 import { api } from '../api-client.js';
+import { SITE, displayMediaUrl } from '../site-context.js';
 
 let singleton = null;
 
@@ -141,7 +142,7 @@ export class MediaPicker extends HTMLElement {
 
     grid.innerHTML = this._media.map(m => `
       <div class="media-item" data-src="/media/${escapeAttr(m.filename)}" data-alt="${escapeAttr(m.alt || '')}">
-        <img src="/media/${escapeAttr(m.filename)}" alt="${escapeAttr(m.alt || '')}" loading="lazy" />
+        <img src="${escapeAttr(displayMediaUrl(`/media/${m.filename}`, SITE))}" alt="${escapeAttr(m.alt || '')}" loading="lazy" />
         <div class="media-item-name">${escapeHtml(m.filename)}</div>
       </div>
     `).join('');

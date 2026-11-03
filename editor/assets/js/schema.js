@@ -10,6 +10,7 @@
 
 import { Schema } from 'prosemirror-model';
 import { blockTypes, inlineTypes } from '../../../src/schema/content-schema.js';
+import { SITE, displayMediaUrl, storedMediaUrl } from './site-context.js';
 
 // Pull attr defs from content-schema for reference
 const codeAttrs = blockTypes.code_block.attrs;
@@ -313,7 +314,7 @@ const figure = {
       const variants = ['full', 'bordered', 'float-start', 'float-end', 'centered'];
       const variant = variants.find(v => cls.includes(v)) || 'default';
       return {
-        src: img ? img.getAttribute('src') || '' : '',
+        src: img ? storedMediaUrl(img.getAttribute('src') || '', SITE) : '',
         alt: img ? img.getAttribute('alt') || '' : '',
         variant,
       };
@@ -335,7 +336,7 @@ const figure = {
     // A content hole must be its parent's only child, so the caption
     // node renders inside a wrapper next to the <img>
     return ['figure', attrs,
-      ['img', { src: node.attrs.src, alt: node.attrs.alt }],
+      ['img', { src: displayMediaUrl(node.attrs.src, SITE), alt: node.attrs.alt }],
       ['div', { 'data-figure-caption': '' }, 0],
     ];
   },

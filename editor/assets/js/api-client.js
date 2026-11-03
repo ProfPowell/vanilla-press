@@ -7,7 +7,10 @@
  * @module editor/api-client
  */
 
-const BASE = '/api';
+import { SITE, apiBase } from './site-context.js';
+
+/** `/api/sites/<site>` in the app's editor (`?site=`), else `/api` (`vp serve`). */
+const BASE = apiBase(SITE);
 
 let workspacePromise = null;
 
@@ -157,5 +160,32 @@ export const api = {
   /** Get all config as an object. */
   getAllConfig() {
     return request('/config');
+  },
+
+  // --- App only (per-site base, `?site=`) ---
+
+  /** Publish: build, commit and push. { status: 'pushed'|'saved', url }; errors carry `data` (log, files). */
+  publishDocument(id) {
+    return request(`/documents/${encodeURIComponent(id)}/publish`, { method: 'POST' });
+  },
+
+  /** Unpublish: same shape as publishDocument. */
+  unpublishDocument(id) {
+    return request(`/documents/${encodeURIComponent(id)}/unpublish`, { method: 'POST' });
+  },
+
+  /** Whether the published page is live: { live, url }. */
+  getLive(id) {
+    return request(`/documents/${encodeURIComponent(id)}/live`);
+  },
+
+  /** Draft backup state: { pending, lastPushAt, error, connected }. */
+  getStatus() {
+    return request('/status');
+  },
+
+  /** Start (or reuse) the site's dev server: { url }. */
+  startPreview() {
+    return request('/preview', { method: 'POST' });
   },
 };

@@ -344,3 +344,71 @@ describe('app server request guard', () => {
     assert.deepEqual(docs(), ['good.json']);
   });
 });
+
+describe('app server preview and per-site media', () => {
+  let root, env, app, siteA, siteB, idA, idB, previewCalls, previewImpl;
+  const previews = {
+    start: async (site) => { previewCalls.push(site); return previewImpl(site); },
+    stop: async () => {},
+    stopAll: async () => {},
+  };
+
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), 'vp-app-preview-'));
+    env = { VP_CONFIG_DIR: join(root, 'config') };
+    siteA = makeSite(root, 'media-a');
+    siteB = makeSite(root, 'media-b');
+    mkdirSync(join(siteA, 'src', 'media'), { recursive: true });
+    writeFileSync(join(siteA, 'src', 'media', 'pic.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    app = await startApp({ port: 0, env, git: fakeGit, previews });
+    const add = async (path) => (await (await fetch(`${app.url}/api/sites`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }),
+    })).json()).id;
+    idA = await add(siteA);
+    idB = await add(siteB);
+  });
+  after(async () => {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("preview route starts the site's dev server", async () => {
+    previewCalls = [];
+    previewImpl = async () => ({ url: 'http://127.0.0.1:45678' });
+    const res = await fetch(`${app.url}/api/sites/${idA}/preview`, { method: 'POST' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { url: 'http://127.0.0.1:45678' });
+    assert.equal(previewCalls.length, 1);
+    assert.equal(previewCalls[0].id, idA);
+    assert.equal(previewCalls[0].path, siteA);
+  });
+
+  it('preview route reports a dev server that did not start as 502', async () => {
+    previewCalls = [];
+    previewImpl = async () => { throw new Error('Preview server did not start: boom'); };
+    const res = await fetch(`${app.url}/api/sites/${idA}/preview`, { method: 'POST' });
+    assert.equal(res.status, 502);
+    assert.deepEqual(await res.json(), { error: 'Preview server did not start: boom' });
+  });
+
+  it('preview route for an unknown site is 404', async () => {
+    previewCalls = [];
+    const res = await fetch(`${app.url}/api/sites/nope/preview`, { method: 'POST' });
+    assert.equal(res.status, 404);
+    assert.equal(previewCalls.length, 0);
+  });
+
+  it("serves a site's media at /sites/<id>/media/<file>", async () => {
+    const res = await fetch(`${app.url}/sites/${idA}/media/pic.png`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/png');
+    assert.deepEqual([...new Uint8Array(await res.arrayBuffer())], [0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it('per-site media: other site, unknown id and traversal are 404', async () => {
+    assert.equal((await fetch(`${app.url}/sites/${idB}/media/pic.png`)).status, 404);
+    assert.equal((await fetch(`${app.url}/sites/nope/media/pic.png`)).status, 404);
+    assert.equal((await fetch(`${app.url}/sites/${idA}/media/..%2f..%2fpackage.json`)).status, 404);
+    assert.equal((await fetch(`${app.url}/sites/${idA}/media/%2e%2e/%2e%2e/package.json`)).status, 404);
+  });
+});

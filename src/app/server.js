@@ -35,6 +35,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HOST = '127.0.0.1';
 const PORT_ATTEMPTS = 20;
 const SITE_PATH = /^\/api\/sites\/([^/]+)(?:\/|$)/;
+/** `/sites/<id>/media/<file>`: a site's uploads (its `src/media`), for the editor to display. */
+const SITE_MEDIA_PATH = /^\/sites\/([^/]+)\/media\//;
 
 const STATIC_MOUNTS = [
   { prefix: '/app/', dir: join(ROOT, 'app') },
@@ -217,6 +219,17 @@ export async function startApp({
     sendJson(res, 200, { ok: true });
   });
 
+  app.add('POST', '/api/sites/:siteId/preview', async (req, res) => {
+    const site = getSite(req.params.siteId, { env });
+    if (!site) return sendJson(res, 404, { error: 'Unknown site' });
+    try {
+      const { url } = await previews.start(site);
+      sendJson(res, 200, { url });
+    } catch (err) {
+      sendJson(res, 502, { error: err.message });
+    }
+  });
+
   app.add('GET', '/api/folders', (req, res) => {
     try {
       sendJson(res, 200, listFolders(req.query.path || homedir()));
@@ -242,6 +255,16 @@ export async function startApp({
     if (!(await entry.router.handle(req, res))) sendJson(res, 404, { error: 'Not found' });
   }
 
+  /** Serve `/sites/<id>/media/<file>` from that site's `src/media`; false when not served. */
+  function serveSiteMedia(req, res, pathname) {
+    const match = pathname.match(SITE_MEDIA_PATH);
+    let id;
+    try { id = decodeURIComponent(match[1]); } catch { return false; }
+    const site = getSite(id, { env });
+    if (!site) return false;
+    return serveStatic(req, res, [{ prefix: `/sites/${id}/media/`, dir: join(site.path, 'src', 'media') }]);
+  }
+
   const server = createServer(async (req, res) => {
     try {
       if (refuseForeign(req, res, server.address().port)) return;
@@ -255,6 +278,8 @@ export async function startApp({
       } else if (pathname === '/app' || pathname === '/editor') {
         res.writeHead(302, { Location: `${pathname}/` });
         return res.end();
+      } else if (SITE_MEDIA_PATH.test(pathname)) {
+        if (serveSiteMedia(req, res, pathname)) return;
       } else if (serveStatic(req, res, STATIC_MOUNTS)) {
         return;
       }

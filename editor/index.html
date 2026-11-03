@@ -32,6 +32,22 @@
 </head>
 <body>
 <editor-shell>
+  <!-- The app's header (?site=): shown and wired by site-mode.js; vp serve never shows it -->
+  <header class="site-header" data-site-header hidden>
+    <a class="back-to-posts" data-back-to-posts href="/app/">&larr; Posts</a>
+    <p class="save-state" data-save-state role="status" aria-live="polite"></p>
+    <div class="spacer"></div>
+    <p class="action-state" data-action-state role="status" aria-live="polite"></p>
+    <button type="button" data-tools-toggle aria-expanded="false">Tools</button>
+    <button type="button" data-settings-toggle aria-pressed="true">Settings</button>
+    <button type="button" data-site-preview>Preview</button>
+    <button type="button" class="btn-publish" data-site-publish>Publish</button>
+    <div class="action-report" data-action-report hidden role="alert">
+      <div data-action-report-body></div>
+      <button type="button" data-action-report-close>Dismiss</button>
+    </div>
+  </header>
+
   <div class="editor-toolbar">
     <!-- Formatting buttons injected by menu.js -->
     <div class="toolbar-utils">

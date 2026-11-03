@@ -1,0 +1,163 @@
+/* The app's editor (?site=): a quiet writing screen.
+ * editor-shell.site-mode adds a header row; the doc browser, theme picker,
+ * block inspector and Export live behind Tools (.tools-open); the settings
+ * panel hides with .settings-hidden. .sidebar-hidden is set by site-mode.js
+ * when neither settings nor tools are showing. Without ?site= none of these
+ * classes are set, so the layout is the one in _shell.css. */
+
+editor-shell.site-mode {
+  grid-template-columns: 1fr var(--editor-sidebar-w);
+  grid-template-rows: auto var(--editor-toolbar-h) minmax(0, 1fr);
+  grid-template-areas:
+    "header  header"
+    "toolbar toolbar"
+    "editor  sidebar";
+}
+
+editor-shell.site-mode.inspector-open {
+  grid-template-columns: 1fr var(--editor-sidebar-w) var(--editor-inspector-w);
+  grid-template-areas:
+    "header  header  header"
+    "toolbar toolbar toolbar"
+    "editor  sidebar inspector";
+}
+
+editor-shell.site-mode.sidebar-hidden {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "header"
+    "toolbar"
+    "editor";
+}
+
+editor-shell.site-mode.sidebar-hidden .editor-sidebar {
+  display: none;
+}
+
+/* Header: back link, save state ... action state, Tools, Settings, Preview, Publish */
+editor-shell.site-mode .site-header {
+  grid-area: header;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-s);
+  padding: var(--size-xs) var(--size-m);
+  background: var(--color-surface);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.site-header .spacer {
+  flex: 1;
+}
+
+.site-header .back-to-posts {
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: var(--font-size-s);
+}
+
+.site-header .back-to-posts:hover {
+  text-decoration: underline;
+}
+
+.site-header .save-state,
+.site-header .action-state {
+  margin: 0;
+  font-size: var(--font-size-s);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.site-header .save-state.error,
+.site-header .action-state.error {
+  color: var(--color-error, #d9534f);
+  white-space: normal;
+}
+
+.site-header .action-state.done {
+  color: var(--color-success, #5cb85c);
+}
+
+.site-header button {
+  height: 2rem;
+  padding: 0 var(--size-m);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-s);
+  cursor: pointer;
+}
+
+.site-header button[aria-expanded="true"],
+.site-header button[aria-pressed="true"] {
+  background: var(--color-background);
+  border-color: var(--color-accent);
+}
+
+.site-header .btn-publish {
+  background: var(--color-success, #5cb85c);
+  border-color: var(--color-success, #5cb85c);
+  color: #fff;
+}
+
+.site-header .btn-unpublish {
+  background: var(--color-warning, #f0ad4e);
+  border-color: var(--color-warning, #f0ad4e);
+  color: #fff;
+}
+
+.site-header button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Build log / conflicting files, under the header row */
+.site-header .action-report {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-s);
+  font-size: var(--font-size-s);
+}
+
+.site-header .action-report[hidden] {
+  display: none;
+}
+
+.site-header .action-report > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-header .action-report p {
+  margin: 0;
+}
+
+.site-header .action-report pre {
+  max-height: 16rem;
+  overflow: auto;
+  margin: var(--size-xs) 0 0;
+  padding: var(--size-s);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  font-size: var(--font-size-xs, 0.75rem);
+  white-space: pre-wrap;
+}
+
+/* The writing screen: tools and the old save indicator stay out of sight */
+editor-shell.site-mode .toolbar-utils .save-indicator,
+editor-shell.site-mode meta-panel .actions {
+  display: none;
+}
+
+editor-shell.site-mode:not(.tools-open) :is(doc-browser, theme-picker, .site-label),
+editor-shell.site-mode:not(.tools-open) :is([data-export-json], [data-toggle-inspector]),
+editor-shell.site-mode.settings-hidden meta-panel {
+  display: none;
+}
+
+editor-shell.site-mode .editor-pane {
+  padding-block: var(--size-2xl, 3rem);
+}

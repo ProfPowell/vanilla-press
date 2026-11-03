@@ -36,6 +36,7 @@ import './components/meta-panel.js';
 import './components/doc-browser.js';
 import './components/theme-picker.js';
 import { initPatterns } from './patterns.js';
+import { isSiteMode, initSiteMode } from './site-mode.js';
 
 // Re-export meta-state functions for convenience
 export { getCurrentMeta, setCurrentMeta, getCurrentDocId } from './meta-state.js';
@@ -216,6 +217,7 @@ export function initEditor() {
 
   setupExportButton();
   initPatterns();
+  initSiteMode();
 
   // Trigger initial AST inspector update
   if (window.__onEditorUpdate) {
@@ -318,7 +320,8 @@ export async function loadDocument(id) {
     notifyConflict();
   } catch (err) {
     console.error('Error loading document:', err);
-    alert(`Error loading document: ${err.message}`);
+    if (isSiteMode) setSaveStatus('error', `Couldn't open the post: ${err.message}`);
+    else alert(`Error loading document: ${err.message}`);
   }
 }
 

@@ -13,13 +13,17 @@ import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.j
 import { api } from '../api-client.js';
 import { postUrlPath } from '../../../../src/sync/paths.js';
 import { saveDocument, loadDocument, handleSaveError, loadVersionOnDisk } from '../editor.js';
+import { onMetaUpdate as onSiteMetaUpdate } from '../site-mode.js';
 
 export class MetaPanel extends HTMLElement {
   connectedCallback() {
     this.render();
 
     // Listen for meta updates (e.g. from doc loading)
-    window.__onMetaUpdate = (meta) => this.syncFromMeta(meta);
+    window.__onMetaUpdate = (meta) => {
+      this.syncFromMeta(meta);
+      onSiteMetaUpdate(meta); // the app's header Publish button (no-op without ?site=)
+    };
     // Show / hide the "changed on disk" notice for the current document
     window.__onConflictChange = (docId, message) => this.showConflict(docId, message);
   }

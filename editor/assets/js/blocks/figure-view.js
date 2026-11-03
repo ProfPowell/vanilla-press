@@ -11,6 +11,7 @@
  */
 
 import { openMediaPicker } from '../components/media-picker.js';
+import { SITE, displayMediaUrl } from '../site-context.js';
 
 export class FigureView {
   constructor(node, view, getPos) {
@@ -81,7 +82,7 @@ export class FigureView {
     this.img = document.createElement('img');
     this.img.alt = node.attrs.alt || '';
     if (node.attrs.src) {
-      this.img.src = node.attrs.src;
+      this.img.src = displayMediaUrl(node.attrs.src, SITE);
       this.img.style.display = '';
     } else {
       this.img.style.display = 'none';
@@ -107,7 +108,7 @@ export class FigureView {
 
     // Update image
     if (node.attrs.src) {
-      this.img.src = node.attrs.src;
+      this.img.src = displayMediaUrl(node.attrs.src, SITE);
       this.img.alt = node.attrs.alt || '';
       this.img.style.display = '';
       this.placeholder.style.display = 'none';

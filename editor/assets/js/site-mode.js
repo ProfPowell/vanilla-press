@@ -21,7 +21,7 @@
 
 import {
   SITE, backupOutcome, publishFailure, keepPollingBackup, createLiveTracker,
-  saveStateText, headerActions, actionPendingText,
+  saveStateText, headerActions, actionPendingText, afterAction, heldOnLoad,
 } from './site-context.js';
 import { api } from './api-client.js';
 import { postUrlPath } from '../../../src/sync/paths.js';
@@ -46,6 +46,8 @@ let liveTimer = null;
 let held = false;
 /** What the save slot shows once saved: 'saved' or 'backed-up' (null: something else). */
 let savedShown = null;
+/** Real saves so far: a save during an action means the action did not carry the newest edit. */
+let saveCount = 0;
 
 /** Whether the editor runs in the app for one site. */
 export const isSiteMode = Boolean(SITE);
@@ -204,6 +206,7 @@ export function onSaveStatus(status, message) {
       show(els.saveState, 'Saving…');
       break;
     case 'saved':
+      if (realSave) saveCount++;
       if (realSave && getCurrentMeta()?.status === 'published') {
         // This edit is not live: a Live link (or a running live check) is out of date.
         held = true;
@@ -285,11 +288,23 @@ export function onMetaUpdate(meta) {
     for (const el of [els.actionState, els.saveState]) el.title = '';
     show(els.actionState, '');
     if (savedShown) showSaved(savedShown);
+    loadHeld(getCurrentDocId());
   }
   const actions = headerActions(meta);
   els.publish.textContent = actions.publish.text;
   els.publish.className = actions.publish.className;
   els.update.hidden = !actions.update;
+}
+
+/** Ask the server whether the opened post has saved edits that are not live yet (survives a reload). */
+async function loadHeld(docId) {
+  const meta = getCurrentMeta();
+  if (!docId || meta?.status !== 'published') return;
+  let state = null;
+  try { state = await api.getDocumentState(docId); } catch { return; }
+  if (getCurrentDocId() !== docId || !heldOnLoad(getCurrentMeta(), state)) return;
+  held = true;
+  if (lastStatus === 'saved') showSaved(savedShown || 'saved');
 }
 
 /** The open post's edits are on the live site now (or committed for it): drop `· not live yet`. */
@@ -317,15 +332,17 @@ async function runAction(action) {
       return;
     }
     const docId = getCurrentDocId();
+    const savesAtAction = saveCount;
     show(els.actionState, actionPendingText(action));
     let result;
     try {
       const call = { publish: api.publishDocument, update: api.updateDocument, unpublish: api.unpublishDocument }[action];
       result = await call.call(api, docId);
     } catch (err) {
-      return await showPublishError(err, action, docId);
+      return await showPublishError(err, action, docId, savesAtAction);
     }
-    editsApplied();
+    const after = afterAction(savesAtAction, saveCount);
+    if (after.clearHeld) editsApplied();
     // The server changed status (and published date): load it back
     await loadDocument(docId);
     document.querySelector('doc-browser')?.refresh();
@@ -335,6 +352,10 @@ async function runAction(action) {
     if (!result.url) {
       const done = action === 'update' ? 'Updated' : 'Published';
       return show(els.actionState, `${done} and pushed (set siteUrl to check when it is live)`, 'done');
+    }
+    if (!after.watchLive) {
+      // An edit saved while this ran is not in it: Live would be wrong for what you see.
+      return show(els.actionState, `${action === 'update' ? 'Updated' : 'Published'}; your newest edits are not live yet: click Update`);
     }
     watchLive(docId, result.url, actionPendingText(action));
   } finally {
@@ -351,11 +372,12 @@ async function runAction(action) {
  * @param {Error & { status?: number, data?: Object }} err
  * @param {'publish'|'update'|'unpublish'} action
  * @param {string} docId
+ * @param {number} savesAtAction - the real-save count when the action started
  */
-async function showPublishError(err, action, docId) {
+async function showPublishError(err, action, docId, savesAtAction) {
   const failure = publishFailure(err, action);
   if (failure.reload) {
-    editsApplied();
+    if (afterAction(savesAtAction, saveCount).clearHeld) editsApplied();
     await loadDocument(docId);
     document.querySelector('doc-browser')?.refresh();
   }

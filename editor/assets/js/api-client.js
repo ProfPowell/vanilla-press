@@ -179,6 +179,11 @@ export const api = {
     return request(`/documents/${encodeURIComponent(id)}/unpublish`, { method: 'POST' });
   },
 
+  /** Whether a published post has saved edits that are not live yet: { notLive }. */
+  getDocumentState(id) {
+    return request(`/documents/${encodeURIComponent(id)}/state`);
+  },
+
   /** Whether the published page is live: { live, url }. */
   getLive(id) {
     return request(`/documents/${encodeURIComponent(id)}/live`);

@@ -118,6 +118,30 @@ export function keepPollingBackup(outcome) {
 }
 
 /**
+ * After a publish/update/unpublish succeeded (or was committed): were its
+ * edits the newest? `savesAtAction` is the real-save count right after the
+ * action's own save; a save after it is not in this build, so the post stays
+ * held and the live check (which would say Live) is skipped.
+ * @param {number} savesAtAction
+ * @param {number} savesNow
+ * @returns {{ clearHeld: boolean, watchLive: boolean }}
+ */
+export function afterAction(savesAtAction, savesNow) {
+  const newest = savesNow === savesAtAction;
+  return { clearHeld: newest, watchLive: newest };
+}
+
+/**
+ * Whether a post opened with saved edits that are not live yet (GET .../state).
+ * @param {{ status?: string }|null} meta
+ * @param {{ notLive?: boolean }|null} state
+ * @returns {boolean}
+ */
+export function heldOnLoad(meta, state) {
+  return meta?.status === 'published' && state?.notLive === true;
+}
+
+/**
  * Token bookkeeping for the live poll, so a poll never reports on another
  * post: `start(docId)` returns a token, `current(token)` says whether it
  * still counts; `docOpened(docId)` cancels the poll (true) when a different

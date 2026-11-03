@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   siteFromSearch, apiBase, displayMediaUrl, storedMediaUrl, backupOutcome, publishFailure,
-  keepPollingBackup, createLiveTracker, saveStateText, headerActions, actionPendingText,
+  keepPollingBackup, createLiveTracker, saveStateText, headerActions, actionPendingText, afterAction, heldOnLoad,
 } from '../../editor/assets/js/site-context.js';
 
 describe('editor site context', () => {
@@ -131,5 +131,16 @@ describe('editor site context', () => {
     const t2 = live.start('doc_b');
     live.cancel();
     assert.equal(live.current(t2), false);
+  });
+  it('afterAction: a save after the action\'s own save keeps the edits held and skips the live check', () => {
+    assert.deepEqual(afterAction(3, 3), { clearHeld: true, watchLive: true });
+    assert.deepEqual(afterAction(3, 4), { clearHeld: false, watchLive: false });
+  });
+
+  it('heldOnLoad: a published post whose page is not live yet, from GET state', () => {
+    assert.equal(heldOnLoad({ status: 'published' }, { notLive: true }), true);
+    assert.equal(heldOnLoad({ status: 'published' }, { notLive: false }), false);
+    assert.equal(heldOnLoad({ status: 'draft' }, { notLive: true }), false);
+    assert.equal(heldOnLoad({ status: 'published' }, null), false);
   });
 });

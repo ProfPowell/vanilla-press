@@ -37,6 +37,27 @@ describe('html renderer: component', () => {
   });
 });
 
+describe('html renderer: unsafe names', () => {
+  it('drops a block with an unsafe tag', () => {
+    assert.equal(block({ type: 'component', tag: 'script', attrs: {} }), '');
+    assert.equal(block({ type: 'component', tag: 'img onerror=x', attrs: {} }), '');
+  });
+  it('inline with unsafe tag renders only its children', () => {
+    assert.equal(block({ type: 'paragraph', children: [{ type: 'component', tag: 'script', attrs: {}, children: [{ type: 'text', value: 'hi' }] }] }), '<p>hi</p>');
+  });
+  it('skips unsafe attr names', () => {
+    assert.equal(block({ type: 'component', tag: 'x-one', attrs: { onclick: 'x', title: 't', 'a b': '1' } }), '<x-one title="t"></x-one>');
+  });
+  it('markdown applies the same guards', () => {
+    const out = renderMd({ meta: {}, blocks: [
+      { type: 'component', tag: 'x-one', attrs: { onclick: 'x', title: 't' } },
+      { type: 'component', tag: 'script', attrs: {} },
+    ] });
+    assert.ok(out.includes('<x-one title="t"></x-one>'));
+    assert.ok(!out.includes('script') && !out.includes('onclick'));
+  });
+});
+
 describe('markdown renderer: component', () => {
   const doc = (...blocks) => ({ meta: {}, blocks });
   it('emits the same HTML for blocks', () => {

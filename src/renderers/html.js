@@ -8,6 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { isSafeComponentTag, isSafeAttrName } from '../schema/component-names.js';
 import { escapeHtml, escapeAttr, formatDate } from './shared.js';
 
 /**
@@ -372,7 +373,7 @@ function renderDefinitionDesc(block) {
  * @returns {string}
  */
 function renderComponentAttrs(attrs) {
-  return Object.keys(attrs || {}).sort().map(name => {
+  return Object.keys(attrs || {}).filter(isSafeAttrName).sort().map(name => {
     const v = attrs[name];
     if (v === true) return ` ${name}`;
     if (v === false) return '';
@@ -388,6 +389,7 @@ function renderComponentAttrs(attrs) {
  */
 export function renderComponentBlock(block) {
   const { tag } = block;
+  if (!isSafeComponentTag(tag)) return '';
   let inner = '';
   if (Array.isArray(block.children) && block.children.length) {
     inner = block.children.map(renderBlock).join('\n');
@@ -408,6 +410,7 @@ export function renderComponentBlock(block) {
  * @returns {string}
  */
 export function renderComponentInline(node) {
+  if (!isSafeComponentTag(node.tag)) return renderInline(node.children);
   return `<${node.tag}${renderComponentAttrs(node.attrs)}>${renderInline(node.children)}</${node.tag}>`;
 }
 

@@ -7,11 +7,9 @@
  * @module schema/validate
  */
 
+import { isSafeComponentTag, isSafeAttrName } from './component-names.js';
 import { blockTypes, inlineTypes, validMarks, requiredMeta, validStatuses } from './content-schema.js';
 
-const TAG_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/;
-const RESERVED_TAGS = new Set(['annotation-xml', 'color-profile', 'font-face', 'font-face-src', 'font-face-uri', 'font-face-format', 'font-face-name', 'missing-glyph']);
-const ATTR_NAME_RE = /^[a-z][a-z0-9-]*$/;
 const WRAPS = ['text', 'template', 'script'];
 
 /**
@@ -266,7 +264,7 @@ function validateAttrs(attrs, attrDefs, path, errors) {
  */
 function validateComponent(node, path, errors, ctx, inline) {
   const { tag } = node;
-  if (typeof tag !== 'string' || !TAG_RE.test(tag) || RESERVED_TAGS.has(tag)) {
+  if (!isSafeComponentTag(tag)) {
     errors.push(`${path}: component tag ${JSON.stringify(tag)} is not a valid custom element name`);
     return;
   }
@@ -277,7 +275,7 @@ function validateComponent(node, path, errors, ctx, inline) {
     errors.push(`${path}: component "${tag}" attrs must be an object`);
   } else {
     for (const [name, value] of Object.entries(attrs)) {
-      if (!ATTR_NAME_RE.test(name) || name.startsWith('on')) {
+      if (!isSafeAttrName(name)) {
         errors.push(`${path}: component "${tag}" attr name "${name}" is not allowed`);
       } else if (!['string', 'number', 'boolean'].includes(typeof value)) {
         errors.push(`${path}: component "${tag}" attr "${name}" must be a string, number or boolean`);
@@ -331,7 +329,7 @@ function validateComponent(node, path, errors, ctx, inline) {
     for (const [name, value] of Object.entries(attrs)) {
       const def = declared.get(name);
       if (!def) {
-        if (ATTR_NAME_RE.test(name) && !name.startsWith('on')) {
+        if (isSafeAttrName(name)) {
           errors.push(`${path}: component "${tag}" has no attr "${name}"`);
         }
         continue;

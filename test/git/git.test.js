@@ -1,12 +1,12 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import {
   gitStatus, commitPaths, push, cloneRepo,
-  GitConflictError, GitNotConnectedError, GitError,
+  GitConflictError, GitNotConnectedError, GitError, GitStashConflictError,
 } from '../../src/git/git.js';
 
 let root, remote, a, b;
@@ -156,4 +156,71 @@ test('git never prompts', async () => {
   const started = Date.now();
   await assert.rejects(cloneRepo('https://127.0.0.1:9/none.git', join(root, 'c')), GitError);
   assert.ok(Date.now() - started < 10000);
+});
+
+function addHook(body) {
+  const hook = join(remote, 'hooks', 'pre-receive');
+  writeFileSync(hook, `#!/bin/sh\n${body}\n`);
+  chmodSync(hook, 0o755);
+}
+
+test('git calls time out with a GitError', async () => {
+  addHook('exec sleep 5');
+  write(a, 'content/x.json', '{}');
+  await commitPaths(a, ['content'], 'Draft: X');
+  process.env.VP_GIT_TIMEOUT_MS = '300';
+  try {
+    const started = Date.now();
+    await assert.rejects(push(a), (err) => err instanceof GitError && /timed out/.test(err.message));
+    assert.ok(Date.now() - started < 4000);
+  } finally {
+    delete process.env.VP_GIT_TIMEOUT_MS;
+  }
+});
+
+test('git children get non-interactive ssh and askpass settings', async () => {
+  const out = join(root, 'env.txt');
+  addHook(`printf '%s|%s|%s' "$GIT_SSH_COMMAND" "\${GIT_ASKPASS-unset}" "$GIT_TERMINAL_PROMPT" > '${out}'`);
+  write(a, 'content/x.json', '{}');
+  await commitPaths(a, ['content'], 'Draft: X');
+  const saved = process.env.GIT_SSH_COMMAND;
+  delete process.env.GIT_SSH_COMMAND;
+  try {
+    await push(a);
+  } finally {
+    if (saved !== undefined) process.env.GIT_SSH_COMMAND = saved;
+  }
+  assert.equal(readFileSync(out, 'utf8'), 'ssh -o BatchMode=yes||0');
+});
+
+test('push keeps a non-conflicting uncommitted change outside VP paths', async () => {
+  write(b, 'other.txt', 'remote\n');
+  git(b, 'add', '-A');
+  git(b, 'commit', '-m', 'other');
+  git(b, 'push');
+  write(a, 'README.md', 'my local edit\n');
+  write(a, 'content/x.json', '{}');
+  await commitPaths(a, ['content'], 'Draft: X');
+  assert.deepEqual(await push(a), { pushed: true, rebased: true });
+  assert.equal(git(a, 'status', '--porcelain'), 'M README.md');
+  assert.equal(git(a, 'stash', 'list'), '');
+});
+
+test('push stops honestly when re-applying uncommitted changes conflicts', async () => {
+  write(b, 'README.md', 'remote edit\n');
+  git(b, 'commit', '-am', 'readme');
+  git(b, 'push');
+  write(a, 'README.md', 'my local edit\n');
+  write(a, 'content/x.json', '{}');
+  await commitPaths(a, ['content'], 'Draft: X');
+  const remoteBefore = git(remote, 'rev-parse', 'main');
+  await assert.rejects(push(a), (err) => {
+    assert.ok(err instanceof GitStashConflictError);
+    assert.ok(!(err instanceof GitConflictError));
+    assert.deepEqual(err.files, ['README.md']);
+    assert.match(err.message, /stash/);
+    return true;
+  });
+  assert.equal(git(remote, 'rev-parse', 'main'), remoteBefore);
+  assert.notEqual(git(a, 'stash', 'list'), '');
 });

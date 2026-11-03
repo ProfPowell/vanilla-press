@@ -8,12 +8,28 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 /** Thrown when a rebase onto the remote conflicts. The rebase is aborted first. */
 export class GitConflictError extends Error {
   constructor(files) {
     super(`Merge conflict in: ${files.join(', ')}`);
     this.name = 'GitConflictError';
+    this.files = files;
+  }
+}
+
+/**
+ * Thrown when the rebase succeeded but re-applying the user's uncommitted changes
+ * conflicted. Those changes are kept in `git stash`; nothing was pushed.
+ */
+export class GitStashConflictError extends Error {
+  constructor(files) {
+    super(
+      `Your uncommitted changes conflict with the incoming remote changes in: ${files.join(', ')}. ` +
+      'They are kept in `git stash`; resolve them there (git stash pop). Nothing was pushed.',
+    );
+    this.name = 'GitStashConflictError';
     this.files = files;
   }
 }
@@ -42,14 +58,25 @@ export class GitError extends Error {
  * @returns {Promise<string>} trimmed stdout
  */
 async function runGit(dir, args) {
+  const timeout = Number(process.env.VP_GIT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
   try {
     const { stdout } = await execFileAsync('git', args, {
       cwd: dir,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      // No prompt may ever reach a terminal: HTTPS (TERMINAL_PROMPT), askpass helpers, ssh.
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_ASKPASS: '',
+        GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes',
+      },
       maxBuffer: 16 * 1024 * 1024,
+      timeout,
     });
     return stdout.trim();
   } catch (err) {
+    if (err.killed) {
+      throw new GitError(`git ${args[0]} timed out after ${Math.round(timeout / 1000)}s`, String(err.stderr ?? ''));
+    }
     const stderr = String(err.stderr ?? err.message ?? '').trim();
     throw new GitError(`git ${args[0]} failed: ${stderr}`, stderr);
   }
@@ -116,15 +143,26 @@ export async function push(dir) {
   } catch (err) {
     if (!(err instanceof GitError) || !REJECTED.test(err.stderr)) throw err;
   }
+  const unmerged = async () => ((await tryGit(dir, ['diff', '--name-only', '--diff-filter=U'])) || '')
+    .split('\n').filter(Boolean);
+  const rebaseInProgress = () => existsSync(join(dir, '.git', 'rebase-merge'))
+    || existsSync(join(dir, '.git', 'rebase-apply'));
   try {
     await runGit(dir, ['pull', '--rebase', '--autostash']);
   } catch (err) {
-    const files = ((await tryGit(dir, ['diff', '--name-only', '--diff-filter=U'])) || '')
-      .split('\n').filter(Boolean);
-    await tryGit(dir, ['rebase', '--abort']);
-    if (files.length > 0) throw new GitConflictError(files);
+    const files = await unmerged();
+    if (rebaseInProgress()) {
+      await runGit(dir, ['rebase', '--abort']);
+      if (files.length > 0) throw new GitConflictError(files);
+      throw err;
+    }
+    // Rebase finished but re-applying the autostash conflicted: changes stay in the stash.
+    if (files.length > 0) throw new GitStashConflictError(files);
     throw err;
   }
+  // git can exit 0 even when the autostash re-apply left conflict markers.
+  const leftover = await unmerged();
+  if (leftover.length > 0) throw new GitStashConflictError(leftover);
   await runGit(dir, ['push']);
   return { pushed: true, rebased: true };
 }

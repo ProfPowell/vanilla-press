@@ -241,5 +241,5 @@ export async function pullFastForward(dir) {
  * @returns {Promise<void>}
  */
 export async function cloneRepo(url, dest) {
-  await runGit(process.cwd(), ['clone', url, dest]);
+  await runGit(process.cwd(), ['clone', '--', url, dest]); // `--`: a URL can never be read as an option
 }

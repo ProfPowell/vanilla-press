@@ -10,6 +10,7 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 
 const LOG_LIMIT = 4000;
+export const BUILD_TIMEOUT_MS = 10 * 60_000;
 
 /**
  * Spawn npm in a new process group so the whole tree can be killed.
@@ -41,19 +42,38 @@ export function collectLog(child) {
   return () => log.slice(-LOG_LIMIT);
 }
 
+/** SIGKILL a child's process group (npm and everything it started). */
+function killGroup(child) {
+  try {
+    if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGKILL');
+    else child.kill('SIGKILL');
+  } catch { /* already gone */ }
+}
+
 /**
- * Run npm to completion.
+ * Run npm to completion. With `timeoutMs`, a run that takes longer is killed
+ * (its whole process group) and reported as failed.
  * @param {string} dir
  * @param {string[]} args
  * @param {NodeJS.ProcessEnv} [env]
+ * @param {{ timeoutMs?: number }} [opts]
  * @returns {Promise<{ ok: boolean, log: string }>}
  */
-export function runNpm(dir, args, env = {}) {
+export function runNpm(dir, args, env = {}, { timeoutMs } = {}) {
   return new Promise((resolve) => {
     const child = spawnNpm(args, { cwd: dir, env });
     const tail = collectLog(child);
-    child.on('error', (err) => resolve({ ok: false, log: `${tail()}${err.message}`.slice(-LOG_LIMIT) }));
-    child.on('close', (code) => resolve({ ok: code === 0, log: tail() }));
+    let timedOut = false;
+    const timer = timeoutMs > 0 ? setTimeout(() => { timedOut = true; killGroup(child); }, timeoutMs) : null;
+    const done = (result) => { clearTimeout(timer); resolve(result); };
+    child.on('error', (err) => done({ ok: false, log: `${tail()}${err.message}`.slice(-LOG_LIMIT) }));
+    child.on('close', (code) => {
+      if (timedOut) {
+        const note = `\nBuild timed out after ${Math.round(timeoutMs / 1000)} s and was stopped.`;
+        return done({ ok: false, log: `${tail()}${note}`.slice(-LOG_LIMIT) });
+      }
+      done({ ok: code === 0, log: tail() });
+    });
   });
 }
 
@@ -70,12 +90,14 @@ export async function ensureInstalled(dir, { run = runNpm } = {}) {
 }
 
 /**
- * Run the site's `npm run build` with NODE_ENV=production.
+ * Run the site's `npm run build` with NODE_ENV=production. A build that runs
+ * longer than `timeoutMs` (default 10 minutes) is stopped and reported as failed.
  * @param {string} dir
+ * @param {{ timeoutMs?: number }} [opts]
  * @returns {Promise<{ ok: boolean, log: string }>}
  */
-export function runBuild(dir) {
-  return runNpm(dir, ['run', 'build'], { NODE_ENV: 'production' });
+export function runBuild(dir, { timeoutMs = BUILD_TIMEOUT_MS } = {}) {
+  return runNpm(dir, ['run', 'build'], { NODE_ENV: 'production' }, { timeoutMs });
 }
 
 function isFree(port) {

@@ -59,14 +59,14 @@ describe('app publish end to end', () => {
       // The "deployed" page is whatever the test says it is.
       fetch: async () => new Response(liveHtml, { status: 200 }),
     });
-  });
+  }, { timeout: 60_000 });
 
   after(async () => {
     await app?.close();
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('app publish builds a real Cook site and pushes the page', async () => {
+  it('app publish builds a real Cook site and pushes the page', { timeout: 120_000 }, async () => {
     const added = await api('/api/sites', { method: 'POST', body: { path: site, name: 'E2E' } });
     assert.equal(added.status, 201, JSON.stringify(added.data));
     siteId = added.data.id;

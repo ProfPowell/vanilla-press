@@ -1,6 +1,6 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
@@ -9,6 +9,8 @@ import { ensureInstalled, runBuild, freePort } from '../../src/app/site-process.
 let dir;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'vp-proc-')); });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+const require_ = (name) => readFileSync(join(dir, name), 'utf8');
 
 function pkg(scripts) {
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', scripts }));
@@ -32,6 +34,18 @@ test('runBuild sets NODE_ENV=production', async () => {
   pkg({ build: `node -e "console.log('env='+process.env.NODE_ENV)"` });
   const res = await runBuild(dir);
   assert.match(res.log, /env=production/);
+});
+
+test('runBuild times out as a failed build and kills the build', { timeout: 15000 }, async () => {
+  pkg({ build: `node -e "require('fs').writeFileSync('pid',String(process.pid));setInterval(()=>{},1000)"` });
+  const started = Date.now();
+  const res = await runBuild(dir, { timeoutMs: 1500 });
+  assert.equal(res.ok, false);
+  assert.match(res.log, /Build timed out after 2 s/);
+  assert.ok(Date.now() - started < 8000);
+  const pid = Number(require_('pid'));
+  await new Promise((r) => setTimeout(r, 200));
+  assert.throws(() => process.kill(pid, 0), /ESRCH/);
 });
 
 test('ensureInstalled skips when node_modules exists', async () => {

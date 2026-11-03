@@ -189,6 +189,13 @@ test('push without upstream throws GitNotConnectedError', async () => {
 test('git never prompts', async () => {
   const started = Date.now();
   await assert.rejects(cloneRepo('https://127.0.0.1:9/none.git', join(root, 'c')), GitError);
+  // A "URL" that looks like an option is a repository name to git, never an option.
+  await assert.rejects(cloneRepo('--bogus-option', join(root, 'd')), (err) => {
+    assert.ok(err instanceof GitError);
+    assert.doesNotMatch(err.stderr, /unknown option/);
+    assert.match(err.stderr, /does not exist|not found|bogus-option/);
+    return true;
+  });
   assert.ok(Date.now() - started < 10000);
 });
 

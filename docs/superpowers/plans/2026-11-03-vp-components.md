@@ -139,7 +139,7 @@
 - Modify: `package.json` dependencies.
   - Add the packages from Global Constraints at their current npm versions: `@profpowell/browser-window ^1.4.7`, `@profpowell/terminal-window ^2.1.0`, `@profpowell/code-playground ^0.2.0`, `@profpowell/pdf-viewer ^0.2.0`, `@profpowell/bg-wc ^0.4.0`, `@profpowell/border-wc ^0.2.0`, `@profpowell/image-editor ^0.1.0`.
   - Bump `@profpowell/code-block` to `^2.9.0`.
-  - Add `@profpowell/marquee-wc` and `@profpowell/blink-wc` as `file:../marquee-wc` and `file:../blink-wc` (not on npm yet; the same pattern as `vanilla-breeze`).
+  - Add `@profpowell/marquee-wc ^1.7.0` and `@profpowell/blink-wc ^1.5.0` (now on npm).
 - Test: `test/components/manifest.test.js`, `test/components/catalog.test.js`, `test/components/describe.test.js`, plus fixture packages under `test/fixtures/components/`.
 
 **Interfaces:**
@@ -502,7 +502,7 @@
   - `test/e2e/components-build.test.js`;
   - `editor/components-gallery.html`: every catalog element rendered once, with a VB theme switcher, for the check below.
 - Modify: `package.json` (devDependency), `README.md`, `CLAUDE.md` (an App → Components paragraph), `docs/EDITOR.md`.
-- Create: `docs/superpowers/followups/2026-11-03-vp-components.md`: per-package follow-ups from the gallery check (manifests without slots, packages that ignore VB tokens), plus the outstanding npm publishes (marquee-wc, blink-wc, bg-wc 0.5.0).
+- Create: `docs/superpowers/followups/2026-11-03-vp-components.md`: per-package follow-ups from the gallery check (manifests without slots, packages that ignore VB tokens), plus the outstanding npm publish of bg-wc 0.5.0.
 
 - [ ] **Step 1: Write the e2e test.**
   - The temp site has `node_modules` symlinked to VP's (as in `test/e2e/cook-site.test.js`).

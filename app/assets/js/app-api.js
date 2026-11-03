@@ -49,3 +49,28 @@ export function formatDate(iso) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+/** Component packages for a site: `{ cookSupportsPackages, packages }`. */
+export function listComponents(siteId) {
+  return api(`/api/sites/${encodeURIComponent(siteId)}/components`);
+}
+
+/**
+ * Turn a package on or off. Resolves `{ status, body }` for any HTTP response so callers can
+ * classify refusals (409 in use / dirty, 502 npm); throws only when the app is unreachable.
+ */
+export async function setComponent(siteId, pkg, enabled) {
+  let res;
+  try {
+    res = await fetch(`/api/sites/${encodeURIComponent(siteId)}/components/${encodeURIComponent(pkg)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+  } catch {
+    throw new Error('Cannot reach the Vanilla Press app. Is it still running?');
+  }
+  let body = null;
+  try { body = await res.json(); } catch { /* no body */ }
+  return { status: res.status, body };
+}

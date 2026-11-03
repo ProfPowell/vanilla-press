@@ -27,6 +27,7 @@
       <ul>
         <li><button type="button" data-section="posts" aria-current="page">Posts</button></li>
         <li><button type="button" data-section="media">Media</button></li>
+        <li><button type="button" data-section="components">Components</button></li>
         <li><button type="button" data-section="theme">Theme</button></li>
         <li><button type="button" data-section="programs">Programs</button></li>
         <li><button type="button" data-section="analytics">Analytics</button></li>
@@ -43,6 +44,12 @@
         <p id="error" class="error" role="alert" hidden></p>
         <p id="empty" hidden>No posts yet. Start with a new post.</p>
         <ul id="posts" class="post-list" aria-labelledby="posts-title"></ul>
+      </section>
+      <section id="components-section" aria-labelledby="components-title" hidden>
+        <div class="section-head"><h2 id="components-title">Components</h2></div>
+        <p id="components-notice" class="notice" role="status" hidden></p>
+        <p id="components-error" class="error" role="alert" hidden></p>
+        <ul id="components" class="component-list" aria-labelledby="components-title"></ul>
       </section>
       <section id="soon-section" aria-labelledby="soon-title" hidden>
         <h2 id="soon-title"></h2>

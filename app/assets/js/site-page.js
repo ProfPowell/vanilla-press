@@ -1,4 +1,5 @@
-import { api, h, formatDate } from './app-api.js';
+import { api, h, formatDate, listComponents, setComponent } from './app-api.js';
+import { packageRows, toggleOutcome } from './components-view.js';
 
 const $ = (id) => document.getElementById(id);
 const siteId = new URLSearchParams(location.search).get('site');
@@ -84,16 +85,91 @@ $('new-post').addEventListener('click', async (e) => {
   }
 });
 
-// Sidebar: Posts shows the list; every other section is a placeholder.
+// Components section.
+let componentState = null;
+let busy = false;
+
+function setComponentsError(text, posts) {
+  const el = $('components-error');
+  el.replaceChildren();
+  if (text) el.append(text);
+  if (posts?.length) {
+    el.append(h('ul', {}, ...posts.map((p) =>
+      h('li', {}, h('a', { href: editorUrl(p.id) }, p.title || 'Untitled'), ` (${p.status})`))));
+  }
+  el.hidden = !text;
+}
+
+function componentRow(pkg, row, working) {
+  const id = `comp-${row.package.replace(/[^a-z0-9]/gi, '-')}`;
+  const box = h('input', { type: 'checkbox', role: 'switch', id, 'data-package': row.package });
+  box.checked = row.enabled;
+  box.disabled = !row.canToggle || busy;
+  const elements = (pkg.elements || []).map((e) =>
+    h('li', {}, h('strong', {}, e.label), e.description ? ` ${e.description}` : ''));
+  return h('li', { class: 'component' },
+    h('div', { class: 'component-head' },
+      h('label', { for: id }, h('span', { class: 'component-name' }, row.label)),
+      box,
+      h('span', { class: 'muted' }, row.version ? `v${row.version}` : ''),
+      h('span', { class: 'muted', role: 'status' }, working || row.note)),
+    h('ul', { class: 'component-elements' }, ...elements));
+}
+
+function renderComponents(workingPkg, workingText) {
+  const rows = packageRows(componentState.packages);
+  $('components').replaceChildren(...rows.map((row, i) =>
+    componentRow(componentState.packages[i], row, row.package === workingPkg ? workingText : '')));
+  const n = $('components-notice');
+  n.hidden = componentState.cookSupportsPackages !== false;
+  n.textContent = n.hidden ? '' : "This site's Cook is older than 2.5.0, so turned-on components won't load on the live site yet. Update cook-ssg in the site to ^2.5.0.";
+}
+
+async function loadComponents() {
+  try {
+    componentState = await listComponents(siteId);
+    setComponentsError('');
+    renderComponents();
+  } catch (err) {
+    setComponentsError(err.message);
+  }
+}
+
+$('components').addEventListener('change', async (e) => {
+  const box = e.target.closest('input[data-package]');
+  if (!box || busy) return;
+  const pkg = box.dataset.package;
+  const enabled = box.checked;
+  busy = true;
+  setComponentsError('');
+  renderComponents(pkg, enabled ? 'Installing\u2026' : 'Removing\u2026');
+  try {
+    const { status, body } = await setComponent(siteId, pkg, enabled);
+    const out = toggleOutcome(status, body);
+    if (out.kind === 'ok') {
+      componentState.packages = componentState.packages.map((p) => (p.package === pkg ? body : p));
+    } else {
+      setComponentsError(out.text, out.posts);
+    }
+  } catch (err) {
+    setComponentsError(err.message);
+  }
+  busy = false;
+  renderComponents();
+});
+
+// Sidebar: Posts and Components are real; every other section is a placeholder.
 document.querySelector('.side-nav').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-section]');
   if (!btn) return;
   for (const b of document.querySelectorAll('.side-nav button')) b.removeAttribute('aria-current');
   btn.setAttribute('aria-current', 'page');
-  const posts = btn.dataset.section === 'posts';
-  $('posts-section').hidden = !posts;
-  $('soon-section').hidden = posts;
+  const section = btn.dataset.section;
+  $('posts-section').hidden = section !== 'posts';
+  $('components-section').hidden = section !== 'components';
+  $('soon-section').hidden = section === 'posts' || section === 'components';
   $('soon-title').textContent = btn.textContent;
+  if (section === 'components' && !componentState) loadComponents();
 });
 
 if (!siteId) {

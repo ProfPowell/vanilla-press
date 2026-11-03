@@ -20,6 +20,7 @@ Recorded during the subagent-driven build of feat/components (plan: docs/superpo
 - Task 7: Ruling R11: settings panel opens when the cursor is anywhere inside a component (not only node selection) — needed to edit blocks-kind components while typing in them — cost if wrong: panel shows more often.
 - Task 7: Ruling R12: document saves validate component tags against the full catalog (componentIndex enabledOnly:false); only Publish/Update require the tag to be enabled (Task 4 guard); the editor surfaces the server's error text — cost if wrong: a draft can hold a component the site doesn't load (by design, Publish blocks it).
 - Task 7: Ruling R13: describe.js synthesizes AttrDefs for a package whose manifest is missing, from a catalog `attributes` hint on the element ([{name,type,enum?}] transcribed from the README attribute table); descriptors then carry real attributes, so server normalize/validate and the editor form agree; component-model settingsFields becomes unnecessary (remove or reduce to formFields). When the manifest exists, it wins and the hint is ignored. Catalog test: hint names cover defaults/advanced; for packages WITH a manifest, no hint needed — cost if wrong: hints drift from the package until it ships a manifest.
+- After merge prep: Ruling R17: marquee-wc 1.7.1 ships a manifest, but its attributes (like blink-wc 1.5.0's and bg-wc 0.5.0's) carry no types. The manifest now decides which attributes exist; a catalog hint naming one supplies its type, choices and description. marquee-wc keeps its hint for that reason. VP moves to marquee-wc ^1.7.1 and bg-wc ^0.5.0 — cost if wrong: hints drift from the package until its manifest is typed.
 
 ## Deferred minors
 
@@ -49,8 +50,9 @@ Recorded during the subagent-driven build of feat/components (plan: docs/superpo
 
 ## Package follow-ups
 
-- marquee-wc and border-wc: the published tarballs (marquee-wc 1.7.0, border-wc 0.2.0) lack `custom-elements.json`. Add it to `files` and republish. Until then Cook 2.5.0 skips them on live sites, so they do not load there.
-- marquee-wc needs its CSS self-injected: it renders as stacked copies otherwise (a fix prompt was given to the package owner).
+- border-wc: the published 0.2.0 tarball lacks `custom-elements.json`. Add it to `files` and republish. Until then Cook 2.5.0 skips it on live sites. (marquee-wc 1.7.1 fixed this and self-injects its CSS.)
+- blink-wc 1.5.0 animates only through `dist/blink-wc.css`, which nothing loads (not Cook, not VP, not the VB bundle). It needs its CSS self-injected the way marquee-wc 1.7.1 does it, or it shows as plain text in the editor and on live sites.
+- Untyped manifests: marquee-wc 1.7.1, blink-wc 1.5.0 and bg-wc 0.5.0 list attributes with no `type`, so every setting is a plain text field unless the catalog hints it (R17). Typed `@attr {type}` JSDoc in each package would fix it at the source.
 - border-wc draws nothing without `effect`, and injects light-DOM SVG children (the editor has to tolerate foreign nodes).
 - bg-wc 0.5.0 is unpublished (npm has 0.4.0).
 - Manifests without slots: the catalog cannot learn from a manifest where content goes, so content kinds are hand-set in `catalog.js`.
@@ -72,6 +74,7 @@ Findings, each with its owner:
 | qr-code renders 0x0 and geo-map shows "location unavailable" with catalog defaults | VP catalog (needs a sample `value` / location) |
 | carousel-wc icons 404 at `/cdn/icons/lucide/*.svg` under `vp serve` | VP server (serve VB icons, or fix the path) |
 | blink-wc showed empty because the gallery gave inline elements no text | VP gallery (fixed) |
+| blink-wc does not animate: its keyframes live in an unloaded CSS file. The gallery's "changes under themes" check missed it | package repo (blink-wc) |
 
 ## Final review
 

@@ -29,6 +29,21 @@ import { readManifest } from './manifest.js';
 export const noManifestNote = (pkg) =>
   `Won't load on the live site until ${pkg} ships custom-elements.json in its npm package`;
 
+/**
+ * An element's attributes. The manifest decides which exist; a catalog hint
+ * that names one supplies its type, choices and description, since published
+ * manifests can list attributes untyped (R17). With no manifest attributes the
+ * hint stands in whole (R13).
+ * @param {AttrDef[]|undefined} fromManifest
+ * @param {AttrDef[]|undefined} hints
+ * @returns {AttrDef[]}
+ */
+function mergeAttributes(fromManifest, hints = []) {
+  if (!fromManifest?.length) return hints;
+  const byName = new Map(hints.map((h) => [h.name, h]));
+  return fromManifest.map((a) => (byName.has(a.name) ? { ...a, ...byName.get(a.name) } : a));
+}
+
 function readJson(file) {
   try {
     return JSON.parse(readFileSync(file, 'utf8'));
@@ -110,8 +125,7 @@ export function describeComponents({ siteDir, vpRoot, catalog = CATALOG }) {
         ...el,
         package: entry.package,
         bundled,
-        // The manifest wins; a catalog hint stands in when it declares nothing (R13)
-        attributes: manifest.get(el.tag)?.attributes?.length ? manifest.get(el.tag).attributes : (el.attributes ?? []),
+        attributes: mergeAttributes(manifest.get(el.tag)?.attributes, el.attributes),
         scriptPath,
         loadsOnLiveSite,
         liveSiteNote,

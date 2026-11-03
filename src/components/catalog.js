@@ -154,7 +154,8 @@ export const CATALOG = [
         kind: 'text',
         defaults: { speed: 50, 'pause-on-hover': true },
         advanced: ['behavior', 'gap', 'play-state', 'autofill', 'fade', 'reduced-motion', 'mode', 'unit'],
-        // README attribute table and its Modes tables (no published manifest)
+        // README attribute table and its Modes tables. The 1.7.1 manifest lists
+        // these untyped, so this hint supplies types and choices (R17).
         attributes: [
           { name: 'direction', type: 'string', enum: ['left', 'right', 'up', 'down'], description: 'Scroll direction (default left).' },
           { name: 'speed', type: 'number', description: 'Pixels per second (default 50).' },

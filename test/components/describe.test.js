@@ -90,6 +90,23 @@ describe('describeComponents', () => {
     assert.deepEqual(state(states, 'x-other').elements[0].attributes, [{ name: 'size', type: 'number' }]);
   });
 
+  it('a hint refines the manifest attributes it names; the manifest decides which exist (R17)', () => {
+    // Published manifests can list attributes with no type (marquee-wc 1.7.1, blink-wc 1.5.0).
+    const hinted = [{
+      package: 'x-widgets',
+      elements: [hint('x-two', { attributes: [
+        { name: 'label', type: 'string', enum: ['a', 'b'], description: 'From the hint.' },
+        { name: 'undeclared', type: 'number' },
+      ] })],
+    }];
+    const [label, ...rest] = state(describeComponents({ siteDir: null, vpRoot, catalog: hinted }), 'x-widgets').elements[0].attributes;
+    assert.deepEqual(rest, [], 'an attribute the manifest does not declare is not added');
+    assert.equal(label.name, 'label');
+    assert.equal(label.type, 'string');
+    assert.deepEqual(label.enum, ['a', 'b']);
+    assert.equal(label.description, 'From the hint.');
+  });
+
   it('site copy wins over VP copy', () => {
     sitePkg({ 'x-widgets': '^1.0.0' });
     install(siteDir, 'x-widgets', 'x-widgets-site');
@@ -122,13 +139,14 @@ describe('describeComponents', () => {
     assert.equal(state(describeComponents({ siteDir, vpRoot, catalog }), 'x-other').loadsOnLiveSite, true);
   });
 
-  it('the real marquee-wc and border-wc are flagged while their tarballs lack a manifest (R14)', () => {
+  it('the real border-wc is flagged while its tarball lacks a manifest (R14)', () => {
     const real = describeComponents({ siteDir: null, vpRoot: REAL_VP });
-    for (const pkg of ['@profpowell/marquee-wc', '@profpowell/border-wc']) {
+    for (const pkg of ['@profpowell/border-wc']) {
       assert.equal(state(real, pkg).loadsOnLiveSite, false, pkg);
       assert.match(state(real, pkg).liveSiteNote, new RegExp(`until ${pkg} ships custom-elements\\.json`));
     }
-    assert.equal(state(real, '@profpowell/code-block').loadsOnLiveSite, true);
+    // marquee-wc 1.7.1 ships its manifest
+    for (const pkg of ['@profpowell/code-block', '@profpowell/marquee-wc']) assert.equal(state(real, pkg).loadsOnLiveSite, true, pkg);
   });
 
   it('siteDir null treats every package as enabled', () => {

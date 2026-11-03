@@ -10,10 +10,11 @@ import { initialAttrs } from '../../editor/assets/js/component-model.js';
 
 const vpRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-// The published marquee-wc 1.7.0 and border-wc 0.2.0 tarballs omit
-// custom-elements.json (not in their "files"). Until they are republished
-// their catalog elements carry an `attributes` hint from the README (R13).
-const NO_PUBLISHED_MANIFEST = new Set(['@profpowell/marquee-wc', '@profpowell/border-wc']);
+// The published border-wc 0.2.0 tarball omits custom-elements.json (not in
+// its "files"). Until it is republished its element carries an `attributes`
+// hint from the README (R13). marquee-wc 1.7.1 ships a manifest whose
+// attributes are untyped, so its hint now only refines them (R17).
+const NO_PUBLISHED_MANIFEST = new Set(['@profpowell/border-wc']);
 
 const elements = CATALOG.flatMap((e) => e.elements.map((el) => ({ pkg: e.package, el })));
 
@@ -50,7 +51,13 @@ describe('component catalog', () => {
 
   it('packages without a published manifest carry an attributes hint covering defaults and advanced (R13)', () => {
     for (const entry of CATALOG.filter((e) => NO_PUBLISHED_MANIFEST.has(e.package))) {
-      for (const el of entry.elements) {
+      for (const el of entry.elements) assert.ok(Array.isArray(el.attributes) && el.attributes.length, `${el.tag} has no attributes hint`);
+    }
+  });
+
+  it('every attributes hint is well formed and covers its defaults and advanced (R13, R17)', () => {
+    for (const entry of CATALOG) {
+      for (const el of entry.elements.filter((e) => e.attributes)) {
         assert.ok(Array.isArray(el.attributes) && el.attributes.length, `${el.tag} has no attributes hint`);
         const byName = new Map(el.attributes.map((a) => [a.name, a]));
         assert.equal(byName.size, el.attributes.length, `${el.tag} hint repeats a name`);
@@ -69,9 +76,13 @@ describe('component catalog', () => {
     }
   });
 
-  it('only packages without a published manifest carry an attributes hint', () => {
+  it('a hint on a package with a manifest names only attributes the manifest declares (R17)', () => {
     for (const entry of CATALOG.filter((e) => !NO_PUBLISHED_MANIFEST.has(e.package))) {
-      for (const el of entry.elements) assert.equal(el.attributes, undefined, `${el.tag}: its manifest is the source`);
+      const manifest = manifestFor(entry.package);
+      for (const el of entry.elements.filter((e) => e.attributes)) {
+        const names = new Set(manifest.get(el.tag).attributes.map((a) => a.name));
+        for (const a of el.attributes) assert.ok(names.has(a.name), `${el.tag} hint ${a.name} not in its manifest`);
+      }
     }
   });
 

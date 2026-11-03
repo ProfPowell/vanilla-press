@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   siteFromSearch, apiBase, displayMediaUrl, storedMediaUrl, backupOutcome, publishFailure,
+  keepPollingBackup, afterUpdatePush, createLiveTracker,
 } from '../../editor/assets/js/site-context.js';
 
 describe('editor site context', () => {
@@ -69,5 +70,39 @@ describe('editor site context', () => {
       message: 'oops', reload: false, poll: false,
     });
     assert.equal(publishFailure({ message: '' }, false).message, 'Publish failed');
+  });
+
+  it('backupOutcome: an Update push is "updated", never "backed-up"', () => {
+    const savedAt = Date.parse('2026-11-02T10:00:00Z');
+    const pushed = { pending: 0, lastPushAt: '2026-11-02T10:00:31Z', connected: true, error: null };
+    assert.equal(backupOutcome({ ...pushed, lastPushKind: 'update' }, savedAt), 'updated');
+    assert.equal(backupOutcome({ ...pushed, lastPushKind: 'draft' }, savedAt), 'backed-up');
+    assert.equal(backupOutcome({ ...pushed, lastPushKind: 'update', pending: 1 }, savedAt), 'waiting');
+  });
+
+  it('keepPollingBackup: a (possibly stale) error keeps the poll going, like waiting', () => {
+    assert.equal(keepPollingBackup('waiting'), true);
+    assert.equal(keepPollingBackup('error'), true);
+    assert.equal(keepPollingBackup('backed-up'), false);
+    assert.equal(keepPollingBackup('updated'), false);
+    assert.equal(keepPollingBackup('not-connected'), false);
+  });
+
+  it('afterUpdatePush: says the live site is updating; checks it only for a published post', () => {
+    assert.deepEqual(afterUpdatePush({ status: 'published' }), { text: 'Updating live site…', checkLive: true });
+    assert.deepEqual(afterUpdatePush({ status: 'draft' }), { text: 'Updating live site…', checkLive: false });
+    assert.deepEqual(afterUpdatePush(null), { text: 'Updating live site…', checkLive: false });
+  });
+
+  it('createLiveTracker: opening another document cancels the live poll', () => {
+    const live = createLiveTracker();
+    const t = live.start('doc_a');
+    assert.equal(live.docOpened('doc_a'), false); // reloaded after publish: same post
+    assert.equal(live.current(t), true);
+    assert.equal(live.docOpened('doc_b'), true);
+    assert.equal(live.current(t), false);
+    const t2 = live.start('doc_b');
+    live.cancel();
+    assert.equal(live.current(t2), false);
   });
 });

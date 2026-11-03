@@ -111,14 +111,19 @@ test('draft backup of a published post is an Update without the skip marker', as
   const backup = backupFor(clock);
   write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello'));
   write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Hi</p>\n');
+  assert.equal(backup.state().lastPushKind, null);
   backup.noteSaved({ title: 'Hello', status: 'published' });
   await backup.flush();
   assert.equal(lastRemote(), 'Update: Hello');
+  assert.equal(backup.state().lastPushKind, 'update');
   // A draft-only edit afterwards is a Draft again.
   write(fx.site, 'content/posts/other.json', draft('other', 'Other'));
   backup.noteSaved({ title: 'Other', status: 'draft' });
   await backup.flush();
   assert.equal(lastRemote(), 'Draft: Other [CI Skip]');
+  assert.equal(backup.state().lastPushKind, 'draft');
+  await backup.exclusive(async () => ({ status: 'pushed' }));
+  assert.equal(backup.state().lastPushKind, 'publish');
 });
 
 test('draft backup leaves files outside VP paths alone', async () => {
@@ -187,6 +192,21 @@ test('draft backup records other git errors and retries on the next flush', asyn
   assert.equal(ok.error, null);
   assert.equal(ok.pending, 0);
   assert.equal(lastRemote(), 'Draft: Hello [CI Skip]');
+});
+
+test('an Update commit whose push failed is still an update when a later flush pushes it', async () => {
+  fx = makeGitSite();
+  let fail = true;
+  const flaky = { ...realGit, push: async (dir) => { if (fail) throw new realGit.GitError('down', 'down'); return realGit.push(dir); } };
+  const backup = backupFor(fakeClock(), { git: flaky });
+  write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello'));
+  write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Hi</p>\n');
+  backup.noteSaved({ title: 'Hello', status: 'published' });
+  await backup.flush();
+  fail = false;
+  await backup.flush(); // nothing new to commit: pushes the Update commit
+  assert.equal(lastRemote(), 'Update: Hello');
+  assert.equal(backup.state().lastPushKind, 'update');
 });
 
 test('dispose cancels the pending timer', () => {

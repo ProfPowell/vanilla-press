@@ -104,7 +104,12 @@ export function backupMessage(titles, files) {
 }
 
 /**
- * @typedef {{ pending: number, lastPushAt: string|null, error: string|null, connected: boolean }} BackupState
+ * @typedef {{
+ *   pending: number, lastPushAt: string|null, error: string|null, connected: boolean,
+ *   lastPushKind: 'draft'|'update'|'publish'|null,
+ * }} BackupState - lastPushKind: what the last push carried: only `Draft:` backups,
+ *   an `Update:` backup (it touched a published page, so the live site redeploys),
+ *   or a publish/unpublish
  */
 
 /**
@@ -145,6 +150,8 @@ export function createBackup({
   let firstAt = null; // first save of the current window (uncommitted saves)
   let timer = null;
   let lastPushAt = null;
+  let lastPushKind = null;
+  let unpushedUpdate = false; // a local Update: commit not pushed yet
   let error = null;
   let connected = false; // until init() reads git status; pushed() sets it true
   let initPromise = null;
@@ -154,7 +161,7 @@ export function createBackup({
   // any point (for example before a slug rename) has its deletion committed later.
   const known = new Set();
 
-  const state = () => ({ pending: uncommitted + unpushed, lastPushAt, error, connected });
+  const state = () => ({ pending: uncommitted + unpushed, lastPushAt, error, connected, lastPushKind });
 
   function paths() {
     for (const p of ownedPaths(ws, getCollectionsConfig())) known.add(p);
@@ -203,7 +210,9 @@ export function createBackup({
     try { onRebased(); } catch (err) { console.warn(`Re-sync after rebase failed: ${err.message}`); }
   }
 
-  function pushed() {
+  function pushed(kind) {
+    lastPushKind = kind === 'publish' ? 'publish' : (unpushedUpdate ? 'update' : 'draft');
+    unpushedUpdate = false;
     unpushed = 0;
     error = null;
     connected = true;
@@ -239,11 +248,18 @@ export function createBackup({
           return state();
         }
         snapshot = take();
-        await git.commitPaths(ws.siteDir, paths(), (files) => backupMessage(snapshot.titles, files));
+        const titled = snapshot.titles;
+        let isUpdate = false;
+        await git.commitPaths(ws.siteDir, paths(), (files) => {
+          const message = backupMessage(titled, files);
+          isUpdate = message.startsWith('Update: ');
+          return message;
+        });
+        if (isUpdate) unpushedUpdate = true;
         unpushed += snapshot.count; // committed (or nothing to commit): only the push is left
         snapshot = null;
         const result = await git.push(ws.siteDir);
-        pushed();
+        pushed('backup');
         afterPush(result);
       } catch (err) {
         if (snapshot) giveBack(snapshot);
@@ -276,7 +292,7 @@ export function createBackup({
         paths(); // the page this publish wrote (or removed) is known for later backups
         unpushed += snapshot.count;
         if (result?.status === 'pushed') {
-          pushed();
+          pushed('publish');
           afterPush(result);
         }
         else if (result?.status === 'saved') connected = false;

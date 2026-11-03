@@ -54,17 +54,63 @@ export function storedMediaUrl(url, site) {
 }
 
 /**
- * Where the draft backup stands for a save made at `savedAt`.
- * @param {{ pending: number, lastPushAt: string|null, error: string|null, connected: boolean }} status - GET /status
+ * Where the draft backup stands for a save made at `savedAt`. `updated`: it
+ * was pushed in an `Update:` commit (it touched a published page), so the
+ * live site is redeploying; it is never reported as plain `backed-up`.
+ * @param {{ pending: number, lastPushAt: string|null, error: string|null, connected: boolean,
+ *   lastPushKind?: 'draft'|'update'|'publish'|null }} status - GET /status
  * @param {number} savedAt - ms since epoch
- * @returns {'backed-up'|'waiting'|'not-connected'|'error'}
+ * @returns {'backed-up'|'updated'|'waiting'|'not-connected'|'error'}
  */
 export function backupOutcome(status, savedAt) {
   if (!status.connected) return 'not-connected';
   if (status.error) return 'error';
   const pushedAt = status.lastPushAt ? Date.parse(status.lastPushAt) : NaN;
-  if (status.pending === 0 && pushedAt >= savedAt) return 'backed-up';
+  if (status.pending === 0 && pushedAt >= savedAt) return status.lastPushKind === 'update' ? 'updated' : 'backed-up';
   return 'waiting';
+}
+
+/**
+ * Whether the backup poll goes on after this outcome. An error may be stale
+ * (from an earlier push), so it keeps polling until a newer push succeeds or
+ * the poll's time bound runs out.
+ * @param {ReturnType<typeof backupOutcome>} outcome
+ * @returns {boolean}
+ */
+export function keepPollingBackup(outcome) {
+  return outcome === 'waiting' || outcome === 'error';
+}
+
+/**
+ * What to show once a save went out in an `Update:` push: the live site is
+ * updating; the live check runs only when the open post is published.
+ * @param {{ status?: string }|null} meta - the open document's meta
+ * @returns {{ text: string, checkLive: boolean }}
+ */
+export function afterUpdatePush(meta) {
+  return { text: 'Updating live site…', checkLive: meta?.status === 'published' };
+}
+
+/**
+ * Token bookkeeping for the live poll, so a poll never reports on another
+ * post: `start(docId)` returns a token, `current(token)` says whether it
+ * still counts; `docOpened(docId)` cancels the poll (true) when a different
+ * document is opened, `cancel()` always does.
+ */
+export function createLiveTracker() {
+  let token = 0;
+  let docId = null;
+  return {
+    start(id) { docId = id; return ++token; },
+    current(t) { return t === token; },
+    cancel() { token++; },
+    docOpened(id) {
+      if (id === docId) return false;
+      docId = id;
+      token++;
+      return true;
+    },
+  };
 }
 
 /**

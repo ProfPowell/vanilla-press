@@ -78,10 +78,11 @@ The editor opens with the document browser in the sidebar showing all seeded doc
 
 ### Components
 
-- **Insert:** type `/` in an empty paragraph and choose a component from the palette (grouped, filterable). Block components land as a block; an inline one (like blink-wc) lands in the paragraph.
-- **Settings:** with the cursor in a component (or the component selected) a settings panel shows its attributes as a form, built from the package's manifest; rarely used attributes sit under an advanced heading. Text, code and block content is edited in the page itself.
-- **Inline wrap:** select text and use the component select in the toolbar to wrap it in an inline component; the same select unwraps it.
-- **States:** a component whose package is not turned on for the site shows the label "<name> is not on for this site"; one whose script fails to import shows "<name> couldn't load". The post still saves; Publish and Update refuse a post that uses a package that is not on. Turn packages on from the site's Components screen.
+- **Insert:** type `/` in an empty paragraph and choose a block component from the palette (grouped, filterable); it lands as a block. Inline components (like blink-wc) are not in the `/` palette: see Inline wrap.
+- **Settings:** with the cursor in a component (or the component selected) a settings panel shows its attributes as a form, built from the package's manifest (or the catalog's hint for a package that ships none); rarely used attributes sit under an Advanced heading. Text and code components (marquee-wc, code-block) are edited in the panel's Text or Code box. Block components (browser-window, accordion-wc and the like) hold ordinary blocks: type into them in the page.
+- **Inline wrap:** select text in a paragraph and pick a component from the toolbar's "Wrap in component" select; the selection is wrapped in it. There is no unwrap yet: to remove an inline component, delete the wrapped text (and type it again if you want it plain). Unwrap is a follow-up.
+- **Removed attributes:** when a save drops attributes a component's installed version doesn't have, the save state says so ("Removed "x" from <tag>: ...") and the editor takes them out of its copy, so the settings panel matches the stored post.
+- **States:** a component whose package is not turned on for the site shows the label "<name> is not on for this site"; one whose script fails to import shows "<name> couldn't load". The post still saves; Publish and Update refuse a post that uses a package that is not on, or one that won't load on the live site (a package whose npm tarball has no custom-elements.json, such as marquee-wc and border-wc today: the Components screen says so). Turn packages on from the site's Components screen.
 - **Gallery:** `/editor/components-gallery.html` on `vp serve` shows every element with a theme switcher.
 
 ### AST inspector

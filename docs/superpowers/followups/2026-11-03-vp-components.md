@@ -72,3 +72,38 @@ Findings, each with its owner:
 | qr-code renders 0x0 and geo-map shows "location unavailable" with catalog defaults | VP catalog (needs a sample `value` / location) |
 | carousel-wc icons 404 at `/cdn/icons/lucide/*.svg` under `vp serve` | VP server (serve VB icons, or fix the path) |
 | blink-wc showed empty because the gallery gave inline elements no text | VP gallery (fixed) |
+
+## Final review
+
+Final whole-branch review of feat/components (fix base 6f86c55). Every finding is fixed:
+
+| Finding | Fix | Tests |
+|---|---|---|
+| Code playground and Animated background could not be saved after insert: `inherit-theme: true` and `intensity: 0.65` defaults, both declared `string` | Defaults are `'true'` (the element reads anything but "false" as on) and `'0.65'`. `normalizeComponents` coerces numbers and `true` to strings for string attributes (`false` is left out, since it renders as no attribute) and "60"/"true"/"false" to number/boolean, reporting nothing | catalog.test.js "every element's defaults match its descriptor's attribute types and enums, and validate once inserted"; schema/component.test.js "coerces values to the declared type without reporting them" |
+| Dropped-attribute notices never reached the user (spec §9) | POST/PUT documents also return `dropped: { tag, attr }[]`. The editor removes those attributes from its ProseMirror doc (no undo step, no extra save) and shows the notices after "Saved" in the save state | server.test.js "POST/PUT document drops undeclared component attrs and returns a notice" (now also `dropped`); component-model.test.js "withoutDropped …", "dropAttributes …"; site-context.test.js "saveStateText: notices from the save follow the state" |
+| A failed commit after a successful npm run left package.json/lock edited; re-enabling then said "already on" | The commit is wrapped: the files are put back byte for byte, npm re-syncs node_modules (best effort), and a 502 says what happened and "Close other git tools and try again." "Already in the requested state" now needs the package files committed; otherwise the dirty guard answers | components.test.js "a failed commit after npm puts the package files back, says what to do, and a later toggle works", "a dependency in package.json but not committed is not \"already on\": the dirty guard answers" |
+| npm failure did not say why (Review Focus 5) | The Components screen shows npm's output in a `<details>` (as text) and "Check your internet connection, then try again." `runNpm` takes a `timeoutNote`; npm's default says "npm took too long (over N min)", builds keep "Build timed out"; a component timeout says "npm install <pkg> took too long (over 5 min) and was stopped" | components-view.test.js "toggleOutcome npm: the error, a next step, and the log tail"; site-process.test.js "runNpm timeout says npm took too long, not that a build timed out", "durationText: …"; components.test.js "an npm timeout says npm took too long" |
+| R14: marquee-wc and border-wc never load on the live site | PackageState and each descriptor carry `loadsOnLiveSite` and `liveSiteNote`; the Components screen shows the note; Publish/Update refuse a post using such a component, naming the element and the fix | describe.test.js "an installed package with no custom-elements.json does not load on the live site (R14)", "the real marquee-wc and border-wc are flagged …"; publish.test.js "publish and update refuse a post using a component that will not load on the live site (R14)"; components-view.test.js "packageRows: a package that won't load on the live site says so (R14)" |
+| R15: docs/EDITOR.md described behavior that does not exist | Corrected: inline components come from the toolbar's "Wrap in component" select, not `/`; no unwrap (delete the wrapped text); text/code kinds are edited in the settings panel's box, blocks kinds in the page | docs only |
+| R16: foot-notes kind | `none` | catalog.test.js "kinds are valid and code kinds have codeWrap" |
+
+### Rulings
+
+- Ruling R14: manifest-less non-bundled packages (no custom-elements.json in the installed copy) are marked on the Components screen "won't load on the live site until the package ships custom-elements.json", and Publish/Update refuse a post using them with a message naming the package and the fix. Cost if wrong: marquee/border unusable for publishing until republished (honest vs broken live page).
+- Ruling R15: EDITOR.md is corrected to describe actual behavior; inline unwrap is not built in this branch (follow-up). Cost if wrong: users must delete wrapped text to unwrap.
+- Ruling R16: foot-notes catalog kind changes to `none` now (no posts exist yet). Cost if wrong: none.
+
+### Follow-ups
+
+- Inline unwrap: the toolbar can wrap a selection in an inline component but not unwrap one; today the only way out is deleting the wrapped text.
+- A failed component commit that got as far as staging leaves the package files staged (with the working tree put back); the next commit re-stages them, so it is harmless but shows in `git status`.
+
+### Deferred minors (final review)
+
+- Declined-to-judge items accepted as listed by the reviewer: javascript: URLs out of scope for a single-user localhost owner; package folders served whole; package.json deps as the record; spec code-kind examples vs catalog `none`; gallery visuals owned by packages; Cook internals; R6/R7/R8 as ruled; describe perf.
+- The save error says "not on for this site" for uncatalogued tags under R12.
+- `vp serve --site` serves VP's copy of a package while describing the site's copy.
+- Strict type check on hand-edited JSON strings (now softened: numeric/boolean strings are coerced on save).
+- `<!--<script` in wrap 'script' (no catalog element uses it).
+- No old-Cook warning in the editor.
+- Saves wait silently while npm runs.

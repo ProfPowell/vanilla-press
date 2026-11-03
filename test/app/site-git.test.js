@@ -2,7 +2,7 @@ import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { ownedPaths, createBackup, commitTitle } from '../../src/app/site-git.js';
+import { ownedPaths, createBackup, commitTitle, postPages, BACKUP_PATHS } from '../../src/app/site-git.js';
 import * as realGit from '../../src/git/git.js';
 import { resolveWorkspace } from '../../src/workspace/workspace.js';
 import { makeGitSite, fakeClock, git, write } from './git-site-fixture.js';
@@ -105,25 +105,43 @@ test('draft backup pushes at most 120 s after the first save', async () => {
   assert.equal(lastRemote(), 'Draft: A [CI Skip]');
 });
 
-test('draft backup of a published post is an Update without the skip marker', async () => {
+test('backup of an edited published post commits the JSON only, as Edit with CI Skip', async () => {
   fx = makeGitSite();
-  const clock = fakeClock();
-  const backup = backupFor(clock);
+  const backup = backupFor(fakeClock());
   write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello'));
-  write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Hi</p>\n');
+  write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Old</p>\n');
+  git(fx.site, 'add', '-A');
+  git(fx.site, 'commit', '-m', 'Publish: Hello');
+  git(fx.site, 'push');
+  write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello') + ' ');
+  write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>New</p>\n'); // the save's sync
   assert.equal(backup.state().lastPushKind, null);
   backup.noteSaved({ title: 'Hello', status: 'published' });
   await backup.flush();
-  assert.equal(lastRemote(), 'Update: Hello');
-  assert.equal(backup.state().lastPushKind, 'update');
-  // A draft-only edit afterwards is a Draft again.
-  write(fx.site, 'content/posts/other.json', draft('other', 'Other'));
-  backup.noteSaved({ title: 'Other', status: 'draft' });
-  await backup.flush();
-  assert.equal(lastRemote(), 'Draft: Other [CI Skip]');
+  assert.equal(lastRemote(), 'Edit: Hello [CI Skip]');
+  assert.equal(git(fx.remote, 'show', '--name-only', '--format=', 'main'), 'content/posts/hello.json');
+  assert.match(git(fx.remote, 'show', 'main:src/posts/hello.html'), /<p>Old<\/p>/);
+  assert.match(git(fx.site, 'status', '--porcelain'), /M src\/posts\/hello\.html/); // still the working tree's, for Preview
   assert.equal(backup.state().lastPushKind, 'draft');
   await backup.exclusive(async () => ({ status: 'pushed' }));
   assert.equal(backup.state().lastPushKind, 'publish');
+});
+
+test('backup stages only content, src/media and config/vp.json', async () => {
+  fx = makeGitSite();
+  assert.deepEqual([...BACKUP_PATHS].sort(), ['config/vp.json', 'content', 'src/media']);
+  const backup = backupFor(fakeClock());
+  write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello'));
+  write(fx.site, 'src/media/pic.png', 'png');
+  write(fx.site, 'config/vp.json', '{}\n');
+  write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Hi</p>\n');
+  write(fx.site, 'src/about.html', '---\nvp_id: "doc_about"\n---\n<p>About</p>\n');
+  mkdirSync(join(fx.site, 'content', 'pages'), { recursive: true });
+  backup.noteSaved({ title: 'Hello', status: 'draft' });
+  await backup.flush();
+  assert.deepEqual(git(fx.remote, 'show', '--name-only', '--format=', 'main').split('\n').sort(),
+    ['config/vp.json', 'content/posts/hello.json', 'src/media/pic.png']);
+  assert.equal(lastRemote(), 'Draft: Hello [CI Skip]');
 });
 
 test('draft backup leaves files outside VP paths alone', async () => {
@@ -141,7 +159,7 @@ test('draft backup leaves files outside VP paths alone', async () => {
   assert.match(status, /\?\? src\/programs\//);
 });
 
-test('draft backup never commits a hand-written page in a collection dir', async () => {
+test('backup never commits a page, VP-written or hand-written', async () => {
   fx = makeGitSite();
   const backup = backupFor(fakeClock());
   write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello'));
@@ -150,8 +168,10 @@ test('draft backup never commits a hand-written page in a collection dir', async
   backup.noteSaved({ title: 'Hello', status: 'published' });
   await backup.flush();
   const pushed = git(fx.remote, 'show', '--name-only', '--format=', 'main').split('\n').sort();
-  assert.deepEqual(pushed, ['content/posts/hello.json', 'src/posts/hello.html']);
-  assert.match(git(fx.site, 'status', '--porcelain'), /\?\? src\/posts\/mine\.html/);
+  assert.deepEqual(pushed, ['content/posts/hello.json']);
+  const untracked = git(fx.site, 'status', '--porcelain', '-uall');
+  assert.match(untracked, /\?\? src\/posts\/mine\.html/);
+  assert.match(untracked, /\?\? src\/posts\/hello\.html/);
 });
 
 test('draft backup without a remote keeps working', async () => {
@@ -194,21 +214,6 @@ test('draft backup records other git errors and retries on the next flush', asyn
   assert.equal(lastRemote(), 'Draft: Hello [CI Skip]');
 });
 
-test('an Update commit whose push failed is still an update when a later flush pushes it', async () => {
-  fx = makeGitSite();
-  let fail = true;
-  const flaky = { ...realGit, push: async (dir) => { if (fail) throw new realGit.GitError('down', 'down'); return realGit.push(dir); } };
-  const backup = backupFor(fakeClock(), { git: flaky });
-  write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello'));
-  write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Hi</p>\n');
-  backup.noteSaved({ title: 'Hello', status: 'published' });
-  await backup.flush();
-  fail = false;
-  await backup.flush(); // nothing new to commit: pushes the Update commit
-  assert.equal(lastRemote(), 'Update: Hello');
-  assert.equal(backup.state().lastPushKind, 'update');
-});
-
 test('dispose cancels the pending timer', () => {
   fx = makeGitSite();
   const clock = fakeClock();
@@ -219,7 +224,7 @@ test('dispose cancels the pending timer', () => {
   assert.equal(clock.pending(), 0);
 });
 
-test('a mixed batch with a published edit is an Update without the skip marker', async () => {
+test('a mixed batch with a published edit is an Edit, still with the skip marker', async () => {
   fx = makeGitSite();
   const backup = backupFor(fakeClock());
   write(fx.site, 'content/posts/other.json', draft('other', 'Other'));
@@ -228,7 +233,9 @@ test('a mixed batch with a published edit is an Update without the skip marker',
   write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Hi</p>\n');
   backup.noteSaved({ title: 'Hello', status: 'published' });
   await backup.flush();
-  assert.equal(lastRemote(), 'Update: Other, Hello');
+  assert.equal(lastRemote(), 'Edit: Other, Hello [CI Skip]');
+  assert.deepEqual(git(fx.remote, 'show', '--name-only', '--format=', 'main').split('\n').sort(),
+    ['content/posts/hello.json', 'content/posts/other.json']);
 });
 
 const localCount = () => Number(git(fx.site, 'rev-list', '--count', 'HEAD'));
@@ -303,4 +310,41 @@ test('init: connected comes from git status before any push', async () => {
   assert.equal((await mk({ isRepo: false }).init()).connected, false);
   assert.equal((await mk({ isRepo: true, hasRemote: true, hasUpstream: false }).init()).connected, false);
   assert.equal((await mk({ isRepo: true, hasRemote: true, hasUpstream: true }).init()).connected, true);
+});
+
+const page = (id, body) => `---\ntitle: "T"\nvp_id: "${id}"\n---\n<p>${body}</p>\n`;
+const pageSet = (id, current) => postPages(wsOf(fx.site), id, current, { git: realGit, collectionsConfig: {} });
+
+test('postPages: the current page plus every changed or deleted page of this post in HEAD, never another post', async () => {
+  fx = makeGitSite();
+  write(fx.site, 'content/posts/a.json', draft('a', 'A'));
+  write(fx.site, 'src/posts/a.html', page('doc_a', 'A'));
+  write(fx.site, 'src/posts/b.html', page('doc_b', 'B'));
+  write(fx.site, 'src/posts/mine.html', '---\ntitle: "Mine"\n---\n<p>Hand-written</p>\n');
+  git(fx.site, 'add', '-A');
+  git(fx.site, 'commit', '-m', 'published');
+  // A renamed (old page removed, new one written); B edited, not updated; the user's page edited.
+  rmSync(join(fx.site, 'src/posts/a.html'));
+  write(fx.site, 'src/posts/a-2.html', page('doc_a', 'A2'));
+  write(fx.site, 'src/posts/b.html', page('doc_b', 'B2'));
+  write(fx.site, 'src/posts/mine.html', '<p>Edited by hand</p>\n');
+  assert.deepEqual((await pageSet('doc_a', 'src/posts/a-2.html')).sort(), ['src/posts/a-2.html', 'src/posts/a.html']);
+  assert.deepEqual(await pageSet('doc_a', null), ['src/posts/a.html']); // unpublish after the rename
+  assert.deepEqual(await pageSet('doc_b', 'src/posts/b.html'), ['src/posts/b.html']);
+  // A current path that is not this post's page (hand-written, or another post's) is left out.
+  assert.deepEqual(await pageSet('doc_x', 'src/posts/mine.html'), []);
+  assert.deepEqual(await pageSet('doc_x', 'src/posts/b.html'), []);
+});
+
+test('postPages: pages collection pages live directly in src/', async () => {
+  fx = makeGitSite();
+  mkdirSync(join(fx.site, 'content', 'pages'), { recursive: true });
+  write(fx.site, 'src/about.html', page('doc_about', 'About'));
+  write(fx.site, 'src/media/x.html', page('doc_about', 'Media'));
+  git(fx.site, 'add', '-A');
+  git(fx.site, 'commit', '-m', 'about');
+  rmSync(join(fx.site, 'src/about.html'));
+  rmSync(join(fx.site, 'src/media/x.html'));
+  write(fx.site, 'src/index.html', '<h1>Home 2</h1>\n');
+  assert.deepEqual(await pageSet('doc_about', null), ['src/about.html']);
 });

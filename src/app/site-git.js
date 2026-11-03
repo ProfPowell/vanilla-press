@@ -1,6 +1,8 @@
 /**
- * Which paths in a site Vanilla Press owns (the only ones it ever stages), and
- * the draft backup: saves are committed and pushed to GitHub after a pause.
+ * Which paths in a site Vanilla Press owns (the only ones it ever stages), the
+ * page set of one post (what Publish, Update and Unpublish stage), and the
+ * backup: saves are committed and pushed to GitHub after a pause. A backup
+ * never stages a page, so it never changes the live site.
  *
  * @module app/site-git
  */
@@ -15,6 +17,8 @@ import { GitNotConnectedError } from '../git/git.js';
 export const QUIET_MS = 30_000;
 export const MAX_WAIT_MS = 120_000;
 const SKIP = ' [CI Skip]';
+/** What a backup stages: the JSON, uploads and settings, never a page. */
+export const BACKUP_PATHS = Object.freeze(['content', 'src/media', 'config/vp.json']);
 const MAX_TITLES = 3;
 
 const trimSlashes = (p) => p.replace(/^\/+|\/+$/g, '');
@@ -45,6 +49,62 @@ function vpPages(siteDir, rel, recursive) {
   return out;
 }
 
+/** The output dir (under `src/`, `''` for src itself) of each collection in `content/`. */
+function collectionDirs(ws, collectionsConfig) {
+  const dirs = new Set();
+  for (const entry of listDir(join(ws.siteDir, 'content'))) {
+    if (!entry.isDirectory()) continue;
+    dirs.add(trimSlashes(collectionOutput(entry.name, collectionsConfig).path));
+  }
+  return dirs;
+}
+
+/** True when `path` is an `.html` file a collection with one of `dirs` writes (`''`: directly in src/). */
+function inCollectionDirs(path, dirs) {
+  if (!path.endsWith('.html')) return false;
+  for (const dir of dirs) {
+    if (dir === '' ? /^src\/[^/]+$/.test(path) : path.startsWith(`src/${dir}/`)) return true;
+  }
+  return false;
+}
+
+/** The `vp_id` of the page at a site-relative path, or null. */
+function vpIdAt(siteDir, path) {
+  try { return readVpId(readFileSync(join(siteDir, path), 'utf8')); } catch { return null; }
+}
+
+/**
+ * The pages one post's Publish, Update or Unpublish stages: its current page
+ * (when it exists and is this post's), plus every page tracked in HEAD whose
+ * `vp_id` is this post's and that is modified or deleted in the working tree
+ * (an old slug after a rename, or the page an unpublish removed, even from an
+ * earlier run). Never another post's page, never a hand-written one.
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @param {string} docId
+ * @param {string|null} currentHtmlPath - the post's page now (null when it has none)
+ * @param {{ git: { changedSinceHead: Function, readHead: Function }, collectionsConfig?: Object }} options
+ * @returns {Promise<string[]>}
+ */
+export async function postPages(ws, docId, currentHtmlPath, { git, collectionsConfig = {} }) {
+  const out = new Set();
+  if (currentHtmlPath && vpIdAt(ws.siteDir, currentHtmlPath) === docId) out.add(currentHtmlPath);
+  const dirs = collectionDirs(ws, collectionsConfig);
+  if (dirs.size === 0) return [...out];
+  const roots = [...new Set([...dirs].map((d) => (d ? `src/${d}` : 'src')))];
+  let candidates;
+  try {
+    candidates = await git.changedSinceHead(ws.siteDir, roots);
+  } catch {
+    return [...out]; // no commit yet: nothing in HEAD to remove
+  }
+  for (const path of candidates) {
+    if (out.has(path) || !inCollectionDirs(path, dirs)) continue;
+    const text = await git.readHead(ws.siteDir, path);
+    if (text !== null && readVpId(text) === docId) out.add(path);
+  }
+  return [...out];
+}
+
 /**
  * Site-relative paths Vanilla Press owns: `content`, `src/media`,
  * `config/vp.json` and, for each collection in `content/`, the pages in its
@@ -58,12 +118,8 @@ function vpPages(siteDir, rel, recursive) {
  * @returns {string[]}
  */
 export function ownedPaths(ws, collectionsConfig = {}) {
-  const paths = new Set(['content', 'src/media', 'config/vp.json']);
-  const dirs = new Set();
-  for (const entry of listDir(join(ws.siteDir, 'content'))) {
-    if (!entry.isDirectory()) continue;
-    dirs.add(trimSlashes(collectionOutput(entry.name, collectionsConfig).path));
-  }
+  const paths = new Set(BACKUP_PATHS);
+  const dirs = collectionDirs(ws, collectionsConfig);
   if (dirs.size === 0) return [...paths];
   for (const dir of dirs) {
     for (const page of vpPages(ws.siteDir, dir, dir !== '')) paths.add(page);
@@ -86,40 +142,34 @@ export function commitTitle(titles) {
   return `${titles.slice(0, MAX_TITLES).join(', ')} and ${titles.length - MAX_TITLES} more`;
 }
 
-/** True when a staged file is a page the build publishes (an HTML file under src/, not media). */
-function isPage(file) {
-  return file.startsWith('src/') && !file.startsWith('src/media/') && file.endsWith('.html');
-}
-
 /**
- * The backup commit message for the staged files: `Draft: <titles> [CI Skip]`
- * when no published page changed, otherwise `Update: <titles>` (it must deploy).
+ * The backup commit message: `Draft: <titles>` when every save in the batch
+ * was a draft, otherwise `Edit: <titles>`; always with the CI skip marker (a
+ * backup never changes the live site).
  * @param {string[]} titles
- * @param {string[]} files
+ * @param {boolean} allDraft
  * @returns {string}
  */
-export function backupMessage(titles, files) {
+export function backupMessage(titles, allDraft) {
   const t = commitTitle(titles.length ? titles : ['changes']);
-  return files.some(isPage) ? `Update: ${t}` : `Draft: ${t}${SKIP}`;
+  return `${allDraft ? 'Draft' : 'Edit'}: ${t}${SKIP}`;
 }
 
 /**
  * @typedef {{
  *   pending: number, lastPushAt: string|null, error: string|null, connected: boolean,
- *   lastPushKind: 'draft'|'update'|'publish'|null,
- * }} BackupState - lastPushKind: what the last push carried: only `Draft:` backups,
- *   an `Update:` backup (it touched a published page, so the live site redeploys),
- *   or a publish/unpublish
+ *   lastPushKind: 'draft'|'publish'|null,
+ * }} BackupState - lastPushKind: what the last push carried: backups only
+ *   (`Draft:`/`Edit:`), or a publish, update or unpublish
  */
 
 /**
- * Draft backup for one site: push QUIET_MS after the last save, at most
+ * Backup for one site (stages only BACKUP_PATHS): push QUIET_MS after the last save, at most
  * MAX_WAIT_MS after the first unpushed one. All git work runs one at a time.
  * @param {{
  *   site?: Object,
  *   ws: import('../workspace/workspace.js').Workspace,
  *   git: { commitPaths: Function, push: Function, gitStatus: Function },
- *   getCollectionsConfig?: () => Object,
  *   onRebased?: () => void,
  *   now?: () => number,
  *   setTimer?: (fn: Function, ms: number) => any,
@@ -129,7 +179,6 @@ export function backupMessage(titles, files) {
 export function createBackup({
   ws,
   git,
-  getCollectionsConfig = () => ({}),
   onRebased = () => {},
   now = Date.now,
   setTimer = (fn, ms) => {
@@ -147,29 +196,17 @@ export function createBackup({
   let uncommitted = 0;
   let unpushed = 0;
   let titles = [];
+  let allDraft = true; // every uncommitted save was a draft
   let firstAt = null; // first save of the current window (uncommitted saves)
   let timer = null;
   let lastPushAt = null;
   let lastPushKind = null;
-  let unpushedUpdate = false; // a local Update: commit not pushed yet
   let error = null;
   let connected = false; // until init() reads git status; pushed() sets it true
   let initPromise = null;
   let closed = false;
   let queue = Promise.resolve();
-  // Owned paths seen this session: a page VP removed is no longer listed by ownedPaths, but its deletion must be staged.
-  // Seeded now and refreshed after every save and publish, so a page that exists at
-  // any point (for example before a slug rename) has its deletion committed later.
-  const known = new Set();
-
   const state = () => ({ pending: uncommitted + unpushed, lastPushAt, error, connected, lastPushKind });
-
-  function paths() {
-    for (const p of ownedPaths(ws, getCollectionsConfig())) known.add(p);
-    return [...known];
-  }
-
-  try { paths(); } catch { /* unreadable site: the first save retries */ }
 
   function cancel() {
     if (timer !== null) clearTimer(timer);
@@ -192,9 +229,10 @@ export function createBackup({
 
   /** Take the uncommitted saves for a commit; a new window starts for later saves. */
   function take() {
-    const snapshot = { count: uncommitted, titles };
+    const snapshot = { count: uncommitted, titles, allDraft };
     uncommitted = 0;
     titles = [];
+    allDraft = true;
     firstAt = null;
     return snapshot;
   }
@@ -203,6 +241,7 @@ export function createBackup({
   function giveBack(snapshot) {
     uncommitted += snapshot.count;
     titles = [...snapshot.titles, ...titles.filter((t) => !snapshot.titles.includes(t))];
+    allDraft = snapshot.allDraft && allDraft;
     if (uncommitted > 0 && firstAt === null) firstAt = now();
   }
 
@@ -213,8 +252,7 @@ export function createBackup({
   }
 
   function pushed(kind) {
-    lastPushKind = kind === 'publish' ? 'publish' : (unpushedUpdate ? 'update' : 'draft');
-    unpushedUpdate = false;
+    lastPushKind = kind === 'publish' ? 'publish' : 'draft';
     unpushed = 0;
     error = null;
     connected = true;
@@ -225,11 +263,11 @@ export function createBackup({
    * Record a synced save.
    * @param {{ title?: string, status?: string }} save
    */
-  function noteSaved({ title } = {}) {
+  function noteSaved({ title, status } = {}) {
     uncommitted++;
     if (title && !titles.includes(title)) titles.push(title);
+    if (status !== 'draft') allDraft = false;
     if (firstAt === null) firstAt = now();
-    paths();
     schedule();
   }
 
@@ -254,14 +292,7 @@ export function createBackup({
         return state();
       }
       snapshot = take();
-      const titled = snapshot.titles;
-      let isUpdate = false;
-      await git.commitPaths(ws.siteDir, paths(), (files) => {
-        const message = backupMessage(titled, files);
-        isUpdate = message.startsWith('Update: ');
-        return message;
-      });
-      if (isUpdate) unpushedUpdate = true;
+      await git.commitPaths(ws.siteDir, [...BACKUP_PATHS], backupMessage(snapshot.titles, snapshot.allDraft));
       unpushed += snapshot.count; // committed (or nothing to commit): only the push is left
       snapshot = null;
       const result = await git.push(ws.siteDir);
@@ -294,7 +325,6 @@ export function createBackup({
       const snapshot = take();
       try {
         const result = await fn();
-        paths(); // the page this publish wrote (or removed) is known for later backups
         unpushed += snapshot.count;
         if (result?.status === 'pushed') {
           pushed('publish');
@@ -355,5 +385,5 @@ export function createBackup({
     });
   }
 
-  return { noteSaved, flush, state, exclusive, dispose, close, paths, init };
+  return { noteSaved, flush, state, exclusive, dispose, close, init };
 }

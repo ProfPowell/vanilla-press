@@ -1,7 +1,8 @@
 /**
- * Publish and Unpublish: take a post all the way live (save, sync, build
- * check, commit, push; hosting deploys from the pushed repo), and check
- * whether the deployed page matches the local build.
+ * Publish, Update and Unpublish: take a post (or its latest edits) all the
+ * way live (save, sync, build check, commit, push; hosting deploys from the
+ * pushed repo), and check whether the deployed page matches the page built.
+ * Each stages the backup paths plus that one post's pages, never another's.
  *
  * @module app/publish
  */
@@ -14,7 +15,7 @@ import { syncDocument } from '../sync/to-site.js';
 import { preflightSave } from '../sync/site-files.js';
 import { outputPaths, postUrlPath } from '../sync/paths.js';
 import { GitNotConnectedError } from '../git/git.js';
-import { ownedPaths } from './site-git.js';
+import { BACKUP_PATHS, postPages } from './site-git.js';
 
 /** The site's build failed; `log` is the tail of its output. */
 export class BuildError extends Error {
@@ -108,29 +109,38 @@ export function builtPage(siteDir, doc, collectionsConfig) {
 }
 
 /**
- * Publish or unpublish a document: save and sync the status change, run the
- * site's build (on failure the previous version is restored and re-synced),
- * commit the owned paths, push.
+ * Publish, update or unpublish a document: save and sync the status change,
+ * run the site's build (on failure the previous version is restored and
+ * re-synced), commit the backup paths plus this post's pages (postPages),
+ * push. Publishing an already-published post is an Update: it keeps the
+ * `published` date and the commit says `Update: <title>`.
  * @param {{
  *   site?: Object,
  *   ws: import('../workspace/workspace.js').Workspace,
  *   db: import('better-sqlite3').Database,
  *   docId: string,
  *   publish: boolean,
+ *   update?: boolean,
  *   deps: {
  *     ensureInstalled: Function, runBuild: Function,
  *     commitPaths: Function, push: Function, gitStatus: Function,
+ *     changedSinceHead: Function, readHead: Function,
  *     collectionsConfig?: Object, readSiteUrl?: Function,
  *   },
- * }} options
- * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean }>}
- *   rebased: the push rebased onto commits from elsewhere (the caller re-syncs the store)
+ * }} options - update: refuse (422) unless the post is already published
+ * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean,
+ *   kind: 'publish'|'update'|'unpublish', expectedText: string|null }>}
+ *   rebased: the push rebased onto commits from elsewhere (the caller re-syncs the store);
+ *   expectedText: the page this build made (publish/update), for the live check
  * @throws {BuildError|PublishRejectedError|Error} git errors propagate (GitConflictError, ...)
  */
-export async function setPublished({ ws, db, docId, publish, deps }) {
+export async function setPublished({ ws, db, docId, publish, update = false, deps }) {
   const collectionsConfig = deps.collectionsConfig || {};
   const previous = getDocument(db, docId);
   if (!previous) throw new PublishRejectedError(404, { error: 'Document not found' });
+  const wasPublished = previous.meta.status === 'published';
+  if (update && !wasPublished) throw new PublishRejectedError(422, { error: 'This post is not published: use Publish' });
+  const kind = !publish ? 'unpublish' : wasPublished ? 'update' : 'publish';
 
   // 1. Save the status change and sync it.
   const now = new Date().toISOString();
@@ -168,25 +178,33 @@ export async function setPublished({ ws, db, docId, publish, deps }) {
     throw new BuildError(build.log);
   }
 
-  // 3. Commit the owned paths (pending draft saves included), plus both page paths so a removal is staged.
+  // The page this build made, read now: Preview's dev server may rebuild dist later.
+  const expectedText = publish ? builtPage(ws.siteDir, saved, collectionsConfig) : null;
+
+  // 3. Commit the backup paths (pending saves included) and this post's pages: its
+  // current page, plus any old one (renamed or unpublished) still in HEAD.
   const status = await deps.gitStatus(ws.siteDir);
-  const pagePaths = [outputPaths(previous, collectionsConfig).html, outputPaths(saved, collectionsConfig).html];
-  const paths = [...new Set([...ownedPaths(ws, collectionsConfig), ...pagePaths.filter(Boolean)])];
-  const sha = status.isRepo
-    ? await deps.commitPaths(ws.siteDir, paths, `${publish ? 'Publish' : 'Unpublish'}: ${saved.meta.title}`)
-    : null;
+  let sha = null;
+  if (status.isRepo) {
+    const pages = await postPages(ws, docId, outputPaths(saved, collectionsConfig).html, {
+      git: { changedSinceHead: deps.changedSinceHead, readHead: deps.readHead }, collectionsConfig,
+    });
+    const label = { publish: 'Publish', update: 'Update', unpublish: 'Unpublish' }[kind];
+    sha = await deps.commitPaths(ws.siteDir, [...BACKUP_PATHS, ...pages], `${label}: ${saved.meta.title}`);
+  }
 
   const siteUrl = publish ? await (deps.readSiteUrl || readSiteUrl)(ws.siteDir) : null;
   const url = publish ? publicUrl(siteUrl, saved, collectionsConfig) : null;
+  const done = (pushStatus, rebased = false) => ({ status: pushStatus, url, sha, rebased, kind, expectedText });
 
   // 4. Push (pushes every local commit, including earlier unpushed ones).
-  if (!status.isRepo || !status.hasRemote || !status.hasUpstream) return { status: 'saved', url, sha, rebased: false };
+  if (!status.isRepo || !status.hasRemote || !status.hasUpstream) return done('saved');
   let pushResult;
   try {
     pushResult = await deps.push(ws.siteDir);
   } catch (err) {
-    if (err instanceof GitNotConnectedError) return { status: 'saved', url, sha, rebased: false };
+    if (err instanceof GitNotConnectedError) return done('saved');
     throw err;
   }
-  return { status: 'pushed', url, sha, rebased: Boolean(pushResult?.rebased) };
+  return done('pushed', Boolean(pushResult?.rebased));
 }

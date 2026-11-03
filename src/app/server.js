@@ -133,7 +133,7 @@ export async function startApp({
       await pullOnOpen(site, ws, db);
       syncFromSite(ws, db);
       const backup = createBackup({
-        site, ws, git, getCollectionsConfig: () => getCollectionsConfig(db), ...backupTimers,
+        site, ws, git, ...backupTimers,
         onRebased: () => syncFromSite(ws, db),
       });
       const prefix = `/api/sites/${site.id}`;
@@ -180,18 +180,28 @@ export async function startApp({
     entry.db.close();
   }
 
-  /** Publish, unpublish, backup status, live check: `<prefix>/...` on a site's router. */
+  /**
+   * Publish, update, unpublish, backup status, live check: `<prefix>/...` on a
+   * site's router. POST publish on an already-published post is an Update too;
+   * POST update refuses (422) a post that is not published.
+   */
   function mountSiteGit(router, prefix, { site, ws, db, backup }) {
-    const publishRoute = (publish) => async (req, res) => {
+    /** What the live check expects after a publish or update this run: docId -> { url, text }. */
+    const expected = new Map();
+    const publishRoute = (action) => async (req, res) => {
+      const docId = req.params.id;
       try {
         const result = await backup.exclusive(() => setPublished({
-          site, ws, db, docId: req.params.id, publish,
+          site, ws, db, docId, publish: action !== 'unpublish', update: action === 'update',
           deps: {
             ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
             commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,
+            changedSinceHead: git.changedSinceHead, readHead: git.readHead,
             collectionsConfig: getCollectionsConfig(db),
           },
         }));
+        if (result.expectedText != null) expected.set(docId, { url: result.url, text: result.expectedText });
+        else expected.delete(docId);
         sendJson(res, 200, { status: result.status, url: result.url });
       } catch (err) {
         if (err instanceof PublishRejectedError) return sendJson(res, err.status, err.body);
@@ -204,8 +214,9 @@ export async function startApp({
         sendJson(res, 500, { error: err.message });
       }
     };
-    router.add('POST', `${prefix}/documents/:id/publish`, publishRoute(true));
-    router.add('POST', `${prefix}/documents/:id/unpublish`, publishRoute(false));
+    router.add('POST', `${prefix}/documents/:id/publish`, publishRoute('publish'));
+    router.add('POST', `${prefix}/documents/:id/update`, publishRoute('update'));
+    router.add('POST', `${prefix}/documents/:id/unpublish`, publishRoute('unpublish'));
 
     router.add('GET', `${prefix}/info`, async (req, res) => sendJson(res, 200, { siteUrl: await readSiteUrl(ws.siteDir) }));
     router.add('GET', `${prefix}/status`, async (req, res) => { await backup.init(); sendJson(res, 200, backup.state()); });
@@ -215,9 +226,12 @@ export async function startApp({
       const doc = getDocument(db, req.params.id);
       if (!doc) return sendJson(res, 404, { error: 'Document not found' });
       if (doc.meta.status !== 'published') return sendJson(res, 200, { live: false, url: null });
+      // The page the last publish/update built (dist may have been rebuilt since by
+      // Preview, from edits that are not live); without one (an earlier run), dist.
+      const snapshot = expected.get(doc.id);
       const collectionsConfig = getCollectionsConfig(db);
-      const url = publicUrl(await readSiteUrl(ws.siteDir), doc, collectionsConfig);
-      const expectedText = builtPage(ws.siteDir, doc, collectionsConfig);
+      const url = snapshot?.url || publicUrl(await readSiteUrl(ws.siteDir), doc, collectionsConfig);
+      const expectedText = snapshot ? snapshot.text : builtPage(ws.siteDir, doc, collectionsConfig);
       const live = Boolean(url && expectedText !== null) &&
         await checkLive({ url, expectedText, fetch: fetchImpl });
       sendJson(res, 200, { live, url });

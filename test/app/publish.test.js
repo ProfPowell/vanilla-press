@@ -44,6 +44,19 @@ const deps = () => ({ ensureInstalled, runBuild, ...realGit, collectionsConfig: 
 const lastRemote = () => git(fx.remote, 'log', '-1', '--format=%s', 'main');
 const remoteFiles = () => git(fx.remote, 'ls-tree', '-r', '--name-only', 'main').split('\n');
 
+/** Save new text (and meta) for a stored document and sync it, as an editor save does. */
+function edit(ws, id, text, meta = {}) {
+  const cur = getDocument(db, id);
+  const next = saveDocument(db, {
+    ...cur, meta: { ...cur.meta, ...meta }, blocks: [{ type: 'paragraph', children: [{ type: 'text', value: text }] }],
+  });
+  syncDocument(ws, next, { collectionsConfig: {}, previousDoc: cur });
+  return next;
+}
+const headFiles = () => git(fx.site, 'ls-tree', '-r', '--name-only', 'HEAD').split('\n');
+const remoteShow = (path) => git(fx.remote, 'show', `main:${path}`);
+const OTHER = 'doc_other001';
+
 describe('setPublished', () => {
   test('publish writes, builds, commits and pushes', async () => {
     const ws = setup();
@@ -140,6 +153,82 @@ describe('setPublished', () => {
     assert.ok(!remoteFiles().includes('src/posts/hello.html'));
     assert.ok(remoteFiles().includes('content/posts/hello.json'));
     assert.equal(getDocument(db, ID).meta.status, 'draft');
+  });
+
+  test('update on a published post commits only its own page, as Update, keeping the published date', async () => {
+    const ws = setup();
+    const otherSaved = saveDocument(db, { ...hello(), id: OTHER, meta: { ...hello().meta, title: 'Other', slug: 'other' } });
+    syncDocument(ws, otherSaved, { collectionsConfig: {} });
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    await setPublished({ site: {}, ws, db, docId: OTHER, publish: true, deps: deps() });
+    const published = getDocument(db, ID).meta.published;
+    edit(ws, ID, 'Version two.');
+    edit(ws, OTHER, 'Other, not live yet.'); // saved, never updated
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, update: true, deps: deps() });
+    assert.equal(res.status, 'pushed');
+    assert.equal(res.url, 'https://example.com/posts/hello/');
+    assert.equal(lastRemote(), 'Update: Hello');
+    const files = git(fx.remote, 'show', '--name-only', '--format=', 'main').split('\n');
+    assert.ok(files.includes('src/posts/hello.html'), files.join(' '));
+    assert.ok(!files.includes('src/posts/other.html'), files.join(' '));
+    assert.match(remoteShow('src/posts/hello.html'), /Version two\./);
+    assert.match(remoteShow('src/posts/other.html'), /Hi there\./);
+    assert.match(git(fx.site, 'status', '--porcelain'), /M src\/posts\/other\.html/);
+    assert.equal(getDocument(db, ID).meta.published, published);
+    assert.equal(getDocument(db, ID).meta.status, 'published');
+    assert.match(res.expectedText, /Version two\./); // the page this build made, for the live check
+  });
+
+  test('publish on an already-published post is an Update too', async () => {
+    const ws = setup();
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    edit(ws, ID, 'Version two.');
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(lastRemote(), 'Update: Hello');
+  });
+
+  test('update refuses a post that is not published', async () => {
+    const ws = setup();
+    await assert.rejects(
+      setPublished({ site: {}, ws, db, docId: ID, publish: true, update: true, deps: deps() }),
+      (err) => err.status === 422 && /not published/.test(err.body.error),
+    );
+    assert.equal(getDocument(db, ID).meta.status, 'draft');
+  });
+
+  test('a failed build on update pushes nothing and keeps the post published', async () => {
+    const ws = setup();
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    edit(ws, ID, 'Version two.');
+    write(fx.site, 'build.js', BUILD_FAIL);
+    const before = git(fx.remote, 'rev-parse', 'main');
+    const localBefore = git(fx.site, 'rev-parse', 'HEAD');
+    await assert.rejects(setPublished({ site: {}, ws, db, docId: ID, publish: true, update: true, deps: deps() }), BuildError);
+    assert.equal(git(fx.remote, 'rev-parse', 'main'), before);
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
+    assert.equal(getDocument(db, ID).meta.status, 'published');
+  });
+
+  test('rename a published post, then Update: HEAD has the new page and not the old one', async () => {
+    const ws = setup();
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    edit(ws, ID, 'Renamed.', { slug: 'hello-2' });
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, update: true, deps: deps() });
+    assert.ok(headFiles().includes('src/posts/hello-2.html'), headFiles().join(' '));
+    assert.ok(!headFiles().includes('src/posts/hello.html'), headFiles().join(' '));
+    assert.ok(!remoteFiles().includes('src/posts/hello.html'));
+    assert.equal(git(fx.site, 'status', '--porcelain'), '');
+  });
+
+  test('rename a published post, then Unpublish: neither page is in HEAD (I-1)', async () => {
+    const ws = setup();
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    edit(ws, ID, 'Renamed.', { slug: 'hello-2' });
+    await setPublished({ site: {}, ws, db, docId: ID, publish: false, deps: deps() });
+    assert.equal(lastRemote(), 'Unpublish: Hello');
+    const head = headFiles();
+    assert.ok(!head.includes('src/posts/hello.html') && !head.includes('src/posts/hello-2.html'), head.join(' '));
+    assert.ok(!remoteFiles().some((f) => f.endsWith('.html') && f.includes('hello')), remoteFiles().join(' '));
   });
 
   test('without a remote the publish is saved and committed locally', async () => {
@@ -254,20 +343,66 @@ describe('app routes', () => {
     const flushed = await api(`/api/sites/${siteId}/backup`, { method: 'POST' });
     assert.equal(flushed.status, 200);
     assert.equal(flushed.data.pending, 0);
-    assert.equal(lastRemote(), 'Draft: all posts [CI Skip]');
+    assert.equal(lastRemote(), 'Edit: all posts [CI Skip]'); // not known to be drafts only
   });
 
-  test('a slug rename of a published post leaves only the new files in HEAD', async () => {
+  test('a slug rename of a published post backs up the JSON only; Update moves the page', async () => {
     await open();
     await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
     const put = await api(`/api/sites/${siteId}/documents/${ID}`, { method: 'PUT', body: { meta: { slug: 'hello-2' } } });
     assert.equal(put.status, 200, JSON.stringify(put.data));
     assert.equal((await api(`/api/sites/${siteId}/backup`, { method: 'POST' })).data.error, null);
-    const head = git(fx.site, 'ls-tree', '-r', '--name-only', 'HEAD').split('\n');
-    assert.ok(head.includes('content/posts/hello-2.json') && head.includes('src/posts/hello-2.html'), head.join(' '));
-    assert.ok(!head.includes('content/posts/hello.json') && !head.includes('src/posts/hello.html'), head.join(' '));
+    assert.equal(lastRemote(), 'Edit: Hello [CI Skip]');
+    let head = headFiles();
+    assert.ok(head.includes('content/posts/hello-2.json') && !head.includes('content/posts/hello.json'), head.join(' '));
+    assert.ok(head.includes('src/posts/hello.html') && !head.includes('src/posts/hello-2.html'), head.join(' ')); // live page unchanged
+    const up = await api(`/api/sites/${siteId}/documents/${ID}/update`, { method: 'POST' });
+    assert.deepEqual(up.data, { status: 'pushed', url: 'https://example.com/posts/hello-2/' });
+    assert.equal(lastRemote(), 'Update: Hello');
     assert.deepEqual(remoteFiles().filter((f) => f.includes('hello')).sort(), ['content/posts/hello-2.json', 'src/posts/hello-2.html']);
     assert.equal(git(fx.site, 'diff', '--cached', '--name-only'), '');
+  });
+
+  test('rename, restart the app, then Unpublish: neither page is in HEAD', async () => {
+    await open();
+    await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    await api(`/api/sites/${siteId}/documents/${ID}`, { method: 'PUT', body: { meta: { slug: 'hello-2' } } });
+    await app.close(); // quits inside the backup pause: nothing flushed
+    app = await startApp({
+      port: 0, env, previews: { start() {}, stop: async () => {}, stopAll: async () => {} },
+      backup: { now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer },
+    });
+    const un = await api(`/api/sites/${siteId}/documents/${ID}/unpublish`, { method: 'POST' });
+    assert.equal(un.status, 200, JSON.stringify(un.data));
+    const head = headFiles();
+    assert.ok(!head.includes('src/posts/hello.html') && !head.includes('src/posts/hello-2.html'), head.join(' '));
+    assert.ok(head.includes('content/posts/hello-2.json') && !head.includes('content/posts/hello.json'), head.join(' '));
+  });
+
+  test('update route on a draft is a 422', async () => {
+    await open();
+    const res = await api(`/api/sites/${siteId}/documents/${ID}/update`, { method: 'POST' });
+    assert.equal(res.status, 422, JSON.stringify(res.data));
+    assert.match(res.data.error, /not published/);
+  });
+
+  test('live check after Update compares with the page that Update built, even if dist changes later', async () => {
+    let body = '';
+    await open({ fetchImpl: async () => new Response(body, { status: 200 }) });
+    await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    const put = await api(`/api/sites/${siteId}/documents/${ID}`, {
+      method: 'PUT', body: { blocks: [{ type: 'paragraph', children: [{ type: 'text', value: 'Version two.' }] }] },
+    });
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    assert.equal((await api(`/api/sites/${siteId}/documents/${ID}/update`, { method: 'POST' })).status, 200);
+    const built = readFileSync(join(fx.site, 'dist', 'posts', 'hello', 'index.html'), 'utf8');
+    assert.match(built, /Version two\./);
+    // Preview's dev server rebuilds dist from a later, unpublished edit.
+    write(fx.site, 'dist/posts/hello/index.html', '<p>Version three.</p>\n');
+    body = '<p>Version three.</p>';
+    assert.equal((await api(`/api/sites/${siteId}/documents/${ID}/live`)).data.live, false);
+    body = `<html><body>${built}</body></html>`;
+    assert.deepEqual((await api(`/api/sites/${siteId}/documents/${ID}/live`)).data, { live: true, url: 'https://example.com/posts/hello/' });
   });
 
   test('build failure is a 422 with the log', async () => {

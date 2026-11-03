@@ -206,7 +206,7 @@ test('push keeps a non-conflicting uncommitted change outside VP paths', async (
   assert.equal(git(a, 'stash', 'list'), '');
 });
 
-test('push stops honestly when re-applying uncommitted changes conflicts', async () => {
+test('push refuses, changing nothing, when the remote touches a file the user is editing', async () => {
   write(b, 'README.md', 'remote edit\n');
   git(b, 'commit', '-am', 'readme');
   git(b, 'push');
@@ -214,13 +214,18 @@ test('push stops honestly when re-applying uncommitted changes conflicts', async
   write(a, 'content/x.json', '{}');
   await commitPaths(a, ['content'], 'Draft: X');
   const remoteBefore = git(remote, 'rev-parse', 'main');
+  const headBefore = git(a, 'rev-parse', 'HEAD');
+  const statusBefore = git(a, 'status', '--porcelain');
   await assert.rejects(push(a), (err) => {
     assert.ok(err instanceof GitStashConflictError);
     assert.ok(!(err instanceof GitConflictError));
     assert.deepEqual(err.files, ['README.md']);
-    assert.match(err.message, /stash/);
+    assert.match(err.message, /Commit or discard/);
     return true;
   });
   assert.equal(git(remote, 'rev-parse', 'main'), remoteBefore);
-  assert.notEqual(git(a, 'stash', 'list'), '');
+  assert.equal(git(a, 'rev-parse', 'HEAD'), headBefore);
+  assert.equal(git(a, 'status', '--porcelain'), statusBefore);
+  assert.equal(readFileSync(join(a, 'README.md'), 'utf8'), 'my local edit\n');
+  assert.equal(git(a, 'stash', 'list'), '');
 });

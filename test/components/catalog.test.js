@@ -4,7 +4,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATALOG, CONTENT_KINDS } from '../../src/components/catalog.js';
 import { readManifest } from '../../src/components/manifest.js';
-import { packageDir } from '../../src/components/describe.js';
+import { packageDir, describeComponents, componentIndex } from '../../src/components/describe.js';
+import { validate } from '../../src/schema/validate.js';
+import { initialAttrs } from '../../editor/assets/js/component-model.js';
 
 const vpRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -85,6 +87,29 @@ describe('component catalog', () => {
     }
   });
 
+  it('every element\'s defaults match its descriptor\'s attribute types and enums, and validate once inserted', () => {
+    const index = componentIndex(describeComponents({ siteDir: null, vpRoot }), { enabledOnly: false });
+    for (const { el } of elements) {
+      const desc = index.get(el.tag);
+      assert.ok(desc, `${el.tag} described`);
+      const byName = new Map(desc.attributes.map((a) => [a.name, a]));
+      for (const [k, v] of Object.entries(el.defaults)) {
+        const def = byName.get(k);
+        assert.ok(def, `${el.tag} default ${k} not declared`);
+        assert.equal(typeof v, def.type, `${el.tag} default ${k}=${JSON.stringify(v)} must be a ${def.type}`);
+        if (def.enum) assert.ok(def.enum.includes(v), `${el.tag} default ${k}=${v} not in its enum`);
+      }
+      // What the editor inserts (initialAttrs) must save: validate it as a stored post would be.
+      const node = { type: 'component', ...initialAttrs(desc) };
+      if (desc.kind === 'blocks') node.children = [{ type: 'paragraph', children: [{ type: 'text', value: 'a' }] }];
+      if (desc.kind === 'inline') node.children = [{ type: 'text', value: 'a' }];
+      const block = desc.kind === 'inline' ? { type: 'paragraph', children: [node] } : node;
+      const doc = { id: 'doc_cat', meta: { title: 'T', slug: 't', collection: 'posts', status: 'draft' }, blocks: [block] };
+      const r = validate(doc, { components: index });
+      assert.equal(r.valid, true, `${el.tag}: ${r.errors.join('; ')}`);
+    }
+  });
+
   it('kinds are valid and code kinds have codeWrap', () => {
     for (const { el } of elements) {
       assert.ok(CONTENT_KINDS.includes(el.kind), `${el.tag} kind`);
@@ -102,6 +127,8 @@ describe('component catalog', () => {
     assert.equal(byTag['code-block'].codeWrap, 'text');
     assert.equal(byTag['blink-wc'].kind, 'inline');
     assert.equal(byTag['marquee-wc'].kind, 'text');
+    // R16: <foot-notes> collects the <foot-note> elements above it and wraps no authored content
+    assert.equal(byTag['foot-notes'].kind, 'none');
   });
 
   it('tags are unique across the catalog', () => {

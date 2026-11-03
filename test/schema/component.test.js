@@ -97,4 +97,26 @@ describe('normalizeComponents', () => {
     assert.deepEqual(dropped, [{ path: 'blocks[0].children[0].children[0]', tag: 'x-inline', attr: 'q' }]);
     assert.deepEqual(doc.blocks[1].attrs, { q: 1 });
   });
+  it('coerces values to the declared type without reporting them', () => {
+    const index = new Map(fixtureIndex);
+    index.set('x-str', { ...fixtureIndex.get('x-one'), tag: 'x-str', attributes: [
+      { name: 'label', type: 'string' }, { name: 'level', type: 'string', enum: ['1', '2'] },
+      { name: 'flag', type: 'string' }, { name: 'off', type: 'string' },
+    ] });
+    const src = docWith(
+      comp({ attrs: { mode: 'a', count: '60', open: 'true' } }),
+      comp({ attrs: { count: ' 2.5 ', open: 'false' } }),
+      comp({ tag: 'x-str', attrs: { label: 0.65, level: 2, flag: true, off: false } }),
+      comp({ attrs: { count: 'many', open: 'yes' } }),
+    );
+    const { doc, dropped } = normalizeComponents(src, index);
+    assert.deepEqual(dropped, []);
+    assert.deepEqual(doc.blocks[0].attrs, { mode: 'a', count: 60, open: true });
+    assert.deepEqual(doc.blocks[1].attrs, { count: 2.5, open: false });
+    // false on a string attribute renders as no attribute, so it is left out rather than written "false"
+    assert.deepEqual(doc.blocks[2].attrs, { label: '0.65', level: '2', flag: 'true' });
+    assert.deepEqual(doc.blocks[3].attrs, { count: 'many', open: 'yes' }, 'not coercible: left for validate to report');
+    assert.equal(validate(doc, { components: index }).valid, false);
+    assert.equal(validate({ ...doc, blocks: doc.blocks.slice(0, 3) }, { components: index }).valid, true);
+  });
 });

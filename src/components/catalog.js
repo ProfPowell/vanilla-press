@@ -76,7 +76,9 @@ export const CATALOG = [
         tag: 'code-playground', label: 'Code playground', icon: 'play', group: 'Code',
         description: 'Live HTML, CSS and JS editors with a preview.',
         kind: 'none',
-        defaults: { 'inherit-theme': true },
+        // The manifest declares inherit-theme untyped (a string); the element treats it
+        // as on unless its value is "false"
+        defaults: { 'inherit-theme': 'true' },
         advanced: ['mode', 'run-mode', 'debounce', 'preview-position', 'show-console', 'persist', 'fit-preview', 'head-src'],
       },
     ],
@@ -102,7 +104,8 @@ export const CATALOG = [
         tag: 'bg-wc', label: 'Animated background', icon: 'image', group: 'Frames',
         description: 'Content over a generative background.',
         kind: 'blocks',
-        defaults: { preset: 'mesh-gradient', intensity: 0.65 },
+        // The manifest declares intensity untyped (a string); README: intensity="0.65" (0-1)
+        defaults: { preset: 'mesh-gradient', intensity: '0.65' },
         advanced: ['palette', 'speed', 'density', 'seed', 'paused', 'pixel-ratio', 'quality', 'fit', 'motion', 'mode', 'power-save'],
       },
     ],
@@ -231,10 +234,11 @@ export const CATALOG = [
         kind: 'none', defaults: { url: '' }, advanced: ['provider', 'theme', 'activate', 'state'],
       },
       {
-        // static.html: <foot-note> elements precede <foot-notes>, which collects them into a list
+        // static.html: <foot-note> elements precede <foot-notes>, which collects them into
+        // a list; it wraps no authored content (R16)
         tag: 'foot-notes', label: 'Footnotes', icon: 'footnote', group: 'Layout',
         description: 'Collects the footnotes above it into a notes list or margin sidenotes.',
-        kind: 'blocks', defaults: {}, advanced: ['data-mode', 'data-label-back', 'data-label-ref', 'data-label-heading', 'data-preview'],
+        kind: 'none', defaults: {}, advanced: ['data-mode', 'data-label-back', 'data-label-ref', 'data-label-heading', 'data-preview'],
       },
       {
         tag: 'accordion-wc', label: 'Accordion', icon: 'accordion', group: 'Layout',

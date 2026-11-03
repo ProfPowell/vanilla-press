@@ -97,7 +97,8 @@ export function describeComponents({ siteDir, vpRoot, catalog = CATALOG }) {
         ...el,
         package: entry.package,
         bundled,
-        attributes: manifest.get(el.tag)?.attributes ?? [],
+        // The manifest wins; a catalog hint stands in when it declares nothing (R13)
+        attributes: manifest.get(el.tag)?.attributes?.length ? manifest.get(el.tag).attributes : (el.attributes ?? []),
         scriptPath,
       })),
     };

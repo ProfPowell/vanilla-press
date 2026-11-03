@@ -490,6 +490,45 @@ describe('documents API with components', () => {
   });
 });
 
+describe('documents API: components without a published manifest (R13)', () => {
+  let root, app, siteId;
+  const call = async (path, method = 'GET', body) => {
+    const res = await fetch(`${app.url}${path}`, body === undefined ? { method } : {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    return { status: res.status, data: await res.json() };
+  };
+
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), 'vp-app-hint-'));
+    const site = makeSite(root, 'hint-site');
+    writeFileSync(join(site, 'package.json'), JSON.stringify({
+      name: 'hint-site', dependencies: { '@profpowell/border-wc': '^0.2.0' }, devDependencies: { 'cook-ssg': '^2.5.0' },
+    }));
+    // The real catalog and VP's own node_modules (border-wc 0.2.0 ships no custom-elements.json)
+    app = await startApp({ port: 0, env: { VP_CONFIG_DIR: join(root, 'config') }, git: fakeGit });
+    siteId = (await call('/api/sites', 'POST', { path: site })).data.id;
+  });
+  after(async () => {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('a border-wc keeps its catalog-hinted attributes; an undeclared one is dropped with a notice', async () => {
+    const res = await call(`/api/sites/${siteId}/documents`, 'POST', {
+      ...post('doc_border001', 'border', 'Border'),
+      blocks: [{
+        type: 'component', tag: 'border-wc',
+        attrs: { effect: 'squiggle', animate: true, thickness: 3, bogus: 'x' },
+        children: [{ type: 'paragraph', children: [{ type: 'text', value: 'Hi' }] }],
+      }],
+    });
+    assert.equal(res.status, 201, JSON.stringify(res.data));
+    assert.deepEqual(res.data.blocks[0].attrs, { effect: 'squiggle', animate: true, thickness: 3 });
+    assert.deepEqual(res.data.notices, ['Removed "bogus" from <border-wc>: this version of the component doesn\'t have it.']);
+  });
+});
+
 describe('mountApi components options', () => {
   async function serve(options, fn) {
     const site = mkdtempSync(join(tmpdir(), 'vp-mount-comp-'));

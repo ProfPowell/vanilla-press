@@ -15,7 +15,13 @@
  *   kind: ContentKind, codeWrap?: 'text'|'template'|'script', codeLanguage?: string,
  *   defaults: Record<string, string|number|boolean>, advanced: string[] }} ElementHint
  */
-/** @typedef {{ package: string, bundled?: boolean, elements: ElementHint[] }} CatalogEntry */
+/**
+ * `attributes` (optional) is only for packages whose published tarball has no
+ * custom-elements.json: their README attribute table, in AttrDef shape. It is
+ * used when the manifest declares nothing for the tag; a manifest wins.
+ * @typedef {ElementHint & { attributes?: import('./manifest.js').AttrDef[] }} CatalogElement
+ */
+/** @typedef {{ package: string, bundled?: boolean, elements: CatalogElement[] }} CatalogEntry */
 
 /** @type {ContentKind[]} */
 export const CONTENT_KINDS = ['none', 'text', 'code', 'blocks', 'inline'];
@@ -112,6 +118,26 @@ export const CATALOG = [
         kind: 'blocks',
         defaults: { effect: 'squiggle', animate: true },
         advanced: ['thickness', 'speed', 'radius', 'mode', 'motion'],
+        // README attribute table (no published manifest: see `attributes` in ElementHint)
+        attributes: [
+          {
+            name: 'effect', type: 'string', description: 'The border effect.',
+            enum: ['aurora', 'barber', 'chroma', 'wings', 'ants', 'lightning', 'neon', 'glitch', 'hud', 'ascii',
+              'stitching', 'typewriter', 'barbed-wire', 'rope', 'scallop', 'scoop', 'zigzag', 'wave', 'deco',
+              'memphis', 'opart', 'psychedelic', 'plasma', 'gooey', 'sparks', 'marquee', 'washi', 'filmstrip',
+              'ticket', 'bunting', 'squiggle', 'draw'],
+          },
+          { name: 'color', type: 'string', description: 'Stroke/particle color (any CSS color; defaults to currentColor).' },
+          { name: 'thickness', type: 'number', description: 'Stroke width in px.' },
+          { name: 'speed', type: 'number', description: 'Animation duration in ms.' },
+          { name: 'radius', type: 'number', description: "Corner radius in px (falls back to the host's computed border-radius)." },
+          { name: 'animate', type: 'boolean', description: 'Plays the entrance/loop animation.' },
+          { name: 'mode', type: 'string', description: 'Effect-specific placement mode (e.g. center).' },
+          {
+            name: 'motion', type: 'string', enum: ['auto', 'reduce', 'force'],
+            description: 'Overrides prefers-reduced-motion: reduce forces static, force forces animation, auto honors it.',
+          },
+        ],
       },
     ],
   },
@@ -125,6 +151,25 @@ export const CATALOG = [
         kind: 'text',
         defaults: { speed: 50, 'pause-on-hover': true },
         advanced: ['behavior', 'gap', 'play-state', 'autofill', 'fade', 'reduced-motion', 'mode', 'unit'],
+        // README attribute table and its Modes tables (no published manifest)
+        attributes: [
+          { name: 'direction', type: 'string', enum: ['left', 'right', 'up', 'down'], description: 'Scroll direction (default left).' },
+          { name: 'speed', type: 'number', description: 'Pixels per second (default 50).' },
+          { name: 'behavior', type: 'string', enum: ['loop', 'slide', 'alternate'], description: 'Default loop.' },
+          { name: 'gap', type: 'string', description: 'CSS length between repeats; overrides --marquee-gap.' },
+          { name: 'pause-on-hover', type: 'boolean', description: 'Also pauses on :focus-within.' },
+          { name: 'play-state', type: 'string', enum: ['running', 'paused'], description: 'Default running.' },
+          { name: 'autofill', type: 'boolean', description: 'Clone short content to fill the viewport.' },
+          { name: 'fade', type: 'boolean', description: 'Apply an edge fade mask.' },
+          { name: 'reduced-motion', type: 'string', enum: ['respect', 'ignore'], description: 'Default respect.' },
+          {
+            name: 'mode', type: 'string', description: 'A surface theme or letter-motion preset.',
+            enum: ['ticker', 'breaking-news', 'code-block', 'screen-saver', 'credits', 'dot-matrix',
+              'bounce', 'wave', 'march', 'pulse', 'ransom', 'pop', 'spin', 'rainbow', 'flip', 'glitch',
+              'leet', 'blink', 'chase', 'invert', 'decode'],
+          },
+          { name: 'unit', type: 'string', enum: ['letter', 'word'], description: 'Granularity for the motion modes (default letter).' },
+        ],
       },
     ],
   },

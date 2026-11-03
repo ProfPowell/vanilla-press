@@ -10,7 +10,7 @@ const vpRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 // The published marquee-wc 1.7.0 and border-wc 0.2.0 tarballs omit
 // custom-elements.json (not in their "files"). Until they are republished
-// their attributes cannot be checked here, and the settings form is empty.
+// their catalog elements carry an `attributes` hint from the README (R13).
 const NO_PUBLISHED_MANIFEST = new Set(['@profpowell/marquee-wc', '@profpowell/border-wc']);
 
 const elements = CATALOG.flatMap((e) => e.elements.map((el) => ({ pkg: e.package, el })));
@@ -43,6 +43,33 @@ describe('component catalog', () => {
       for (const el of entry.elements) {
         assert.ok(manifest.has(el.tag), `${el.tag} missing from ${entry.package} manifest`);
       }
+    }
+  });
+
+  it('packages without a published manifest carry an attributes hint covering defaults and advanced (R13)', () => {
+    for (const entry of CATALOG.filter((e) => NO_PUBLISHED_MANIFEST.has(e.package))) {
+      for (const el of entry.elements) {
+        assert.ok(Array.isArray(el.attributes) && el.attributes.length, `${el.tag} has no attributes hint`);
+        const byName = new Map(el.attributes.map((a) => [a.name, a]));
+        assert.equal(byName.size, el.attributes.length, `${el.tag} hint repeats a name`);
+        for (const a of el.attributes) {
+          assert.ok(['string', 'number', 'boolean'].includes(a.type), `${el.tag} ${a.name} type ${a.type}`);
+          if (a.enum) assert.ok(Array.isArray(a.enum) && a.enum.length && a.type === 'string', `${el.tag} ${a.name} enum`);
+        }
+        for (const k of [...Object.keys(el.defaults), ...el.advanced]) assert.ok(byName.has(k), `${el.tag} ${k} not in its hint`);
+        for (const [k, v] of Object.entries(el.defaults)) {
+          const def = byName.get(k);
+          if (def.enum) assert.ok(def.enum.includes(v), `${el.tag} default ${k}=${v} not in its enum`);
+          if (def.type === 'number') assert.equal(typeof v, 'number', `${el.tag} default ${k}`);
+          if (def.type === 'boolean') assert.equal(typeof v, 'boolean', `${el.tag} default ${k}`);
+        }
+      }
+    }
+  });
+
+  it('only packages without a published manifest carry an attributes hint', () => {
+    for (const entry of CATALOG.filter((e) => !NO_PUBLISHED_MANIFEST.has(e.package))) {
+      for (const el of entry.elements) assert.equal(el.attributes, undefined, `${el.tag}: its manifest is the source`);
     }
   });
 

@@ -80,6 +80,16 @@ describe('describeComponents', () => {
     assert.equal(missing.elements[0].scriptPath, null);
   });
 
+  it("uses an element's catalog attributes hint only when the manifest has none for it (R13)", () => {
+    const hinted = [
+      { package: 'x-widgets', elements: [hint('x-two', { attributes: [{ name: 'ignored', type: 'string' }] })] },
+      { package: 'x-other', elements: [hint('x-three', { attributes: [{ name: 'size', type: 'number' }] })] },
+    ];
+    const states = describeComponents({ siteDir: null, vpRoot, catalog: hinted });
+    assert.deepEqual(state(states, 'x-widgets').elements[0].attributes.map((a) => a.name), ['label'], 'manifest wins');
+    assert.deepEqual(state(states, 'x-other').elements[0].attributes, [{ name: 'size', type: 'number' }]);
+  });
+
   it('site copy wins over VP copy', () => {
     sitePkg({ 'x-widgets': '^1.0.0' });
     install(siteDir, 'x-widgets', 'x-widgets-site');

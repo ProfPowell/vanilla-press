@@ -72,29 +72,17 @@ describe('formFields', () => {
 });
 
 describe('settingsFields', () => {
-  it('keeps declared fields, each with its attribute definition', () => {
-    const attr = { name: 'title', type: 'string' };
-    const fields = settingsFields(d('x-s', 'none', { attributes: [attr] }), {});
-    assert.deepEqual(fields.map(f => [f.name, f.control]), [['title', 'text']]);
-    assert.equal(fields[0].attrDef, attr);
+  it('is formFields with each attribute definition attached', () => {
+    const attrs = [{ name: 'title', type: 'string' }, { name: 'speed', type: 'number' }];
+    const desc = d('x-s', 'none', { attributes: attrs, advanced: ['speed'] });
+    const fields = settingsFields(desc);
+    assert.deepEqual(fields.map(({ attrDef, ...f }) => f), formFields(desc));
+    assert.equal(fields[0].attrDef, attrs[0]);
+    assert.equal(fields[1].attrDef, attrs[1]);
   });
-  it('adds undeclared defaults, advanced names and node attrs, typed by their values', () => {
-    const desc = d('x-m', 'text', {
-      defaults: { speed: 50, 'pause-on-hover': true },
-      advanced: ['gap'],
-      attributes: [],
-    });
-    const fields = settingsFields(desc, { speed: 60, extra: 'x' });
-    assert.deepEqual(fields.map(f => [f.name, f.control, f.advanced]), [
-      ['speed', 'number', false], ['pause-on-hover', 'checkbox', false], ['extra', 'text', false], ['gap', 'text', true],
-    ]);
-    assert.deepEqual(fields[0].attrDef, { name: 'speed', type: 'number' });
-    assert.deepEqual(fields[1].attrDef, { name: 'pause-on-hover', type: 'boolean' });
-    assert.equal(fields[0].label, 'Speed');
-  });
-  it('does not repeat a declared attribute', () => {
-    const desc = d('x-r', 'none', { defaults: { title: 'T' }, attributes: [{ name: 'title', type: 'string' }] });
-    assert.deepEqual(settingsFields(desc, { title: 'U' }).map(f => f.name), ['title']);
+  it('adds no fields beyond the declared attributes', () => {
+    const desc = d('x-m', 'text', { defaults: { speed: 50 }, advanced: ['gap'], attributes: [] });
+    assert.deepEqual(settingsFields(desc), []);
   });
 });
 

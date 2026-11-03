@@ -76,9 +76,9 @@ export class ComponentSettings extends HTMLElement {
   }
 
   render({ node, descriptor, availability, label }) {
-    const { tag, attrs } = node.attrs;
+    const { tag } = node.attrs;
     const desc = descriptor || { tag, attributes: [], defaults: {}, advanced: [] };
-    this._fields = settingsFields(desc, attrs || {});
+    this._fields = settingsFields(desc);
 
     const control = (field) => {
       const id = `cs-${field.name}`;

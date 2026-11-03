@@ -120,6 +120,17 @@ test('commitPaths commits a rename as delete plus add, leaving the index clean',
   assert.equal(git(a, 'diff', '--cached', '--name-only'), '');
 });
 
+test('commitPaths treats paths literally: * and [ stage only that file', async () => {
+  write(a, 'src/posts/a*.html', 'star');
+  write(a, 'src/posts/ab.html', 'mine');
+  write(a, 'src/posts/[x].html', 'bracket');
+  write(a, 'src/posts/x.html', 'mine too');
+  await commitPaths(a, ['src/posts/a*.html', 'src/posts/[x].html'], 'odd slugs');
+  assert.deepEqual(git(a, 'show', '--name-only', '--format=', 'HEAD').split('\n').sort(),
+    ['src/posts/[x].html', 'src/posts/a*.html']);
+  assert.equal(git(a, 'ls-files', '--others', '--exclude-standard'), 'src/posts/ab.html\nsrc/posts/x.html');
+});
+
 test('commitPaths returns null when nothing changed', async () => {
   write(a, 'content/x.json', '{}');
   await commitPaths(a, ['content'], 'add');

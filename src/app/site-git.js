@@ -27,37 +27,51 @@ function listDir(dir) {
   }
 }
 
+/** Site-relative `.html` files under `src/<rel>` (recursively; top level only for `''`) whose front matter has `vp_id`. */
+function vpPages(siteDir, rel, recursive) {
+  const out = [];
+  const base = rel ? `src/${rel}` : 'src';
+  for (const entry of listDir(join(siteDir, base))) {
+    const path = `${base}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (recursive) out.push(...vpPages(siteDir, `${rel}/${entry.name}`, true));
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith('.html')) continue;
+    let text;
+    try { text = readFileSync(join(siteDir, path), 'utf8'); } catch { continue; }
+    if (readVpId(text)) out.push(path);
+  }
+  return out;
+}
+
 /**
  * Site-relative paths Vanilla Press owns: `content`, `src/media`,
- * `config/vp.json`, `src/<dir>` for each collection in `content/` whose
- * output dir is not `''`, and, for a `''` dir (pages), each `src/*.html`
- * whose front matter has `vp_id` plus every html path in the local manifest
- * (never `src/` itself). Paths may not exist; commitPaths skips those.
+ * `config/vp.json` and, for each collection in `content/`, the pages in its
+ * output dir that VP wrote: each `.html` file whose front matter has
+ * `vp_id` (under `src/<dir>`, or directly in `src/` for a `''` dir such as
+ * pages), plus every html path in the local manifest so a removed page's
+ * deletion is staged. Never a collection folder wholesale, so hand-written
+ * files there stay the user's. Paths may not exist; commitPaths skips those.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {Object} [collectionsConfig]
  * @returns {string[]}
  */
 export function ownedPaths(ws, collectionsConfig = {}) {
   const paths = new Set(['content', 'src/media', 'config/vp.json']);
-  let rootPages = false;
+  const dirs = new Set();
   for (const entry of listDir(join(ws.siteDir, 'content'))) {
     if (!entry.isDirectory()) continue;
-    const dir = trimSlashes(collectionOutput(entry.name, collectionsConfig).path);
-    if (dir) paths.add(`src/${dir}`);
-    else rootPages = true;
+    dirs.add(trimSlashes(collectionOutput(entry.name, collectionsConfig).path));
   }
-  if (rootPages) {
-    for (const entry of listDir(join(ws.siteDir, 'src'))) {
-      if (!entry.isFile() || !entry.name.endsWith('.html')) continue;
-      let text;
-      try { text = readFileSync(join(ws.siteDir, 'src', entry.name), 'utf8'); } catch { continue; }
-      if (readVpId(text)) paths.add(`src/${entry.name}`);
-    }
-    let manifest = { documents: {} };
-    try { manifest = readManifest(ws); } catch { /* corrupt: sync reports it */ }
-    for (const doc of Object.values(manifest.documents || {})) {
-      if (typeof doc?.html === 'string' && doc.html.startsWith('src/') && doc.html.endsWith('.html')) paths.add(doc.html);
-    }
+  if (dirs.size === 0) return [...paths];
+  for (const dir of dirs) {
+    for (const page of vpPages(ws.siteDir, dir, dir !== '')) paths.add(page);
+  }
+  let manifest = { documents: {} };
+  try { manifest = readManifest(ws); } catch { /* corrupt: sync reports it */ }
+  for (const doc of Object.values(manifest.documents || {})) {
+    if (typeof doc?.html === 'string' && doc.html.startsWith('src/') && doc.html.endsWith('.html')) paths.add(doc.html);
   }
   return [...paths];
 }
@@ -134,6 +148,8 @@ export function createBackup({
   let initPromise = null;
   let queue = Promise.resolve();
   // Owned paths seen this session: a page VP removed is no longer listed by ownedPaths, but its deletion must be staged.
+  // Seeded now and refreshed after every save and publish, so a page that exists at
+  // any point (for example before a slug rename) has its deletion committed later.
   const known = new Set();
 
   const state = () => ({ pending: uncommitted + unpushed, lastPushAt, error, connected });
@@ -142,6 +158,8 @@ export function createBackup({
     for (const p of ownedPaths(ws, getCollectionsConfig())) known.add(p);
     return [...known];
   }
+
+  try { paths(); } catch { /* unreadable site: the first save retries */ }
 
   function cancel() {
     if (timer !== null) clearTimer(timer);
@@ -246,6 +264,7 @@ export function createBackup({
       const snapshot = take();
       try {
         const result = await fn();
+        paths(); // the page this publish wrote (or removed) is known for later backups
         unpushed += snapshot.count;
         if (result?.status === 'pushed') pushed();
         else if (result?.status === 'saved') connected = false;

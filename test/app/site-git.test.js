@@ -23,14 +23,22 @@ function backupFor(clock, extra = {}) {
   });
 }
 
-test('ownedPaths lists content and collection dirs', () => {
+test('ownedPaths lists content and the VP-owned files in each collection dir', () => {
   fx = makeGitSite();
   write(fx.site, 'content/posts/a.json', draft('a', 'A'));
   write(fx.site, 'content/media.json', '[]');
-  assert.deepEqual(ownedPaths(wsOf(fx.site), {}).sort(), ['config/vp.json', 'content', 'src/media', 'src/posts']);
+  write(fx.site, 'src/posts/a.html', '---\ntitle: "A"\nvp_id: "doc_a"\n---\n<p>A</p>\n');
+  write(fx.site, 'src/posts/mine.html', '---\ntitle: "Mine"\n---\n<p>Hand-written</p>\n');
+  write(fx.site, 'src/posts/notes.txt', 'mine');
+  write(fx.site, '.vp/manifest.json', JSON.stringify({
+    version: 1, documents: { doc_gone: { json: 'content/posts/gone.json', html: 'src/posts/gone.html', jsonHash: 'x' } },
+  }));
+  assert.deepEqual(ownedPaths(wsOf(fx.site), {}).sort(),
+    ['config/vp.json', 'content', 'src/media', 'src/posts/a.html', 'src/posts/gone.html']);
   // A configured output dir replaces the default one.
+  write(fx.site, 'src/blog/b.html', '---\nvp_id: "doc_b"\n---\n<p>B</p>\n');
   assert.deepEqual(ownedPaths(wsOf(fx.site), { posts: { path: 'blog' } }).sort(),
-    ['config/vp.json', 'content', 'src/blog', 'src/media']);
+    ['config/vp.json', 'content', 'src/blog/b.html', 'src/media', 'src/posts/gone.html']);
 });
 
 test('ownedPaths lists only VP-owned page files for a pages collection', () => {
@@ -126,6 +134,19 @@ test('draft backup leaves files outside VP paths alone', async () => {
   const status = git(fx.site, 'status', '--porcelain');
   assert.match(status, /M config\/main\.js/);
   assert.match(status, /\?\? src\/programs\//);
+});
+
+test('draft backup never commits a hand-written page in a collection dir', async () => {
+  fx = makeGitSite();
+  const backup = backupFor(fakeClock());
+  write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello'));
+  write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Hi</p>\n');
+  write(fx.site, 'src/posts/mine.html', '---\ntitle: "Mine"\n---\n<p>Hand-written</p>\n');
+  backup.noteSaved({ title: 'Hello', status: 'published' });
+  await backup.flush();
+  const pushed = git(fx.remote, 'show', '--name-only', '--format=', 'main').split('\n').sort();
+  assert.deepEqual(pushed, ['content/posts/hello.json', 'src/posts/hello.html']);
+  assert.match(git(fx.site, 'status', '--porcelain'), /\?\? src\/posts\/mine\.html/);
 });
 
 test('draft backup without a remote keeps working', async () => {

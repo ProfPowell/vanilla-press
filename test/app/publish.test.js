@@ -120,6 +120,15 @@ describe('setPublished', () => {
     assert.ok(!remoteFiles().includes('src/programs/p/index.html'));
   });
 
+  test('publish never commits a hand-written page in the collection dir', async () => {
+    const ws = setup();
+    write(fx.site, 'src/posts/mine.html', '---\ntitle: "Mine"\n---\n<p>Hand-written</p>\n');
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.ok(remoteFiles().includes('src/posts/hello.html'));
+    assert.ok(!remoteFiles().includes('src/posts/mine.html'));
+    assert.equal(git(fx.site, 'ls-files', '--others', '--exclude-standard'), 'src/posts/mine.html');
+  });
+
   test('unpublish removes the page and pushes', async () => {
     const ws = setup();
     await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });

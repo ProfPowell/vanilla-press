@@ -68,6 +68,8 @@ async function runGit(dir, args, { raw = false } = {}) {
       env: {
         ...process.env,
         GIT_TERMINAL_PROMPT: '0',
+        // Paths are file names, never globs: a slug with `*` or `[` stages only that file.
+        GIT_LITERAL_PATHSPECS: '1',
         GIT_ASKPASS: '',
         GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes',
       },

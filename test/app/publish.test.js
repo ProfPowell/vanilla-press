@@ -188,7 +188,7 @@ describe('app routes', () => {
     return { status: res.status, data: await res.json() };
   }
 
-  async function open({ fetchImpl, git: gitOps } = {}) {
+  async function open({ fetchImpl, git: gitOps, siteProcess } = {}) {
     setup();
     db.close();
     db = null;
@@ -197,6 +197,7 @@ describe('app routes', () => {
     app = await startApp({
       port: 0, env, previews: { start() {}, stop: async () => {}, stopAll: async () => {} },
       ...(gitOps ? { git: gitOps } : {}),
+      ...(siteProcess ? { siteProcess } : {}),
       backup: { now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer },
       fetch: fetchImpl,
     });
@@ -391,6 +392,37 @@ describe('app routes', () => {
     const res = await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
     assert.equal(res.status, 409);
     assert.match(res.data.error, /resolve the conflict in content\/posts\/hello\.json, then publish again/);
+  });
+
+  test('removing a site pushes its pending saves first', async () => {
+    await open();
+    await api(`/api/sites/${siteId}/documents/${ID}`, { method: 'PUT', body: { meta: { title: 'Bye' } } });
+    const res = await api(`/api/sites/${siteId}`, { method: 'DELETE' });
+    assert.deepEqual(res.data, { ok: true });
+    assert.equal(lastRemote(), 'Draft: Bye [CI Skip]');
+    assert.equal((await api(`/api/sites/${siteId}/documents`)).status, 404);
+  });
+
+  test('removing a site during a publish lets the publish finish, then closes', async () => {
+    let entered, release;
+    const inBuild = new Promise((r) => { entered = r; });
+    const gate = new Promise((r) => { release = r; });
+    const slowBuild = async (dir) => { entered(); await gate; return runBuild(dir); };
+    await open({ siteProcess: { runBuild: slowBuild } });
+    const order = [];
+    const publishing = api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' })
+      .then((r) => { order.push('publish'); return r; });
+    await inBuild;
+    const removing = api(`/api/sites/${siteId}`, { method: 'DELETE' }).then((r) => { order.push('delete'); return r; });
+    await new Promise((r) => setTimeout(r, 200));
+    assert.deepEqual(order, []); // the removal waits for the publish
+    release();
+    const [pub, del] = await Promise.all([publishing, removing]);
+    assert.equal(pub.status, 200, JSON.stringify(pub.data));
+    assert.equal(pub.data.status, 'pushed');
+    assert.deepEqual(del.data, { ok: true });
+    assert.deepEqual(order, ['publish', 'delete']);
+    assert.equal(lastRemote(), 'Publish: Hello');
   });
 
   test('shutdown flushes every open site, then stops previews', async () => {

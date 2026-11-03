@@ -164,10 +164,18 @@ export async function startApp({
     return pending;
   }
 
-  function closeSite(id) {
+  /**
+   * Close an open site. With `flush`, its backup is flushed first and the
+   * database closed in the backup's queue, after any running publish.
+   * @param {string} id
+   * @param {{ flush?: boolean }} [options]
+   */
+  async function closeSite(id, { flush = false } = {}) {
+    await opening.get(id)?.catch(() => {});
     const entry = open.get(id);
     if (!entry) return;
     open.delete(id);
+    if (flush) return entry.backup.close(() => entry.db.close());
     entry.backup.dispose();
     entry.db.close();
   }
@@ -248,11 +256,11 @@ export async function startApp({
     }
   });
 
-  app.add('DELETE', '/api/sites/:siteId', (req, res) => {
+  app.add('DELETE', '/api/sites/:siteId', async (req, res) => {
     const { siteId } = req.params;
-    closeSite(siteId);
+    removeSite(siteId, { env }); // first, so no new request reopens it
     previews.stop?.(siteId)?.catch?.(() => {});
-    removeSite(siteId, { env });
+    await closeSite(siteId, { flush: true });
     sendJson(res, 200, { ok: true });
   });
 
@@ -336,7 +344,7 @@ export async function startApp({
       server.close(() => resolve());
       server.closeAllConnections?.();
     });
-    for (const id of [...open.keys()]) closeSite(id);
+    await Promise.all([...new Set([...open.keys(), ...opening.keys()])].map((id) => closeSite(id)));
     await previews.stopAll();
   }
 

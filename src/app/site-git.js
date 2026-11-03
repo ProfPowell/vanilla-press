@@ -155,6 +155,7 @@ export function createBackup({
   let error = null;
   let connected = false; // until init() reads git status; pushed() sets it true
   let initPromise = null;
+  let closed = false;
   let queue = Promise.resolve();
   // Owned paths seen this session: a page VP removed is no longer listed by ownedPaths, but its deletion must be staged.
   // Seeded now and refreshed after every save and publish, so a page that exists at
@@ -177,6 +178,7 @@ export function createBackup({
 
   function schedule() {
     cancel();
+    if (closed) return;
     const t = now();
     const delay = Math.max(0, Math.min(t + QUIET_MS, firstAt + MAX_WAIT_MS) - t);
     timer = setTimer(() => { timer = null; return flush(); }, delay);
@@ -237,41 +239,44 @@ export function createBackup({
    */
   function flush() {
     cancel();
-    return serial(async () => {
-      if (uncommitted === 0 && unpushed === 0 && error === null) return state();
-      let snapshot = null;
-      try {
-        const status = await git.gitStatus(ws.siteDir);
-        if (!status.isRepo) {
-          connected = false;
-          firstAt = uncommitted > 0 ? now() : null; // next save waits for a full pause
-          return state();
-        }
-        snapshot = take();
-        const titled = snapshot.titles;
-        let isUpdate = false;
-        await git.commitPaths(ws.siteDir, paths(), (files) => {
-          const message = backupMessage(titled, files);
-          isUpdate = message.startsWith('Update: ');
-          return message;
-        });
-        if (isUpdate) unpushedUpdate = true;
-        unpushed += snapshot.count; // committed (or nothing to commit): only the push is left
-        snapshot = null;
-        const result = await git.push(ws.siteDir);
-        pushed('backup');
-        afterPush(result);
-      } catch (err) {
-        if (snapshot) giveBack(snapshot);
-        if (err instanceof GitNotConnectedError) {
-          connected = false;
-          error = null;
-        } else {
-          error = err.message;
-        }
+    return serial(flushNow);
+  }
+
+  /** Commit the owned paths and push (call inside the git queue). */
+  async function flushNow() {
+    if (uncommitted === 0 && unpushed === 0 && error === null) return state();
+    let snapshot = null;
+    try {
+      const status = await git.gitStatus(ws.siteDir);
+      if (!status.isRepo) {
+        connected = false;
+        firstAt = uncommitted > 0 ? now() : null; // next save waits for a full pause
+        return state();
       }
-      return state();
-    });
+      snapshot = take();
+      const titled = snapshot.titles;
+      let isUpdate = false;
+      await git.commitPaths(ws.siteDir, paths(), (files) => {
+        const message = backupMessage(titled, files);
+        isUpdate = message.startsWith('Update: ');
+        return message;
+      });
+      if (isUpdate) unpushedUpdate = true;
+      unpushed += snapshot.count; // committed (or nothing to commit): only the push is left
+      snapshot = null;
+      const result = await git.push(ws.siteDir);
+      pushed('backup');
+      afterPush(result);
+    } catch (err) {
+      if (snapshot) giveBack(snapshot);
+      if (err instanceof GitNotConnectedError) {
+        connected = false;
+        error = null;
+      } else {
+        error = err.message;
+      }
+    }
+    return state();
   }
 
   /**
@@ -330,8 +335,25 @@ export function createBackup({
 
   /** Cancel the timer without flushing (the app is closing). */
   function dispose() {
+    closed = true;
     cancel();
   }
 
-  return { noteSaved, flush, state, exclusive, dispose, paths, init };
+  /**
+   * Flush, then run `fn` (closing the site), both in the git queue, so a
+   * running publish finishes first and no save is left unpushed. Later
+   * saves schedule nothing. Never rejects because of the flush.
+   * @param {() => (void|Promise<void>)} fn
+   * @returns {Promise<void>}
+   */
+  function close(fn) {
+    closed = true;
+    cancel();
+    return serial(async () => {
+      await flushNow();
+      await fn();
+    });
+  }
+
+  return { noteSaved, flush, state, exclusive, dispose, close, paths, init };
 }

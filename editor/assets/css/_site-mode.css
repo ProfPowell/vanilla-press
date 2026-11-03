@@ -5,6 +5,12 @@
  * when neither settings nor tools are showing. Without ?site= none of these
  * classes are set, so the layout is the one in _shell.css. */
 
+/* VB gives `header` a display, which beats the UA [hidden] rule: the app
+ * header must never show outside site mode (vp serve). */
+.site-header[hidden] {
+  display: none !important;
+}
+
 editor-shell.site-mode {
   grid-template-columns: 1fr var(--editor-sidebar-w);
   grid-template-rows: auto var(--editor-toolbar-h) minmax(0, 1fr);
@@ -122,7 +128,7 @@ editor-shell.site-mode .site-header {
 }
 
 .site-header .action-report[hidden] {
-  display: none;
+  display: none !important;
 }
 
 .site-header .action-report > div {

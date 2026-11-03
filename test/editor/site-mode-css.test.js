@@ -1,0 +1,28 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'editor', 'assets', 'css', '_site-mode.css'), 'utf8');
+
+/** The declarations of the rule whose selector list includes `selector`, or null. */
+function ruleFor(selector) {
+  for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const selectors = m[1].replace(/\/\*[\s\S]*?\*\//g, '').split(',').map((s) => s.trim());
+    if (selectors.includes(selector)) return m[2];
+  }
+  return null;
+}
+
+describe('editor site-mode css', () => {
+  // VB styles `header` (and other elements) with a display, which beats the UA
+  // [hidden] rule: without this the app header shows in `vp serve`.
+  for (const selector of ['.site-header[hidden]', '.site-header .action-report[hidden]']) {
+    it(`${selector} is display: none !important`, () => {
+      const decls = ruleFor(selector);
+      assert.ok(decls, `no rule for ${selector}`);
+      assert.match(decls, /display:\s*none\s*!important/);
+    });
+  }
+});

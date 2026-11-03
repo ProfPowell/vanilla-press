@@ -136,6 +136,46 @@ export function paletteEntries(descriptors) {
     .sort((a, b) => a.category.localeCompare(b.category) || a.label.localeCompare(b.label));
 }
 
+/**
+ * A component's attrs without those a save dropped for its tag (`dropped`
+ * from POST/PUT documents: the server removes attributes the component does
+ * not declare). Null when none apply, so callers can skip the node.
+ * @param {string} tag
+ * @param {Record<string, string|number|boolean>} attrs
+ * @param {Array<{ tag: string, attr: string }>|undefined} dropped
+ * @returns {Record<string, string|number|boolean>|null}
+ */
+export function withoutDropped(tag, attrs, dropped) {
+  const names = (dropped || []).filter(d => d.tag === tag).map(d => d.attr)
+    .filter(name => attrs && Object.hasOwn(attrs, name));
+  if (!names.length) return null;
+  const next = { ...attrs };
+  for (const name of names) delete next[name];
+  return next;
+}
+
+/**
+ * A copy of a block AST with a save's `dropped` attributes removed from every
+ * component of their tag (what the server stored). The editor applies the
+ * same rule to its ProseMirror doc with `withoutDropped`.
+ * @param {Object[]} blocks
+ * @param {Array<{ tag: string, attr: string }>} dropped
+ * @returns {Object[]}
+ */
+export function dropAttributes(blocks, dropped) {
+  const visit = (node) => {
+    if (!node || typeof node !== 'object') return node;
+    let out = node;
+    if (node.type === 'component') {
+      const next = withoutDropped(node.tag, node.attrs, dropped);
+      if (next) out = { ...node, attrs: next };
+    }
+    if (Array.isArray(node.children)) out = { ...out, children: node.children.map(visit) };
+    return out;
+  };
+  return (blocks || []).map(visit);
+}
+
 /** Block types whose children are inline nodes. */
 const INLINE_PARENTS = new Set(Object.entries(blockTypes)
   .filter(([, def]) => def.children === 'inline').map(([name]) => name));

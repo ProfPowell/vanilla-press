@@ -61,8 +61,10 @@ export class EditorShell extends HTMLElement {
           saved: 'Saved', saving: 'Saving...', unsaved: 'Unsaved',
           conflict: 'Changed on disk', error: 'Not saved',
         };
-        // A rejected save (422) shows its message; auto-save keeps running
-        this.saveIndicator.textContent = (status === 'error' && message) || labels[status] || '';
+        // A rejected save (422) shows its message; auto-save keeps running.
+        // A save's notices (attributes it removed) follow "Saved".
+        const text = status === 'saved' && message ? `${labels.saved} · ${message}` : labels[status] || '';
+        this.saveIndicator.textContent = (status === 'error' && message) || text;
         this.saveIndicator.title = message || '';
       }
     };

@@ -46,6 +46,8 @@ let liveTimer = null;
 let held = false;
 /** What the save slot shows once saved: 'saved' or 'backed-up' (null: something else). */
 let savedShown = null;
+/** What the last save changed (its `notices`), shown with the saved state until the next save. */
+let savedNotices = [];
 /** Real saves so far: a save during an action means the action did not carry the newest edit. */
 let saveCount = 0;
 
@@ -206,6 +208,8 @@ export function onSaveStatus(status, message) {
       show(els.saveState, 'Saving…');
       break;
     case 'saved':
+      // A save's notices (message) stay with its saved state; any other 'saved' (a load) clears them
+      savedNotices = realSave && message ? [message] : [];
       if (realSave) saveCount++;
       if (realSave && getCurrentMeta()?.status === 'published') {
         // This edit is not live: a Live link (or a running live check) is out of date.
@@ -230,9 +234,12 @@ export function onSaveStatus(status, message) {
 function showSaved(outcome) {
   savedShown = outcome;
   const published = getCurrentMeta()?.status === 'published';
-  const text = saveStateText(outcome, { published, held });
+  const text = saveStateText(outcome, { published, held, notices: savedNotices });
   show(els.saveState, text, outcome === 'backed-up' ? 'done' : '');
-  els.saveState.title = published && held ? 'Backed up to GitHub; click Update to put these edits on the live site' : '';
+  els.saveState.title = [
+    published && held ? 'Backed up to GitHub; click Update to put these edits on the live site' : '',
+    ...savedNotices,
+  ].filter(Boolean).join('\n');
 }
 
 /** Poll GET /status until the save at `now` is backed up (or we know it won't be). */

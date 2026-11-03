@@ -70,14 +70,16 @@ export function backupOutcome(status, savedAt) {
 
 /**
  * The save slot's text once a save is done. `held`: this published post has
- * saved edits that are not live yet (they go live on Update).
+ * saved edits that are not live yet (they go live on Update). `notices`: what
+ * the last save changed (component attributes it removed), shown after the state.
  * @param {'saved'|'backed-up'} outcome
- * @param {{ published: boolean, held: boolean }} post
+ * @param {{ published: boolean, held: boolean, notices?: string[] }} post
  * @returns {string}
  */
-export function saveStateText(outcome, { published, held }) {
-  const text = outcome === 'backed-up' ? 'Backed up' : 'Saved';
-  return published && held ? `${text} · not live yet` : text;
+export function saveStateText(outcome, { published, held, notices = [] }) {
+  const base = outcome === 'backed-up' ? 'Backed up' : 'Saved';
+  const text = published && held ? `${base} · not live yet` : base;
+  return notices.length ? `${text} · ${notices.join(' ')}` : text;
 }
 
 /**

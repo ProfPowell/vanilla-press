@@ -40,7 +40,7 @@ import './components/doc-browser.js';
 import './components/theme-picker.js';
 import './components/component-settings.js';
 import { initPatterns } from './patterns.js';
-import { enabledDescriptors, unrepresentable } from './component-model.js';
+import { enabledDescriptors, unrepresentable, withoutDropped } from './component-model.js';
 import { isSiteMode, initSiteMode } from './site-mode.js';
 import { saveErrorMessage } from './site-context.js';
 
@@ -219,7 +219,8 @@ export function initEditor() {
         window.__onEditorUpdate(newState);
       }
 
-      if (transaction.docChanged) {
+      // A save's own clean-up (attributes the server removed) is already saved
+      if (transaction.docChanged && !transaction.getMeta(SERVER_NORMALIZED)) {
         setSaveStatus('unsaved');
         debouncedSave();
       }
@@ -375,6 +376,35 @@ export async function loadDocument(id) {
   }
 }
 
+/** Transaction meta: the change mirrors what the server already stored. */
+const SERVER_NORMALIZED = 'vpServerNormalized';
+
+/**
+ * Take a save's `dropped` component attributes (the server removed attributes
+ * the component does not declare) out of the editor's doc too, so the settings
+ * panel shows what is stored. Not an undo step and not a new save; the
+ * selection maps through (setNodeMarkup moves nothing).
+ * @param {Array<{ tag: string, attr: string }>|undefined} dropped
+ */
+function applyDropped(dropped) {
+  if (!editorView || !dropped?.length) return;
+  const { state } = editorView;
+  const tr = state.tr;
+  state.doc.descendants((node, pos) => {
+    if (!node.type.name.startsWith('component_')) return true;
+    const next = withoutDropped(node.attrs.tag, node.attrs.attrs, dropped);
+    if (next) tr.setNodeMarkup(pos, null, { ...node.attrs, attrs: next });
+    return true;
+  });
+  if (!tr.docChanged) return;
+  tr.setMeta('addToHistory', false);
+  tr.setMeta(SERVER_NORMALIZED, true);
+  editorView.dispatch(tr);
+}
+
+/** The save status message for a save's `notices` (escaped by the indicator: it sets textContent). */
+const noticesMessage = (saved) => (saved?.notices?.length ? saved.notices.join(' ') : undefined);
+
 /**
  * Save the current document to the API.
  * Does nothing while the document is in conflict with its file on disk.
@@ -402,8 +432,9 @@ export async function saveDocument() {
     const blocks = toBlockAst(editorView.state.doc);
     const meta = getCurrentMeta();
 
-    await api.updateDocument(docId, { meta, blocks });
-    setSaveStatus('saved');
+    const saved = await api.updateDocument(docId, { meta, blocks });
+    applyDropped(saved?.dropped);
+    setSaveStatus('saved', noticesMessage(saved));
     return true;
   } catch (err) {
     handleSaveError(docId, err);
@@ -431,7 +462,8 @@ function createFromEditor() {
       setCurrentDocId(doc.id);
       setCurrentMeta({ slug: doc.meta.slug });
       window.location.hash = `doc-${doc.id}`;
-      setSaveStatus('saved');
+      applyDropped(doc.dropped);
+      setSaveStatus('saved', noticesMessage(doc));
       document.querySelector('doc-browser')?.refresh();
       return true;
     } catch (err) {

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   nodeTypeFor, initialAttrs, formFields, settingsFields, coerce, paletteEntries, enabledDescriptors, unrepresentable,
+  withoutDropped, dropAttributes,
 } from '../../editor/assets/js/component-model.js';
 
 const d = (tag, kind, extra = {}) => ({
@@ -162,5 +163,35 @@ describe('unrepresentable', () => {
       'blocks[3].children[0]', 'blocks[3].children[1]',
       'blocks[4].children[0].children[0]',
     ]);
+  });
+});
+
+describe('dropped attributes (a save\'s `dropped`)', () => {
+  const dropped = [{ tag: 'x-one', attr: 'bogus' }, { tag: 'x-one', attr: 'zap' }, { tag: 'x-in', attr: 'q' }];
+
+  it('withoutDropped: the attrs without the dropped ones for that tag, or null when none apply', () => {
+    const attrs = { mode: 'a', bogus: 'z', zap: 1 };
+    assert.deepEqual(withoutDropped('x-one', attrs, dropped), { mode: 'a' });
+    assert.deepEqual(attrs, { mode: 'a', bogus: 'z', zap: 1 }, 'input untouched');
+    assert.equal(withoutDropped('x-one', { mode: 'a' }, dropped), null);
+    assert.equal(withoutDropped('x-two', { bogus: 1 }, dropped), null, 'another tag keeps its attrs');
+    assert.equal(withoutDropped('x-one', { bogus: 1 }, []), null);
+    assert.equal(withoutDropped('x-one', { bogus: 1 }, undefined), null);
+  });
+
+  it('dropAttributes: removes them from every component of that tag, at any depth', () => {
+    const blocks = [
+      { type: 'component', tag: 'x-one', attrs: { mode: 'a', bogus: 'z' } },
+      { type: 'component', tag: 'x-blocks', attrs: { bogus: 1 }, children: [
+        { type: 'paragraph', children: [{ type: 'component', tag: 'x-in', attrs: { q: 1, k: 2 }, children: [{ type: 'text', value: 'a' }] }] },
+        { type: 'component', tag: 'x-one', attrs: { zap: 3 } },
+      ] },
+    ];
+    const out = dropAttributes(blocks, dropped);
+    assert.deepEqual(out[0].attrs, { mode: 'a' });
+    assert.deepEqual(out[1].attrs, { bogus: 1 });
+    assert.deepEqual(out[1].children[0].children[0].attrs, { k: 2 });
+    assert.deepEqual(out[1].children[1].attrs, {});
+    assert.deepEqual(blocks[0].attrs, { mode: 'a', bogus: 'z' }, 'input untouched');
   });
 });

@@ -447,6 +447,8 @@ describe('documents API with components', () => {
     assert.equal(res.status, 201, JSON.stringify(res.data));
     assert.deepEqual(res.data.blocks[0].attrs, { mode: 'a' });
     assert.deepEqual(res.data.notices, ['Removed "bogus" from <x-one>: this version of the component doesn\'t have it.']);
+    // The same, as data, for the editor to take out of its copy
+    assert.deepEqual(res.data.dropped, [{ tag: 'x-one', attr: 'bogus' }]);
   });
 
   it('PUT document drops undeclared component attrs and returns a notice', async () => {
@@ -457,9 +459,11 @@ describe('documents API with components', () => {
       'Removed "nope" from <x-one>: this version of the component doesn\'t have it.',
       'Removed "zap" from <x-one>: this version of the component doesn\'t have it.',
     ]);
+    assert.deepEqual(res.data.dropped, [{ tag: 'x-one', attr: 'nope' }, { tag: 'x-one', attr: 'zap' }]);
     const stored = await call(`/api/sites/${siteId}/documents/doc_comp0001`);
     assert.deepEqual(stored.data.blocks[0].attrs, { count: 2 });
     assert.equal(stored.data.notices, undefined);
+    assert.equal(stored.data.dropped, undefined);
   });
 
   it('PUT saves a catalogued component that is off (R12); a tag not in the catalog is still refused', async () => {

@@ -103,6 +103,14 @@ describe('editor site context', () => {
     assert.equal(saveStateText('backed-up', { published: false, held: true }), 'Backed up');
   });
 
+  it('saveStateText: notices from the save follow the state', () => {
+    const notices = ['Removed "bogus" from <x-one>: this version of the component doesn\'t have it.'];
+    assert.equal(saveStateText('saved', { published: false, held: false, notices }), `Saved · ${notices[0]}`);
+    assert.equal(saveStateText('backed-up', { published: true, held: true, notices: [...notices, 'Second.'] }),
+      `Backed up · not live yet · ${notices[0]} Second.`);
+    assert.equal(saveStateText('saved', { published: false, held: false, notices: [] }), 'Saved');
+  });
+
   it('headerActions: a published post gets Unpublish and Update; a draft gets Publish only', () => {
     assert.deepEqual(headerActions({ status: 'published' }), { publish: { text: 'Unpublish', className: 'btn-unpublish', action: 'unpublish' }, update: true });
     assert.deepEqual(headerActions({ status: 'draft' }), { publish: { text: 'Publish', className: 'btn-publish', action: 'publish' }, update: false });

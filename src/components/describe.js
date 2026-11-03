@@ -12,13 +12,22 @@ import { readManifest } from './manifest.js';
 /**
  * `scriptPath` is the package's entry inside the package (e.g.
  * 'dist/browser-window.js'); null when bundled or not installed.
+ * `loadsOnLiveSite`/`liveSiteNote`: as on its PackageState.
  * @typedef {ElementHint & { package: string, attributes: AttrDef[], bundled: boolean,
- *   scriptPath: string|null }} ComponentDescriptor
+ *   scriptPath: string|null, loadsOnLiveSite: boolean, liveSiteNote: string|null }} ComponentDescriptor
  */
 /**
+ * `loadsOnLiveSite` is false for a non-bundled package whose installed copy has no
+ * custom-elements.json: Cook's package-components (2.5.0) only loads packages with a
+ * manifest (Ruling R14). `liveSiteNote` then says why, else it is null.
  * @typedef {{ package: string, bundled: boolean, enabled: boolean, siteVersion: string|null,
- *   vpVersion: string|null, source: 'site'|'vp'|null, elements: ComponentDescriptor[] }} PackageState
+ *   vpVersion: string|null, source: 'site'|'vp'|null, loadsOnLiveSite: boolean,
+ *   liveSiteNote: string|null, elements: ComponentDescriptor[] }} PackageState
  */
+
+/** Why a package without a manifest won't load on the live site (R14). */
+export const noManifestNote = (pkg) =>
+  `Won't load on the live site until ${pkg} ships custom-elements.json in its npm package`;
 
 function readJson(file) {
   try {
@@ -86,6 +95,8 @@ export function describeComponents({ siteDir, vpRoot, catalog = CATALOG }) {
     const manifest = found ? readManifest(found.dir) : new Map();
     const pkgJson = found ? readJson(join(found.dir, 'package.json')) : null;
     const scriptPath = !bundled && pkgJson ? entryPath(pkgJson) : null;
+    const loadsOnLiveSite = bundled || !found || manifest.size > 0;
+    const liveSiteNote = loadsOnLiveSite ? null : noManifestNote(entry.package);
     return {
       package: entry.package,
       bundled,
@@ -93,6 +104,8 @@ export function describeComponents({ siteDir, vpRoot, catalog = CATALOG }) {
       siteVersion: siteInstall ? readJson(join(siteInstall, 'package.json'))?.version ?? null : null,
       vpVersion: vpInstall ? readJson(join(vpInstall, 'package.json'))?.version ?? null : null,
       source: found ? found.source : null,
+      loadsOnLiveSite,
+      liveSiteNote,
       elements: entry.elements.map((el) => ({
         ...el,
         package: entry.package,
@@ -100,6 +113,8 @@ export function describeComponents({ siteDir, vpRoot, catalog = CATALOG }) {
         // The manifest wins; a catalog hint stands in when it declares nothing (R13)
         attributes: manifest.get(el.tag)?.attributes?.length ? manifest.get(el.tag).attributes : (el.attributes ?? []),
         scriptPath,
+        loadsOnLiveSite,
+        liveSiteNote,
       })),
     };
   });

@@ -13,6 +13,7 @@ export function packageRows(packages) {
     let note = '';
     if (p.bundled) note = 'Part of Vanilla Breeze';
     else if (p.source === null) note = 'Not installed';
+    else if (p.loadsOnLiveSite === false) note = p.liveSiteNote || "Won't load on the live site";
     return {
       package: p.package,
       label: els.length === 1 ? els[0].label : p.package,

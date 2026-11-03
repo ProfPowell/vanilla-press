@@ -125,6 +125,33 @@ describe('setPublished', () => {
     assert.equal(off.kind, 'unpublish');
   });
 
+  test('publish and update refuse a post using a component that will not load on the live site (R14)', async () => {
+    const ws = setup();
+    const cur = getDocument(db, ID);
+    saveDocument(db, { ...cur, blocks: [...cur.blocks, { type: 'component', tag: 'marquee-wc', attrs: {}, value: 'Hi' }] });
+    const localBefore = git(fx.site, 'rev-parse', 'HEAD');
+    let built = 0;
+    const note = "Won't load on the live site until @profpowell/marquee-wc ships custom-elements.json in its npm package";
+    const on = new Map([['marquee-wc', { tag: 'marquee-wc', package: '@profpowell/marquee-wc', loadsOnLiveSite: false, liveSiteNote: note }]]);
+    const d = { ...deps(), runBuild: async () => { built++; return { ok: true, log: '' } }, components: () => on };
+    const expected = `This post uses <marquee-wc>, which won't load on the live site: ${note}. Remove it from the post to publish now.`;
+    await assert.rejects(
+      setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d }),
+      (err) => err instanceof PublishRejectedError && err.status === 422 && err.message === expected,
+    );
+    assert.equal(built, 0);
+    assert.equal(getDocument(db, ID).meta.status, 'draft');
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
+    // An already published post: Update is refused the same way.
+    const pub = getDocument(db, ID);
+    saveDocument(db, { ...pub, meta: { ...pub.meta, status: 'published', published: new Date().toISOString() } });
+    await assert.rejects(
+      setPublished({ site: {}, ws, db, docId: ID, publish: true, update: true, deps: d }),
+      (err) => err instanceof PublishRejectedError && err.status === 422 && err.message === expected,
+    );
+    assert.equal(built, 0);
+  });
+
   test('build failure keeps an edit saved during the build', async () => {
     const ws = setup();
     const edited = [{ type: 'paragraph', children: [{ type: 'text', value: 'Edited during the build.' }] }];

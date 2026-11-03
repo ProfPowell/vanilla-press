@@ -51,3 +51,13 @@ test('toggleOutcome npm: the error, a next step, and the log tail', () => {
   assert.equal(bare.text, "Couldn't commit turning on x. Close other git tools and try again.", 'a 502 without a log is not an npm failure');
   assert.equal(bare.log, undefined);
 });
+
+test("packageRows: a package that won't load on the live site says so (R14)", () => {
+  const note = "Won't load on the live site until @profpowell/marquee-wc ships custom-elements.json in its npm package";
+  const [r] = packageRows([{ package: '@profpowell/marquee-wc', bundled: false, enabled: true, siteVersion: '1.7.0', vpVersion: '1.7.0',
+    source: 'site', loadsOnLiveSite: false, liveSiteNote: note, elements: [el('Marquee')] }]);
+  assert.equal(r.note, note);
+  assert.equal(r.canToggle, true);
+  const [ok] = packageRows([{ package: 'p', bundled: false, enabled: true, siteVersion: '1.0.0', source: 'site', loadsOnLiveSite: true, liveSiteNote: null, elements: [el('W')] }]);
+  assert.equal(ok.note, '');
+});

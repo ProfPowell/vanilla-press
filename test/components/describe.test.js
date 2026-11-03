@@ -103,6 +103,34 @@ describe('describeComponents', () => {
     assert.equal(packageDir('x-widgets', { siteDir, vpRoot }).source, 'site');
   });
 
+  it('an installed package with no custom-elements.json does not load on the live site (R14)', () => {
+    install(vpRoot, 'x-other', 'x-nomanifest');
+    sitePkg({ 'x-widgets': '^1.0.0', 'x-other': '^0.2.0' });
+    const states = describeComponents({ siteDir, vpRoot, catalog });
+    const other = state(states, 'x-other');
+    assert.equal(other.loadsOnLiveSite, false);
+    assert.equal(other.liveSiteNote, "Won't load on the live site until x-other ships custom-elements.json in its npm package");
+    assert.equal(other.elements[0].loadsOnLiveSite, false);
+    assert.equal(other.elements[0].liveSiteNote, other.liveSiteNote);
+    for (const pkg of ['x-widgets', 'x-bundled']) {
+      assert.equal(state(states, pkg).loadsOnLiveSite, true, pkg);
+      assert.equal(state(states, pkg).liveSiteNote, null, pkg);
+      assert.equal(state(states, pkg).elements[0].loadsOnLiveSite, true, pkg);
+    }
+    // The site's own copy decides: with a manifest there, it loads.
+    install(siteDir, 'x-other', 'x-widgets');
+    assert.equal(state(describeComponents({ siteDir, vpRoot, catalog }), 'x-other').loadsOnLiveSite, true);
+  });
+
+  it('the real marquee-wc and border-wc are flagged while their tarballs lack a manifest (R14)', () => {
+    const real = describeComponents({ siteDir: null, vpRoot: REAL_VP });
+    for (const pkg of ['@profpowell/marquee-wc', '@profpowell/border-wc']) {
+      assert.equal(state(real, pkg).loadsOnLiveSite, false, pkg);
+      assert.match(state(real, pkg).liveSiteNote, new RegExp(`until ${pkg} ships custom-elements\\.json`));
+    }
+    assert.equal(state(real, '@profpowell/code-block').loadsOnLiveSite, true);
+  });
+
   it('siteDir null treats every package as enabled', () => {
     const states = describeComponents({ siteDir: null, vpRoot, catalog });
     assert.ok(states.every((s) => s.enabled));

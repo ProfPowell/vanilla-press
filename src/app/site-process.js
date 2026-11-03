@@ -51,15 +51,28 @@ function killGroup(child) {
 }
 
 /**
+ * A timeout as people say it: "5 min" from a minute up, else "2 s".
+ * @param {number} ms
+ * @returns {string}
+ */
+export function durationText(ms) {
+  return ms >= 60_000 ? `${Math.round(ms / 60_000)} min` : `${Math.round(ms / 1000)} s`;
+}
+
+const npmTimeoutNote = (ms) => `npm took too long (over ${durationText(ms)}) and was stopped.`;
+const buildTimeoutNote = (ms) => `Build timed out after ${Math.round(ms / 1000)} s and was stopped.`;
+
+/**
  * Run npm to completion. With `timeoutMs`, a run that takes longer is killed
- * (its whole process group) and reported as failed.
+ * (its whole process group) and reported as failed with `timedOut: true` and
+ * `timeoutNote(timeoutMs)` at the end of its log (default: "npm took too long (over N min)").
  * @param {string} dir
  * @param {string[]} args
  * @param {NodeJS.ProcessEnv} [env]
- * @param {{ timeoutMs?: number }} [opts]
- * @returns {Promise<{ ok: boolean, log: string }>}
+ * @param {{ timeoutMs?: number, timeoutNote?: (ms: number) => string }} [opts]
+ * @returns {Promise<{ ok: boolean, log: string, timedOut?: boolean }>}
  */
-export function runNpm(dir, args, env = {}, { timeoutMs } = {}) {
+export function runNpm(dir, args, env = {}, { timeoutMs, timeoutNote = npmTimeoutNote } = {}) {
   return new Promise((resolve) => {
     const child = spawnNpm(args, { cwd: dir, env });
     const tail = collectLog(child);
@@ -69,8 +82,8 @@ export function runNpm(dir, args, env = {}, { timeoutMs } = {}) {
     child.on('error', (err) => done({ ok: false, log: `${tail()}${err.message}`.slice(-LOG_LIMIT) }));
     child.on('close', (code) => {
       if (timedOut) {
-        const note = `\nBuild timed out after ${Math.round(timeoutMs / 1000)} s and was stopped.`;
-        return done({ ok: false, log: `${tail()}${note}`.slice(-LOG_LIMIT) });
+        const note = `\n${timeoutNote(timeoutMs)}`;
+        return done({ ok: false, timedOut: true, log: `${tail()}${note}`.slice(-LOG_LIMIT) });
       }
       done({ ok: code === 0, log: tail() });
     });
@@ -97,7 +110,7 @@ export async function ensureInstalled(dir, { run = runNpm } = {}) {
  * @returns {Promise<{ ok: boolean, log: string }>}
  */
 export function runBuild(dir, { timeoutMs = BUILD_TIMEOUT_MS } = {}) {
-  return runNpm(dir, ['run', 'build'], { NODE_ENV: 'production' }, { timeoutMs });
+  return runNpm(dir, ['run', 'build'], { NODE_ENV: 'production' }, { timeoutMs, timeoutNote: buildTimeoutNote });
 }
 
 function canListen(port, host) {

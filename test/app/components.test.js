@@ -37,10 +37,11 @@ const commitFiles = (dir, rev) => git(dir, 'show', '--name-only', '--format=', r
 const componentsCommit = (dir, ref = 'HEAD') => git(dir, 'log', '-1', '--grep=^Components:', '--format=%H %s', ref);
 
 /** A stub npm that edits package.json and the lock as npm would; `fail` makes it exit 1 after writing. */
-function fakeNpm({ fail = false } = {}) {
+function fakeNpm({ fail = false, timeout = false } = {}) {
   const calls = [];
   const run = async (dir, args) => {
     calls.push(args);
+    if (timeout) return { ok: false, timedOut: true, log: 'npm http fetch GET\nnpm took too long (over 5 min) and was stopped.' };
     const pkg = readPkg(dir);
     pkg.dependencies ??= {};
     const [cmd, spec] = args;
@@ -221,6 +222,14 @@ describe('site components API', () => {
     assert.equal(res.data.error, "package.json has changes that aren't committed. Commit or discard them, then try again.");
     assert.deepEqual(npm.calls, []);
     assert.equal(head(fx.site), before);
+  });
+
+  it('an npm timeout says npm took too long', async () => {
+    await open({ npmOpts: { timeout: true } });
+    const res = await put('x-widgets', true);
+    assert.equal(res.status, 502);
+    assert.equal(res.data.error, 'npm install x-widgets took too long (over 5 min) and was stopped');
+    assert.match(res.data.log, /took too long/);
   });
 
   it('a failed install with no lock before leaves no lock', async () => {

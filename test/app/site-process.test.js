@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync, readFileSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
-import { ensureInstalled, runBuild, freePort } from '../../src/app/site-process.js';
+import { ensureInstalled, runBuild, runNpm, freePort, durationText } from '../../src/app/site-process.js';
 
 let dir;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'vp-proc-')); });
@@ -46,6 +46,21 @@ test('runBuild times out as a failed build and kills the build', { timeout: 1500
   const pid = Number(require_('pid'));
   await new Promise((r) => setTimeout(r, 200));
   assert.throws(() => process.kill(pid, 0), /ESRCH/);
+});
+
+test('runNpm timeout says npm took too long, not that a build timed out', { timeout: 15000 }, async () => {
+  pkg({ hang: `node -e "setInterval(()=>{},1000)"` });
+  const res = await runNpm(dir, ['run', 'hang'], {}, { timeoutMs: 1500 });
+  assert.equal(res.ok, false);
+  assert.equal(res.timedOut, true);
+  assert.match(res.log, /npm took too long \(over 2 s\) and was stopped\./);
+  assert.doesNotMatch(res.log, /Build/);
+});
+
+test('durationText: minutes from a minute up, else seconds', () => {
+  assert.equal(durationText(5 * 60_000), '5 min');
+  assert.equal(durationText(10 * 60_000), '10 min');
+  assert.equal(durationText(1500), '2 s');
 });
 
 test('ensureInstalled skips when node_modules exists', async () => {

@@ -37,7 +37,17 @@ test('toggleOutcome kinds', () => {
   const d = toggleOutcome(409, { error: "package.json has changes that aren't committed. Commit or discard them, then try again." });
   assert.equal(d.kind, 'dirty');
   assert.match(d.text, /committed/);
-  assert.equal(toggleOutcome(502, { error: 'npm failed' }).kind, 'npm');
+  assert.equal(toggleOutcome(502, { error: 'npm failed', log: '' }).kind, 'npm');
   assert.equal(toggleOutcome(400, { error: 'bad' }).kind, 'error');
   assert.equal(toggleOutcome(404, null).kind, 'error');
+});
+
+test('toggleOutcome npm: the error, a next step, and the log tail', () => {
+  const out = toggleOutcome(502, { error: 'npm install x-widgets failed', log: 'npm ERR! code ENOTFOUND' });
+  assert.equal(out.kind, 'npm');
+  assert.equal(out.text, 'npm install x-widgets failed. Check your internet connection, then try again.');
+  assert.equal(out.log, 'npm ERR! code ENOTFOUND');
+  const bare = toggleOutcome(502, { error: "Couldn't commit turning on x. Close other git tools and try again." });
+  assert.equal(bare.text, "Couldn't commit turning on x. Close other git tools and try again.", 'a 502 without a log is not an npm failure');
+  assert.equal(bare.log, undefined);
 });

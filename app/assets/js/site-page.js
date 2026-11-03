@@ -90,7 +90,8 @@ $('new-post').addEventListener('click', async (e) => {
 let componentState = null;
 let busy = false;
 
-function setComponentsError(text, posts) {
+/** Show a refused toggle: its text, the posts in the way, or npm's output (all as text). */
+function setComponentsError(text, posts, log) {
   const el = $('components-error');
   el.replaceChildren();
   if (text) el.append(text);
@@ -98,6 +99,7 @@ function setComponentsError(text, posts) {
     el.append(h('ul', {}, ...posts.map((p) =>
       h('li', {}, h('a', { href: editorUrl(p.id) }, p.title || 'Untitled'), ` (${p.status})`))));
   }
+  if (log) el.append(h('details', { class: 'npm-log' }, h('summary', {}, "npm's output"), h('pre', {}, log)));
   el.hidden = !text;
 }
 
@@ -192,7 +194,7 @@ $('components').addEventListener('change', async (e) => {
     if (out.kind === 'ok') {
       componentState.packages = componentState.packages.map((p) => (p.package === pkg ? body : p));
     } else {
-      setComponentsError(out.text, out.posts);
+      setComponentsError(out.text, out.posts, out.log);
     }
   } catch (err) {
     setComponentsError(err.message);

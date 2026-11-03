@@ -10,6 +10,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CATALOG } from '../components/catalog.js';
 import { describeComponents, componentIndex } from '../components/describe.js';
+import { durationText } from './site-process.js';
 
 /** The files a component change edits; nothing else is staged. */
 export const PACKAGE_FILES = ['package.json', 'package-lock.json'];
@@ -217,7 +218,10 @@ export async function setComponent({ ws, db, pkg, enabled, deps }) {
     }
     if (!result?.ok) {
       restore();
-      throw new ComponentError(502, { error: `npm ${args[0]} ${pkg} failed`, log: tail(result?.log) });
+      const error = result?.timedOut
+        ? `npm ${args[0]} ${pkg} took too long (over ${durationText(NPM_TIMEOUT_MS)}) and was stopped`
+        : `npm ${args[0]} ${pkg} failed`;
+      throw new ComponentError(502, { error, log: tail(result?.log) });
     }
 
     if (!status.isRepo) return null;

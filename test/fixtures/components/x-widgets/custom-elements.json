@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "modules": [
+    {
+      "kind": "javascript-module",
+      "path": "dist/x-widgets.js",
+      "declarations": [
+        {
+          "kind": "class",
+          "name": "XOne",
+          "tagName": "x-one",
+          "description": "The first widget.",
+          "attributes": [
+            { "name": "mode", "type": { "text": "'a' | 'b'" }, "description": "Display mode", "default": "'a'" },
+            { "name": "count", "type": { "text": "number" } },
+            { "name": "open", "type": { "text": "boolean" } }
+          ]
+        },
+        { "kind": "class", "name": "XTwo", "tagName": "x-two", "attributes": [{ "name": "label" }] },
+        { "kind": "class", "name": "Helper" }
+      ]
+    }
+  ]
+}

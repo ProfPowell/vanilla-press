@@ -26,7 +26,16 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@profpowell/code-block": "^2.7.2",
+    "@profpowell/bg-wc": "^0.4.0",
+    "@profpowell/blink-wc": "^1.5.0",
+    "@profpowell/border-wc": "^0.2.0",
+    "@profpowell/browser-window": "^1.4.7",
+    "@profpowell/code-block": "^2.9.0",
+    "@profpowell/code-playground": "^0.2.0",
+    "@profpowell/image-editor": "^0.1.0",
+    "@profpowell/marquee-wc": "^1.7.0",
+    "@profpowell/pdf-viewer": "^0.2.0",
+    "@profpowell/terminal-window": "^2.1.0",
     "better-sqlite3": "^11.8.1",
     "vanilla-breeze": "file:../vanilla-breeze"
   },

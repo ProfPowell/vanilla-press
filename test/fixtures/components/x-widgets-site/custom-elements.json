@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "modules": [
+    {
+      "kind": "javascript-module",
+      "path": "dist/x-widgets.js",
+      "declarations": [
+        {
+          "kind": "class",
+          "name": "XOne",
+          "tagName": "x-one",
+          "attributes": [
+            { "name": "mode", "type": { "text": "'a' | 'b'" } },
+            { "name": "open", "type": { "text": "boolean" } }
+          ]
+        },
+        { "kind": "class", "name": "XTwo", "tagName": "x-two", "attributes": [{ "name": "label" }] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{ "name": "x-widgets", "version": "1.2.0", "type": "module", "exports": { ".": { "import": "./dist/x-widgets.js" } }, "main": "dist/x-widgets.cjs" }

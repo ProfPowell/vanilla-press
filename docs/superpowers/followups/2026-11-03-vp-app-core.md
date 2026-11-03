@@ -1,0 +1,117 @@
+# Vanilla Press app, step 1: rulings and deferred follow-ups
+
+Recorded during the subagent-driven build of feat/vp-app-core (plan: docs/superpowers/plans/2026-11-02-vp-app-core.md). The user decided option A on 2026-11-03: edits to a published post wait for an Update click.
+
+## Rulings made during the build
+
+- Ruling A: ownedPaths also includes `src/media` (uploaded files; the spec's "content/media.json and config/vp.json" plus the media files the editor writes to ws.mediaDir = src/media) — media uploads are VP-owned and must be backed up — cost if wrong: an extra dir staged; T5 test expects 4 sorted entries: config/vp.json, content, src/media, src/posts.
+- Ruling B: for a collection whose output dir is '' (pages), ownedPaths lists individual files: each `src/*.html` whose front matter has vp_id, plus every html path in the local manifest (so a removed page's deletion is staged) — never `src/` wholesale — cost if wrong: a root page deletion missed when the manifest is lost.
+- Ruling C: on a rejected push, refuse up front (fetch; intersect upstream-changed files with the user's dirty tracked files; if any, GitStashConflictError, repo untouched) instead of autostash-then-clean-up — why: "exactly as before" and never damage the user's own edits — cost if wrong: VP refuses to publish when the user has an unrelated uncommitted edit to a file the other machine also changed, even if the edits wouldn't conflict
+- Ruling D: registry routes matched by exact method+path before per-site dispatch; a site id'd 'clone' is shadowed only for POST /api/sites/clone — cost if wrong: that one site can't receive a POST to its root (no such route exists)
+- Ruling E (superseded by the user's option A and Ruling L): a draft backup commit gets the ` [CI Skip]` marker only when its staged changes touch no published page (no *.html under the collection output dirs); otherwise it is titled `Update: <title>[, …]` with no skip marker, so the repo never holds live-page changes Cloudflare hasn't deployed — why: autosave of a published post rewrites its HTML; skipping would leave the deployed site behind the repo and ship half-edits on the next unrelated deploy — cost if wrong: edits to an already-published post go live ~30 s after you stop typing instead of waiting for a button (surface to user at finish)
+- Ruling F: POST /api/sync (sync everything) calls onSynced once with title 'all posts' so it is backed up like any save — cost if wrong: one extra backup commit after a bulk sync
+- Ruling G: add GET /api/sites/:id/info → { siteUrl } (spec's View site needs siteUrl; plan had no route) — cost if wrong: one small extra route
+- Ruling H: per-site media — the app server serves `/sites/<id>/media/<file>` from that site's src/media, and the editor (site mode) maps stored `/media/<file>` image URLs to it for display only; stored/published URLs stay `/media/<file>` (correct on the live Cook site) — why: one app serves many sites, so a bare /media/ is ambiguous; media management proper is roadmap step 2 — cost if wrong: images in the editor show broken until step 2
+- Ruling I (superseded by the user's option A and Ruling L): Important 2 is a product decision for the user — in this fix wave only make it honest: an `Update:` backup shows "Updating live site…" then the live check result instead of "Backed up", and README/CLAUDE.md say plainly that edits to a published post go live after the backup pause and that Preview needs a published post; draft preview / hold-back-until-Update goes to the user at finishing — cost if wrong: one more round after the user decides
+- Ruling J: second machine — on site open VP runs a fast-forward-only pull when the folder is clean in VP-owned paths and has an upstream (skipped otherwise, never merges/rebases on open), then syncFromSite; after a rebased push VP re-runs syncFromSite; conflict messages name a next step — cost if wrong: a slower site open when the remote is slow (git timeout bounds it)
+- Ruling K: every collection folder is filtered like Ruling B — only HTML files with vp_id plus manifest html paths (for deletions); content/ stays wholesale (JSON is VP's); runGit sets GIT_LITERAL_PATHSPECS=1 — cost if wrong: a VP page whose vp_id was stripped by hand stops being backed up
+- Ruling L: backups stage only content/, src/media, config/vp.json — never page HTML — and always carry [CI Skip] (message `Draft: …` when every title is a draft, else `Edit: …`); the working-tree page still updates on save so Preview (cook dev) shows the edit; Update = setPublished on an already-published post (keeps `published`, message `Update: <title>`) staging only that post's pages: its current page plus every page tracked in HEAD whose vp_id is this post's id and that is deleted or changed (read via `git show HEAD:<path>`), never other posts' pages; Unpublish and Publish stage the same per-post set — fixes I-1 (rename then unpublish) and the cross-run rename gap; live check after Update compares the fresh build (fixes R2/I-2) — cost if wrong: a published post's JSON in git runs ahead of its live page until Update (by design)
+- Ruling M: pull-on-open's dirty check uses only BACKUP_PATHS (content/, src/media, config/vp.json); unpublished-live page edits don't block the fast-forward — git itself refuses a ff that would overwrite local changes, and that failure is already logged and non-blocking — cost if wrong: one skipped pull on open in a rare overlap
+- Ruling N: "not live yet" must survive a reload — the server reports it per post (published page changed since HEAD, via changedSinceHead) on the document/status API and the editor shows it on load — cost if wrong: one git call per document open
+- Ruling O: per-site document writes (PUT/POST/DELETE through the API) wait in the same serial queue as Publish/Update/Unpublish, so nothing changes between the build check and the commit — cost if wrong: an autosave during a build is delayed until the build finishes
+- Ruling P: in site mode (app server), the document PUT ignores `status` and `published` in the body — only Publish/Update/Unpublish change them; POST create still accepts status draft only — cost if wrong: status can't be changed by a raw API PUT in the app (the CLI and vp serve keep the old behavior)
+
+## Deferred minor issues
+
+- [Task 1] readSites does not shape-check entries (registry.js:56)
+- [Task 1] duplicate check is string-based; symlinked/differently-cased paths not detected (registry.js:118)
+- [Task 1] listFolders throws raw ENOENT/ENOTDIR — Task 4 must map to 4xx (registry.js:151)
+- [Task 1] no tests for .gitignore without trailing newline / CRLF
+- [Task 2] rejection detection English-only (no LC_ALL=C); bare "rejected" also matches [remote rejected] (git.js:119,134)
+- [Task 2] paths treated as pathspecs (glob chars in slugs) — GIT_LITERAL_PATHSPECS (git.js:107-111)
+- [Task 2] stdout.trim() on -z output (git.js:68)
+- [Task 2] no test that a pre-staged unrelated file stays out of the commit
+- [Task 2] never-prompts test doesn't exercise a prompt (plan-mandated)
+- [Task 2] GitNotConnectedError messages for no-remote vs no-upstream not asserted
+- [Task 2] cloneRepo relative dest depends on process cwd
+- [Task 2] rebaseInProgress uses join(dir,'.git',…) — breaks for worktrees/submodules; use git rev-parse --git-path
+- [Task 2] join(dir, rev-parse --git-path) breaks if git returns an absolute path (worktrees) — use resolve (git.js:142)
+- [Task 2] upstream rename reports only the new name; dirty edit to old name not caught by pre-check — add --no-renames (git.js:151)
+- [Task 2] safety-net unmerged branch (reset --merge) untested
+- [Task 3] runNpm resolves on close (grandchild can hold pipes); runBuild no timeout
+- [Task 3] stop() during startup surfaces as generic "did not start"
+- [Task 3] no process-exit hook for previews (Task 5 wires SIGINT/SIGTERM stopAll)
+- [Task 3] stopAll calls this.stop (breaks if destructured)
+- [Task 3] stop() during ensureInstalled blocks until npm install finishes (install not cancellable)
+- [Task 4] no test for open-failure path (deleted site folder → 422) or concurrent first requests
+- [Task 4] no vp serve traversal regression test (/src/..%2fpackage.json)
+- [Task 4] DELETE unknown site id returns { ok: true }
+- [Task 4] DELETE can close a db mid-request (in-flight upload → 500)
+- [Task 4] site removed by another process keeps its db open until close()
+- [Task 4] mountApi assumes every pattern starts with /api (brittle slice)
+- [Task 4] connected test lacks the both-true case
+- [Task 4] port-fallback test finally may TypeError on undefined holder
+- [Task 4] POST /api/sync does not call onSynced — Task 5 to confirm
+- [Task 4] router decodeURIComponent on malformed escape → 500
+- [Task 4] 415 path does not drain request body (router.js:197)
+- [Task 4] no test for mixed-case/trailing-dot Host
+- [Task 5] git errors classified by name prefix, not instanceof (server.js:336, site-git.js:628)
+- [Task 5] no test for Ruling E mixed batch (draft + published edit in one flush)
+- [Task 5] no test for publish without siteUrl (url null) or build failure on unpublish (page re-created)
+- [Task 5] titles of an unpushed commit are dropped from later messages
+- [Task 5] readSiteUrl module-cache entry per live poll
+- [Task 5] setPublished takes unused `site`
+- [Task 5] giveBack keeps firstAt at later save time (120 s cap can slip after failed commit)
+- [Task 5] build-revert `getDocument(...) || saved` would recreate a doc deleted during the build
+- [Task 5] no remote → pending never returns to 0 (status shows pending forever)
+- [Task 5] after a push error with no further saves, no retry timer is armed
+- [Task 6] no shutdown timeout — a hung shutdown() waits for a second signal (SIGTERM from a supervisor hangs)
+- [Task 6] win32 `cmd /c start ""` quoting may mis-parse the title (windowsVerbatimArguments)
+- [Task 6] signal path (graceful exit 0, double-signal exit 1) untested
+- [Task 6] `vp --site X` with no command starts the app and ignores --site
+- [Task 7] New post enabled when site unknown → POSTs to /api/sites//documents
+- [Task 7] siteUrl into href without http(s) scheme check
+- [Task 7] $ / showError duplicated in both page scripts
+- [Task 7] sidebar switch doesn't move focus/announce; aria-current on buttons
+- [Task 7] backup status fetched once, not refreshed
+- [Task 7] Add form has no double-submit guard
+- [Task 7] CSS fallbacks are light-theme values
+- [Task 7] server.test.js temp config cleanup not in finally
+- [Task 7] init() only lazily from GET /status; a transient gitStatus failure sticks as connected=false (clear initPromise on catch)
+- [Task 7] site-card git state computed separately from init() (duplicated logic, server.js:185)
+- [Task 8] live poll survives a document switch (shows on the next post's header)
+- [Task 8] stale backup error stops the Backed-up poll; header can stay "not backed up" after a successful retry
+- [Task 8] any 409 shown as GitHub conflict (preflightSave 409 possible) — check data.files
+- [Task 8] backup poll can double-run (timer reset before await)
+- [Task 8] polls not restarted after bfcache restore (pageshow)
+- [Task 8] media route serves SVG same-origin without CSP sandbox
+- [Task 8] preview tab keeps window.opener
+- [Task 8] figure with no caption can't be saved (400, ast.js — predates task)
+- [Task 8] status dropdown disabled in site mode → "archived" can't be set from the app (follow-up)
+- [Task 8] if loadDocument throws in showPublishError the failure message is not shown
+- [Task 9] e2e test has no explicit timeout; cold first run took 143 s (cause unknown; not npm install) — add { timeout } and check for any network step on Cook's first run
+- [Task 9] CLAUDE.md registry-routes line omits DELETE /api/sites/:id
+- [Final] action slot cleared on doc switch but save slot may keep "Updating live site…"
+- [Final] an unpushed Publish commit pushed by a later flush reports lastPushKind 'draft' → "Backed up" during a deploy
+- [Final] cross-run rename gap (crash inside the 30 s window) — fix via ls-files --deleted + HEAD blob vp_id
+- [Final] pull --ff-only should add --no-rebase for git < 2.34; slow remote delays first open and shutdown
+- [Final] vpPages reads every .html per save (cache by mtime for large sites)
+- [Final] in-flight PUT holding an entry can touch db after DELETE closes it
+- [Final] CLI signal tests use 200-300 ms sleeps (flaky under load)
+- [Final] stale browser tab overwrites a remotely changed doc on next save (predates)
+- [Final] Publish live check also stale when Preview's cook dev rebuilt dist (predates)
+- [Final] SIGHUP → stdout EIO risk during flush (guard stdout error)
+- [Final] global-constraints.md still says src/<dir> wholesale (workspace file, superseded by Ruling K)
+- [Task 10] Update build check builds the whole working tree incl. other posts' un-Updated edits
+- [Task 10] live snapshot is in memory; after restart the live check reads dist/ again
+- [Task 10] e2e with real Cook doesn't exercise Update
+- [Task 10] changedSinceHead should use raw output with -z
+- [Task 10] a held page also changed remotely → GitStashConflictError on every backup with a confusing "commit or discard" next step
+- [Task 10] old output dir not searched once its content/<dir> disappears (page deletion not staged)
+- [Task 10] PUT /config/theme (config/vp.json) and POST /media not under the writes lock (can ride in a Publish commit without a build check)
+- [Task 10] state route returns notLive:false on git error — should report unknown
+- [Task 10] hasHead uses tryGit (any failure = no HEAD)
+- [Task 10] a stalled request body holds the writes lock (localhost only)
+- [Task 10] narrow client race can still start the live poll before held is set
+- [Task 10] onRebased syncFromSite runs outside the writes lock (predates)
+- [Task 10] meta panel still renders a hidden [data-publish] button whose handler is a no-op in site mode

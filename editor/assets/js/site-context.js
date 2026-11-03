@@ -67,5 +67,35 @@ export function backupOutcome(status, savedAt) {
   return 'waiting';
 }
 
+/**
+ * What to show after POST publish/unpublish failed.
+ *
+ * - 422 with a log: the build failed; nothing was applied.
+ * - 409 with `files`, or 502: the change was applied and committed on this
+ *   computer, only the push failed, so the editor reloads the document.
+ * - Anything else (e.g. the save preflight's 409): the server's error text; nothing applied.
+ *
+ * A failure never starts the live poll.
+ * @param {{ status?: number, message?: string, data?: { error?: string, log?: string, files?: string[] } }} err
+ * @param {boolean} unpublish
+ * @returns {{ message: string, reload: boolean, poll: false, log?: string, files?: string[] }}
+ */
+export function publishFailure(err, unpublish) {
+  const data = err.data || {};
+  const errorText = data.error || err.message || 'Publish failed';
+  const applied = `${unpublish ? 'Unpublished' : 'Published'} on this computer, but couldn't push`;
+  if (err.status === 422 && data.log !== undefined) {
+    return { message: 'Build failed', log: data.log, reload: false, poll: false };
+  }
+  if (err.status === 409 && Array.isArray(data.files)) {
+    return {
+      message: `${applied}: GitHub has changes that conflict with yours`,
+      files: data.files, reload: true, poll: false,
+    };
+  }
+  if (err.status === 502) return { message: `${applied}: ${errorText}`, reload: true, poll: false };
+  return { message: errorText, reload: false, poll: false };
+}
+
 /** The site being edited in this page, or null (no `?site=`, or not in a browser). */
 export const SITE = typeof location === 'undefined' ? null : siteFromSearch(location.search);

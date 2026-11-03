@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  siteFromSearch, apiBase, displayMediaUrl, storedMediaUrl, backupOutcome,
+  siteFromSearch, apiBase, displayMediaUrl, storedMediaUrl, backupOutcome, publishFailure,
 } from '../../editor/assets/js/site-context.js';
 
 describe('editor site context', () => {
@@ -38,5 +38,32 @@ describe('editor site context', () => {
     assert.equal(backupOutcome({ pending: 1, lastPushAt: '2026-11-02T10:00:31Z', connected: true, error: null }, savedAt), 'waiting');
     assert.equal(backupOutcome({ pending: 1, lastPushAt: null, connected: false, error: null }, savedAt), 'not-connected');
     assert.equal(backupOutcome({ pending: 1, lastPushAt: null, connected: true, error: 'push failed' }, savedAt), 'error');
+  });
+
+  it('publishFailure: a failed push after the change was applied reloads and says so', () => {
+    const conflict = { status: 409, data: { error: 'git push failed', files: ['content/posts/a.json'] } };
+    assert.deepEqual(publishFailure(conflict, true), {
+      message: "Unpublished on this computer, but couldn't push: GitHub has changes that conflict with yours",
+      files: ['content/posts/a.json'], reload: true, poll: false,
+    });
+    assert.equal(publishFailure(conflict, false).message,
+      "Published on this computer, but couldn't push: GitHub has changes that conflict with yours");
+    const gone = { status: 502, message: 'remote unreachable', data: { error: 'remote unreachable' } };
+    assert.deepEqual(publishFailure(gone, false), {
+      message: "Published on this computer, but couldn't push: remote unreachable", reload: true, poll: false,
+    });
+  });
+
+  it('publishFailure: nothing applied (build failed, preflight 409, other) does not reload', () => {
+    assert.deepEqual(publishFailure({ status: 422, data: { error: 'Build failed', log: 'boom' } }, false), {
+      message: 'Build failed', log: 'boom', reload: false, poll: false,
+    });
+    assert.deepEqual(publishFailure({ status: 409, message: 'Changed on disk', data: { error: 'Changed on disk' } }, true), {
+      message: 'Changed on disk', reload: false, poll: false,
+    });
+    assert.deepEqual(publishFailure({ status: 500, message: 'oops', data: {} }, false), {
+      message: 'oops', reload: false, poll: false,
+    });
+    assert.equal(publishFailure({ message: '' }, false).message, 'Publish failed');
   });
 });

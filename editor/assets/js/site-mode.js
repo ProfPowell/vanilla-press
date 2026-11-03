@@ -16,7 +16,7 @@
  * @module editor/site-mode
  */
 
-import { SITE, backupOutcome } from './site-context.js';
+import { SITE, backupOutcome, publishFailure } from './site-context.js';
 import { api } from './api-client.js';
 import { postUrlPath } from '../../../src/sync/paths.js';
 import { getCurrentMeta, getCurrentDocId } from './meta-state.js';
@@ -262,7 +262,7 @@ async function togglePublish() {
     try {
       result = unpublish ? await api.unpublishDocument(docId) : await api.publishDocument(docId);
     } catch (err) {
-      return showPublishError(err);
+      return await showPublishError(err, unpublish, docId);
     }
     // The server changed status (and published date): load it back
     await loadDocument(docId);
@@ -278,18 +278,25 @@ async function togglePublish() {
   }
 }
 
-/** @param {Error & { status?: number, data?: Object }} err */
-function showPublishError(err) {
-  const data = err.data || {};
-  if (err.status === 422 && data.log !== undefined) {
-    show(els.actionState, 'Build failed', 'error');
-    showReport("Build failed. Nothing was pushed, and the post's status is unchanged.", { log: data.log });
-  } else if (err.status === 409) {
-    const message = "Couldn't push: GitHub has changes that conflict with yours";
-    show(els.actionState, message, 'error');
-    showReport(`${message}. Conflicting files:`, { files: data.files || [] });
-  } else {
-    show(els.actionState, err.message || 'Publish failed', 'error');
+/**
+ * Show a failed publish/unpublish. When only the push failed, the change is
+ * already applied on this computer: reload the post so the button and
+ * settings match what is stored. Never starts the live poll.
+ * @param {Error & { status?: number, data?: Object }} err
+ * @param {boolean} unpublish
+ * @param {string} docId
+ */
+async function showPublishError(err, unpublish, docId) {
+  const failure = publishFailure(err, unpublish);
+  if (failure.reload) {
+    await loadDocument(docId);
+    document.querySelector('doc-browser')?.refresh();
+  }
+  show(els.actionState, failure.message, 'error');
+  if (failure.log !== undefined) {
+    showReport("Build failed. Nothing was pushed, and the post's status is unchanged.", { log: failure.log });
+  } else if (failure.files) {
+    showReport(`${failure.message}. Conflicting files:`, { files: failure.files });
   }
 }
 

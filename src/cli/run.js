@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync } from 'node:fs';
 import { join, dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync, spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
@@ -221,7 +221,10 @@ function openInEditor(doc) {
 function cmdHelp() {
   console.log(`Vanilla Press CLI v${VERSION}
 
-Usage: vp <command> [options]
+Usage: vp [command] [options]
+
+App:
+  vp, vp app [--port <n>]   Start Vanilla Press and open it in the browser (default ${DEFAULT_PORT})
 
 Content:
   list [collection]         List documents
@@ -252,6 +255,51 @@ Options:
   --site <path>             Edit the Cook site at <path> (or set VP_SITE)
   --help, -h                Show this help
   --version, -v             Show version`);
+}
+
+/**
+ * Open a URL in the default browser. Never fatal: failures print a hint.
+ * @param {string} url
+ */
+function openBrowser(url) {
+  if (process.env.VP_NO_OPEN === '1') return;
+  const [cmd, args] = process.platform === 'darwin' ? ['open', [url]]
+    : process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', url]]
+      : ['xdg-open', [url]];
+  const hint = () => console.error(`Could not open the browser; open ${url} yourself.`);
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+    child.on('error', hint);
+    child.unref();
+  } catch {
+    hint();
+  }
+}
+
+/** `vp` / `vp app`: start the multi-site app, open the browser, shut down cleanly on a signal. */
+async function cmdApp(args) {
+  const { values } = parseArgs({
+    args,
+    options: { port: { type: 'string', default: DEFAULT_PORT } },
+    allowPositionals: true,
+  });
+  const port = parseInt(values.port, 10);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) error(`invalid port: ${values.port}`);
+
+  const { startApp } = await import('../app/server.js');
+  const app = await startApp({ port });
+  console.log(`Vanilla Press is running at ${app.url}`);
+  openBrowser(app.url);
+
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) process.exit(1);
+    stopping = true;
+    try { await app.shutdown(); } catch (err) { console.error(`shutdown: ${err.message}`); }
+    process.exit(0);
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
 }
 
 function cmdVersion() {
@@ -834,11 +882,15 @@ export async function run(argv) {
   }
 
   // Handle top-level flags
-  if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
-    if (argv.length === 0 || argv[0] === '--help' || argv[0] === '-h') {
-      cmdHelp();
-      return;
-    }
+  if (argv[0] === '--help' || argv[0] === '-h') {
+    cmdHelp();
+    return;
+  }
+
+  // No command (or only --port): start the app
+  if (argv.length === 0 || argv[0].startsWith('--port')) {
+    await cmdApp(argv);
+    return;
   }
 
   if (argv[0] === '--version' || argv[0] === '-v') {
@@ -876,6 +928,9 @@ export async function run(argv) {
       break;
     case 'delete':
       await cmdDelete(commandArgs);
+      break;
+    case 'app':
+      await cmdApp(commandArgs);
       break;
     case 'serve':
       cmdServe(commandArgs);

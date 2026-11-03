@@ -550,3 +550,49 @@ describe('vp with --site', () => {
     assert.equal(res.status, 1);
   });
 });
+
+describe('vp app', () => {
+  /** Spawn vp, resolve with the "running at" URL once printed; always kill the child. */
+  async function startAndGetUrl(args) {
+    const { spawn } = await import('node:child_process');
+    const configDir = mkdtempSync(join(tmpdir(), 'vp-config-'));
+    const child = spawn('node', [BIN, ...args], {
+      env: { ...process.env, VP_NO_OPEN: '1', VP_CONFIG_DIR: configDir },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    try {
+      return await new Promise((resolve, reject) => {
+        let out = '';
+        const timer = setTimeout(() => reject(new Error(`no URL in 10s; output: ${out}`)), 10000);
+        child.stdout.on('data', (d) => {
+          out += d;
+          const m = out.match(/Vanilla Press is running at (http:\/\/127\.0\.0\.1:\d+)/);
+          if (m) { clearTimeout(timer); resolve(m[1]); }
+        });
+        child.on('exit', (code) => { clearTimeout(timer); reject(new Error(`exited ${code}; output: ${out}`)); });
+      });
+    } finally {
+      child.removeAllListeners('exit');
+      child.kill('SIGKILL');
+      rmSync(configDir, { recursive: true, force: true });
+    }
+  }
+
+  it('vp with no command starts the app', async () => {
+    const url = await startAndGetUrl(['--port', '0']);
+    assert.match(url, /^http:\/\/127\.0\.0\.1:\d+$/);
+  });
+
+  it('vp app --port 0 starts the app', async () => {
+    const url = await startAndGetUrl(['app', '--port', '0']);
+    assert.match(url, /^http:\/\/127\.0\.0\.1:\d+$/);
+  });
+
+  it('vp --help lists the app first', () => {
+    const { stdout } = vp(['--help'], { db: freshDbPath() });
+    const app = stdout.indexOf('vp app');
+    assert.ok(app > -1);
+    assert.ok(app < stdout.indexOf('list [collection]'));
+    assert.ok(app < stdout.indexOf('serve [--port'));
+  });
+});

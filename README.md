@@ -11,9 +11,9 @@ vp            # or: npx vp
 
 `vp` (same as `vp app`) starts the app at `http://127.0.0.1:3007`, opens it in your browser, and shows your sites. Add a site by choosing a folder (its `package.json` must depend on `cook-ssg`) or by cloning a GitHub repo. `VP_NO_OPEN=1` skips opening the browser; `--port <n>` picks the port.
 
-Open a site, pick or create a post, and edit. Saves are backed up to GitHub about 30 seconds after you stop typing (drafts carry `[CI Skip]`, so they do not trigger a Cloudflare build). **Publish** runs the site's `npm run build`, then commits and pushes the page.
+Open a site, pick or create a post, and edit. Saves are backed up to GitHub about 30 seconds after you stop typing. Backups carry `[CI Skip]` and never include a page, so **a backup never changes the live site**. **Publish** runs the site's `npm run build`, then commits and pushes the page.
 
-**Edits to a published post go live automatically.** Its page is rewritten on every save, so the backup after the pause is an `Update:` commit that Cloudflare deploys; the editor says "Updating live site…" and then "Live" (or "Still deploying, check Cloudflare"). There is no separate step to hold an edit back. **Preview** shows published pages only: publish a post first to preview it.
+**Edits to a published post go live only when you click Update.** Until then they are saved and backed up to GitHub (the editor says "Saved · not live yet", then "Backed up · not live yet"), and the live site keeps the version you last published. **Update** runs the same build check as Publish, commits that post's page (and nothing of any other post's), and pushes; the editor says "Updating…" and then "Live" (or "Still deploying, check Cloudflare"). **Unpublish** takes the page down. **Preview** opens the site's dev server, which builds from your working copy, so it shows a published post's edits before you Update; Preview shows published pages only, so publish a post first to preview it.
 
 On a second computer, opening a site pulls (fast-forward only) before loading its posts, as long as you have no uncommitted changes in the files VP owns; a backup or publish that had to rebase onto another machine's commits reloads the posts too.
 

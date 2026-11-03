@@ -143,9 +143,10 @@ All endpoints return JSON. Errors return `{ error: "message" }`.
 | `POST` | `/api/sites/:id/preview` | Start the site's dev server; `{ url }` |
 | `GET` | `/api/sites/:id/info` | `{ siteUrl }` from the site's `config/data.js` |
 | `POST` | `/api/sites/:id/documents/:docId/publish` | Build check, commit, push; `{ status: 'pushed'\|'saved', url }`. 422 with `log` if the build fails; 409 with `files` on a rebase conflict |
+| `POST` | `/api/sites/:id/documents/:docId/update` | Same as publish, for an already-published post: its saved edits go live (`Update: <title>`); 422 for a draft. Publish on a published post is an Update too |
 | `POST` | `/api/sites/:id/documents/:docId/unpublish` | Same, back to draft |
-| `GET` | `/api/sites/:id/documents/:docId/live` | `{ live, url }`: whether the deployed page matches the local build |
-| `GET` | `/api/sites/:id/status` | Draft backup state: `{ pending, lastPushAt, error, connected, lastPushKind }`; `lastPushKind` is `draft`, `update` (the push changed a published page, so the live site redeploys) or `publish` |
+| `GET` | `/api/sites/:id/documents/:docId/live` | `{ live, url }`: whether the deployed page matches the page the last publish/update built |
+| `GET` | `/api/sites/:id/status` | Draft backup state: `{ pending, lastPushAt, error, connected, lastPushKind }`; `lastPushKind` is `draft` (backups only: they never change the live site) or `publish` (a publish, update or unpublish) |
 | `POST` | `/api/sites/:id/backup` | Commit and push pending saves now |
 | `GET` | `/sites/:id/media/:file` | A site's uploaded file (`src/media`) |
 

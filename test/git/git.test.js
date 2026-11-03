@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import {
-  gitStatus, commitPaths, push, cloneRepo, pullFastForward, changedFiles,
+  gitStatus, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead,
   GitConflictError, GitNotConnectedError, GitError, GitStashConflictError,
 } from '../../src/git/git.js';
 
@@ -313,4 +313,30 @@ test('pullFastForward fast-forwards; it refuses to merge diverged history', asyn
   const before = git(a, 'rev-parse', 'HEAD');
   await assert.rejects(pullFastForward(a), GitError);
   assert.equal(git(a, 'rev-parse', 'HEAD'), before);
+});
+
+test('changedSinceHead lists tracked files modified or deleted since HEAD, under the paths', async () => {
+  write(a, 'src/posts/a.html', 'a\n');
+  write(a, 'src/posts/b.html', 'b\n');
+  write(a, 'src/posts/c.html', 'c\n');
+  write(a, 'src/other/d.html', 'd\n');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'pages');
+  write(a, 'src/posts/a.html', 'a2\n'); // modified
+  rmSync(join(a, 'src/posts/b.html')); // deleted
+  write(a, 'src/posts/c.html', 'c2\n');
+  git(a, 'add', 'src/posts/c.html'); // staged counts too: compared with HEAD
+  write(a, 'src/posts/new.html', 'n\n'); // untracked: not listed
+  write(a, 'src/other/d.html', 'd2\n'); // outside the paths
+  assert.deepEqual((await changedSinceHead(a, ['src/posts'])).sort(), ['src/posts/a.html', 'src/posts/b.html', 'src/posts/c.html']);
+  assert.deepEqual(await changedSinceHead(a, []), []);
+});
+
+test('readHead returns a file as committed in HEAD, or null', async () => {
+  write(a, 'src/posts/a.html', 'old text\n');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'page');
+  rmSync(join(a, 'src/posts/a.html'));
+  assert.equal(await readHead(a, 'src/posts/a.html'), 'old text\n');
+  assert.equal(await readHead(a, 'src/posts/missing.html'), null);
 });

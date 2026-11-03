@@ -226,6 +226,33 @@ export async function changedFiles(dir, paths) {
 }
 
 /**
+ * Tracked files under the given paths whose working-tree copy differs from
+ * HEAD: modified or deleted (staged or not). Untracked files are not listed.
+ * @param {string} dir
+ * @param {string[]} paths
+ * @returns {Promise<string[]>}
+ */
+export async function changedSinceHead(dir, paths) {
+  if (paths.length === 0) return [];
+  const out = await runGit(dir, ['diff', 'HEAD', '--name-only', '--no-renames', '--diff-filter=MDT', '-z', '--', ...paths]);
+  return out.split('\0').filter(Boolean);
+}
+
+/**
+ * A file's text as committed in HEAD, or null when HEAD has no such file.
+ * @param {string} dir
+ * @param {string} path - repo-relative
+ * @returns {Promise<string|null>}
+ */
+export async function readHead(dir, path) {
+  try {
+    return await runGit(dir, ['cat-file', 'blob', `HEAD:${path}`], { raw: true });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * `git pull --ff-only`: bring in the upstream's commits when that needs no merge.
  * Throws a GitError when history diverged or the pull would touch local changes.
  * @param {string} dir

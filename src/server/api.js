@@ -45,9 +45,24 @@ function generateId() {
  * @param {string} options.rootDir - Project root directory
  * @param {string} options.mediaDir - Media upload directory
  * @param {import('../workspace/workspace.js').Workspace} [options.workspace] - Absent means fixture mode (sync disabled)
+ * @param {string} [options.prefix='/api'] - URL prefix for every route
+ * @param {(e: { docId: string, title: string, status: string }) => void} [options.onSynced] - Called after
+ *   every successful sync (create, update, delete, reload). Never called in fixture mode.
  */
 export function mountApi(router, db, options) {
-  const { rootDir } = options;
+  const { rootDir, onSynced } = options;
+  const prefix = (options.prefix ?? '/api').replace(/\/+$/, '');
+  const route = { add: (method, pattern, handler) => router.add(method, prefix + pattern.slice('/api'.length), handler) };
+
+  /** Report a successful sync; a throwing listener never breaks the response. */
+  function synced(docId, meta = {}) {
+    if (!onSynced) return;
+    try {
+      onSynced({ docId, title: meta.title, status: meta.status });
+    } catch (err) {
+      console.error('onSynced error:', err);
+    }
+  }
   const ws = options.workspace?.syncEnabled ? options.workspace : null;
   const mediaDir = ws ? ws.mediaDir : options.mediaDir;
 
@@ -72,6 +87,7 @@ export function mountApi(router, db, options) {
     if (!ws) return true;
     try {
       syncDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
+      synced(saved.id, saved.meta);
       return true;
     } catch (err) {
       const body = { error: `Saved, but not synced: ${err.message}` };
@@ -96,7 +112,7 @@ export function mountApi(router, db, options) {
 
   // --- Workspace ---
 
-  router.add('GET', '/api/workspace', (req, res) => {
+  route.add('GET', '/api/workspace', (req, res) => {
     sendJson(res, 200, {
       site: ws ? ws.siteDir : null,
       syncEnabled: Boolean(ws),
@@ -106,7 +122,7 @@ export function mountApi(router, db, options) {
 
   // --- Documents ---
 
-  router.add('GET', '/api/documents', (req, res) => {
+  route.add('GET', '/api/documents', (req, res) => {
     const { collection, status } = req.query;
 
     if (collection) {
@@ -129,7 +145,7 @@ export function mountApi(router, db, options) {
     }
   });
 
-  router.add('GET', '/api/documents/:id', (req, res) => {
+  route.add('GET', '/api/documents/:id', (req, res) => {
     const doc = getDocument(db, req.params.id);
     if (!doc) {
       sendJson(res, 404, { error: 'Document not found' });
@@ -138,7 +154,7 @@ export function mountApi(router, db, options) {
     sendJson(res, 200, doc);
   });
 
-  router.add('POST', '/api/documents', jsonErrors((req, res) => {
+  route.add('POST', '/api/documents', jsonErrors((req, res) => {
     const body = req.body;
     if (!body) {
       sendJson(res, 400, { error: 'Request body required' });
@@ -169,7 +185,7 @@ export function mountApi(router, db, options) {
     if (syncSaved(res, saved, previous)) sendJson(res, 201, saved);
   }));
 
-  router.add('PUT', '/api/documents/:id', jsonErrors((req, res) => {
+  route.add('PUT', '/api/documents/:id', jsonErrors((req, res) => {
     const existing = getDocument(db, req.params.id);
     if (!existing) {
       sendJson(res, 404, { error: 'Document not found' });
@@ -200,19 +216,22 @@ export function mountApi(router, db, options) {
   }));
 
   // Replace the stored document with its version on disk (after a 409).
-  router.add('POST', '/api/documents/:id/reload', jsonErrors((req, res) => {
+  route.add('POST', '/api/documents/:id/reload', jsonErrors((req, res) => {
     if (!ws) {
       sendJson(res, 400, { error: 'Sync is not enabled (no site)' });
       return;
     }
     try {
-      sendJson(res, 200, reloadFromSite(ws, db, req.params.id));
+      const previous = getDocument(db, req.params.id);
+      const reloaded = reloadFromSite(ws, db, req.params.id);
+      synced(req.params.id, reloaded.deleted ? previous?.meta : reloaded.meta);
+      sendJson(res, 200, reloaded);
     } catch (err) {
       sendJson(res, err.message.startsWith('No content file') ? 404 : 422, { error: err.message });
     }
   }));
 
-  router.add('DELETE', '/api/documents/:id', jsonErrors((req, res) => {
+  route.add('DELETE', '/api/documents/:id', jsonErrors((req, res) => {
     const existing = getDocument(db, req.params.id);
     if (!existing) {
       sendJson(res, 404, { error: 'Document not found' });
@@ -230,19 +249,20 @@ export function mountApi(router, db, options) {
     }
 
     deleteDocument(db, req.params.id);
+    if (ws) synced(req.params.id, existing.meta);
     sendJson(res, 200, { ok: true });
   }));
 
   // --- Collections ---
 
-  router.add('GET', '/api/collections', (req, res) => {
+  route.add('GET', '/api/collections', (req, res) => {
     const collections = getCollections(db);
     sendJson(res, 200, collections);
   });
 
   // --- Search ---
 
-  router.add('GET', '/api/search', (req, res) => {
+  route.add('GET', '/api/search', (req, res) => {
     const { q, limit } = req.query;
     if (!q) {
       sendJson(res, 400, { error: 'Query parameter "q" required' });
@@ -257,12 +277,12 @@ export function mountApi(router, db, options) {
 
   // --- Media ---
 
-  router.add('GET', '/api/media', (req, res) => {
+  route.add('GET', '/api/media', (req, res) => {
     const rows = db.prepare('SELECT * FROM media ORDER BY created DESC').all();
     sendJson(res, 200, rows);
   });
 
-  router.add('POST', '/api/media', async (req, res) => {
+  route.add('POST', '/api/media', async (req, res) => {
     const contentType = req.headers['content-type'] || '';
 
     if (!contentType.includes('multipart/form-data')) {
@@ -312,18 +332,18 @@ export function mountApi(router, db, options) {
   // --- Themes ---
 
   // Available VB themes (from node_modules/vanilla-breeze/dist/cdn)
-  router.add('GET', '/api/themes', (req, res) => {
+  route.add('GET', '/api/themes', (req, res) => {
     sendJson(res, 200, listThemes(join(rootDir, 'node_modules', 'vanilla-breeze', 'dist', 'cdn')));
   });
 
   // --- Config ---
 
-  router.add('GET', '/api/config', (req, res) => {
+  route.add('GET', '/api/config', (req, res) => {
     const config = getAllConfig(db);
     sendJson(res, 200, config);
   });
 
-  router.add('GET', '/api/config/:key', (req, res) => {
+  route.add('GET', '/api/config/:key', (req, res) => {
     const value = getConfig(db, req.params.key);
     if (value === null) {
       sendJson(res, 200, { key: req.params.key, value: null });
@@ -332,7 +352,7 @@ export function mountApi(router, db, options) {
     sendJson(res, 200, { key: req.params.key, value });
   });
 
-  router.add('PUT', '/api/config/:key', (req, res) => {
+  route.add('PUT', '/api/config/:key', (req, res) => {
     const body = req.body;
     if (!body || body.value === undefined) {
       sendJson(res, 400, { error: 'Request body with "value" field required' });
@@ -346,7 +366,7 @@ export function mountApi(router, db, options) {
 
   // --- Publish ---
 
-  router.add('POST', '/api/sync', jsonErrors((req, res) => {
+  route.add('POST', '/api/sync', jsonErrors((req, res) => {
     if (!ws) {
       sendJson(res, 200, { ok: true, synced: 0 });
       return;

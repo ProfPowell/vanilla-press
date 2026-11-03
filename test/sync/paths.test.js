@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { collectionOutput, outputPaths } from '../../src/sync/paths.js';
+import { collectionOutput, outputPaths, postUrlPath } from '../../src/sync/paths.js';
 
 const doc = (collection, slug, status) => ({ id: '1', meta: { title: 'T', slug, collection, status }, blocks: [] });
 
@@ -30,5 +30,14 @@ describe('outputPaths', () => {
   });
   it('config override changes html path', () => {
     assert.equal(outputPaths(doc('posts', 'h', 'published'), { posts: { path: 'blog', layout: 'post' } }).html, 'src/blog/h.html');
+  });
+});
+
+describe('postUrlPath', () => {
+  it('postUrlPath gives the page URL', () => {
+    assert.equal(postUrlPath(doc('posts', 'hello', 'published')), '/posts/hello/');
+    assert.equal(postUrlPath(doc('pages', 'hello', 'published')), '/hello/');
+    assert.equal(postUrlPath(doc('posts', 'hello', 'published'), { posts: { path: '/blog/' } }), '/blog/hello/');
+    assert.equal(postUrlPath(doc('notes', 'n1', 'draft'), { notes: { path: 'a/b' } }), '/a/b/n1/');
   });
 });

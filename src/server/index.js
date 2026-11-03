@@ -11,38 +11,18 @@
 
 import { createServer } from 'node:http';
 import { parseArgs } from 'node:util';
-import { join, dirname, extname } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, existsSync, statSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { migrate } from '../store/migrate.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { createRouter } from './router.js';
 import { mountApi } from './api.js';
 import { syncFromSite } from '../sync/from-site.js';
+import { serveStatic } from './static.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
-
-const MIME_TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.mjs': 'application/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.xml': 'application/xml; charset=utf-8',
-  '.md': 'text/markdown; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-};
 
 /**
  * Start the dev server.
@@ -110,15 +90,7 @@ export function startServer(options = {}) {
       }
 
       // Try static file serving
-      const urlPath = decodeURIComponent(req.url.split('?')[0]);
-
-      for (const mount of staticMounts) {
-        if (urlPath.startsWith(mount.prefix)) {
-          const relPath = urlPath.slice(mount.prefix.length);
-          const filePath = join(mount.dir, relPath);
-          if (serveFile(res, filePath)) return;
-        }
-      }
+      if (serveStatic(req, res, staticMounts)) return;
 
       // 404
       res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -132,9 +104,9 @@ export function startServer(options = {}) {
     }
   });
 
-  server.listen(port, () => {
-    console.log(`Vanilla Press dev server running at http://localhost:${port}/editor/`);
-    console.log(`API: http://localhost:${port}/api/`);
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`Vanilla Press dev server running at http://127.0.0.1:${port}/editor/`);
+    console.log(`API: http://127.0.0.1:${port}/api/`);
     console.log(`DB: ${dbPath}`);
     console.log(ws.syncEnabled ? `Site: ${ws.siteDir} (syncing)` : 'Fixture mode: demo content, not synced');
   });
@@ -150,45 +122,6 @@ export function startServer(options = {}) {
   process.on('SIGTERM', shutdown);
 
   return server;
-}
-
-/**
- * Serve a static file.
- * @param {import('node:http').ServerResponse} res
- * @param {string} filePath
- * @returns {boolean} true if file was served
- */
-function serveFile(res, filePath) {
-  // Prevent directory traversal
-  if (filePath.includes('..')) return false;
-
-  try {
-    if (!existsSync(filePath)) return false;
-    const stat = statSync(filePath);
-
-    // Serve index.html for directories
-    if (stat.isDirectory()) {
-      const indexPath = join(filePath, 'index.html');
-      if (existsSync(indexPath)) {
-        return serveFile(res, indexPath);
-      }
-      return false;
-    }
-
-    const ext = extname(filePath);
-    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-    const content = readFileSync(filePath);
-
-    res.writeHead(200, {
-      'Content-Type': contentType,
-      'Content-Length': content.length,
-      'Cache-Control': 'no-cache',
-    });
-    res.end(content);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // --- CLI entry point ---

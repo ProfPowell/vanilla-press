@@ -37,3 +37,16 @@ export function outputPaths(doc, collectionsConfig) {
     html: status === 'published' ? `src/${dir ? dir + '/' : ''}${slug}.html` : null,
   };
 }
+
+/**
+ * Site-relative URL of a document's page, e.g. `/posts/hello/`; pages
+ * (path `''`) give `/hello/`. Shared with the editor (served from /src/).
+ * @param {{ meta: { slug: string, collection: string } }} doc
+ * @param {Object} [collectionsConfig]
+ * @returns {string}
+ */
+export function postUrlPath(doc, collectionsConfig) {
+  const { slug, collection } = doc.meta;
+  const dir = collectionOutput(collection, collectionsConfig).path.replace(/^\/+|\/+$/g, '');
+  return `/${dir ? dir + '/' : ''}${slug}/`;
+}

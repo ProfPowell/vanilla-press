@@ -11,7 +11,7 @@
 import { validStatuses } from '../../../../src/schema/content-schema.js';
 import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.js';
 import { api } from '../api-client.js';
-import { collectionOutput } from '../../../../src/sync/paths.js';
+import { postUrlPath } from '../../../../src/sync/paths.js';
 import { saveDocument, loadDocument, handleSaveError, loadVersionOnDisk } from '../editor.js';
 
 export class MetaPanel extends HTMLElement {
@@ -204,8 +204,6 @@ export class MetaPanel extends HTMLElement {
         const { value } = await api.getConfig('collections');
         collections = value ? JSON.parse(value) : {};
       } catch { /* defaults */ }
-      const { path } = collectionOutput(meta.collection, collections);
-      const dir = path.replace(/^\/+|\/+$/g, '');
       const base = previewUrl.replace(/\/+$/, '');
       try {
         await fetch(base, { mode: 'no-cors' });
@@ -214,7 +212,7 @@ export class MetaPanel extends HTMLElement {
         say(`Preview needs the site's dev server at ${base}: run "npm run dev" in the site folder`);
         return;
       }
-      const url = `${base}/${dir ? dir + '/' : ''}${meta.slug}/`;
+      const url = `${base}${postUrlPath({ meta }, collections)}`;
       if (tab) tab.location.href = url;
       else window.open(url, '_blank');
     });

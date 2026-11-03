@@ -124,7 +124,7 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  *   deps: {
  *     ensureInstalled: Function, runBuild: Function,
  *     commitPaths: Function, push: Function, gitStatus: Function,
- *     changedSinceHead: Function, readHead: Function,
+ *     changedSinceHead: Function, readHead: Function, hasHead: Function,
  *     collectionsConfig?: Object, readSiteUrl?: Function,
  *   },
  * }} options - update: refuse (422) unless the post is already published
@@ -163,9 +163,9 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   } catch (err) {
     build = { ok: false, log: err.message };
   }
-  if (!build.ok) {
-    // Revert only the status change on the current stored version: an edit
-    // saved while the build ran is kept. `updated` goes back only if nothing else touched the doc.
+  // Revert only the status change on the current stored version: an edit
+  // saved meanwhile is kept. `updated` goes back only if nothing else touched the doc.
+  const revertStatus = () => {
     const current = getDocument(db, docId) || saved;
     const revert = {
       ...current.meta,
@@ -175,6 +175,9 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
     };
     const restored = saveDocument(db, { ...current, meta: revert });
     syncDocument(ws, restored, { collectionsConfig, previousDoc: current });
+  };
+  if (!build.ok) {
+    revertStatus();
     throw new BuildError(build.log);
   }
 
@@ -186,9 +189,16 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   const status = await deps.gitStatus(ws.siteDir);
   let sha = null;
   if (status.isRepo) {
-    const pages = await postPages(ws, docId, outputPaths(saved, collectionsConfig).html, {
-      git: { changedSinceHead: deps.changedSinceHead, readHead: deps.readHead }, collectionsConfig,
-    });
+    let pages;
+    try {
+      pages = await postPages(ws, docId, outputPaths(saved, collectionsConfig).html, {
+        git: { changedSinceHead: deps.changedSinceHead, readHead: deps.readHead, hasHead: deps.hasHead }, collectionsConfig,
+      });
+    } catch (err) {
+      // Committing without the page would report success while the old page stays live.
+      revertStatus();
+      throw new Error(`Nothing was committed: could not list this post's pages (${err.message})`);
+    }
     const label = { publish: 'Publish', update: 'Update', unpublish: 'Unpublish' }[kind];
     sha = await deps.commitPaths(ws.siteDir, [...BACKUP_PATHS, ...pages], `${label}: ${saved.meta.title}`);
   }

@@ -2,7 +2,7 @@ import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { ownedPaths, createBackup, commitTitle, postPages, BACKUP_PATHS } from '../../src/app/site-git.js';
+import { ownedPaths, createBackup, commitTitle, postPages, pageNotLive, BACKUP_PATHS } from '../../src/app/site-git.js';
 import * as realGit from '../../src/git/git.js';
 import { resolveWorkspace } from '../../src/workspace/workspace.js';
 import { makeGitSite, fakeClock, git, write } from './git-site-fixture.js';
@@ -347,4 +347,51 @@ test('postPages: pages collection pages live directly in src/', async () => {
   rmSync(join(fx.site, 'src/media/x.html'));
   write(fx.site, 'src/index.html', '<h1>Home 2</h1>\n');
   assert.deepEqual(await pageSet('doc_about', null), ['src/about.html']);
+});
+
+test('postPages: an old slug now holding another post\'s page is not staged (rename collision)', async () => {
+  fx = makeGitSite();
+  write(fx.site, 'content/posts/x.json', draft('x', 'A'));
+  write(fx.site, 'src/posts/x.html', page('doc_a', 'A'));
+  write(fx.site, 'src/posts/b.html', page('doc_b', 'B'));
+  git(fx.site, 'add', '-A');
+  git(fx.site, 'commit', '-m', 'published');
+  // A renamed x -> y (held), then B renamed b -> x (held): x.html is now B's page.
+  write(fx.site, 'src/posts/y.html', page('doc_a', 'A at y'));
+  write(fx.site, 'src/posts/x.html', page('doc_b', 'B at x'));
+  rmSync(join(fx.site, 'src/posts/b.html'));
+  assert.deepEqual(await pageSet('doc_a', 'src/posts/y.html'), ['src/posts/y.html']);
+  assert.deepEqual((await pageSet('doc_b', 'src/posts/x.html')).sort(), ['src/posts/b.html', 'src/posts/x.html']);
+});
+
+test('postPages: a git failure is thrown, except when there is no commit yet', async () => {
+  fx = makeGitSite();
+  write(fx.site, 'content/posts/a.json', draft('a', 'A'));
+  const failing = { ...realGit, changedSinceHead: async () => { throw new realGit.GitError('git diff timed out after 60s'); } };
+  await assert.rejects(
+    postPages(wsOf(fx.site), 'doc_a', null, { git: failing, collectionsConfig: {} }),
+    /timed out/,
+  );
+  const fresh = join(fx.root, 'fresh');
+  mkdirSync(join(fresh, 'content', 'posts'), { recursive: true });
+  git(fx.root, 'init', '-q', '-b', 'main', fresh);
+  assert.deepEqual(await postPages(wsOf(fresh), 'doc_a', null, { git: realGit, collectionsConfig: {} }), []);
+});
+
+test('pageNotLive: a published post\'s page that differs from HEAD (or is not in it yet)', async () => {
+  fx = makeGitSite();
+  write(fx.site, 'content/posts/a.json', draft('a', 'A'));
+  write(fx.site, 'src/posts/a.html', page('doc_a', 'A'));
+  git(fx.site, 'add', '-A');
+  git(fx.site, 'commit', '-m', 'published');
+  const notLive = (current) => pageNotLive(wsOf(fx.site), 'doc_a', current, { git: realGit, collectionsConfig: {} });
+  assert.equal(await notLive('src/posts/a.html'), false);
+  write(fx.site, 'src/posts/a.html', page('doc_a', 'A2'));
+  assert.equal(await notLive('src/posts/a.html'), true);
+  git(fx.site, 'checkout', '--', 'src/posts/a.html');
+  // Renamed, held: the new page is not in HEAD, the old one is deleted.
+  rmSync(join(fx.site, 'src/posts/a.html'));
+  write(fx.site, 'src/posts/a-2.html', page('doc_a', 'A'));
+  assert.equal(await notLive('src/posts/a-2.html'), true);
+  assert.equal(await notLive(null), false); // not published: nothing live to differ from
 });

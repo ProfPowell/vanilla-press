@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import {
-  gitStatus, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead,
+  gitStatus, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead, hasHead,
   GitConflictError, GitNotConnectedError, GitError, GitStashConflictError,
 } from '../../src/git/git.js';
 
@@ -340,3 +340,11 @@ test('readHead returns a file as committed in HEAD, or null', async () => {
   assert.equal(await readHead(a, 'src/posts/a.html'), 'old text\n');
   assert.equal(await readHead(a, 'src/posts/missing.html'), null);
 });
+
+test('hasHead is false before the first commit, true after', async () => {
+  const fresh = join(root, 'fresh');
+  execFileSync('git', ['init', '-b', 'main', fresh], { stdio: 'ignore' });
+  assert.equal(await hasHead(fresh), false);
+  assert.equal(await hasHead(a), true);
+});
+

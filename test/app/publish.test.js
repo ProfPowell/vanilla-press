@@ -231,6 +231,20 @@ describe('setPublished', () => {
     assert.ok(!remoteFiles().some((f) => f.endsWith('.html') && f.includes('hello')), remoteFiles().join(' '));
   });
 
+  test('a git failure listing the pages makes Unpublish fail, commit nothing and keep the post published', async () => {
+    const ws = setup();
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    const localBefore = git(fx.site, 'rev-parse', 'HEAD');
+    const failing = { ...deps(), changedSinceHead: async () => { throw new realGit.GitError('git diff timed out after 60s'); } };
+    await assert.rejects(
+      setPublished({ site: {}, ws, db, docId: ID, publish: false, deps: failing }),
+      (err) => !err.name.startsWith('Git') && /timed out/.test(err.message),
+    );
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
+    assert.equal(getDocument(db, ID).meta.status, 'published');
+    assert.ok(existsSync(join(fx.site, 'src', 'posts', 'hello.html')));
+  });
+
   test('without a remote the publish is saved and committed locally', async () => {
     const ws = setup({ remote: false });
     const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
@@ -377,6 +391,60 @@ describe('app routes', () => {
     const head = headFiles();
     assert.ok(!head.includes('src/posts/hello.html') && !head.includes('src/posts/hello-2.html'), head.join(' '));
     assert.ok(head.includes('content/posts/hello-2.json') && !head.includes('content/posts/hello.json'), head.join(' '));
+  });
+
+  test('a save during a publish waits until the publish commit; the commit holds the pre-save page', async () => {
+    let entered, release;
+    const inBuild = new Promise((r) => { entered = r; });
+    const gate = new Promise((r) => { release = r; });
+    const slowBuild = async (dir) => { entered(); await gate; return runBuild(dir); };
+    await open({ siteProcess: { runBuild: slowBuild } });
+    const order = [];
+    const publishing = api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' }).then((r) => { order.push('publish'); return r; });
+    await inBuild;
+    const saving = api(`/api/sites/${siteId}/documents/${ID}`, {
+      method: 'PUT', body: { blocks: [{ type: 'paragraph', children: [{ type: 'text', value: 'Saved mid-build.' }] }] },
+    }).then((r) => { order.push('save'); return r; });
+    await new Promise((r) => setTimeout(r, 200));
+    assert.deepEqual(order, []); // the save waits for the publish
+    release();
+    const [pub, put] = await Promise.all([publishing, saving]);
+    assert.equal(pub.status, 200, JSON.stringify(pub.data));
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    assert.deepEqual(order, ['publish', 'save']);
+    const committed = git(fx.site, 'show', 'HEAD:src/posts/hello.html');
+    assert.match(committed, /Hi there\./);
+    assert.doesNotMatch(committed, /Saved mid-build/);
+  });
+
+  test('a held page edit does not stop the fast-forward pull on open', async () => {
+    await open();
+    write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello001"\n---\n<p>Live</p>\n');
+    git(fx.site, 'add', '-A');
+    git(fx.site, 'commit', '-m', 'Publish: Hello');
+    git(fx.site, 'push');
+    write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello001"\n---\n<p>Held edit</p>\n');
+    const remoteId = pushRemotePost();
+    assert.ok((await docIds()).includes(remoteId));
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
+    assert.match(readFileSync(join(fx.site, 'src/posts/hello.html'), 'utf8'), /Held edit/);
+  });
+
+  test('notLive: true after a saved edit to a published post, false after Update', async () => {
+    await open();
+    const state = async () => (await api(`/api/sites/${siteId}/documents/${ID}/state`)).data;
+    assert.deepEqual(await state(), { notLive: false }); // a draft
+    await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    assert.deepEqual(await state(), { notLive: false });
+    await api(`/api/sites/${siteId}/documents/${ID}`, {
+      method: 'PUT', body: { blocks: [{ type: 'paragraph', children: [{ type: 'text', value: 'Version two.' }] }] },
+    });
+    assert.deepEqual(await state(), { notLive: true });
+    await api(`/api/sites/${siteId}/backup`, { method: 'POST' });
+    assert.deepEqual(await state(), { notLive: true }); // a backup never makes it live
+    await api(`/api/sites/${siteId}/documents/${ID}/update`, { method: 'POST' });
+    assert.deepEqual(await state(), { notLive: false });
+    assert.equal((await api(`/api/sites/${siteId}/documents/doc_nope0000/state`)).status, 404);
   });
 
   test('update route on a draft is a 422', async () => {

@@ -234,8 +234,17 @@ export async function changedFiles(dir, paths) {
  */
 export async function changedSinceHead(dir, paths) {
   if (paths.length === 0) return [];
-  const out = await runGit(dir, ['diff', 'HEAD', '--name-only', '--no-renames', '--diff-filter=MDT', '-z', '--', ...paths]);
+  const out = await runGit(dir, ['diff', 'HEAD', '--name-only', '--no-renames', '--diff-filter=MDT', '-z', '--', ...paths], { raw: true });
   return out.split('\0').filter(Boolean);
+}
+
+/**
+ * Whether the repo has a commit yet (`git rev-parse --verify HEAD`).
+ * @param {string} dir
+ * @returns {Promise<boolean>}
+ */
+export async function hasHead(dir) {
+  return (await tryGit(dir, ['rev-parse', '--verify', '--quiet', 'HEAD'])) !== null;
 }
 
 /**

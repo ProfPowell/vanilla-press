@@ -7,7 +7,7 @@
  * @module app/site-git
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { collectionOutput } from '../sync/paths.js';
 import { readManifest } from '../sync/manifest.js';
@@ -78,31 +78,53 @@ function vpIdAt(siteDir, path) {
  * (when it exists and is this post's), plus every page tracked in HEAD whose
  * `vp_id` is this post's and that is modified or deleted in the working tree
  * (an old slug after a rename, or the page an unpublish removed, even from an
- * earlier run). Never another post's page, never a hand-written one.
+ * earlier run) and whose working file is gone or still this post's (an old
+ * slug another post has taken since is that post's). Never another post's
+ * page, never a hand-written one. A git failure is thrown (the action must
+ * fail visibly), except when the repo has no commit yet.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {string} docId
  * @param {string|null} currentHtmlPath - the post's page now (null when it has none)
- * @param {{ git: { changedSinceHead: Function, readHead: Function }, collectionsConfig?: Object }} options
+ * @param {{ git: { changedSinceHead: Function, readHead: Function, hasHead: Function }, collectionsConfig?: Object }} options
  * @returns {Promise<string[]>}
  */
 export async function postPages(ws, docId, currentHtmlPath, { git, collectionsConfig = {} }) {
   const out = new Set();
   if (currentHtmlPath && vpIdAt(ws.siteDir, currentHtmlPath) === docId) out.add(currentHtmlPath);
-  const dirs = collectionDirs(ws, collectionsConfig);
-  if (dirs.size === 0) return [...out];
-  const roots = [...new Set([...dirs].map((d) => (d ? `src/${d}` : 'src')))];
-  let candidates;
-  try {
-    candidates = await git.changedSinceHead(ws.siteDir, roots);
-  } catch {
-    return [...out]; // no commit yet: nothing in HEAD to remove
-  }
-  for (const path of candidates) {
-    if (out.has(path) || !inCollectionDirs(path, dirs)) continue;
-    const text = await git.readHead(ws.siteDir, path);
-    if (text !== null && readVpId(text) === docId) out.add(path);
-  }
+  for (const path of await headPagesOf(ws, docId, collectionDirs(ws, collectionsConfig), git)) out.add(path);
   return [...out];
+}
+
+/** Pages of `docId` in HEAD that are modified or deleted, and not taken over by another post or by hand. */
+async function headPagesOf(ws, docId, dirs, git) {
+  const found = [];
+  if (dirs.size === 0) return found;
+  if (!(await git.hasHead(ws.siteDir))) return found; // no commit yet: nothing in HEAD
+  const roots = [...new Set([...dirs].map((d) => (d ? `src/${d}` : 'src')))];
+  for (const path of await git.changedSinceHead(ws.siteDir, roots)) {
+    if (!inCollectionDirs(path, dirs)) continue;
+    if (existsSync(join(ws.siteDir, path)) && vpIdAt(ws.siteDir, path) !== docId) continue;
+    const text = await git.readHead(ws.siteDir, path);
+    if (text !== null && readVpId(text) === docId) found.push(path);
+  }
+  return found;
+}
+
+/**
+ * Whether a published post has saved edits that are not live: its page is
+ * not in HEAD as it is now (changed, or new after a rename), or an old page
+ * of it in HEAD was removed. False for a post with no page or a repo with no commit.
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @param {string} docId
+ * @param {string|null} currentHtmlPath - null when the post is not published
+ * @param {{ git: { changedSinceHead: Function, readHead: Function, hasHead: Function }, collectionsConfig?: Object }} options
+ * @returns {Promise<boolean>}
+ */
+export async function pageNotLive(ws, docId, currentHtmlPath, { git, collectionsConfig = {} }) {
+  if (!currentHtmlPath || !(await git.hasHead(ws.siteDir))) return false;
+  if ((await git.readHead(ws.siteDir, currentHtmlPath)) === null) return true;
+  if ((await git.changedSinceHead(ws.siteDir, [currentHtmlPath])).length > 0) return true;
+  return (await headPagesOf(ws, docId, collectionDirs(ws, collectionsConfig), git)).length > 0;
 }
 
 /**

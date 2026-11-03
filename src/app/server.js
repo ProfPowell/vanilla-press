@@ -18,11 +18,12 @@ import { createPreviews } from './preview.js';
 import * as defaultGit from '../git/git.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import * as defaultSiteProcess from './site-process.js';
-import { createBackup, ownedPaths } from './site-git.js';
+import { createBackup, BACKUP_PATHS, pageNotLive } from './site-git.js';
 import {
   setPublished, BuildError, PublishRejectedError, checkLive, readSiteUrl, publicUrl, builtPage,
 } from './publish.js';
 import { getDocument } from '../store/content.js';
+import { outputPaths } from '../sync/paths.js';
 import { getCollectionsConfig } from '../sync/site-files.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { syncFromSite } from '../sync/from-site.js';
@@ -45,6 +46,30 @@ const STATIC_MOUNTS = [
   { prefix: '/assets/vb/', dir: join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') },
   { prefix: '/assets/code-block/', dir: join(ROOT, 'node_modules', '@profpowell', 'code-block', 'dist') },
 ];
+
+/** Actions with their own queue (they take the write lock inside the backup queue). */
+const ACTION_PATH = /\/documents\/[^/]+\/(publish|update|unpublish)$/;
+
+/**
+ * A write that changes a document's files (create, save, reload, delete, sync
+ * all): it waits for a running publish/update/unpublish (Ruling O).
+ */
+function isDocumentWrite(req, pathname) {
+  if (!['POST', 'PUT', 'DELETE'].includes(req.method)) return false;
+  const rest = pathname.replace(/^\/api\/sites\/[^/]+/, '');
+  if (rest === '/sync') return true;
+  return (rest === '/documents' || rest.startsWith('/documents/')) && !ACTION_PATH.test(rest);
+}
+
+/** A lock: `lock(fn)` runs fn after every earlier call has settled. */
+function createLock() {
+  let tail = Promise.resolve();
+  return (fn) => {
+    const run = tail.then(fn, fn);
+    tail = run.catch(() => {});
+    return run;
+  };
+}
 
 /**
  * Listen on `HOST`, trying `port`, `port+1`, ... (port 0: the OS picks, no fallback).
@@ -100,7 +125,7 @@ export async function startApp({
   // Looked up on each use, so a caller can swap a function after start (tests do).
   const git = new Proxy({}, { get: (_, key) => gitOverrides[key] ?? defaultGit[key] });
   const siteProcess = new Proxy({}, { get: (_, key) => siteProcessOverrides[key] ?? defaultSiteProcess[key] });
-  /** Open sites, cached for the life of the server: id -> { db, router, ws, backup } */
+  /** Open sites, cached for the life of the server: id -> { db, router, ws, backup, writes } */
   const open = new Map();
 
   /** Opens in progress: id -> Promise<entry>, so concurrent requests open a site once. */
@@ -108,14 +133,15 @@ export async function startApp({
 
   /**
    * Another machine may have pushed: fast-forward first when that is safe (an
-   * upstream, no uncommitted changes in VP-owned paths). Never merges or
-   * rebases; any failure is logged and the site opens as it is.
+   * upstream, no uncommitted changes in the backup paths; a held page edit
+   * does not count, git itself refuses a fast-forward that would overwrite
+   * it). Never merges or rebases; any failure is logged and the site opens as it is.
    */
   async function pullOnOpen(site, ws, db) {
     try {
       const status = await git.gitStatus(ws.siteDir);
       if (!status.isRepo || !status.hasUpstream) return;
-      const dirty = await git.changedFiles(ws.siteDir, ownedPaths(ws, getCollectionsConfig(db)));
+      const dirty = await git.changedFiles(ws.siteDir, [...BACKUP_PATHS]);
       if (dirty.length > 0) {
         console.warn(`${site.name || site.id}: not pulling, uncommitted changes in ${dirty.slice(0, 3).join(', ')}`);
         return;
@@ -142,8 +168,9 @@ export async function startApp({
         rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix,
         onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
       });
-      mountSiteGit(router, prefix, { site, ws, db, backup });
-      const entry = { ws, db, router, backup };
+      const writes = createLock();
+      mountSiteGit(router, prefix, { site, ws, db, backup, writes });
+      const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);
       return entry;
     } catch (err) {
@@ -185,21 +212,22 @@ export async function startApp({
    * site's router. POST publish on an already-published post is an Update too;
    * POST update refuses (422) a post that is not published.
    */
-  function mountSiteGit(router, prefix, { site, ws, db, backup }) {
+  function mountSiteGit(router, prefix, { site, ws, db, backup, writes }) {
     /** What the live check expects after a publish or update this run: docId -> { url, text }. */
     const expected = new Map();
     const publishRoute = (action) => async (req, res) => {
       const docId = req.params.id;
       try {
-        const result = await backup.exclusive(() => setPublished({
+        // Document writes wait (Ruling O): nothing changes between the build check and the commit.
+        const result = await backup.exclusive(() => writes(() => setPublished({
           site, ws, db, docId, publish: action !== 'unpublish', update: action === 'update',
           deps: {
             ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
             commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,
-            changedSinceHead: git.changedSinceHead, readHead: git.readHead,
+            changedSinceHead: git.changedSinceHead, readHead: git.readHead, hasHead: git.hasHead,
             collectionsConfig: getCollectionsConfig(db),
           },
-        }));
+        })));
         if (result.expectedText != null) expected.set(docId, { url: result.url, text: result.expectedText });
         else expected.delete(docId);
         sendJson(res, 200, { status: result.status, url: result.url });
@@ -217,6 +245,18 @@ export async function startApp({
     router.add('POST', `${prefix}/documents/:id/publish`, publishRoute('publish'));
     router.add('POST', `${prefix}/documents/:id/update`, publishRoute('update'));
     router.add('POST', `${prefix}/documents/:id/unpublish`, publishRoute('unpublish'));
+
+    // Whether a published post has saved edits that are not live yet (survives a reload).
+    router.add('GET', `${prefix}/documents/:id/state`, async (req, res) => {
+      const doc = getDocument(db, req.params.id);
+      if (!doc) return sendJson(res, 404, { error: 'Document not found' });
+      const collectionsConfig = getCollectionsConfig(db);
+      let notLive = false;
+      try {
+        notLive = await pageNotLive(ws, doc.id, outputPaths(doc, collectionsConfig).html, { git, collectionsConfig });
+      } catch { /* not a repo, or git failed: no hint */ }
+      sendJson(res, 200, { notLive });
+    });
 
     router.add('GET', `${prefix}/info`, async (req, res) => sendJson(res, 200, { siteUrl: await readSiteUrl(ws.siteDir) }));
     router.add('GET', `${prefix}/status`, async (req, res) => { await backup.init(); sendJson(res, 200, backup.state()); });
@@ -309,7 +349,9 @@ export async function startApp({
     } catch (err) {
       return sendJson(res, 422, { error: `Cannot open site: ${err.message}` });
     }
-    if (!(await entry.router.handle(req, res))) sendJson(res, 404, { error: 'Not found' });
+    const handle = () => entry.router.handle(req, res);
+    const handled = isDocumentWrite(req, pathname) ? await entry.writes(handle) : await handle();
+    if (!handled) sendJson(res, 404, { error: 'Not found' });
   }
 
   /** Serve `/sites/<id>/media/<file>` from that site's `src/media`; false when not served. */

@@ -46,8 +46,9 @@ function generateId() {
  * @param {string} options.mediaDir - Media upload directory
  * @param {import('../workspace/workspace.js').Workspace} [options.workspace] - Absent means fixture mode (sync disabled)
  * @param {string} [options.prefix='/api'] - URL prefix for every route
- * @param {(e: { docId: string, title: string, status: string }) => void} [options.onSynced] - Called after
- *   every successful sync (create, update, delete, reload). Never called in fixture mode.
+ * @param {(e: { docId: string|null, title: string, status: string }) => void} [options.onSynced] - Called after
+ *   every successful sync (create, update, delete, reload), and once for POST /api/sync with
+ *   `{ docId: null, title: 'all posts' }`. Never called in fixture mode.
  */
 export function mountApi(router, db, options) {
   const { rootDir, onSynced } = options;
@@ -372,8 +373,9 @@ export function mountApi(router, db, options) {
       return;
     }
     try {
-      const { synced, conflicts } = syncAll(ws, db);
-      sendJson(res, 200, { ok: true, synced, conflicts });
+      const { synced: count, conflicts } = syncAll(ws, db);
+      synced(null, { title: 'all posts' });
+      sendJson(res, 200, { ok: true, synced: count, conflicts });
     } catch (err) {
       sendJson(res, 500, { error: `Sync failed: ${err.message}` });
     }

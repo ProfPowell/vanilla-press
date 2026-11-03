@@ -98,6 +98,18 @@ test('commitPaths stages deletion of a tracked path that no longer exists', asyn
   assert.ok(sha);
 });
 
+test('commitPaths takes a message function given the staged files', async () => {
+  write(a, 'content/x.json', '{}');
+  write(a, 'src/posts/x.html', '<p>x</p>');
+  write(a, 'other.txt', 'mine');
+  git(a, 'add', 'other.txt'); // the user's own staged file stays out
+  let seen;
+  await commitPaths(a, ['content', 'src/posts'], (files) => { seen = files; return `n=${files.length}`; });
+  assert.deepEqual(seen.sort(), ['content/x.json', 'src/posts/x.html']);
+  assert.equal(git(a, 'log', '-1', '--format=%s'), 'n=2');
+  assert.match(git(a, 'status', '--porcelain'), /^A {2}other\.txt$/m);
+});
+
 test('commitPaths returns null when nothing changed', async () => {
   write(a, 'content/x.json', '{}');
   await commitPaths(a, ['content'], 'add');

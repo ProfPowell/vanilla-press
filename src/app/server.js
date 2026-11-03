@@ -16,6 +16,14 @@ import { fileURLToPath } from 'node:url';
 import { listSites, getSite, addSite, removeSite, listFolders } from './registry.js';
 import { createPreviews } from './preview.js';
 import * as defaultGit from '../git/git.js';
+import { GitConflictError, GitStashConflictError } from '../git/git.js';
+import * as defaultSiteProcess from './site-process.js';
+import { createBackup } from './site-git.js';
+import {
+  setPublished, BuildError, PublishRejectedError, checkLive, readSiteUrl, publicUrl, builtPage,
+} from './publish.js';
+import { getDocument } from '../store/content.js';
+import { getCollectionsConfig } from '../sync/site-files.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { syncFromSite } from '../sync/from-site.js';
 import { createRouter, sendJson } from '../server/router.js';
@@ -67,19 +75,30 @@ async function listen(server, port) {
  *   port?: number,
  *   env?: NodeJS.ProcessEnv,
  *   previews?: ReturnType<typeof createPreviews>,
- *   git?: { gitStatus: Function, cloneRepo: Function },
- *   siteProcess?: Object,
- * }} [options]
- * @returns {Promise<{ server: import('node:http').Server, port: number, url: string, close: () => Promise<void> }>}
+ *   git?: Object,
+ *   siteProcess?: { ensureInstalled?: Function, runBuild?: Function },
+ *   backup?: { now?: () => number, setTimer?: Function, clearTimer?: Function },
+ *   fetch?: typeof fetch,
+ * }} [options] - git and siteProcess override the real functions one by one (for tests);
+ *   backup injects the draft-backup timers; fetch is used by the live check.
+ * @returns {Promise<{ server: import('node:http').Server, port: number, url: string,
+ *   close: () => Promise<void>, shutdown: () => Promise<void> }>} shutdown: for quitting the
+ *   app (the CLI registers it for SIGINT/SIGTERM): flushes every open site's backup, then
+ *   stops previews and closes. close stops without flushing.
  */
 export async function startApp({
   port = 3007,
   env = process.env,
   previews = createPreviews(),
-  git = defaultGit,
-  siteProcess, // eslint-disable-line no-unused-vars -- kept for later tasks
+  git: gitOverrides = {},
+  siteProcess: siteProcessOverrides = {},
+  backup: backupTimers = {},
+  fetch: fetchImpl = globalThis.fetch,
 } = {}) {
-  /** Open sites, cached for the life of the server: id -> { db, router, ws } */
+  // Looked up on each use, so a caller can swap a function after start (tests do).
+  const git = new Proxy({}, { get: (_, key) => gitOverrides[key] ?? defaultGit[key] });
+  const siteProcess = new Proxy({}, { get: (_, key) => siteProcessOverrides[key] ?? defaultSiteProcess[key] });
+  /** Open sites, cached for the life of the server: id -> { db, router, ws, backup } */
   const open = new Map();
 
   function openSite(site) {
@@ -87,9 +106,17 @@ export async function startApp({
     const db = openWorkspaceDb(ws);
     try {
       syncFromSite(ws, db);
+      const backup = createBackup({
+        site, ws, git, getCollectionsConfig: () => getCollectionsConfig(db), ...backupTimers,
+      });
+      const prefix = `/api/sites/${site.id}`;
       const router = createRouter();
-      mountApi(router, db, { rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix: `/api/sites/${site.id}` });
-      const entry = { ws, db, router };
+      mountApi(router, db, {
+        rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix,
+        onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
+      });
+      mountSiteGit(router, prefix, { site, ws, db, backup });
+      const entry = { ws, db, router, backup };
       open.set(site.id, entry);
       return entry;
     } catch (err) {
@@ -102,7 +129,51 @@ export async function startApp({
     const entry = open.get(id);
     if (!entry) return;
     open.delete(id);
+    entry.backup.dispose();
     entry.db.close();
+  }
+
+  /** Publish, unpublish, backup status, live check: `<prefix>/...` on a site's router. */
+  function mountSiteGit(router, prefix, { site, ws, db, backup }) {
+    const publishRoute = (publish) => async (req, res) => {
+      try {
+        const result = await backup.exclusive(() => setPublished({
+          site, ws, db, docId: req.params.id, publish,
+          deps: {
+            ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
+            commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,
+            collectionsConfig: getCollectionsConfig(db),
+          },
+        }));
+        sendJson(res, 200, { status: result.status, url: result.url });
+      } catch (err) {
+        if (err instanceof PublishRejectedError) return sendJson(res, err.status, err.body);
+        if (err instanceof BuildError) return sendJson(res, 422, { error: 'Build failed', log: err.log });
+        if (err instanceof GitConflictError || err instanceof GitStashConflictError) {
+          return sendJson(res, 409, { error: err.message, files: err.files });
+        }
+        if (err?.name?.startsWith('Git')) return sendJson(res, 502, { error: err.message });
+        console.error('Publish error:', err);
+        sendJson(res, 500, { error: err.message });
+      }
+    };
+    router.add('POST', `${prefix}/documents/:id/publish`, publishRoute(true));
+    router.add('POST', `${prefix}/documents/:id/unpublish`, publishRoute(false));
+
+    router.add('GET', `${prefix}/status`, (req, res) => sendJson(res, 200, backup.state()));
+    router.add('POST', `${prefix}/backup`, async (req, res) => sendJson(res, 200, await backup.flush()));
+
+    router.add('GET', `${prefix}/documents/:id/live`, async (req, res) => {
+      const doc = getDocument(db, req.params.id);
+      if (!doc) return sendJson(res, 404, { error: 'Document not found' });
+      if (doc.meta.status !== 'published') return sendJson(res, 200, { live: false, url: null });
+      const collectionsConfig = getCollectionsConfig(db);
+      const url = publicUrl(await readSiteUrl(ws.siteDir), doc, collectionsConfig);
+      const expectedText = builtPage(ws.siteDir, doc, collectionsConfig);
+      const live = Boolean(url && expectedText !== null) &&
+        await checkLive({ url, expectedText, fetch: fetchImpl });
+      sendJson(res, 200, { live, url });
+    });
   }
 
   const app = createRouter();
@@ -208,5 +279,10 @@ export async function startApp({
     await previews.stopAll();
   }
 
-  return { server, port: bound, url: `http://${HOST}:${bound}`, close };
+  async function shutdown() {
+    await Promise.all([...open.values()].map((entry) => entry.backup.flush()));
+    await close();
+  }
+
+  return { server, port: bound, url: `http://${HOST}:${bound}`, close, shutdown };
 }

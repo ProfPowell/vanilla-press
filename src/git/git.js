@@ -110,7 +110,7 @@ export async function gitStatus(dir) {
  * Stage and commit only the given paths. Paths that neither exist nor are tracked are skipped.
  * @param {string} dir
  * @param {string[]} paths
- * @param {string} message
+ * @param {string | ((files: string[]) => string)} message - or a function of the staged file list
  * @returns {Promise<string|null>} the new commit sha, or null when nothing changed
  */
 export async function commitPaths(dir, paths, message) {
@@ -124,7 +124,8 @@ export async function commitPaths(dir, paths, message) {
   const files = staged.split('\0').filter(Boolean);
   if (files.length === 0) return null;
   // Name the files so anything the user already staged elsewhere stays out of this commit.
-  await runGit(dir, ['commit', '-m', message, '--', ...files]);
+  const text = typeof message === 'function' ? message(files) : message;
+  await runGit(dir, ['commit', '-m', text, '--', ...files]);
   return runGit(dir, ['rev-parse', 'HEAD']);
 }
 

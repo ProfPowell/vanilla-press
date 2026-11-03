@@ -2,7 +2,7 @@ import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { setPublished, readSiteUrl, checkLive, BuildError, normalizeText } from '../../src/app/publish.js';
+import { setPublished, readSiteUrl, checkLive, BuildError, PublishRejectedError, normalizeText } from '../../src/app/publish.js';
 import * as realGit from '../../src/git/git.js';
 import { ensureInstalled, runBuild } from '../../src/app/site-process.js';
 import { startApp } from '../../src/app/server.js';
@@ -96,6 +96,33 @@ describe('setPublished', () => {
     assert.equal(JSON.parse(readFileSync(join(fx.site, 'content', 'posts', 'hello.json'), 'utf8')).meta.status, 'draft');
     assert.equal(git(fx.remote, 'rev-parse', 'main'), before);
     assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
+  });
+
+  test('publish refuses a post using a component that is off', async () => {
+    const ws = setup();
+    const cur = getDocument(db, ID);
+    saveDocument(db, { ...cur, blocks: [...cur.blocks, { type: 'paragraph', children: [
+      { type: 'component', tag: 'x-one', attrs: {}, children: [] },
+    ] }] });
+    const localBefore = git(fx.site, 'rev-parse', 'HEAD');
+    const updatedBefore = getDocument(db, ID).meta.updated;
+    let built = 0;
+    const d = { ...deps(), runBuild: async () => { built++; return { ok: true, log: '' } }, components: () => new Map() };
+    await assert.rejects(
+      setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d }),
+      (err) => err instanceof PublishRejectedError && err.status === 422 &&
+        err.message === 'This post uses <x-one>, which is not on for this site. Turn it on under Components, or remove it from the post.',
+    );
+    assert.equal(built, 0);
+    assert.equal(getDocument(db, ID).meta.status, 'draft');
+    assert.equal(getDocument(db, ID).meta.updated, updatedBefore);
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
+    // With the component on, it publishes; unpublish is never refused.
+    const on = new Map([['x-one', { tag: 'x-one' }]]);
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: { ...d, components: () => on } });
+    assert.equal(res.kind, 'publish');
+    const off = await setPublished({ site: {}, ws, db, docId: ID, publish: false, deps: d });
+    assert.equal(off.kind, 'unpublish');
   });
 
   test('build failure keeps an edit saved during the build', async () => {

@@ -162,7 +162,20 @@ export const api = {
     return request('/config');
   },
 
+  /** Component packages: { cookSupportsPackages, packages: PackageState[] }. */
+  listComponents() {
+    return request('/components');
+  },
+
   // --- App only (per-site base, `?site=`) ---
+
+  /**
+   * Turn a component package on or off: the package's new PackageState. Errors carry
+   * `data` (409 `posts` that use it; 502 npm's `log`).
+   */
+  setComponent(pkg, enabled) {
+    return request(`/components/${encodeURIComponent(pkg)}`, { method: 'PUT', body: { enabled } });
+  },
 
   /** Publish: build, commit and push. { status: 'pushed'|'saved', url }; errors carry `data` (log, files). */
   publishDocument(id) {

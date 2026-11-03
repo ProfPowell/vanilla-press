@@ -16,6 +16,7 @@ import { preflightSave } from '../sync/site-files.js';
 import { outputPaths, postUrlPath } from '../sync/paths.js';
 import { GitNotConnectedError } from '../git/git.js';
 import { BACKUP_PATHS, postPages } from './site-git.js';
+import { componentTags } from './components.js';
 
 /** The site's build failed; `log` is the tail of its output. */
 export class BuildError extends Error {
@@ -126,8 +127,11 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  *     commitPaths: Function, push: Function, gitStatus: Function,
  *     changedSinceHead: Function, readHead: Function, hasHead: Function,
  *     collectionsConfig?: Object, readSiteUrl?: Function,
+ *     components?: () => Map<string, Object>,
  *   },
- * }} options - update: refuse (422) unless the post is already published
+ * }} options - update: refuse (422) unless the post is already published;
+ *   deps.components: the components on for the site; publish/update refuse (422), before
+ *   saving or building, a post that uses a component not in it
  * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean,
  *   kind: 'publish'|'update'|'unpublish', expectedText: string|null }>}
  *   rebased: the push rebased onto commits from elsewhere (the caller re-syncs the store);
@@ -141,6 +145,15 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   const wasPublished = previous.meta.status === 'published';
   if (update && !wasPublished) throw new PublishRejectedError(422, { error: 'This post is not published: use Publish' });
   const kind = !publish ? 'unpublish' : wasPublished ? 'update' : 'publish';
+  if (publish && deps.components) {
+    const on = deps.components();
+    const off = [...componentTags(previous.blocks)].find((tag) => !on.has(tag));
+    if (off) {
+      throw new PublishRejectedError(422, {
+        error: `This post uses <${off}>, which is not on for this site. Turn it on under Components, or remove it from the post.`,
+      });
+    }
+  }
 
   // 1. Save the status change and sync it.
   const now = new Date().toISOString();

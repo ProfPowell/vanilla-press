@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest } from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -410,5 +410,110 @@ describe('app server preview and per-site media', () => {
     assert.equal((await fetch(`${app.url}/sites/nope/media/pic.png`)).status, 404);
     assert.equal((await fetch(`${app.url}/sites/${idA}/media/..%2f..%2fpackage.json`)).status, 404);
     assert.equal((await fetch(`${app.url}/sites/${idA}/media/%2e%2e/%2e%2e/package.json`)).status, 404);
+  });
+});
+
+describe('documents API with components', () => {
+  const FIX = join(repoRoot, 'test', 'fixtures', 'components');
+  const hint = (tag) => ({ tag, label: tag, icon: 'x', description: tag, group: 'Test', kind: 'none', defaults: {}, advanced: [] });
+  const catalog = [{ package: 'x-widgets', elements: [hint('x-one')] }, { package: 'x-other', elements: [hint('x-three')] }];
+  let root, app, siteId, vpRoot;
+
+  const call = async (path, method = 'GET', body) => {
+    const res = await fetch(`${app.url}${path}`, body === undefined ? { method } : {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    return { status: res.status, data: await res.json() };
+  };
+  const withX = (attrs) => ({ ...post('doc_comp0001', 'comp', 'Comp'), blocks: [{ type: 'component', tag: 'x-one', attrs }] });
+
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), 'vp-app-components-'));
+    vpRoot = join(root, 'vp');
+    mkdirSync(join(vpRoot, 'node_modules'), { recursive: true });
+    cpSync(join(FIX, 'x-widgets'), join(vpRoot, 'node_modules', 'x-widgets'), { recursive: true });
+    const site = makeSite(root, 'comp-site');
+    writeFileSync(join(site, 'package.json'), JSON.stringify({ name: 'comp-site', dependencies: { 'x-widgets': '^1.0.0' }, devDependencies: { 'cook-ssg': '^2.5.0' } }));
+    app = await startApp({ port: 0, env: { VP_CONFIG_DIR: join(root, 'config') }, git: fakeGit, components: { catalog, vpRoot } });
+    siteId = (await call('/api/sites', 'POST', { path: site })).data.id;
+  });
+  after(async () => {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('POST document drops undeclared component attrs and returns a notice', async () => {
+    const res = await call(`/api/sites/${siteId}/documents`, 'POST', withX({ mode: 'a', bogus: 'x' }));
+    assert.equal(res.status, 201, JSON.stringify(res.data));
+    assert.deepEqual(res.data.blocks[0].attrs, { mode: 'a' });
+    assert.deepEqual(res.data.notices, ['Removed "bogus" from <x-one>: this version of the component doesn\'t have it.']);
+  });
+
+  it('PUT document drops undeclared component attrs and returns a notice', async () => {
+    const res = await call(`/api/sites/${siteId}/documents/doc_comp0001`, 'PUT', { blocks: withX({ count: 2, nope: true, zap: 1 }).blocks });
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.deepEqual(res.data.blocks[0].attrs, { count: 2 });
+    assert.deepEqual(res.data.notices, [
+      'Removed "nope" from <x-one>: this version of the component doesn\'t have it.',
+      'Removed "zap" from <x-one>: this version of the component doesn\'t have it.',
+    ]);
+    const stored = await call(`/api/sites/${siteId}/documents/doc_comp0001`);
+    assert.deepEqual(stored.data.blocks[0].attrs, { count: 2 });
+    assert.equal(stored.data.notices, undefined);
+  });
+
+  it('PUT validates against the enabled components', async () => {
+    const off = await call(`/api/sites/${siteId}/documents/doc_comp0001`, 'PUT', {
+      blocks: [{ type: 'component', tag: 'x-three', attrs: {} }],
+    });
+    assert.equal(off.status, 400);
+    assert.match(off.data.errors.join('\n'), /x-three" is not on for this site/);
+    const bad = await call(`/api/sites/${siteId}/documents/doc_comp0001`, 'PUT', { blocks: withX({ mode: 'zzz' }).blocks });
+    assert.equal(bad.status, 400);
+    assert.match(bad.data.errors.join('\n'), /not in allowed values/);
+  });
+});
+
+describe('mountApi components options', () => {
+  async function serve(options, fn) {
+    const site = mkdtempSync(join(tmpdir(), 'vp-mount-comp-'));
+    const ws = resolveWorkspace({ site, repoRoot });
+    const db = openWorkspaceDb(ws);
+    const router = createRouter();
+    mountApi(router, db, { rootDir: repoRoot, mediaDir: ws.mediaDir, workspace: ws, ...options });
+    const server = createServer(async (req, res) => {
+      if (!(await router.handle(req, res))) sendJson(res, 404, { error: 'Not found' });
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      await fn(`http://127.0.0.1:${server.address().port}`);
+    } finally {
+      await new Promise((r) => server.close(r));
+      db.close();
+      rmSync(site, { recursive: true, force: true });
+    }
+  }
+
+  it('GET /api/components is served when componentsState is given', async () => {
+    const state = { cookSupportsPackages: false, packages: [{ package: 'x', enabled: true }] };
+    await serve({ componentsState: () => state }, async (base) => {
+      const res = await fetch(`${base}/api/components`);
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), state);
+    });
+  });
+
+  it('without components options: no /api/components, no notices, attrs kept (vp serve)', async () => {
+    await serve({}, async (base) => {
+      assert.equal((await fetch(`${base}/api/components`)).status, 404);
+      const res = await fetch(`${base}/api/documents`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...post('doc_serve001', 'serve'), blocks: [{ type: 'component', tag: 'x-any', attrs: { bogus: 'x' } }] }),
+      });
+      assert.equal(res.status, 201);
+      const data = await res.json();
+      assert.deepEqual(data.blocks[0].attrs, { bogus: 'x' });
+      assert.equal(data.notices, undefined);
+    });
   });
 });

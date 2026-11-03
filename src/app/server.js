@@ -31,6 +31,9 @@ import { createRouter, sendJson } from '../server/router.js';
 import { mountApi } from '../server/api.js';
 import { serveStatic, serveFile } from '../server/static.js';
 import { refuseForeign } from '../server/guard.js';
+import { CATALOG } from '../components/catalog.js';
+import { packageDir } from '../components/describe.js';
+import { setComponent, componentsState, enabledComponents, ComponentError } from './components.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HOST = '127.0.0.1';
@@ -38,6 +41,8 @@ const PORT_ATTEMPTS = 20;
 const SITE_PATH = /^\/api\/sites\/([^/]+)(?:\/|$)/;
 /** `/sites/<id>/media/<file>`: a site's uploads (its `src/media`), for the editor to display. */
 const SITE_MEDIA_PATH = /^\/sites\/([^/]+)\/media\//;
+/** `/sites/<id>/components/<pkg>/<path>`: a catalog package's files, for the editor to load. */
+const SITE_COMPONENTS_PATH = /^\/sites\/([^/]+)\/components\//;
 
 const STATIC_MOUNTS = [
   { prefix: '/app/', dir: join(ROOT, 'app') },
@@ -106,8 +111,10 @@ async function listen(server, port) {
  *   siteProcess?: { ensureInstalled?: Function, runBuild?: Function },
  *   backup?: { now?: () => number, setTimer?: Function, clearTimer?: Function },
  *   fetch?: typeof fetch,
+ *   components?: { catalog?: Object[], vpRoot?: string },
  * }} [options] - git and siteProcess override the real functions one by one (for tests);
- *   backup injects the draft-backup timers; fetch is used by the live check.
+ *   backup injects the draft-backup timers; fetch is used by the live check;
+ *   components: the component catalog and the VP root its packages (and npm ranges) come from.
  * @returns {Promise<{ server: import('node:http').Server, port: number, url: string,
  *   close: () => Promise<void>, shutdown: () => Promise<void> }>} shutdown: for quitting the
  *   app (the CLI registers it for SIGINT/SIGTERM/SIGHUP): flushes every open site's backup, then
@@ -121,6 +128,7 @@ export async function startApp({
   siteProcess: siteProcessOverrides = {},
   backup: backupTimers = {},
   fetch: fetchImpl = globalThis.fetch,
+  components: { catalog = CATALOG, vpRoot = ROOT } = {},
 } = {}) {
   // Looked up on each use, so a caller can swap a function after start (tests do).
   const git = new Proxy({}, { get: (_, key) => gitOverrides[key] ?? defaultGit[key] });
@@ -164,13 +172,16 @@ export async function startApp({
       });
       const prefix = `/api/sites/${site.id}`;
       const router = createRouter();
+      const roots = { siteDir: ws.siteDir, vpRoot, catalog };
       mountApi(router, db, {
         rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix,
         statusByActions: true, // Ruling P: only Publish/Update/Unpublish change status
         onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
+        components: () => enabledComponents(roots),
+        componentsState: () => componentsState(roots),
       });
       const writes = createLock();
-      mountSiteGit(router, prefix, { site, ws, db, backup, writes });
+      mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
       const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);
       return entry;
@@ -213,7 +224,7 @@ export async function startApp({
    * site's router. POST publish on an already-published post is an Update too;
    * POST update refuses (422) a post that is not published.
    */
-  function mountSiteGit(router, prefix, { site, ws, db, backup, writes }) {
+  function mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots }) {
     /** What the live check expects after a publish or update this run: docId -> { url, text }. */
     const expected = new Map();
     const publishRoute = (action) => async (req, res) => {
@@ -227,6 +238,7 @@ export async function startApp({
             commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,
             changedSinceHead: git.changedSinceHead, readHead: git.readHead, hasHead: git.hasHead,
             collectionsConfig: getCollectionsConfig(db),
+            components: () => enabledComponents(roots),
           },
         })));
         if (result.expectedText != null) expected.set(docId, { url: result.url, text: result.expectedText });
@@ -257,6 +269,26 @@ export async function startApp({
         notLive = await pageNotLive(ws, doc.id, outputPaths(doc, collectionsConfig).html, { git, collectionsConfig });
       } catch { /* not a repo, or git failed: no hint */ }
       sendJson(res, 200, { notLive });
+    });
+
+    // Turn a component package on or off (npm in the site, then a commit of its package files).
+    router.add('PUT', `${prefix}/components/:pkg`, async (req, res) => {
+      try {
+        const state = await setComponent({
+          ws, db, pkg: req.params.pkg, enabled: req.body?.enabled,
+          deps: {
+            runNpm: siteProcess.runNpm, gitStatus: git.gitStatus, hasHead: git.hasHead,
+            changedSinceHead: git.changedSinceHead, commitPaths: git.commitPaths,
+            backup, writes, vpRoot: roots.vpRoot, catalog: roots.catalog,
+          },
+        });
+        sendJson(res, 200, state);
+      } catch (err) {
+        if (err instanceof ComponentError) return sendJson(res, err.status, err.body);
+        if (err?.name?.startsWith('Git')) return sendJson(res, 502, { error: err.message });
+        console.error('Components error:', err);
+        sendJson(res, 500, { error: err.message });
+      }
     });
 
     router.add('GET', `${prefix}/info`, async (req, res) => sendJson(res, 200, { siteUrl: await readSiteUrl(ws.siteDir) }));
@@ -365,6 +397,27 @@ export async function startApp({
     return serveStatic(req, res, [{ prefix: `/sites/${id}/media/`, dir: join(site.path, 'src', 'media') }]);
   }
 
+  /**
+   * Serve `/sites/<id>/components/<pkg>/<path>` from where that catalog package is
+   * installed (the site's copy first, else VP's); false when not served.
+   */
+  function serveSiteComponent(req, res, pathname) {
+    let decoded;
+    try { decoded = decodeURIComponent(pathname); } catch { return false; }
+    const match = decoded.match(SITE_COMPONENTS_PATH);
+    if (!match) return false;
+    const id = match[1];
+    const site = getSite(id, { env });
+    if (!site) return false;
+    const rest = decoded.slice(match[0].length);
+    const entry = catalog.find((e) => rest.startsWith(`${e.package}/`));
+    if (!entry) return false;
+    const found = packageDir(entry.package, { siteDir: site.path, vpRoot });
+    if (!found) return false;
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return serveStatic(req, res, [{ prefix: `${match[0]}${entry.package}/`, dir: found.dir }]);
+  }
+
   const server = createServer(async (req, res) => {
     try {
       if (refuseForeign(req, res, server.address().port)) return;
@@ -380,6 +433,8 @@ export async function startApp({
         return res.end();
       } else if (SITE_MEDIA_PATH.test(pathname)) {
         if (serveSiteMedia(req, res, pathname)) return;
+      } else if (SITE_COMPONENTS_PATH.test(pathname)) {
+        if (serveSiteComponent(req, res, pathname)) return;
       } else if (serveStatic(req, res, STATIC_MOUNTS)) {
         return;
       }

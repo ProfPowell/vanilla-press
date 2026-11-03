@@ -20,6 +20,7 @@ import {
   getAllPublished,
 } from '../store/content.js';
 import { validate } from '../schema/validate.js';
+import { normalizeComponents } from '../components/normalize.js';
 import { syncDocument, unsyncDocument, SyncConflictError } from '../sync/to-site.js';
 import { reloadFromSite } from '../sync/from-site.js';
 import {
@@ -28,6 +29,9 @@ import {
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
 import { sendJson, readRawBody } from './router.js';
+
+/** The notice for an attribute a save dropped. */
+const droppedNotice = ({ tag, attr }) => `Removed "${attr}" from <${tag}>: this version of the component doesn't have it.`;
 
 /**
  * Generate a document ID: doc_ + 8 random hex chars.
@@ -53,9 +57,31 @@ function generateId() {
  *   changes `status` or `published` (PUT keeps the stored values; POST create stores a draft, or
  *   keeps an existing document's values); only Publish/Update/Unpublish change them. `vp serve`
  *   leaves this off and saves set status as before.
+ * @param {() => Map<string, import('../components/describe.js').ComponentDescriptor>} [options.components] - The
+ *   components on for this site (the app): POST/PUT of a document first drop the component
+ *   attributes a descriptor does not declare, then validate against these descriptors, and the
+ *   response adds `notices: string[]` for what was dropped. Absent (`vp serve`): structural validation only.
+ * @param {() => Object} [options.componentsState] - When given, `GET /api/components` answers its result.
  */
 export function mountApi(router, db, options) {
-  const { rootDir, onSynced, statusByActions = false } = options;
+  const { rootDir, onSynced, statusByActions = false, components } = options;
+
+  /**
+   * Normalize (with `components`) and validate a candidate document.
+   * @returns {{ doc: Object, result: { valid: boolean, errors: string[] }, notices?: string[] }}
+   */
+  function checkDocument(doc) {
+    if (!components) return { doc, result: validate(doc) };
+    const index = components();
+    const normalized = normalizeComponents(doc, index);
+    return {
+      doc: normalized.doc,
+      result: validate(normalized.doc, { components: index }),
+      notices: normalized.dropped.map(droppedNotice),
+    };
+  }
+  /** The saved document, plus `notices` when components are checked. */
+  const withNotices = (saved, notices) => (notices ? { ...saved, notices } : saved);
 
   /** With statusByActions: `meta` with `status`/`published` taken from `stored` (absent: a draft). */
   function keepStatus(meta, stored) {
@@ -189,16 +215,16 @@ export function mountApi(router, db, options) {
     const existing = getDocument(db, doc.id);
     doc.meta = keepStatus(doc.meta, existing?.meta);
 
-    const result = validate(doc);
+    const { doc: checked, result, notices } = checkDocument(doc);
     if (!result.valid) {
       sendJson(res, 400, { error: 'Validation failed', errors: result.errors });
       return;
     }
 
     const previous = ws ? existing : null;
-    if (rejectSave(res, doc)) return;
-    const saved = saveDocument(db, doc);
-    if (syncSaved(res, saved, previous)) sendJson(res, 201, saved);
+    if (rejectSave(res, checked)) return;
+    const saved = saveDocument(db, checked);
+    if (syncSaved(res, saved, previous)) sendJson(res, 201, withNotices(saved, notices));
   }));
 
   route.add('PUT', '/api/documents/:id', jsonErrors((req, res) => {
@@ -220,15 +246,15 @@ export function mountApi(router, db, options) {
       blocks: body.blocks !== undefined ? body.blocks : existing.blocks,
     };
 
-    const result = validate(doc);
+    const { doc: checked, result, notices } = checkDocument(doc);
     if (!result.valid) {
       sendJson(res, 400, { error: 'Validation failed', errors: result.errors });
       return;
     }
 
-    if (rejectSave(res, doc)) return;
-    const saved = saveDocument(db, doc);
-    if (syncSaved(res, saved, existing)) sendJson(res, 200, saved);
+    if (rejectSave(res, checked)) return;
+    const saved = saveDocument(db, checked);
+    if (syncSaved(res, saved, existing)) sendJson(res, 200, withNotices(saved, notices));
   }));
 
   // Replace the stored document with its version on disk (after a 409).
@@ -268,6 +294,14 @@ export function mountApi(router, db, options) {
     if (ws) synced(req.params.id, existing.meta);
     sendJson(res, 200, { ok: true });
   }));
+
+  // --- Components ---
+
+  if (typeof options.componentsState === 'function') {
+    route.add('GET', '/api/components', jsonErrors((req, res) => {
+      sendJson(res, 200, options.componentsState());
+    }));
+  }
 
   // --- Collections ---
 

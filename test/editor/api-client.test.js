@@ -26,6 +26,15 @@ describe('editor api client', () => {
     assert.deepEqual(calls, [{ url: '/api/documents/x/update', method: 'POST' }]);
   });
 
+  it('components: GET /components and PUT /components/<encoded pkg>', async () => {
+    await api.listComponents();
+    await api.setComponent('@profpowell/browser-window', true);
+    assert.deepEqual(calls, [
+      { url: '/api/components', method: 'GET' },
+      { url: '/api/components/%40profpowell%2Fbrowser-window', method: 'PUT' },
+    ]);
+  });
+
   it('the api object literal has no duplicate method names', () => {
     const src = readFileSync(join(jsDir, 'api-client.js'), 'utf8');
     const body = src.slice(src.indexOf('export const api = {'));

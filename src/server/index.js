@@ -21,6 +21,7 @@ import { mountApi } from './api.js';
 import { syncFromSite } from '../sync/from-site.js';
 import { serveStatic } from './static.js';
 import { refuseForeign } from './guard.js';
+import { componentsState } from '../app/components.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -57,7 +58,11 @@ export function startServer(options = {}) {
 
   // Set up router with API routes
   const router = createRouter();
-  mountApi(router, db, { rootDir: ROOT, mediaDir, workspace: ws });
+  // GET /api/components; fixture mode (no site) has every package on.
+  mountApi(router, db, {
+    rootDir: ROOT, mediaDir, workspace: ws,
+    componentsState: () => componentsState({ siteDir: ws.siteDir, vpRoot: ROOT }),
+  });
 
   // Static file mount points: URL prefix → filesystem path
   const staticMounts = [

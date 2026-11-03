@@ -368,6 +368,23 @@ export function createBackup({
   }
 
   /**
+   * Run `fn` in the git queue without taking the pending saves: for a commit
+   * of files outside the backup paths (a components change). When `fn`
+   * resolves to a commit sha, that commit counts as unpushed, so the next
+   * flush pushes it.
+   * @template T
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   */
+  function commitOther(fn) {
+    return serial(async () => {
+      const sha = await fn();
+      if (sha) unpushed++;
+      return sha;
+    });
+  }
+
+  /**
    * Read git status once so state().connected is right before any push:
    * connected means a repo with a remote and an upstream. Never rejects.
    * @returns {Promise<BackupState>}
@@ -407,5 +424,5 @@ export function createBackup({
     });
   }
 
-  return { noteSaved, flush, state, exclusive, dispose, close, init };
+  return { noteSaved, flush, state, exclusive, commitOther, dispose, close, init };
 }

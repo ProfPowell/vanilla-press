@@ -113,30 +113,58 @@
   border-radius: var(--radius-m);
 }
 
-/* Web components (plain display until live rendering) */
-.ProseMirror .pm-component-leaf,
-.ProseMirror .pm-component-blocks {
-  border: 1px dashed var(--color-border, #999);
-  border-radius: 4px;
-  padding: 0.5em 0.75em;
-  margin: 0.75em 0;
+/* Web components: the live element inside a wrapper (blocks/component-view.js).
+ * The wrapper's frame and note show only when the element can't be shown
+ * live: its script failed to load, or it is not on for this site. */
+.ProseMirror .pm-component-live {
+  display: block;
+  position: relative;
+  margin-block: 0.75em;
 }
 
-.ProseMirror .pm-component-label {
+.ProseMirror .pm-component-live-leaf {
+  min-height: 1.5rem;
+  cursor: pointer;
+}
+
+.ProseMirror .pm-component-live-leaf:hover {
+  outline: 1px dashed var(--color-border, #999);
+  outline-offset: 2px;
+}
+
+.ProseMirror .pm-component-live-inline {
+  display: inline;
+  margin: 0;
+}
+
+.ProseMirror .pm-component-note {
+  display: none;
   font-family: var(--font-mono);
   font-size: 0.8em;
-  opacity: 0.7;
+  color: var(--color-text-muted);
   user-select: none;
 }
 
-.ProseMirror .pm-component-inline {
-  border-bottom: 1px dashed currentColor;
+.ProseMirror .pm-component-live:is([data-state="failed"], [data-state="off"]) {
+  border: 1px dashed var(--color-warning, #b8860b);
+  border-radius: var(--radius-m, 4px);
+  padding: 0.5em 0.75em;
 }
 
-.ProseMirror .pm-component-inline::before {
-  content: "<" attr(data-vp-component) ">";
-  font-family: var(--font-mono);
-  font-size: 0.7em;
-  opacity: 0.6;
-  margin-inline-end: 0.15em;
+.ProseMirror .pm-component-live-inline:is([data-state="failed"], [data-state="off"]) {
+  padding: 0 0.25em;
+}
+
+.ProseMirror .pm-component-live:is([data-state="failed"], [data-state="off"]) > .pm-component-note {
+  display: block;
+}
+
+.ProseMirror .pm-component-live-inline:is([data-state="failed"], [data-state="off"]) > .pm-component-note {
+  display: inline;
+  margin-inline-end: 0.25em;
+}
+
+/* A leaf that can't run has nothing editable to show: the note stands for it */
+.ProseMirror .pm-component-live-leaf:is([data-state="failed"], [data-state="off"]) > :not(.pm-component-note) {
+  display: none;
 }

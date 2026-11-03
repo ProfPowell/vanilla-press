@@ -28,6 +28,9 @@ import { CardView } from './blocks/card-view.js';
 import { TabsView } from './blocks/tabs-view.js';
 import { StepsView } from './blocks/steps-view.js';
 import { FigureView } from './blocks/figure-view.js';
+import {
+  ComponentView, InlineComponentView, componentSettingsPlugin, setComponentDescriptors,
+} from './blocks/component-view.js';
 import { getBlockPalette } from './components/block-palette.js';
 import { api } from './api-client.js';
 import './components/editor-shell.js';
@@ -35,6 +38,7 @@ import './components/ast-inspector.js';
 import './components/meta-panel.js';
 import './components/doc-browser.js';
 import './components/theme-picker.js';
+import './components/component-settings.js';
 import { initPatterns } from './patterns.js';
 import { enabledDescriptors, unrepresentable } from './component-model.js';
 import { isSiteMode, initSiteMode } from './site-mode.js';
@@ -188,6 +192,7 @@ export function initEditor() {
       createToolbarPlugin(),
       createLinkPlugin(),
       tableEditing(),
+      componentSettingsPlugin(),
     ],
   });
 
@@ -201,6 +206,9 @@ export function initEditor() {
       tabs: (node, view, getPos) => new TabsView(node, view, getPos),
       steps: (node, view, getPos) => new StepsView(node, view, getPos),
       figure: (node, view, getPos) => new FigureView(node, view, getPos),
+      component_leaf: (node, view, getPos) => new ComponentView(node, view, getPos),
+      component_blocks: (node, view, getPos) => new ComponentView(node, view, getPos),
+      component_inline: (node, view, getPos) => new InlineComponentView(node, view, getPos),
     },
     dispatchTransaction(transaction) {
       const newState = editorView.state.apply(transaction);
@@ -249,14 +257,19 @@ export function initEditor() {
 
 /**
  * Load component descriptors once and offer the enabled ones: block kinds
- * in the `/` palette, inline kinds in the toolbar's wrap select. A failure
- * leaves the editor without component entries.
+ * in the `/` palette, inline kinds in the toolbar's wrap select. The live
+ * component views get all of them (to label the ones not on for this site).
+ * A failure leaves the editor without component entries.
  */
 async function loadComponents() {
   try {
-    const descriptors = enabledDescriptors(await api.listComponents());
+    const res = await api.listComponents();
+    const descriptors = enabledDescriptors(res);
     getBlockPalette().registerComponents(descriptors);
     toolbar?.setInlineComponents(descriptors.filter(d => d.kind === 'inline'));
+    setComponentDescriptors(res);
+    // Refresh the settings panel for a component selected before this arrived
+    if (editorView) editorView.dispatch(editorView.state.tr);
   } catch (err) {
     console.warn('Components unavailable:', err);
   }

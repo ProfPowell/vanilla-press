@@ -1,0 +1,99 @@
+/* <component-settings>: the selected component's settings, in the sidebar
+ * (editor chrome, never themed). In the app (site mode) the sidebar may be
+ * hidden; a selected component brings it back with only this panel. */
+component-settings[hidden] {
+  display: none;
+}
+
+component-settings {
+  display: block;
+  padding-block-end: var(--size-m);
+  border-block-end: 1px solid var(--color-border);
+}
+
+component-settings h3 {
+  font-size: var(--font-size-s);
+  font-weight: 700;
+  margin: 0;
+}
+
+component-settings .component-tag {
+  margin: 0 0 var(--size-s);
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-text-muted);
+}
+
+component-settings .component-note {
+  margin: 0 0 var(--size-s);
+  padding: var(--size-xs) var(--size-s);
+  border-inline-start: 3px solid var(--color-warning, #b8860b);
+  font-size: var(--font-size-s);
+}
+
+component-settings .field {
+  margin-block-end: var(--size-s);
+}
+
+component-settings label {
+  display: block;
+  font-size: var(--font-size-s);
+  color: var(--color-text-muted);
+  margin-block-end: var(--size-2xs, 0.25rem);
+  padding: 0;
+  border: none;
+  font-weight: normal;
+}
+
+component-settings .field-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
+component-settings .field-check label {
+  margin: 0;
+}
+
+component-settings .field-check .hint {
+  flex-basis: 100%;
+}
+
+component-settings :is(input:not([type="checkbox"]), select, textarea) {
+  width: 100%;
+  padding: var(--size-xs) var(--size-s);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: var(--font-size-s);
+}
+
+component-settings textarea {
+  font-family: var(--font-mono);
+  resize: vertical;
+}
+
+component-settings .hint {
+  display: block;
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-text-muted);
+}
+
+component-settings summary {
+  cursor: pointer;
+  font-size: var(--font-size-s);
+  margin-block: var(--size-xs);
+}
+
+editor-shell.site-mode.sidebar-hidden.component-open {
+  grid-template-columns: 1fr var(--editor-sidebar-w);
+  grid-template-areas:
+    "header  header"
+    "toolbar toolbar"
+    "editor  sidebar";
+}
+
+editor-shell.site-mode.sidebar-hidden.component-open .editor-sidebar {
+  display: flex;
+}

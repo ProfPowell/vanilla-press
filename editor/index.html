@@ -67,6 +67,7 @@
 
   <div class="editor-sidebar">
     <p class="site-label" data-site-label></p>
+    <component-settings></component-settings>
     <doc-browser></doc-browser>
     <theme-picker></theme-picker>
     <meta-panel></meta-panel>
@@ -78,5 +79,9 @@
 </editor-shell>
 
 <script type="module" src="assets/js/editor.js"></script>
+<!-- Vanilla Breeze's own elements (the bundled components) are live in the
+     editor. After editor.js: VB also ships a <theme-picker>, and its registry
+     skips a tag that is already defined, so the editor's own picker wins. -->
+<script type="module" src="/assets/vb/vanilla-breeze.js"></script>
 </body>
 </html>

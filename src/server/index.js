@@ -22,9 +22,32 @@ import { syncFromSite } from '../sync/from-site.js';
 import { serveStatic } from './static.js';
 import { refuseForeign } from './guard.js';
 import { componentsState } from '../app/components.js';
+import { CATALOG } from '../components/catalog.js';
+import { packageDir } from '../components/describe.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
+
+/**
+ * Serve `/components/<pkg>/<path>` from VP's own node_modules, for catalog
+ * packages only (fixture mode's counterpart of the app's
+ * `/sites/<id>/components/...`); false when not served.
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @returns {boolean}
+ */
+export function serveComponent(req, res) {
+  let decoded;
+  try { decoded = decodeURIComponent(new URL(req.url, 'http://local').pathname); } catch { return false; }
+  if (!decoded.startsWith('/components/')) return false;
+  const rest = decoded.slice('/components/'.length);
+  const entry = CATALOG.find((e) => rest.startsWith(`${e.package}/`));
+  if (!entry) return false;
+  const found = packageDir(entry.package, { siteDir: null, vpRoot: ROOT });
+  if (!found) return false;
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  return serveStatic(req, res, [{ prefix: `/components/${entry.package}/`, dir: found.dir }]);
+}
 
 /**
  * Start the dev server.
@@ -99,6 +122,7 @@ export function startServer(options = {}) {
       }
 
       // Try static file serving
+      if (serveComponent(req, res)) return;
       if (serveStatic(req, res, staticMounts)) return;
 
       // 404

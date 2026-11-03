@@ -376,9 +376,10 @@ const embed = {
 };
 
 // --- Web components (generic `component` AST node) ---
-// Plain display for now: a labeled box showing the tag. The attrs are the
-// AST's own (`attrs` is the element's attribute object). data-* attributes
-// carry them so copy/paste inside the editor keeps the component.
+// The editor shows them live through NodeViews (blocks/component-view.js);
+// toDOM/parseDOM here are for the clipboard. The attrs are the AST's own
+// (`attrs` is the element's attribute object). data-* attributes carry them
+// so copy/paste inside the editor keeps the component.
 
 function componentDomAttrs(node, cls) {
   const attrs = {

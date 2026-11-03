@@ -1,5 +1,6 @@
 import { api, h, formatDate, listComponents, setComponent } from './app-api.js';
 import { packageRows, toggleOutcome } from './components-view.js';
+import { loadComponent, createComponentElement, setComponentValue } from '/editor/assets/js/component-loader.js';
 
 const $ = (id) => document.getElementById(id);
 const siteId = new URLSearchParams(location.search).get('site');
@@ -100,6 +101,47 @@ function setComponentsError(text, posts) {
   el.hidden = !text;
 }
 
+// "Try it": each element live with its catalog defaults. The package's
+// script loads only when the disclosure opens (Vanilla Breeze's own elements
+// are already live: this page loads its bundle).
+const tryOpen = new Set();
+
+const SAMPLE = {
+  text: (e) => `${e.label}: sample text`,
+  code: () => "console.log('Hello, world');",
+  inline: () => 'Sample text',
+};
+
+function tryItem(e) {
+  const stage = h('div', { class: 'try-stage' }, h('span', { class: 'muted' }, 'Loading\u2026'));
+  loadComponent(e).then((result) => {
+    if (result !== 'ready') {
+      stage.replaceChildren(h('span', { class: 'muted' }, `${e.label} couldn't load`));
+      return;
+    }
+    const live = createComponentElement(e.tag, e.defaults || {});
+    if (e.kind === 'blocks') live.append(h('p', {}, 'Sample content.'));
+    else if (SAMPLE[e.kind]) setComponentValue(live, SAMPLE[e.kind](e), e.kind === 'code' ? e.codeWrap : 'text');
+    stage.replaceChildren(live);
+  });
+  return h('div', { class: 'try-item' }, h('p', { class: 'try-label' }, e.label), stage);
+}
+
+function tryIt(pkg) {
+  const details = h('details', { class: 'component-try', open: tryOpen.has(pkg.package) },
+    h('summary', {}, 'Try it'));
+  const fill = () => {
+    if (details.dataset.filled) return;
+    details.dataset.filled = '1';
+    details.append(...(pkg.elements || []).map(tryItem));
+  };
+  details.addEventListener('toggle', () => {
+    if (details.open) { tryOpen.add(pkg.package); fill(); } else tryOpen.delete(pkg.package);
+  });
+  if (details.open) fill();
+  return details;
+}
+
 function componentRow(pkg, row, working) {
   const id = `comp-${row.package.replace(/[^a-z0-9]/gi, '-')}`;
   const box = h('input', { type: 'checkbox', role: 'switch', id, 'data-package': row.package });
@@ -113,7 +155,8 @@ function componentRow(pkg, row, working) {
       box,
       h('span', { class: 'muted' }, row.version ? `v${row.version}` : ''),
       h('span', { class: 'muted', role: 'status' }, working || row.note)),
-    h('ul', { class: 'component-elements' }, ...elements));
+    h('ul', { class: 'component-elements' }, ...elements),
+    tryIt(pkg));
 }
 
 function renderComponents(workingPkg, workingText) {

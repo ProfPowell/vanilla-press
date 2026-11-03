@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  nodeTypeFor, initialAttrs, formFields, coerce, paletteEntries, enabledDescriptors, unrepresentable,
+  nodeTypeFor, initialAttrs, formFields, settingsFields, coerce, paletteEntries, enabledDescriptors, unrepresentable,
 } from '../../editor/assets/js/component-model.js';
 
 const d = (tag, kind, extra = {}) => ({
@@ -68,6 +68,33 @@ describe('formFields', () => {
       const [f] = formFields(d('x-u', 'none', { attributes: [{ name, type: 'string' }] }));
       assert.deepEqual([f.control, f.inputmode], ['text', 'url'], name);
     }
+  });
+});
+
+describe('settingsFields', () => {
+  it('keeps declared fields, each with its attribute definition', () => {
+    const attr = { name: 'title', type: 'string' };
+    const fields = settingsFields(d('x-s', 'none', { attributes: [attr] }), {});
+    assert.deepEqual(fields.map(f => [f.name, f.control]), [['title', 'text']]);
+    assert.equal(fields[0].attrDef, attr);
+  });
+  it('adds undeclared defaults, advanced names and node attrs, typed by their values', () => {
+    const desc = d('x-m', 'text', {
+      defaults: { speed: 50, 'pause-on-hover': true },
+      advanced: ['gap'],
+      attributes: [],
+    });
+    const fields = settingsFields(desc, { speed: 60, extra: 'x' });
+    assert.deepEqual(fields.map(f => [f.name, f.control, f.advanced]), [
+      ['speed', 'number', false], ['pause-on-hover', 'checkbox', false], ['extra', 'text', false], ['gap', 'text', true],
+    ]);
+    assert.deepEqual(fields[0].attrDef, { name: 'speed', type: 'number' });
+    assert.deepEqual(fields[1].attrDef, { name: 'pause-on-hover', type: 'boolean' });
+    assert.equal(fields[0].label, 'Speed');
+  });
+  it('does not repeat a declared attribute', () => {
+    const desc = d('x-r', 'none', { defaults: { title: 'T' }, attributes: [{ name: 'title', type: 'string' }] });
+    assert.deepEqual(settingsFields(desc, { title: 'U' }).map(f => f.name), ['title']);
   });
 });
 

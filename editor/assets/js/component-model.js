@@ -78,6 +78,33 @@ export function formFields(descriptor) {
   });
 }
 
+/** The attribute type a value implies. */
+const typeOf = (v) => (typeof v === 'boolean' ? 'boolean' : typeof v === 'number' ? 'number' : 'string');
+
+/**
+ * The settings panel's fields: `formFields` (declared attributes) plus a
+ * field for each undeclared name in the catalog defaults, the node's own
+ * attrs and the catalog's advanced list (some packages ship no manifest),
+ * typed by its value. Each field carries the `attrDef` to `coerce` with.
+ * @param {ComponentDescriptor} descriptor
+ * @param {Record<string, string|number|boolean>} nodeAttrs
+ * @returns {Array<ReturnType<typeof formFields>[number] & { attrDef: AttrDef }>}
+ */
+export function settingsFields(descriptor, nodeAttrs) {
+  const declared = new Map((descriptor.attributes || []).map(a => [a.name, a]));
+  const fields = formFields(descriptor).map(f => ({ ...f, attrDef: declared.get(f.name) }));
+  const advanced = new Set(descriptor.advanced || []);
+  const values = { ...(descriptor.defaults || {}), ...(nodeAttrs || {}) };
+  const extra = [...new Set([...Object.keys(values), ...advanced])].filter(name => !declared.has(name));
+  const synth = extra.map(name => {
+    const attrDef = { name, type: typeOf(values[name]) };
+    const [field] = formFields({ attributes: [attrDef], advanced: [...advanced] });
+    return { ...field, attrDef };
+  });
+  // Basic fields first, as declared; advanced after
+  return [...fields, ...synth.filter(f => !f.advanced), ...synth.filter(f => f.advanced)];
+}
+
 /**
  * A form value as an AST attr value. `''` (and anything unparseable or
  * outside the enum) is undefined, meaning "leave the attribute out".

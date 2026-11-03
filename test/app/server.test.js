@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -236,5 +236,93 @@ describe('mountApi onSynced', () => {
       db.close();
       rmSync(site, { recursive: true, force: true });
     }
+  });
+});
+
+describe('app server request guard', () => {
+  let root, env, app, site, siteId, cloneCalls;
+  const raw = (path, { method = 'GET', headers = {}, body } = {}) => new Promise((resolve, reject) => {
+    // node:http lets the test set Host and Origin, which fetch forbids.
+    const req = httpRequest({ host: '127.0.0.1', port: app.port, path, method, headers }, (res) => {
+      let text = '';
+      res.on('data', (c) => { text += c; });
+      res.on('end', () => {
+        let data = text;
+        try { data = JSON.parse(text); } catch { /* text */ }
+        resolve({ status: res.statusCode, data });
+      });
+    });
+    req.on('error', reject);
+    if (body !== undefined) req.write(body);
+    req.end();
+  });
+  const docs = () => existsSync(join(site, 'content', 'posts')) ? readdirSync(join(site, 'content', 'posts')) : [];
+
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), 'vp-app-guard-'));
+    env = { VP_CONFIG_DIR: join(root, 'config') };
+    site = makeSite(root, 'guarded');
+    cloneCalls = 0;
+    app = await startApp({ port: 0, env, git: { ...fakeGit, cloneRepo: async () => { cloneCalls++; } } });
+    siteId = (await (await fetch(`${app.url}/api/sites`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: site }),
+    })).json()).id;
+  });
+  after(async () => {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('a foreign Host is 403, for API and static', async () => {
+    const res = await raw('/api/sites', { headers: { Host: 'evil.example' } });
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.data, { error: 'Forbidden' });
+    assert.equal((await raw('/src/sync/paths.js', { headers: { Host: `evil.example:${app.port}` } })).status, 403);
+  });
+
+  it('GET /api/folders with a foreign Host is 403', async () => {
+    const res = await raw(`/api/folders?path=${encodeURIComponent(root)}`, { headers: { Host: 'rebound.example:' + app.port } });
+    assert.equal(res.status, 403);
+  });
+
+  it('localhost Host is accepted', async () => {
+    assert.equal((await raw('/api/sites', { headers: { Host: `localhost:${app.port}` } })).status, 200);
+  });
+
+  it('a cross-origin POST is 403 and does nothing', async () => {
+    const clone = await raw('/api/sites/clone', {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://evil.example/x.git', dest: join(root, 'evil') }),
+    });
+    assert.equal(clone.status, 403);
+    assert.equal(cloneCalls, 0);
+    const doc = await raw(`/api/sites/${siteId}/documents`, {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' },
+      body: JSON.stringify(post('doc_evil0001', 'evil')),
+    });
+    assert.equal(doc.status, 403);
+    assert.deepEqual(docs(), []);
+  });
+
+  it('a text/plain;application/json body is 415 and creates nothing', async () => {
+    const res = await raw(`/api/sites/${siteId}/documents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;application/json' },
+      body: JSON.stringify(post('doc_evil0002', 'evil2')),
+    });
+    assert.equal(res.status, 415);
+    assert.deepEqual(docs(), []);
+  });
+
+  it('a same-origin POST works', async () => {
+    const res = await raw(`/api/sites/${siteId}/documents`, {
+      method: 'POST',
+      headers: { Origin: `http://127.0.0.1:${app.port}`, 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(post('doc_good0001', 'good')),
+    });
+    assert.equal(res.status, 201, JSON.stringify(res.data));
+    assert.deepEqual(docs(), ['good.json']);
   });
 });

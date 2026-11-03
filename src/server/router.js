@@ -59,11 +59,18 @@ export function createRouter() {
       // Parse query string
       req.query = Object.fromEntries(url.searchParams);
 
-      // Parse JSON body for POST/PUT
+      // Parse JSON body for POST/PUT. The media type must be exactly
+      // application/json (parameters allowed) or multipart/form-data: a
+      // CORS-safelisted type such as `text/plain;application/json` is refused,
+      // so a cross-site form or fetch cannot smuggle a JSON body in.
       if (method === 'POST' || method === 'PUT') {
         const contentType = req.headers['content-type'] || '';
-        if (contentType.includes('application/json')) {
+        const essence = contentType.split(';')[0].trim().toLowerCase();
+        if (essence === 'application/json') {
           req.body = await readJsonBody(req);
+        } else if (contentType && essence !== 'multipart/form-data') {
+          sendJson(res, 415, { error: 'Unsupported content type: use application/json' });
+          return true;
         }
       }
 

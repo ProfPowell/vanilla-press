@@ -20,6 +20,7 @@ import { createRouter } from './router.js';
 import { mountApi } from './api.js';
 import { syncFromSite } from '../sync/from-site.js';
 import { serveStatic } from './static.js';
+import { refuseForeign } from './guard.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -71,6 +72,9 @@ export function startServer(options = {}) {
 
   const server = createServer(async (req, res) => {
     try {
+      // Refuse other sites' pages (CSRF) and rebound host names
+      if (refuseForeign(req, res, server.address().port)) return;
+
       // Try API routes first
       const handled = await router.handle(req, res);
       if (handled) return;

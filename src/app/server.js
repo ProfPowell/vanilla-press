@@ -21,6 +21,7 @@ import { syncFromSite } from '../sync/from-site.js';
 import { createRouter, sendJson } from '../server/router.js';
 import { mountApi } from '../server/api.js';
 import { serveStatic, serveFile } from '../server/static.js';
+import { refuseForeign } from '../server/guard.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HOST = '127.0.0.1';
@@ -171,6 +172,7 @@ export async function startApp({
 
   const server = createServer(async (req, res) => {
     try {
+      if (refuseForeign(req, res, server.address().port)) return;
       const pathname = new URL(req.url, 'http://local').pathname;
       if (await app.handle(req, res)) return;
       if (SITE_PATH.test(pathname)) return await handleSite(req, res, pathname);

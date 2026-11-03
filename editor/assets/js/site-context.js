@@ -54,20 +54,56 @@ export function storedMediaUrl(url, site) {
 }
 
 /**
- * Where the draft backup stands for a save made at `savedAt`. `updated`: it
- * was pushed in an `Update:` commit (it touched a published page), so the
- * live site is redeploying; it is never reported as plain `backed-up`.
- * @param {{ pending: number, lastPushAt: string|null, error: string|null, connected: boolean,
- *   lastPushKind?: 'draft'|'update'|'publish'|null }} status - GET /status
+ * Where the backup stands for a save made at `savedAt`. A backup never
+ * changes the live site (edits to a published post go live on Update).
+ * @param {{ pending: number, lastPushAt: string|null, error: string|null, connected: boolean }} status - GET /status
  * @param {number} savedAt - ms since epoch
- * @returns {'backed-up'|'updated'|'waiting'|'not-connected'|'error'}
+ * @returns {'backed-up'|'waiting'|'not-connected'|'error'}
  */
 export function backupOutcome(status, savedAt) {
   if (!status.connected) return 'not-connected';
   if (status.error) return 'error';
   const pushedAt = status.lastPushAt ? Date.parse(status.lastPushAt) : NaN;
-  if (status.pending === 0 && pushedAt >= savedAt) return status.lastPushKind === 'update' ? 'updated' : 'backed-up';
+  if (status.pending === 0 && pushedAt >= savedAt) return 'backed-up';
   return 'waiting';
+}
+
+/**
+ * The save slot's text once a save is done. `held`: this published post has
+ * saved edits that are not live yet (they go live on Update).
+ * @param {'saved'|'backed-up'} outcome
+ * @param {{ published: boolean, held: boolean }} post
+ * @returns {string}
+ */
+export function saveStateText(outcome, { published, held }) {
+  const text = outcome === 'backed-up' ? 'Backed up' : 'Saved';
+  return published && held ? `${text} · not live yet` : text;
+}
+
+/**
+ * The header's buttons for a post: Publish for a draft; Unpublish plus Update for a published post.
+ * @param {{ status?: string }} meta
+ * @returns {{ publish: { text: string, className: string, action: 'publish'|'unpublish' }, update: boolean }}
+ */
+export function headerActions(meta) {
+  const published = meta?.status === 'published';
+  return {
+    publish: published
+      ? { text: 'Unpublish', className: 'btn-unpublish', action: 'unpublish' }
+      : { text: 'Publish', className: 'btn-publish', action: 'publish' },
+    update: published,
+  };
+}
+
+const PENDING = { publish: 'Publishing…', update: 'Updating…', unpublish: 'Unpublishing…' };
+
+/**
+ * The action slot's text while an action runs (and while the live check waits).
+ * @param {'publish'|'update'|'unpublish'} action
+ * @returns {string}
+ */
+export function actionPendingText(action) {
+  return PENDING[action];
 }
 
 /**
@@ -79,16 +115,6 @@ export function backupOutcome(status, savedAt) {
  */
 export function keepPollingBackup(outcome) {
   return outcome === 'waiting' || outcome === 'error';
-}
-
-/**
- * What to show once a save went out in an `Update:` push: the live site is
- * updating; the live check runs only when the open post is published.
- * @param {{ status?: string }|null} meta - the open document's meta
- * @returns {{ text: string, checkLive: boolean }}
- */
-export function afterUpdatePush(meta) {
-  return { text: 'Updating live site…', checkLive: meta?.status === 'published' };
 }
 
 /**
@@ -114,7 +140,7 @@ export function createLiveTracker() {
 }
 
 /**
- * What to show after POST publish/unpublish failed.
+ * What to show after POST publish/update/unpublish failed.
  *
  * - 422 with a log: the build failed; nothing was applied.
  * - 409 with `files`, or 502: the change was applied and committed on this
@@ -124,13 +150,14 @@ export function createLiveTracker() {
  *
  * A failure never starts the live poll.
  * @param {{ status?: number, message?: string, data?: { error?: string, log?: string, files?: string[] } }} err
- * @param {boolean} unpublish
+ * @param {'publish'|'update'|'unpublish'} action
  * @returns {{ message: string, reload: boolean, poll: false, log?: string, files?: string[] }}
  */
-export function publishFailure(err, unpublish) {
+export function publishFailure(err, action) {
   const data = err.data || {};
-  const errorText = data.error || err.message || 'Publish failed';
-  const applied = `${unpublish ? 'Unpublished' : 'Published'} on this computer, but couldn't push`;
+  const errorText = data.error || err.message || (action === 'update' ? 'Update failed' : 'Publish failed');
+  const done = { publish: 'Published', update: 'Updated', unpublish: 'Unpublished' }[action];
+  const applied = `${done} on this computer, but couldn't push`;
   if (err.status === 422 && data.log !== undefined) {
     return { message: 'Build failed', log: data.log, reload: false, poll: false };
   }

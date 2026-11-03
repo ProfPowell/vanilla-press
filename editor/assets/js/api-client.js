@@ -169,6 +169,11 @@ export const api = {
     return request(`/documents/${encodeURIComponent(id)}/publish`, { method: 'POST' });
   },
 
+  /** Update a published post: its saved edits go live. Same shape as publishDocument. */
+  updateDocument(id) {
+    return request(`/documents/${encodeURIComponent(id)}/update`, { method: 'POST' });
+  },
+
   /** Unpublish: same shape as publishDocument. */
   unpublishDocument(id) {
     return request(`/documents/${encodeURIComponent(id)}/unpublish`, { method: 'POST' });
@@ -179,7 +184,7 @@ export const api = {
     return request(`/documents/${encodeURIComponent(id)}/live`);
   },
 
-  /** Draft backup state: { pending, lastPushAt, error, connected }. */
+  /** Backup state: { pending, lastPushAt, error, connected, lastPushKind }. */
   getStatus() {
     return request('/status');
   },

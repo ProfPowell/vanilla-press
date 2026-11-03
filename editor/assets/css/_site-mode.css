@@ -113,6 +113,17 @@ editor-shell.site-mode .site-header {
   color: #fff;
 }
 
+/* Update shows only for a published post; a button's display would beat [hidden] */
+.site-header button[hidden] {
+  display: none !important;
+}
+
+.site-header .btn-update {
+  background: var(--color-accent, #0275d8);
+  border-color: var(--color-accent, #0275d8);
+  color: #fff;
+}
+
 .site-header button:disabled {
   opacity: 0.6;
   cursor: progress;

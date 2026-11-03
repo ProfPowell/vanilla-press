@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   siteFromSearch, apiBase, displayMediaUrl, storedMediaUrl, backupOutcome, publishFailure,
-  keepPollingBackup, afterUpdatePush, createLiveTracker,
+  keepPollingBackup, createLiveTracker, saveStateText, headerActions, actionPendingText,
 } from '../../editor/assets/js/site-context.js';
 
 describe('editor site context', () => {
@@ -43,55 +43,82 @@ describe('editor site context', () => {
 
   it('publishFailure: a failed push after the change was applied reloads and says so', () => {
     const conflict = { status: 409, data: { files: ['content/posts/a.json'] } };
-    assert.deepEqual(publishFailure(conflict, true), {
+    assert.deepEqual(publishFailure(conflict, 'unpublish'), {
       message: "Unpublished on this computer, but couldn't push: GitHub has changes that conflict with yours",
       files: ['content/posts/a.json'], reload: true, poll: false,
     });
-    assert.equal(publishFailure(conflict, false).message,
+    assert.equal(publishFailure(conflict, 'publish').message,
       "Published on this computer, but couldn't push: GitHub has changes that conflict with yours");
     // The server's own text (with its next step) is kept, e.g. GitStashConflictError's.
     const stash = { status: 409, data: { error: 'GitHub has changes to files you are editing outside Vanilla Press: README.md. Commit or discard your changes to those files, then publish again.', files: ['README.md'] } };
-    assert.equal(publishFailure(stash, false).message,
+    assert.equal(publishFailure(stash, 'publish').message,
       `Published on this computer, but couldn't push: ${stash.data.error}`);
     const gone = { status: 502, message: 'remote unreachable', data: { error: 'remote unreachable' } };
-    assert.deepEqual(publishFailure(gone, false), {
+    assert.deepEqual(publishFailure(gone, 'publish'), {
       message: "Published on this computer, but couldn't push: remote unreachable", reload: true, poll: false,
     });
   });
 
   it('publishFailure: nothing applied (build failed, preflight 409, other) does not reload', () => {
-    assert.deepEqual(publishFailure({ status: 422, data: { error: 'Build failed', log: 'boom' } }, false), {
+    assert.deepEqual(publishFailure({ status: 422, data: { error: 'Build failed', log: 'boom' } }, 'publish'), {
       message: 'Build failed', log: 'boom', reload: false, poll: false,
     });
-    assert.deepEqual(publishFailure({ status: 409, message: 'Changed on disk', data: { error: 'Changed on disk' } }, true), {
+    assert.deepEqual(publishFailure({ status: 409, message: 'Changed on disk', data: { error: 'Changed on disk' } }, 'unpublish'), {
       message: 'Changed on disk', reload: false, poll: false,
     });
-    assert.deepEqual(publishFailure({ status: 500, message: 'oops', data: {} }, false), {
+    assert.deepEqual(publishFailure({ status: 500, message: 'oops', data: {} }, 'publish'), {
       message: 'oops', reload: false, poll: false,
     });
-    assert.equal(publishFailure({ message: '' }, false).message, 'Publish failed');
+    assert.equal(publishFailure({ message: '' }, 'publish').message, 'Publish failed');
+    assert.equal(publishFailure({ message: '' }, 'update').message, 'Update failed');
   });
 
-  it('backupOutcome: an Update push is "updated", never "backed-up"', () => {
+  it('backupOutcome: a backup is only ever backed up (it never changes the live site)', () => {
     const savedAt = Date.parse('2026-11-02T10:00:00Z');
     const pushed = { pending: 0, lastPushAt: '2026-11-02T10:00:31Z', connected: true, error: null };
-    assert.equal(backupOutcome({ ...pushed, lastPushKind: 'update' }, savedAt), 'updated');
     assert.equal(backupOutcome({ ...pushed, lastPushKind: 'draft' }, savedAt), 'backed-up');
-    assert.equal(backupOutcome({ ...pushed, lastPushKind: 'update', pending: 1 }, savedAt), 'waiting');
+    assert.equal(backupOutcome({ ...pushed, lastPushKind: 'publish' }, savedAt), 'backed-up');
+  });
+
+  it('publishFailure: a failed Update push says Updated on this computer', () => {
+    assert.deepEqual(publishFailure({ status: 502, data: { error: 'remote unreachable' } }, 'update'), {
+      message: "Updated on this computer, but couldn't push: remote unreachable", reload: true, poll: false,
+    });
+    assert.deepEqual(publishFailure({ status: 409, data: { files: ['content/posts/a.json'] } }, 'update'), {
+      message: "Updated on this computer, but couldn't push: GitHub has changes that conflict with yours",
+      files: ['content/posts/a.json'], reload: true, poll: false,
+    });
+    assert.deepEqual(publishFailure({ status: 422, data: { error: 'Build failed', log: 'x' } }, 'update'), {
+      message: 'Build failed', log: 'x', reload: false, poll: false,
+    });
+  });
+
+  it('saveStateText: a published post with saved edits says they are not live yet', () => {
+    assert.equal(saveStateText('saved', { published: true, held: true }), 'Saved · not live yet');
+    assert.equal(saveStateText('backed-up', { published: true, held: true }), 'Backed up · not live yet');
+    assert.equal(saveStateText('saved', { published: true, held: false }), 'Saved');
+    assert.equal(saveStateText('backed-up', { published: true, held: false }), 'Backed up');
+    assert.equal(saveStateText('saved', { published: false, held: true }), 'Saved');
+    assert.equal(saveStateText('backed-up', { published: false, held: true }), 'Backed up');
+  });
+
+  it('headerActions: a published post gets Unpublish and Update; a draft gets Publish only', () => {
+    assert.deepEqual(headerActions({ status: 'published' }), { publish: { text: 'Unpublish', className: 'btn-unpublish', action: 'unpublish' }, update: true });
+    assert.deepEqual(headerActions({ status: 'draft' }), { publish: { text: 'Publish', className: 'btn-publish', action: 'publish' }, update: false });
+    assert.deepEqual(headerActions({ status: 'archived' }).update, false);
+  });
+
+  it('actionPendingText names the running action', () => {
+    assert.equal(actionPendingText('publish'), 'Publishing…');
+    assert.equal(actionPendingText('update'), 'Updating…');
+    assert.equal(actionPendingText('unpublish'), 'Unpublishing…');
   });
 
   it('keepPollingBackup: a (possibly stale) error keeps the poll going, like waiting', () => {
     assert.equal(keepPollingBackup('waiting'), true);
     assert.equal(keepPollingBackup('error'), true);
     assert.equal(keepPollingBackup('backed-up'), false);
-    assert.equal(keepPollingBackup('updated'), false);
     assert.equal(keepPollingBackup('not-connected'), false);
-  });
-
-  it('afterUpdatePush: says the live site is updating; checks it only for a published post', () => {
-    assert.deepEqual(afterUpdatePush({ status: 'published' }), { text: 'Updating live site…', checkLive: true });
-    assert.deepEqual(afterUpdatePush({ status: 'draft' }), { text: 'Updating live site…', checkLive: false });
-    assert.deepEqual(afterUpdatePush(null), { text: 'Updating live site…', checkLive: false });
   });
 
   it('createLiveTracker: opening another document cancels the live poll', () => {

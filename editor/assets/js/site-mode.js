@@ -2,16 +2,17 @@
  * The app's editor (`/editor/?site=<id>#doc-<docId>`): a quiet writing
  * screen for one site.
  *
- * - The header shows `← Posts`, the save state, Preview and Publish/Unpublish.
+ * - The header shows `← Posts`, the save state, Preview and Publish (a
+ *   draft) or Unpublish plus Update (a published post).
  * - The doc browser, theme picker, block inspector and Export live behind
  *   Tools (closed by default); the settings panel can be hidden, which is
  *   remembered in localStorage.
- * - Save states: `Saving…`, `Saved`, then `Backed up` once the draft backup
- *   has pushed (GET /status). When that push was an `Update:` commit (it
- *   touched a published page), it says `Updating live site…` instead and,
- *   for a published post, runs the live check (`Live` or `Still deploying`).
- * - Publish saves, then POSTs publish (build, commit, push) and polls the
- *   live check until the page is up.
+ * - Save states: `Saving…`, `Saved`, then `Backed up` once the backup has
+ *   pushed (GET /status). A backup never changes the live site: after a save
+ *   of a published post it says `Saved · not live yet` / `Backed up · not
+ *   live yet`, and any `Live` link is cleared, until Update.
+ * - Publish / Update save, then POST publish / update (build, commit, push)
+ *   and poll the live check until the page is up.
  *
  * Without `?site=` nothing here runs: every export is a no-op.
  *
@@ -19,7 +20,8 @@
  */
 
 import {
-  SITE, backupOutcome, publishFailure, keepPollingBackup, afterUpdatePush, createLiveTracker,
+  SITE, backupOutcome, publishFailure, keepPollingBackup, createLiveTracker,
+  saveStateText, headerActions, actionPendingText,
 } from './site-context.js';
 import { api } from './api-client.js';
 import { postUrlPath } from '../../../src/sync/paths.js';
@@ -40,7 +42,10 @@ let lastStatus = 'saved';
 const backup = { timer: null, savedAt: 0 };
 const live = createLiveTracker();
 let liveTimer = null;
-let liveEl = null; // the slot the live poll reports in
+/** The open published post has saved edits that are not live yet (until Update). */
+let held = false;
+/** What the save slot shows once saved: 'saved' or 'backed-up' (null: something else). */
+let savedShown = null;
 
 /** Whether the editor runs in the app for one site. */
 export const isSiteMode = Boolean(SITE);
@@ -62,6 +67,7 @@ export function initSiteMode() {
     settings: header.querySelector('[data-settings-toggle]'),
     preview: header.querySelector('[data-site-preview]'),
     publish: header.querySelector('[data-site-publish]'),
+    update: header.querySelector('[data-site-update]'),
     report: header.querySelector('[data-action-report]'),
     reportBody: header.querySelector('[data-action-report-body]'),
   };
@@ -74,13 +80,14 @@ export function initSiteMode() {
   const statusSelect = document.querySelector('#meta-status');
   if (statusSelect) {
     statusSelect.disabled = true;
-    statusSelect.title = 'Use Publish / Unpublish in the header';
+    statusSelect.title = 'Use Publish / Unpublish / Update in the header';
   }
 
   els.tools.addEventListener('click', () => setToolsOpen(!shell.classList.contains('tools-open')));
   els.settings.addEventListener('click', () => setSettingsHidden(!shell.classList.contains('settings-hidden'), true));
   els.preview.addEventListener('click', preview);
-  els.publish.addEventListener('click', togglePublish);
+  els.publish.addEventListener('click', () => runAction(headerActions(getCurrentMeta()).publish.action));
+  els.update.addEventListener('click', () => runAction('update'));
   header.querySelector('[data-action-report-close]').addEventListener('click', clearReport);
 
   setSettingsHidden(readSettingsHidden(), false);
@@ -190,14 +197,21 @@ export function onSaveStatus(status, message) {
   if (!els) return;
   const realSave = status === 'saved' && lastStatus === 'saving';
   lastStatus = status;
-  if (status !== 'saved' && liveEl === els.saveState) cancelLive(); // a new edit: the save slot is the editor's again
+  if (status !== 'saved') savedShown = null;
   switch (status) {
     case 'saving':
       els.saveState.title = '';
       show(els.saveState, 'Saving…');
       break;
     case 'saved':
-      show(els.saveState, 'Saved');
+      if (realSave && getCurrentMeta()?.status === 'published') {
+        // This edit is not live: a Live link (or a running live check) is out of date.
+        held = true;
+        cancelLive();
+        els.actionState.title = '';
+        show(els.actionState, '');
+      }
+      showSaved('saved');
       if (realSave) watchBackup();
       break;
     case 'unsaved': show(els.saveState, 'Unsaved'); break;
@@ -207,6 +221,15 @@ export function onSaveStatus(status, message) {
       break;
     default: show(els.saveState, message || 'Not saved', 'error');
   }
+}
+
+/** Show `Saved` / `Backed up` (with `· not live yet` for a published post's held edits). */
+function showSaved(outcome) {
+  savedShown = outcome;
+  const published = getCurrentMeta()?.status === 'published';
+  const text = saveStateText(outcome, { published, held });
+  show(els.saveState, text, outcome === 'backed-up' ? 'done' : '');
+  els.saveState.title = published && held ? 'Backed up to GitHub; click Update to put these edits on the live site' : '';
 }
 
 /** Poll GET /status until the save at `now` is backed up (or we know it won't be). */
@@ -223,8 +246,7 @@ function watchBackup() {
     }
     if (lastStatus !== 'saved') return; // typing again, or an error: the next save polls again
     const outcome = status ? backupOutcome(status, backup.savedAt) : 'waiting';
-    if (outcome === 'backed-up') return show(els.saveState, 'Backed up', 'done');
-    if (outcome === 'updated') return updatingLive();
+    if (outcome === 'backed-up') return showSaved('backed-up');
     if (outcome === 'not-connected') return show(els.saveState, 'Not connected to GitHub');
     // An error may be from an earlier push: show it, but keep waiting for a newer push.
     if (outcome === 'error') show(els.saveState, `Saved, but not backed up: ${status.error}`, 'error');
@@ -233,15 +255,6 @@ function watchBackup() {
     }
   };
   backup.timer = setTimeout(tick, BACKUP_POLL_MS);
-}
-
-/** The save went out in an `Update:` push: the live site is redeploying. */
-function updatingLive() {
-  const { text, checkLive } = afterUpdatePush(getCurrentMeta());
-  show(els.saveState, text);
-  els.saveState.title = 'This backup changed a published page, so the live site is updating';
-  const docId = getCurrentDocId();
-  if (checkLive && docId) watchLive(docId, null, els.saveState);
 }
 
 function cancelLive() {
@@ -268,84 +281,105 @@ export function onMetaUpdate(meta) {
     // Another post is open: a live poll (and its result) belonged to the last one.
     clearTimeout(liveTimer);
     liveTimer = null;
+    held = false;
     for (const el of [els.actionState, els.saveState]) el.title = '';
     show(els.actionState, '');
+    if (savedShown) showSaved(savedShown);
   }
-  const published = meta.status === 'published';
-  els.publish.textContent = published ? 'Unpublish' : 'Publish';
-  els.publish.className = published ? 'btn-unpublish' : 'btn-publish';
+  const actions = headerActions(meta);
+  els.publish.textContent = actions.publish.text;
+  els.publish.className = actions.publish.className;
+  els.update.hidden = !actions.update;
 }
 
-async function togglePublish() {
+/** The open post's edits are on the live site now (or committed for it): drop `· not live yet`. */
+function editsApplied() {
+  held = false;
+  if (savedShown && lastStatus === 'saved') showSaved(savedShown);
+}
+
+/**
+ * Publish, Update or Unpublish the open post.
+ * @param {'publish'|'update'|'unpublish'} action
+ */
+async function runAction(action) {
   if (busy) return;
   busy = true;
   els.publish.disabled = true;
+  els.update.disabled = true;
   clearReport();
   cancelLive();
   try {
     // Save first (creates a new post; stops on a conflict or a rejected save)
     if (!(await saveDocument())) {
-      show(els.actionState, 'Not published: the post is not saved', 'error');
+      const what = { publish: 'published', update: 'updated', unpublish: 'unpublished' }[action];
+      show(els.actionState, `Not ${what}: the post is not saved`, 'error');
       return;
     }
     const docId = getCurrentDocId();
-    const unpublish = getCurrentMeta().status === 'published';
-    show(els.actionState, unpublish ? 'Unpublishing…' : 'Publishing…');
+    show(els.actionState, actionPendingText(action));
     let result;
     try {
-      result = unpublish ? await api.unpublishDocument(docId) : await api.publishDocument(docId);
+      const call = { publish: api.publishDocument, update: api.updateDocument, unpublish: api.unpublishDocument }[action];
+      result = await call.call(api, docId);
     } catch (err) {
-      return await showPublishError(err, unpublish, docId);
+      return await showPublishError(err, action, docId);
     }
+    editsApplied();
     // The server changed status (and published date): load it back
     await loadDocument(docId);
     document.querySelector('doc-browser')?.refresh();
 
     if (result.status === 'saved') return show(els.actionState, 'Saved (not connected to GitHub)');
-    if (unpublish) return show(els.actionState, 'Unpublished', 'done');
-    if (!result.url) return show(els.actionState, 'Published and pushed (set siteUrl to check when it is live)', 'done');
-    watchLive(docId, result.url);
+    if (action === 'unpublish') return show(els.actionState, 'Unpublished', 'done');
+    if (!result.url) {
+      const done = action === 'update' ? 'Updated' : 'Published';
+      return show(els.actionState, `${done} and pushed (set siteUrl to check when it is live)`, 'done');
+    }
+    watchLive(docId, result.url, actionPendingText(action));
   } finally {
     busy = false;
     els.publish.disabled = false;
+    els.update.disabled = false;
   }
 }
 
 /**
- * Show a failed publish/unpublish. When only the push failed, the change is
- * already applied on this computer: reload the post so the button and
- * settings match what is stored. Never starts the live poll.
+ * Show a failed publish/update/unpublish. When only the push failed, the
+ * change is already applied (committed) on this computer: reload the post so
+ * the buttons and settings match what is stored. Never starts the live poll.
  * @param {Error & { status?: number, data?: Object }} err
- * @param {boolean} unpublish
+ * @param {'publish'|'update'|'unpublish'} action
  * @param {string} docId
  */
-async function showPublishError(err, unpublish, docId) {
-  const failure = publishFailure(err, unpublish);
+async function showPublishError(err, action, docId) {
+  const failure = publishFailure(err, action);
   if (failure.reload) {
+    editsApplied();
     await loadDocument(docId);
     document.querySelector('doc-browser')?.refresh();
   }
   show(els.actionState, failure.message, 'error');
   if (failure.log !== undefined) {
-    showReport("Build failed. Nothing was pushed, and the post's status is unchanged.", { log: failure.log });
+    showReport(action === 'update'
+      ? 'Build failed. Nothing was pushed, and the live site still has the previous version.'
+      : "Build failed. Nothing was pushed, and the post's status is unchanged.", { log: failure.log });
   } else if (failure.files) {
     showReport(`${failure.message.replace(/\.$/, '')}. Conflicting files:`, { files: failure.files });
   }
 }
 
 /**
- * Poll the live check every 10 s for up to 300 s, showing the result in `el`
- * (the action slot after Publish, the save slot after an `Update:` backup).
- * Opening another post cancels it.
+ * Poll the live check every 10 s for up to 300 s, showing the result in the
+ * action slot (`pendingText` until then). Opening another post, or saving an
+ * edit to this one, cancels it.
  */
-function watchLive(docId, url, el = els.actionState) {
+function watchLive(docId, url, pendingText) {
   const token = live.start(docId);
-  liveEl = el;
+  const el = els.actionState;
   const started = Date.now();
-  if (el === els.actionState) {
-    show(el, 'Publishing…');
-    el.title = 'Pushed to GitHub; waiting for the site to update';
-  }
+  show(el, pendingText);
+  el.title = 'Pushed to GitHub; waiting for the site to update';
   const tick = async () => {
     liveTimer = null;
     if (!live.current(token)) return;
@@ -358,7 +392,7 @@ function watchLive(docId, url, el = els.actionState) {
       }
       if (!res.url && !url) {
         el.title = '';
-        return show(el, 'Updating live site (set siteUrl to check when it is live)');
+        return show(el, 'Pushed (set siteUrl to check when it is live)');
       }
     } catch { /* try again */ }
     if (Date.now() - started >= LIVE_POLL_FOR_MS) {

@@ -49,9 +49,22 @@ function generateId() {
  * @param {(e: { docId: string|null, title: string, status: string }) => void} [options.onSynced] - Called after
  *   every successful sync (create, update, delete, reload), and once for POST /api/sync with
  *   `{ docId: null, title: 'all posts' }`. Never called in fixture mode.
+ * @param {boolean} [options.statusByActions=false] - The app (Ruling P): a document save never
+ *   changes `status` or `published` (PUT keeps the stored values; POST create stores a draft, or
+ *   keeps an existing document's values); only Publish/Update/Unpublish change them. `vp serve`
+ *   leaves this off and saves set status as before.
  */
 export function mountApi(router, db, options) {
-  const { rootDir, onSynced } = options;
+  const { rootDir, onSynced, statusByActions = false } = options;
+
+  /** With statusByActions: `meta` with `status`/`published` taken from `stored` (absent: a draft). */
+  function keepStatus(meta, stored) {
+    if (!statusByActions) return meta;
+    const out = { ...meta, status: stored?.status || 'draft' };
+    if (stored?.published) out.published = stored.published;
+    else delete out.published;
+    return out;
+  }
   const prefix = (options.prefix ?? '/api').replace(/\/+$/, '');
   const route = { add: (method, pattern, handler) => router.add(method, prefix + pattern.slice('/api'.length), handler) };
 
@@ -173,6 +186,8 @@ export function mountApi(router, db, options) {
     if (!doc.meta.created) doc.meta.created = now;
     doc.meta.updated = now;
     if (!doc.meta.status) doc.meta.status = 'draft';
+    const existing = getDocument(db, doc.id);
+    doc.meta = keepStatus(doc.meta, existing?.meta);
 
     const result = validate(doc);
     if (!result.valid) {
@@ -180,7 +195,7 @@ export function mountApi(router, db, options) {
       return;
     }
 
-    const previous = ws ? getDocument(db, doc.id) : null;
+    const previous = ws ? existing : null;
     if (rejectSave(res, doc)) return;
     const saved = saveDocument(db, doc);
     if (syncSaved(res, saved, previous)) sendJson(res, 201, saved);
@@ -201,7 +216,7 @@ export function mountApi(router, db, options) {
 
     const doc = {
       id: req.params.id,
-      meta: { ...existing.meta, ...body.meta, updated: new Date().toISOString() },
+      meta: keepStatus({ ...existing.meta, ...body.meta, updated: new Date().toISOString() }, existing.meta),
       blocks: body.blocks !== undefined ? body.blocks : existing.blocks,
     };
 

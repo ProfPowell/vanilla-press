@@ -166,6 +166,7 @@ export async function startApp({
       const router = createRouter();
       mountApi(router, db, {
         rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix,
+        statusByActions: true, // Ruling P: only Publish/Update/Unpublish change status
         onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
       });
       const writes = createLock();

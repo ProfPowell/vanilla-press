@@ -13,7 +13,7 @@ import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.j
 import { api } from '../api-client.js';
 import { postUrlPath } from '../../../../src/sync/paths.js';
 import { saveDocument, loadDocument, handleSaveError, loadVersionOnDisk } from '../editor.js';
-import { onMetaUpdate as onSiteMetaUpdate } from '../site-mode.js';
+import { onMetaUpdate as onSiteMetaUpdate, isSiteMode } from '../site-mode.js';
 
 export class MetaPanel extends HTMLElement {
   connectedCallback() {
@@ -133,6 +133,7 @@ export class MetaPanel extends HTMLElement {
     });
 
     statusSelect.addEventListener('change', () => {
+      if (isSiteMode) return; // disabled there; status changes only through the header actions
       setCurrentMeta({ status: statusSelect.value });
     });
 
@@ -223,6 +224,8 @@ export class MetaPanel extends HTMLElement {
   }
 
   async togglePublish() {
+    // The app's header owns Publish/Update/Unpublish; a save never sets status there (Ruling P).
+    if (isSiteMode) return;
     // A page not stored yet is created first (saveDocument creates it).
     if (!getCurrentDocId() || getCurrentDocId() === 'doc_new') {
       if (!(await saveDocument())) return;

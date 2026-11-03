@@ -447,6 +447,70 @@ describe('app routes', () => {
     assert.equal((await api(`/api/sites/${siteId}/documents/doc_nope0000/state`)).status, 404);
   });
 
+  test('app PUT ignores status and published: only Publish/Update/Unpublish change them', async () => {
+    await open();
+    await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    const published = (await api(`/api/sites/${siteId}/documents/${ID}`)).data.meta.published;
+    const put = await api(`/api/sites/${siteId}/documents/${ID}`, { method: 'PUT', body: { meta: { status: 'draft', published: null, title: 'X' } } });
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    const doc = (await api(`/api/sites/${siteId}/documents/${ID}`)).data;
+    assert.equal(doc.meta.status, 'published');
+    assert.equal(doc.meta.published, published);
+    assert.equal(doc.meta.title, 'X');
+    assert.ok(existsSync(join(fx.site, 'src', 'posts', 'hello.html')));
+  });
+
+  test('app POST create stores a new post as a draft whatever status it asks for', async () => {
+    await open();
+    const body = { id: 'doc_new00001', meta: { title: 'New', slug: 'new', collection: 'posts', status: 'published', published: '2026-01-01T00:00:00.000Z' }, blocks: [] };
+    const res = await api(`/api/sites/${siteId}/documents`, { method: 'POST', body });
+    assert.equal(res.status, 201, JSON.stringify(res.data));
+    assert.equal(res.data.meta.status, 'draft');
+    assert.equal(res.data.meta.published, undefined);
+    assert.equal(existsSync(join(fx.site, 'src', 'posts', 'new.html')), false);
+  });
+
+  /** Run `action` with a build held at a gate; while it waits, PUT the full stored meta (as the editor's autosave does). */
+  async function raceFullMetaSave(action, { before } = {}) {
+    let slow = false, entered, release;
+    const inBuild = new Promise((r) => { entered = r; });
+    const gate = new Promise((r) => { release = r; });
+    const build = async (dir) => { if (slow) { entered(); await gate; } return runBuild(dir); };
+    await open({ siteProcess: { runBuild: build } });
+    if (before) await api(`/api/sites/${siteId}/documents/${ID}/${before}`, { method: 'POST' });
+    const staleMeta = (await api(`/api/sites/${siteId}/documents/${ID}`)).data.meta;
+    slow = true;
+    const acting = api(`/api/sites/${siteId}/documents/${ID}/${action}`, { method: 'POST' });
+    await inBuild;
+    const saving = api(`/api/sites/${siteId}/documents/${ID}`, {
+      method: 'PUT', body: { meta: { ...staleMeta, title: 'Typed meanwhile' }, blocks: hello().blocks },
+    });
+    release();
+    const [act, put] = await Promise.all([acting, saving]);
+    assert.equal(act.status, 200, JSON.stringify(act.data));
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    assert.equal((await api(`/api/sites/${siteId}/backup`, { method: 'POST' })).data.error, null);
+    const doc = (await api(`/api/sites/${siteId}/documents/${ID}`)).data;
+    assert.equal(doc.meta.title, 'Typed meanwhile');
+    return { doc, headJson: JSON.parse(git(fx.site, 'show', 'HEAD:content/posts/hello.json')) };
+  }
+
+  test('a full-meta autosave queued behind Publish does not turn the post back into a draft', async () => {
+    const { doc, headJson } = await raceFullMetaSave('publish');
+    assert.equal(doc.meta.status, 'published');
+    assert.ok(existsSync(join(fx.site, 'src', 'posts', 'hello.html')));
+    assert.equal(headJson.meta.status, 'published');
+    assert.ok(headFiles().includes('src/posts/hello.html'));
+  });
+
+  test('a full-meta autosave queued behind Unpublish does not publish the post again', async () => {
+    const { doc, headJson } = await raceFullMetaSave('unpublish', { before: 'publish' });
+    assert.equal(doc.meta.status, 'draft');
+    assert.equal(existsSync(join(fx.site, 'src', 'posts', 'hello.html')), false);
+    assert.equal(headJson.meta.status, 'draft');
+    assert.ok(!headFiles().includes('src/posts/hello.html'));
+  });
+
   test('update route on a draft is a 422', async () => {
     await open();
     const res = await api(`/api/sites/${siteId}/documents/${ID}/update`, { method: 'POST' });

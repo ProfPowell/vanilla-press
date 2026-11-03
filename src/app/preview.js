@@ -68,6 +68,12 @@ export function createPreviews({
   const running = new Map();
   /** Sites mid-start: id -> { promise, ctx } */
   const starting = new Map();
+  /**
+   * Every spawned dev server whose process group may still be alive (starting,
+   * running or stopping): npm can exit while a grandchild lives on.
+   */
+  const spawned = new Set();
+  const forget = (entry) => { if (!groupAlive(entry.child, entry.isGone)) spawned.delete(entry); };
 
   /** SIGTERM the group; SIGKILL it after the grace period if anything is left. */
   async function killEntry(entry) {
@@ -77,6 +83,7 @@ export function createPreviews({
     while (groupAlive(child, entry.isGone) && Date.now() < deadline) await sleep(25);
     if (groupAlive(child, entry.isGone)) signalGroup(child, 'SIGKILL');
     await Promise.race([entry.exited, sleep(killGraceMs)]);
+    forget(entry);
   }
 
   async function launch(site, ctx) {
@@ -99,6 +106,8 @@ export function createPreviews({
     child.once('error', closed);
     const entry = { url, child, exited, isGone: () => gone };
     ctx.entry = entry;
+    spawned.add(entry);
+    exited.then(() => forget(entry));
 
     const deadline = Date.now() + startTimeoutMs;
     let ready = false;
@@ -144,6 +153,15 @@ export function createPreviews({
     async stopAll() {
       const ids = new Set([...running.keys(), ...starting.keys()]);
       await Promise.all([...ids].map((id) => this.stop(id)));
+    },
+    /**
+     * SIGKILL every preview process group (running or still starting), synchronously:
+     * for `process.on('exit')`, where nothing can be awaited. Previews are
+     * detached, so without this they would outlive the app.
+     */
+    killAllSync() {
+      for (const { ctx } of starting.values()) ctx.cancelled = true;
+      for (const entry of spawned) signalGroup(entry.child, 'SIGKILL');
     },
   };
 }

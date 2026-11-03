@@ -137,3 +137,16 @@ test('a failing npm install rejects start and spawns nothing', async () => {
   await assert.rejects(previews.start({ id: 's1', path: dir }), /npm install failed/);
   assert.equal(calls.length, 0);
 });
+
+test('killAllSync SIGKILLs every preview group at once, even one that ignores SIGTERM', async () => {
+  mkdirSync(join(dir, 'node_modules'));
+  writeFileSync(join(dir, 'server.js'),
+    `process.on('SIGTERM',()=>{});const a=process.argv;const p=Number(a[a.indexOf('--port')+1]);
+require('node:http').createServer((q,s)=>s.end('ok')).listen(p,'127.0.0.1');`);
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { dev: 'node server.js' } }));
+  const { url } = await previews.start({ id: 's1', path: dir });
+  const result = previews.killAllSync();
+  assert.equal(result, undefined); // synchronous: nothing to await (usable in process.on('exit'))
+  await sleep(300);
+  assert.equal(await refused(url), true);
+});

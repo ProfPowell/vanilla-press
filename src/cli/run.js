@@ -300,6 +300,7 @@ async function cmdApp(args) {
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
+  process.on('SIGHUP', stop); // terminal closed: flush backups like Ctrl-C
 }
 
 function cmdVersion() {

@@ -588,6 +588,80 @@ describe('vp app', () => {
     assert.match(url, /^http:\/\/127\.0\.0\.1:\d+$/);
   });
 
+  /**
+   * Start `vp app` with one registered site whose dev server writes its pid
+   * and (with ignoreTerm) ignores SIGTERM; start its preview.
+   */
+  async function appWithPreview({ ignoreTerm = false } = {}) {
+    const { spawn } = await import('node:child_process');
+    const root = mkdtempSync(join(tmpdir(), 'vp-app-sig-'));
+    const site = join(root, 'site');
+    mkdirSync(join(site, 'node_modules'), { recursive: true });
+    writeFileSync(join(site, 'server.js'),
+      `${ignoreTerm ? "process.on('SIGTERM',()=>{});" : ''}require('node:fs').writeFileSync('pid', String(process.pid));
+const a=process.argv;const p=Number(a[a.indexOf('--port')+1]);
+require('node:http').createServer((q,s)=>s.end('ok')).listen(p,'127.0.0.1');`);
+    writeFileSync(join(site, 'package.json'), JSON.stringify({
+      name: 'site', private: true, scripts: { dev: 'node server.js' }, devDependencies: { 'cook-ssg': '^2.4.0' },
+    }));
+    const child = spawn('node', [BIN, 'app', '--port', '0'], {
+      env: { ...process.env, VP_NO_OPEN: '1', VP_CONFIG_DIR: join(root, 'config') },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const exited = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })));
+    const url = await new Promise((resolve, reject) => {
+      let out = '';
+      const timer = setTimeout(() => reject(new Error(`no URL in 10s; output: ${out}`)), 10000);
+      child.stdout.on('data', (d) => {
+        out += d;
+        const m = out.match(/Vanilla Press is running at (http:\/\/127\.0\.0\.1:\d+)/);
+        if (m) { clearTimeout(timer); resolve(m[1]); }
+      });
+    });
+    const post = async (path, body) => (await fetch(`${url}${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}),
+    })).json();
+    const { id } = await post('/api/sites', { path: site });
+    const { url: previewUrl } = await post(`/api/sites/${id}/preview`);
+    const pid = Number(readFileSync(join(site, 'pid'), 'utf8'));
+    const cleanup = () => {
+      child.kill('SIGKILL');
+      try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+      rmSync(root, { recursive: true, force: true });
+    };
+    return { child, exited, previewUrl, pid, cleanup };
+  }
+
+  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  it('SIGHUP shuts the app down like SIGINT: exit 0, preview stopped', async () => {
+    const app = await appWithPreview();
+    try {
+      assert.ok(alive(app.pid));
+      app.child.kill('SIGHUP');
+      assert.deepEqual(await app.exited, { code: 0, signal: null });
+      await settle(200);
+      assert.equal(alive(app.pid), false);
+    } finally {
+      app.cleanup();
+    }
+  });
+
+  it('exiting mid-shutdown still kills preview processes (exit hook)', async () => {
+    const app = await appWithPreview({ ignoreTerm: true });
+    try {
+      app.child.kill('SIGTERM'); // graceful stop starts: the preview ignores SIGTERM
+      await settle(300);
+      app.child.kill('SIGTERM'); // second signal: exit now
+      assert.equal((await app.exited).code, 1);
+      await settle(300);
+      assert.equal(alive(app.pid), false);
+    } finally {
+      app.cleanup();
+    }
+  });
+
   it('vp --help lists the app first', () => {
     const { stdout } = vp(['--help'], { db: freshDbPath() });
     const app = stdout.indexOf('vp app');

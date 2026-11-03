@@ -85,7 +85,7 @@ async function listen(server, port) {
  *   backup injects the draft-backup timers; fetch is used by the live check.
  * @returns {Promise<{ server: import('node:http').Server, port: number, url: string,
  *   close: () => Promise<void>, shutdown: () => Promise<void> }>} shutdown: for quitting the
- *   app (the CLI registers it for SIGINT/SIGTERM): flushes every open site's backup, then
+ *   app (the CLI registers it for SIGINT/SIGTERM/SIGHUP): flushes every open site's backup, then
  *   stops previews and closes. close stops without flushing.
  */
 export async function startApp({
@@ -339,6 +339,10 @@ export async function startApp({
 
   const bound = await listen(server, port);
 
+  // However the process ends (a second Ctrl-C, process.exit, a crash), no detached preview survives it.
+  const killPreviews = () => previews.killAllSync?.();
+  process.on('exit', killPreviews);
+
   async function close() {
     await new Promise((resolve) => {
       server.close(() => resolve());
@@ -346,6 +350,7 @@ export async function startApp({
     });
     await Promise.all([...new Set([...open.keys(), ...opening.keys()])].map((id) => closeSite(id)));
     await previews.stopAll();
+    process.off('exit', killPreviews); // only once every preview is down
   }
 
   async function shutdown() {

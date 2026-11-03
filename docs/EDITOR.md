@@ -138,14 +138,14 @@ All endpoints return JSON. Errors return `{ error: "message" }`.
 | `GET` | `/api/sites` | Registered sites, each with `git: { connected, branch }` |
 | `POST` | `/api/sites` | Register a site (`{ path, name }`); the folder must depend on `cook-ssg` |
 | `POST` | `/api/sites/clone` | Clone a repo (`{ url, dest, name }`) and register it |
-| `DELETE` | `/api/sites/:id` | Unregister a site (files are left alone) |
+| `DELETE` | `/api/sites/:id` | Unregister a site: pending saves are pushed first (after any running publish); files are left alone |
 | `GET` | `/api/folders` | List folders for the picker (query: `path`) |
 | `POST` | `/api/sites/:id/preview` | Start the site's dev server; `{ url }` |
 | `GET` | `/api/sites/:id/info` | `{ siteUrl }` from the site's `config/data.js` |
 | `POST` | `/api/sites/:id/documents/:docId/publish` | Build check, commit, push; `{ status: 'pushed'\|'saved', url }`. 422 with `log` if the build fails; 409 with `files` on a rebase conflict |
 | `POST` | `/api/sites/:id/documents/:docId/unpublish` | Same, back to draft |
 | `GET` | `/api/sites/:id/documents/:docId/live` | `{ live, url }`: whether the deployed page matches the local build |
-| `GET` | `/api/sites/:id/status` | Draft backup state |
+| `GET` | `/api/sites/:id/status` | Draft backup state: `{ pending, lastPushAt, error, connected, lastPushKind }`; `lastPushKind` is `draft`, `update` (the push changed a published page, so the live site redeploys) or `publish` |
 | `POST` | `/api/sites/:id/backup` | Commit and push pending saves now |
 | `GET` | `/sites/:id/media/:file` | A site's uploaded file (`src/media`) |
 

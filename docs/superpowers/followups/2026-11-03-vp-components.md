@@ -1,12 +1,12 @@
 # Vanilla Press components: rulings and deferred follow-ups
 
-Recorded during the subagent-driven build of feat/components (plan: docs/superpowers/plans/ for 2026-11-03-vp-components).
+Recorded during the subagent-driven build of feat/components (plan: docs/superpowers/plans/2026-11-03-vp-components.md; spec: docs/superpowers/specs/2026-11-03-vp-components-design.md).
 
 ## Rulings
 
-- | T2→T4 | describeComponents/packageDir/vpVersion vs "npm install <pkg>@<vp's version range>" | vpVersion is installed version, not range → Ruling R1 |
-- | T4→T6 | api.listComponents() vs T6 browser check in `vp serve` fixture mode | GET /components only mounted in app → Ruling R2 |
-- | T5→T7 | T5 "Try it" needs T7 loader | Ruling R3 |
+- Pre-flight scan, T2→T4 (describeComponents/packageDir/vpVersion vs "npm install <pkg>@<vp's version range>"): vpVersion is installed version, not range → Ruling R1
+- Pre-flight scan, T4→T6 (api.listComponents() vs T6 browser check in `vp serve` fixture mode): GET /components only mounted in app → Ruling R2
+- Pre-flight scan, T5→T7 (T5 "Try it" needs T7 loader): Ruling R3
 - Ruling R1: npm install uses the dependency range from VP's own package.json for that package (e.g. ^1.4.7), not vpVersion — matches "Cloudflare installs the same versions" and keeps one source of versions — cost if wrong: a site gets a different minor than VP tested.
 - Ruling R2: GET /components is mounted by mountApi (src/server/api.js) whenever an options.componentsState() is passed; the app passes per-site state, `vp serve` passes describeComponents for its workspace (fixture mode → all enabled). PUT stays app-only — needed for T6/T7 checks in vp serve — cost if wrong: one extra read-only route in vp serve.
 - Ruling R3: the Components section "Try it" preview moves to Task 7 (it needs the loader); Task 5 shows descriptions only — cost if wrong: none, ordering only.
@@ -30,10 +30,12 @@ Recorded during the subagent-driven build of feat/components (plan: docs/superpo
 - Task 1: minor (deferred): package-lock engines drift >=18 → >=20.9
 - Cook fix: reviewed Approved (0 Critical/Important); trailer verified; npm test 455/455; merged ff to master 384254d and pushed. minor (deferred): hand-rolled regex escape in package-components test; no sourcemap/`/pages/` literal cases in fingerprint-site-root test; stray blank line between imports.
 - Task 2: minor (deferred): describeComponents duplicates packageDir lookup; repeated package.json reads; readManifest customElements path no containment check; parseCemType splits quoted '|'; lockfile vanilla-breeze link 0.4.1→0.5.0
+- Task 2: minor (deferred, flag for final review): foot-notes is kind 'blocks' but auto-collects preceding <foot-note> elements and wraps no authored content — 'none' fits (catalog.js:189-192)
 - Task 2: minor (deferred): task-2-report.md top table stale (still lists chart-wc)
 - Task 3: minor (deferred): children wins over value when both present; normalize doesn't guard array attrs; no </SCRIPT uppercase test; no content-scope component test
 - Task 3: minor (deferred): no explicit uppercase SCRIPT/oNclick tests (regex rejects them)
 - Fix R6: complete (commits 90413ca..2d224e7, review clean; trailer verified). minor (deferred): post-listen 'error' after once consumed unhandled; macOS-only regression signal; cleanup doesn't await child exit
+- Task 4: minor (deferred, flag for final review): commitPaths failure after successful npm leaves package.json/lock edited (not restored) → later toggles hit dirty 409 (components.js:210-211)
 - Task 4: minor (deferred): npm failure / timeout messages lack a next step ("Build timed out" text reused for npm); 409 text singular/plural
 - Task 4: minor (deferred): push failure after commit returns 200; PUT response could carry backup state
 - Task 4: minor (deferred): publish refusal only tested with stub Map, no app-level test with package removed by hand
@@ -43,6 +45,7 @@ Recorded during the subagent-driven build of feat/components (plan: docs/superpo
 - Task 6: minor (deferred): no committed PM round-trip regression test (scratch harness only); non-link marks over whole inline component dropped on save
 - Task 7: review 1 → Approved (0 Critical/Important). minor (deferred): `..` segments pass into script URLs (component-loader segments()/describe entryPath); listComponents failure leaves components "loading" with no message; foreign-node put-back appends after PM children (border-wc), fragile; theme-picker define order relies on script order — rename editor element (vp-theme-picker); synthesized advanced-only fields default to string; error guard can mislabel editor errors under a component stack, fromComponent untested; number field applies on every input; Try-it "couldn't load" lacks next step.
 - Task 7: minor (deferred): vp serve now 400s uncatalogued component tags (behavior change, per R12); handleSaveError JSDoc wrap; border-wc `trigger` not in hint (not in README); marquee autofill can't be set false from the form
+- Task 8: review 1 → Needs fixes: Important: follow-ups doc omits 2 ledger minors (Task 2 foot-notes kind; Task 4 commitPaths failure leaves package files dirty). minor (deferred): e2e accepts unescaped < and & in attrs (only " proven; renderer unit tests own < &); rulings table fragments render oddly; plan path line unnamed; gallery select.value undefined when no themes.
 
 ## Package follow-ups
 
@@ -51,8 +54,21 @@ Recorded during the subagent-driven build of feat/components (plan: docs/superpo
 - border-wc draws nothing without `effect`, and injects light-DOM SVG children (the editor has to tolerate foreign nodes).
 - bg-wc 0.5.0 is unpublished (npm has 0.4.0).
 - Manifests without slots: the catalog cannot learn from a manifest where content goes, so content kinds are hand-set in `catalog.js`.
-- Gallery: carousel-wc requests `/cdn/icons/lucide/*.svg` (404 under `vp serve`; VB icons are served from `/assets/vb/`).
 
 ## Gallery check
 
-(To be filled in by the controller: open `/editor/components-gallery.html` on `vp serve`, switch through VB's base themes, and record each element that does not render or does not change with the theme.)
+Run with `editor/components-gallery.html` on `vp serve` (:4377). Result: all 21 elements are defined, 0 load failures, 45 themes listed. Of the 18 elements that can be measured, all change their computed styles under the dracula and 8bit themes.
+
+Findings, each with its owner:
+
+| Finding | Owner |
+|---|---|
+| border-wc draws no SVG despite `effect=squiggle` + `animate`; it renders plain | package repo (border-wc) |
+| marquee-wc renders as stacked copies; it needs its CSS self-injected | package repo (marquee-wc) |
+| code-playground's preview pane stays light in dark themes | package repo (code-playground) |
+| pdf-viewer's page area stays light in dark themes | package repo (pdf-viewer) |
+| audio-player, video-player, image-gallery are `blocks` in the catalog but show only sample text; they need media/`src`. Likely kind `none` + `src`; revisit with media in step 3 | VP catalog, step 3 (media) |
+| youtube-player and social-embed warn about a missing required `video-id` / `url`: catalog defaults lack required attributes and the form does not mark required fields. Catalog should mark required attributes and the form should flag them | VP catalog / editor form |
+| qr-code renders 0x0 and geo-map shows "location unavailable" with catalog defaults | VP catalog (needs a sample `value` / location) |
+| carousel-wc icons 404 at `/cdn/icons/lucide/*.svg` under `vp serve` | VP server (serve VB icons, or fix the path) |
+| blink-wc showed empty because the gallery gave inline elements no text | VP gallery (fixed) |

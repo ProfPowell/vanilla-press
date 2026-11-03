@@ -54,6 +54,7 @@ function fill(node, d) {
       setComponentValue(node, SAMPLE_CODE[lang] || 'const answer = 6 * 7;', d.codeWrap || 'text');
       break;
     }
+    case 'inline': node.append(document.createTextNode('sample text')); break;
     case 'blocks': node.append(el('p', {}, 'Sample block content inside ' + d.label + '.')); break;
     default: break;
   }
@@ -87,7 +88,8 @@ async function loadThemes() {
       groups.get(t.tier).append(opt);
     }
     select.replaceChildren(...groups.values());
-    select.value = themes.some(t => t.id === 'default') ? 'default' : themes[0]?.id;
+    const first = themes.some(t => t.id === 'default') ? 'default' : themes[0]?.id;
+    if (first) select.value = first;
     select._themes = themes;
   } catch (err) {
     console.error('Themes not loaded:', err);

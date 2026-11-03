@@ -186,6 +186,12 @@ export const CATALOG = [
         kind: 'none', defaults: { url: '' }, advanced: ['provider', 'theme', 'activate', 'state'],
       },
       {
+        // static.html: <foot-note> elements precede <foot-notes>, which collects them into a list
+        tag: 'foot-notes', label: 'Footnotes', icon: 'footnote', group: 'Layout',
+        description: 'Collects the footnotes above it into a notes list or margin sidenotes.',
+        kind: 'blocks', defaults: {}, advanced: ['data-mode', 'data-label-back', 'data-label-ref', 'data-label-heading', 'data-preview'],
+      },
+      {
         tag: 'accordion-wc', label: 'Accordion', icon: 'accordion', group: 'Layout',
         description: 'Grouped collapsible sections.',
         kind: 'blocks', defaults: {}, advanced: ['single', 'bordered', 'flush', 'compact', 'indicator', 'transition'],
@@ -194,11 +200,6 @@ export const CATALOG = [
         tag: 'carousel-wc', label: 'Carousel', icon: 'carousel', group: 'Layout',
         description: 'A scrolling carousel of slides.',
         kind: 'blocks', defaults: {}, advanced: ['autoplay', 'autoplay-delay', 'loop', 'item-width', 'gap', 'start', 'persist', 'transition'],
-      },
-      {
-        tag: 'chart-wc', label: 'Chart', icon: 'chart', group: 'Data',
-        description: 'A chart drawn from a table or values.',
-        kind: 'blocks', defaults: {}, advanced: ['data-config', 'data-subtitle', 'data-legend', 'data-tooltip', 'data-palette', 'data-label-x', 'data-label-y', 'data-size', 'data-chart'],
       },
       {
         tag: 'diagram-wc', label: 'Diagram', icon: 'diagram', group: 'Data',

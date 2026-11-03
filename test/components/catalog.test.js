@@ -27,7 +27,10 @@ describe('component catalog', () => {
     assert.equal(pkgs.filter((p) => p.startsWith('@profpowell/')).length, 10);
     const vb = CATALOG.find((e) => e.package === 'vanilla-breeze');
     assert.equal(vb.bundled, true);
-    assert.equal(vb.elements.length, 11);
+    assert.deepEqual(vb.elements.map((e) => e.tag).sort(), [
+      'accordion-wc', 'audio-player', 'carousel-wc', 'diagram-wc', 'foot-notes', 'geo-map',
+      'image-gallery', 'qr-code', 'social-embed', 'video-player', 'youtube-player',
+    ]);
   });
 
   it('every catalog tag exists in its package manifest', () => {

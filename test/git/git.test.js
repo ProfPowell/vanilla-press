@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import {
-  gitStatus, commitPaths, push, cloneRepo,
+  gitStatus, commitPaths, push, cloneRepo, pullFastForward, changedFiles,
   GitConflictError, GitNotConnectedError, GitError, GitStashConflictError,
 } from '../../src/git/git.js';
 
@@ -167,6 +167,7 @@ test('push aborts a conflicting rebase', async () => {
   await assert.rejects(push(a), (err) => {
     assert.ok(err instanceof GitConflictError);
     assert.deepEqual(err.files, ['content/x.json']);
+    assert.match(err.message, /Open the site folder in a terminal or Git app, resolve the conflict in content\/x\.json, then publish again\./);
     return true;
   });
   assert.equal(git(a, 'rev-parse', 'HEAD'), before);
@@ -278,4 +279,31 @@ test('push refuses when the remote renamed a file the user is editing', async ()
   });
   assert.equal(readFileSync(join(a, 'README.md'), 'utf8'), 'my local edit\n');
   assert.equal(git(a, 'stash', 'list'), '');
+});
+
+test('changedFiles lists changed and untracked files under the given paths only', async () => {
+  write(a, 'content/x.json', '{}');
+  write(a, 'other.txt', 'x');
+  write(a, 'README.md', 'edited\n');
+  assert.deepEqual(await changedFiles(a, ['content', 'src/posts/a.html']), ['content/x.json']);
+  assert.deepEqual(await changedFiles(a, ['src/posts/a.html']), []);
+});
+
+test('pullFastForward fast-forwards; it refuses to merge diverged history', async () => {
+  write(b, 'content/b.json', '{}');
+  git(b, 'add', '-A');
+  git(b, 'commit', '-m', 'b');
+  git(b, 'push');
+  await pullFastForward(a);
+  assert.equal(git(a, 'rev-parse', 'HEAD'), git(remote, 'rev-parse', 'main'));
+  write(b, 'content/b2.json', '{}');
+  git(b, 'add', '-A');
+  git(b, 'commit', '-m', 'b2');
+  git(b, 'push');
+  write(a, 'content/a.json', '{}');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'a');
+  const before = git(a, 'rev-parse', 'HEAD');
+  await assert.rejects(pullFastForward(a), GitError);
+  assert.equal(git(a, 'rev-parse', 'HEAD'), before);
 });

@@ -115,6 +115,7 @@ export function backupMessage(titles, files) {
  *   ws: import('../workspace/workspace.js').Workspace,
  *   git: { commitPaths: Function, push: Function, gitStatus: Function },
  *   getCollectionsConfig?: () => Object,
+ *   onRebased?: () => void,
  *   now?: () => number,
  *   setTimer?: (fn: Function, ms: number) => any,
  *   clearTimer?: (handle: any) => void,
@@ -124,6 +125,7 @@ export function createBackup({
   ws,
   git,
   getCollectionsConfig = () => ({}),
+  onRebased = () => {},
   now = Date.now,
   setTimer = (fn, ms) => {
     const handle = setTimeout(fn, ms);
@@ -195,6 +197,12 @@ export function createBackup({
     if (uncommitted > 0 && firstAt === null) firstAt = now();
   }
 
+  /** A push rebased onto commits from elsewhere: let the store pick them up. */
+  function afterPush(result) {
+    if (!result?.rebased) return;
+    try { onRebased(); } catch (err) { console.warn(`Re-sync after rebase failed: ${err.message}`); }
+  }
+
   function pushed() {
     unpushed = 0;
     error = null;
@@ -234,8 +242,9 @@ export function createBackup({
         await git.commitPaths(ws.siteDir, paths(), (files) => backupMessage(snapshot.titles, files));
         unpushed += snapshot.count; // committed (or nothing to commit): only the push is left
         snapshot = null;
-        await git.push(ws.siteDir);
+        const result = await git.push(ws.siteDir);
         pushed();
+        afterPush(result);
       } catch (err) {
         if (snapshot) giveBack(snapshot);
         if (err instanceof GitNotConnectedError) {
@@ -266,7 +275,10 @@ export function createBackup({
         const result = await fn();
         paths(); // the page this publish wrote (or removed) is known for later backups
         unpushed += snapshot.count;
-        if (result?.status === 'pushed') pushed();
+        if (result?.status === 'pushed') {
+          pushed();
+          afterPush(result);
+        }
         else if (result?.status === 'saved') connected = false;
         return result;
       } catch (err) {

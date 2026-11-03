@@ -72,7 +72,8 @@ export function backupOutcome(status, savedAt) {
  *
  * - 422 with a log: the build failed; nothing was applied.
  * - 409 with `files`, or 502: the change was applied and committed on this
- *   computer, only the push failed, so the editor reloads the document.
+ *   computer, only the push failed, so the editor reloads the document. The
+ *   server's error text (which names the next step) is kept.
  * - Anything else (e.g. the save preflight's 409): the server's error text; nothing applied.
  *
  * A failure never starts the live poll.
@@ -89,7 +90,7 @@ export function publishFailure(err, unpublish) {
   }
   if (err.status === 409 && Array.isArray(data.files)) {
     return {
-      message: `${applied}: GitHub has changes that conflict with yours`,
+      message: `${applied}: ${data.error || 'GitHub has changes that conflict with yours'}`,
       files: data.files, reload: true, poll: false,
     };
   }

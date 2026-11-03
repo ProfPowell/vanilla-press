@@ -41,13 +41,17 @@ describe('editor site context', () => {
   });
 
   it('publishFailure: a failed push after the change was applied reloads and says so', () => {
-    const conflict = { status: 409, data: { error: 'git push failed', files: ['content/posts/a.json'] } };
+    const conflict = { status: 409, data: { files: ['content/posts/a.json'] } };
     assert.deepEqual(publishFailure(conflict, true), {
       message: "Unpublished on this computer, but couldn't push: GitHub has changes that conflict with yours",
       files: ['content/posts/a.json'], reload: true, poll: false,
     });
     assert.equal(publishFailure(conflict, false).message,
       "Published on this computer, but couldn't push: GitHub has changes that conflict with yours");
+    // The server's own text (with its next step) is kept, e.g. GitStashConflictError's.
+    const stash = { status: 409, data: { error: 'GitHub has changes to files you are editing outside Vanilla Press: README.md. Commit or discard your changes to those files, then publish again.', files: ['README.md'] } };
+    assert.equal(publishFailure(stash, false).message,
+      `Published on this computer, but couldn't push: ${stash.data.error}`);
     const gone = { status: 502, message: 'remote unreachable', data: { error: 'remote unreachable' } };
     assert.deepEqual(publishFailure(gone, false), {
       message: "Published on this computer, but couldn't push: remote unreachable", reload: true, poll: false,

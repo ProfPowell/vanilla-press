@@ -13,7 +13,9 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 /** Thrown when a rebase onto the remote conflicts. The rebase is aborted first. */
 export class GitConflictError extends Error {
   constructor(files) {
-    super(`Merge conflict in: ${files.join(', ')}`);
+    const list = files.join(', ');
+    super(`GitHub has changes that conflict with yours in: ${list}. Nothing was pushed. ` +
+      `Open the site folder in a terminal or Git app, resolve the conflict in ${list}, then publish again.`);
     this.name = 'GitConflictError';
     this.files = files;
   }
@@ -131,9 +133,9 @@ export async function commitPaths(dir, paths, message) {
   return runGit(dir, ['rev-parse', 'HEAD']);
 }
 
-/** Tracked files with uncommitted changes (staged or not); untracked files are ignored. */
-async function dirtyTrackedFiles(dir) {
-  const parts = (await runGit(dir, ['status', '--porcelain', '-z', '--untracked-files=no'], { raw: true })).split('\0');
+/** File names in `git status --porcelain -z` output (both names of a rename or copy). */
+function porcelainFiles(out) {
+  const parts = out.split('\0');
   const files = [];
   for (let i = 0; i < parts.length; i++) {
     const entry = parts[i];
@@ -142,6 +144,11 @@ async function dirtyTrackedFiles(dir) {
     if (entry[0] === 'R' || entry[0] === 'C') files.push(parts[++i]);
   }
   return files;
+}
+
+/** Tracked files with uncommitted changes (staged or not); untracked files are ignored. */
+async function dirtyTrackedFiles(dir) {
+  return porcelainFiles(await runGit(dir, ['status', '--porcelain', '-z', '--untracked-files=no'], { raw: true }));
 }
 
 const REJECTED = /rejected|non-fast-forward|fetch first/i;
@@ -203,6 +210,29 @@ export async function push(dir) {
   }
   await runGit(dir, ['push']);
   return { pushed: true, rebased: true };
+}
+
+/**
+ * Files with uncommitted changes (staged, unstaged or untracked) under the given paths.
+ * @param {string} dir
+ * @param {string[]} paths
+ * @returns {Promise<string[]>}
+ */
+export async function changedFiles(dir, paths) {
+  if (paths.length === 0) return [];
+  return porcelainFiles(
+    await runGit(dir, ['status', '--porcelain', '-z', '--untracked-files=all', '--', ...paths], { raw: true }),
+  );
+}
+
+/**
+ * `git pull --ff-only`: bring in the upstream's commits when that needs no merge.
+ * Throws a GitError when history diverged or the pull would touch local changes.
+ * @param {string} dir
+ * @returns {Promise<void>}
+ */
+export async function pullFastForward(dir) {
+  await runGit(dir, ['pull', '--ff-only']);
 }
 
 /**

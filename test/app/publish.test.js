@@ -280,6 +280,7 @@ describe('app routes', () => {
 
   test('conflicting remote change is a 409', async () => {
     await open();
+    assert.equal((await api(`/api/sites/${siteId}/documents/${ID}`)).status, 200); // opened before the remote moves
     const other = fx.clone('other');
     const p = join(other, 'content', 'posts', 'hello.json');
     const doc = JSON.parse(readFileSync(p, 'utf8'));
@@ -323,6 +324,73 @@ describe('app routes', () => {
     const after = await api(`/api/sites/${siteId}/documents/${ID}/live`);
     assert.deepEqual(after.data, { live: true, url: 'https://example.com/posts/hello/' });
     assert.equal(seen.at(-1), 'https://example.com/posts/hello/');
+  });
+
+  /** Push a new post from another clone; returns its id. */
+  function pushRemotePost(slug = 'remote') {
+    const other = fx.clone(`other-${slug}`);
+    const id = `doc_${slug}0001`;
+    write(other, `content/posts/${slug}.json`, JSON.stringify({ id, meta: { title: 'From elsewhere', slug, collection: 'posts', status: 'draft' }, blocks: [] }, null, 2) + '\n');
+    git(other, 'add', '-A');
+    git(other, 'commit', '-m', 'other machine');
+    git(other, 'push');
+    return id;
+  }
+  const docIds = async () => (await api(`/api/sites/${siteId}/documents`)).data.map((d) => d.id);
+
+  test('opening a site fast-forwards it first, so a post from another machine is there', async () => {
+    await open();
+    const remoteId = pushRemotePost();
+    assert.ok((await docIds()).includes(remoteId));
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
+  });
+
+  test('opening a site with uncommitted changes in VP paths skips the pull', async () => {
+    await open();
+    const remoteId = pushRemotePost();
+    write(fx.site, 'config/vp.json', '{"theme":"local"}\n'); // unsaved local VP work
+    const before = git(fx.site, 'rev-parse', 'HEAD');
+    assert.ok(!(await docIds()).includes(remoteId));
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), before);
+  });
+
+  test('a failing pull on open is logged and the site still opens', async () => {
+    const failing = { ...realGit, pullFastForward: async () => { throw new realGit.GitError('git pull failed: offline', 'offline'); } };
+    await open({ git: failing });
+    assert.ok((await docIds()).includes(ID));
+  });
+
+  test('a backup push that rebased re-syncs the store', async () => {
+    await open();
+    assert.ok((await docIds()).includes(ID)); // site open
+    const remoteId = pushRemotePost();
+    await api(`/api/sites/${siteId}/documents/${ID}`, { method: 'PUT', body: { meta: { title: 'Hello 2' } } });
+    assert.equal((await api(`/api/sites/${siteId}/backup`, { method: 'POST' })).data.error, null);
+    assert.ok((await docIds()).includes(remoteId));
+  });
+
+  test('a publish push that rebased re-syncs the store', async () => {
+    await open();
+    assert.ok((await docIds()).includes(ID));
+    const remoteId = pushRemotePost();
+    const res = await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.ok((await docIds()).includes(remoteId));
+  });
+
+  test('a rebase conflict on publish names the next step', async () => {
+    await open();
+    assert.ok((await docIds()).includes(ID));
+    const other = fx.clone('other');
+    const p = join(other, 'content', 'posts', 'hello.json');
+    const doc = JSON.parse(readFileSync(p, 'utf8'));
+    doc.meta.status = 'archived';
+    writeFileSync(p, JSON.stringify(doc, null, 2) + '\n');
+    git(other, 'commit', '-am', 'remote edit');
+    git(other, 'push');
+    const res = await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    assert.equal(res.status, 409);
+    assert.match(res.data.error, /resolve the conflict in content\/posts\/hello\.json, then publish again/);
   });
 
   test('shutdown flushes every open site, then stops previews', async () => {

@@ -18,7 +18,7 @@ import { createPreviews } from './preview.js';
 import * as defaultGit from '../git/git.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import * as defaultSiteProcess from './site-process.js';
-import { createBackup } from './site-git.js';
+import { createBackup, ownedPaths } from './site-git.js';
 import {
   setPublished, BuildError, PublishRejectedError, checkLive, readSiteUrl, publicUrl, builtPage,
 } from './publish.js';
@@ -103,13 +103,38 @@ export async function startApp({
   /** Open sites, cached for the life of the server: id -> { db, router, ws, backup } */
   const open = new Map();
 
-  function openSite(site) {
+  /** Opens in progress: id -> Promise<entry>, so concurrent requests open a site once. */
+  const opening = new Map();
+
+  /**
+   * Another machine may have pushed: fast-forward first when that is safe (an
+   * upstream, no uncommitted changes in VP-owned paths). Never merges or
+   * rebases; any failure is logged and the site opens as it is.
+   */
+  async function pullOnOpen(site, ws, db) {
+    try {
+      const status = await git.gitStatus(ws.siteDir);
+      if (!status.isRepo || !status.hasUpstream) return;
+      const dirty = await git.changedFiles(ws.siteDir, ownedPaths(ws, getCollectionsConfig(db)));
+      if (dirty.length > 0) {
+        console.warn(`${site.name || site.id}: not pulling, uncommitted changes in ${dirty.slice(0, 3).join(', ')}`);
+        return;
+      }
+      await git.pullFastForward(ws.siteDir);
+    } catch (err) {
+      console.warn(`${site.name || site.id}: pull skipped: ${err.message}`);
+    }
+  }
+
+  async function openSite(site) {
     const ws = resolveWorkspace({ site: site.path, env: {}, repoRoot: ROOT });
     const db = openWorkspaceDb(ws);
     try {
+      await pullOnOpen(site, ws, db);
       syncFromSite(ws, db);
       const backup = createBackup({
         site, ws, git, getCollectionsConfig: () => getCollectionsConfig(db), ...backupTimers,
+        onRebased: () => syncFromSite(ws, db),
       });
       const prefix = `/api/sites/${site.id}`;
       const router = createRouter();
@@ -125,6 +150,18 @@ export async function startApp({
       db.close();
       throw err;
     }
+  }
+
+  /** The open site's entry, opening it (once) if needed. */
+  function getOpen(site) {
+    const entry = open.get(site.id);
+    if (entry) return Promise.resolve(entry);
+    let pending = opening.get(site.id);
+    if (!pending) {
+      pending = openSite(site).finally(() => opening.delete(site.id));
+      opening.set(site.id, pending);
+    }
+    return pending;
   }
 
   function closeSite(id) {
@@ -244,13 +281,11 @@ export async function startApp({
     try { id = decodeURIComponent(match[1]); } catch { id = null; }
     const site = id && getSite(id, { env });
     if (!site) return sendJson(res, 404, { error: 'Unknown site' });
-    let entry = open.get(site.id);
-    if (!entry) {
-      try {
-        entry = openSite(site);
-      } catch (err) {
-        return sendJson(res, 422, { error: `Cannot open site: ${err.message}` });
-      }
+    let entry;
+    try {
+      entry = await getOpen(site);
+    } catch (err) {
+      return sendJson(res, 422, { error: `Cannot open site: ${err.message}` });
     }
     if (!(await entry.router.handle(req, res))) sendJson(res, 404, { error: 'Not found' });
   }

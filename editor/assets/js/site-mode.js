@@ -296,7 +296,7 @@ async function showPublishError(err, unpublish, docId) {
   if (failure.log !== undefined) {
     showReport("Build failed. Nothing was pushed, and the post's status is unchanged.", { log: failure.log });
   } else if (failure.files) {
-    showReport(`${failure.message}. Conflicting files:`, { files: failure.files });
+    showReport(`${failure.message.replace(/\.$/, '')}. Conflicting files:`, { files: failure.files });
   }
 }
 

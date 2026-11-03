@@ -123,7 +123,8 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  *     collectionsConfig?: Object, readSiteUrl?: Function,
  *   },
  * }} options
- * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null }>}
+ * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean }>}
+ *   rebased: the push rebased onto commits from elsewhere (the caller re-syncs the store)
  * @throws {BuildError|PublishRejectedError|Error} git errors propagate (GitConflictError, ...)
  */
 export async function setPublished({ ws, db, docId, publish, deps }) {
@@ -179,12 +180,13 @@ export async function setPublished({ ws, db, docId, publish, deps }) {
   const url = publish ? publicUrl(siteUrl, saved, collectionsConfig) : null;
 
   // 4. Push (pushes every local commit, including earlier unpushed ones).
-  if (!status.isRepo || !status.hasRemote || !status.hasUpstream) return { status: 'saved', url, sha };
+  if (!status.isRepo || !status.hasRemote || !status.hasUpstream) return { status: 'saved', url, sha, rebased: false };
+  let pushResult;
   try {
-    await deps.push(ws.siteDir);
+    pushResult = await deps.push(ws.siteDir);
   } catch (err) {
-    if (err instanceof GitNotConnectedError) return { status: 'saved', url, sha };
+    if (err instanceof GitNotConnectedError) return { status: 'saved', url, sha, rebased: false };
     throw err;
   }
-  return { status: 'pushed', url, sha };
+  return { status: 'pushed', url, sha, rebased: Boolean(pushResult?.rebased) };
 }

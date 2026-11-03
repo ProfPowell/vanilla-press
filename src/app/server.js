@@ -33,7 +33,7 @@ import { serveStatic, serveFile } from '../server/static.js';
 import { refuseForeign } from '../server/guard.js';
 import { CATALOG } from '../components/catalog.js';
 import { packageDir } from '../components/describe.js';
-import { setComponent, componentsState, enabledComponents, ComponentError } from './components.js';
+import { setComponent, componentsState, enabledComponents, catalogComponents, ComponentError } from './components.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HOST = '127.0.0.1';
@@ -177,7 +177,9 @@ export async function startApp({
         rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix,
         statusByActions: true, // Ruling P: only Publish/Update/Unpublish change status
         onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
-        components: () => enabledComponents(roots),
+        // Saves check the whole catalog (R12): a post keeps a component turned off since;
+        // Publish/Update refuse it (setPublished, against the enabled ones).
+        components: () => catalogComponents(roots),
         componentsState: () => componentsState(roots),
       });
       const writes = createLock();

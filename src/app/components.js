@@ -78,6 +78,17 @@ export function enabledComponents({ siteDir, vpRoot, catalog = CATALOG }) {
 }
 
 /**
+ * The descriptors of every catalog component (on or off), by tag: what a
+ * document save normalizes and validates against (Ruling R12), so a post
+ * keeps a component the site has turned off. Publish checks the enabled ones.
+ * @param {{ siteDir: string|null, vpRoot: string, catalog?: Object[] }} roots
+ * @returns {Map<string, import('../components/describe.js').ComponentDescriptor>}
+ */
+export function catalogComponents({ siteDir, vpRoot, catalog = CATALOG }) {
+  return componentIndex(describeComponents({ siteDir, vpRoot, catalog }), { enabledOnly: false });
+}
+
+/**
  * Every component tag in a list of blocks, at any depth (inline children included).
  * @param {Object[]} blocks
  * @returns {Set<string>}

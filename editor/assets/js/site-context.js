@@ -195,5 +195,18 @@ export function publishFailure(err, action) {
   return { message: errorText, reload: false, poll: false };
 }
 
+/**
+ * What the save status says when a save failed: the server's validation
+ * errors when it sent them (400), so the writer knows what to fix; else the
+ * error's own message.
+ * @param {Error & { data?: { errors?: string[] } }} err
+ * @returns {string}
+ */
+export function saveErrorMessage(err) {
+  const errors = err?.data?.errors;
+  if (Array.isArray(errors) && errors.length) return `Not saved: ${errors.join('; ')}`;
+  return err?.message || 'Not saved';
+}
+
 /** The site being edited in this page, or null (no `?site=`, or not in a browser). */
 export const SITE = typeof location === 'undefined' ? null : siteFromSearch(location.search);

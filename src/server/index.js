@@ -21,7 +21,7 @@ import { mountApi } from './api.js';
 import { syncFromSite } from '../sync/from-site.js';
 import { serveStatic } from './static.js';
 import { refuseForeign } from './guard.js';
-import { componentsState } from '../app/components.js';
+import { componentsState, catalogComponents } from '../app/components.js';
 import { CATALOG } from '../components/catalog.js';
 import { packageDir } from '../components/describe.js';
 
@@ -82,9 +82,12 @@ export function startServer(options = {}) {
   // Set up router with API routes
   const router = createRouter();
   // GET /api/components; fixture mode (no site) has every package on.
+  // Document saves normalize and validate components against the whole catalog (R12).
+  const roots = { siteDir: ws.siteDir, vpRoot: ROOT };
   mountApi(router, db, {
     rootDir: ROOT, mediaDir, workspace: ws,
-    componentsState: () => componentsState({ siteDir: ws.siteDir, vpRoot: ROOT }),
+    components: () => catalogComponents(roots),
+    componentsState: () => componentsState(roots),
   });
 
   // Static file mount points: URL prefix → filesystem path

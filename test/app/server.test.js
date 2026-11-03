@@ -462,15 +462,31 @@ describe('documents API with components', () => {
     assert.equal(stored.data.notices, undefined);
   });
 
-  it('PUT validates against the enabled components', async () => {
+  it('PUT saves a catalogued component that is off (R12); a tag not in the catalog is still refused', async () => {
     const off = await call(`/api/sites/${siteId}/documents/doc_comp0001`, 'PUT', {
       blocks: [{ type: 'component', tag: 'x-three', attrs: {} }],
     });
-    assert.equal(off.status, 400);
-    assert.match(off.data.errors.join('\n'), /x-three" is not on for this site/);
+    assert.equal(off.status, 200, JSON.stringify(off.data));
+    assert.equal(off.data.blocks[0].tag, 'x-three');
+    const unknown = await call(`/api/sites/${siteId}/documents/doc_comp0001`, 'PUT', {
+      blocks: [{ type: 'component', tag: 'x-zz', attrs: {} }],
+    });
+    assert.equal(unknown.status, 400);
+    assert.match(unknown.data.errors.join('\n'), /x-zz" is not on for this site/);
     const bad = await call(`/api/sites/${siteId}/documents/doc_comp0001`, 'PUT', { blocks: withX({ mode: 'zzz' }).blocks });
     assert.equal(bad.status, 400);
     assert.match(bad.data.errors.join('\n'), /not in allowed values/);
+  });
+
+  it('Publish of a post using an off component is refused, naming it', async () => {
+    const saved = await call(`/api/sites/${siteId}/documents/doc_comp0001`, 'PUT', {
+      blocks: [{ type: 'component', tag: 'x-three', attrs: {} }],
+    });
+    assert.equal(saved.status, 200, JSON.stringify(saved.data));
+    const res = await call(`/api/sites/${siteId}/documents/doc_comp0001/publish`, 'POST', {});
+    assert.equal(res.status, 422);
+    assert.equal(res.data.error,
+      'This post uses <x-three>, which is not on for this site. Turn it on under Components, or remove it from the post.');
   });
 });
 

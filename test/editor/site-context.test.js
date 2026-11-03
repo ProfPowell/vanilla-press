@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   siteFromSearch, apiBase, displayMediaUrl, storedMediaUrl, backupOutcome, publishFailure,
   keepPollingBackup, createLiveTracker, saveStateText, headerActions, actionPendingText, afterAction, heldOnLoad,
+  saveErrorMessage,
 } from '../../editor/assets/js/site-context.js';
 
 describe('editor site context', () => {
@@ -142,5 +143,18 @@ describe('editor site context', () => {
     assert.equal(heldOnLoad({ status: 'published' }, { notLive: false }), false);
     assert.equal(heldOnLoad({ status: 'draft' }, { notLive: true }), false);
     assert.equal(heldOnLoad({ status: 'published' }, null), false);
+  });
+});
+
+describe('saveErrorMessage', () => {
+  it("shows the server's validation errors, not a generic message", () => {
+    const err = Object.assign(new Error('Validation failed'), {
+      status: 400, data: { error: 'Validation failed', errors: ['blocks[0]: component "x-zz" is not on for this site', 'blocks[2]: bad'] },
+    });
+    assert.equal(saveErrorMessage(err), 'Not saved: blocks[0]: component "x-zz" is not on for this site; blocks[2]: bad');
+  });
+  it("falls back to the error's message", () => {
+    assert.equal(saveErrorMessage(Object.assign(new Error('Saved, but not synced'), { status: 422, data: {} })), 'Saved, but not synced');
+    assert.equal(saveErrorMessage(new Error('boom')), 'boom');
   });
 });

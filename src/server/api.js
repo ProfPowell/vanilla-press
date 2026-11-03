@@ -58,7 +58,7 @@ function generateId() {
  *   keeps an existing document's values); only Publish/Update/Unpublish change them. `vp serve`
  *   leaves this off and saves set status as before.
  * @param {() => Map<string, import('../components/describe.js').ComponentDescriptor>} [options.components] - The
- *   components on for this site (the app): POST/PUT of a document first drop the component
+ *   catalog's components, on or off (Ruling R12; publish checks which are on): POST/PUT of a document first drop the component
  *   attributes a descriptor does not declare, then validate against these descriptors, and the
  *   response adds `notices: string[]` for what was dropped. Absent (`vp serve`): structural validation only.
  * @param {() => Object} [options.componentsState] - When given, `GET /api/components` answers its result.

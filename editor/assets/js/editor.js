@@ -42,6 +42,7 @@ import './components/component-settings.js';
 import { initPatterns } from './patterns.js';
 import { enabledDescriptors, unrepresentable } from './component-model.js';
 import { isSiteMode, initSiteMode } from './site-mode.js';
+import { saveErrorMessage } from './site-context.js';
 
 // Re-export meta-state functions for convenience
 export { getCurrentMeta, setCurrentMeta, getCurrentDocId } from './meta-state.js';
@@ -445,7 +446,8 @@ function createFromEditor() {
 
 /**
  * Show a failed save: a 409 puts the document in conflict (auto-save paused
- * until the on-disk version is loaded); a 422 (not saved, or saved but not
+ * until the on-disk version is loaded); a 400 with validation `errors` shows
+ * them; a 422 (not saved, or saved but not
  * synced) shows its message in the save indicator and auto-save continues.
  * @param {string} docId
  * @param {Error & { status?: number }} err
@@ -456,8 +458,9 @@ export function handleSaveError(docId, err) {
     conflicts.set(docId, err.message);
     setSaveStatus('conflict');
     notifyConflict();
-  } else if (err.status === 422 || err.status >= 500) {
-    setSaveStatus('error', err.message);
+  } else if (err.status === 422 || err.status >= 500 || (err.status === 400 && err.data?.errors?.length)) {
+    // A 400 with `errors` failed validation: say what to fix (auto-save keeps trying)
+    setSaveStatus('error', saveErrorMessage(err));
   } else {
     setSaveStatus('unsaved');
   }

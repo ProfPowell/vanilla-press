@@ -120,7 +120,7 @@ export async function commitPaths(dir, paths, message) {
   }
   if (usable.length === 0) return null;
   await runGit(dir, ['add', '-A', '--', ...usable]);
-  const staged = await runGit(dir, ['diff', '--cached', '--name-only', '-z', '--', ...usable]);
+  const staged = await runGit(dir, ['diff', '--cached', '--name-only', '--no-renames', '-z', '--', ...usable]);
   const files = staged.split('\0').filter(Boolean);
   if (files.length === 0) return null;
   // Name the files so anything the user already staged elsewhere stays out of this commit.
@@ -173,7 +173,7 @@ export async function push(dir) {
   // so the autostash re-apply can never conflict and nothing is modified.
   await runGit(dir, ['fetch']);
   const incoming = new Set(
-    (await runGit(dir, ['diff', '--name-only', '-z', 'HEAD...@{u}'])).split('\0').filter(Boolean),
+    (await runGit(dir, ['diff', '--name-only', '--no-renames', '-z', 'HEAD...@{u}'])).split('\0').filter(Boolean),
   );
   const clash = (await dirtyTrackedFiles(dir)).filter((f) => incoming.has(f));
   if (clash.length > 0) throw new GitStashConflictError([...new Set(clash)].sort());

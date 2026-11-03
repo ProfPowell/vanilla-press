@@ -247,6 +247,19 @@ describe('app routes', () => {
     assert.equal(lastRemote(), 'Draft: all posts [CI Skip]');
   });
 
+  test('a slug rename of a published post leaves only the new files in HEAD', async () => {
+    await open();
+    await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    const put = await api(`/api/sites/${siteId}/documents/${ID}`, { method: 'PUT', body: { meta: { slug: 'hello-2' } } });
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    assert.equal((await api(`/api/sites/${siteId}/backup`, { method: 'POST' })).data.error, null);
+    const head = git(fx.site, 'ls-tree', '-r', '--name-only', 'HEAD').split('\n');
+    assert.ok(head.includes('content/posts/hello-2.json') && head.includes('src/posts/hello-2.html'), head.join(' '));
+    assert.ok(!head.includes('content/posts/hello.json') && !head.includes('src/posts/hello.html'), head.join(' '));
+    assert.deepEqual(remoteFiles().filter((f) => f.includes('hello')).sort(), ['content/posts/hello-2.json', 'src/posts/hello-2.html']);
+    assert.equal(git(fx.site, 'diff', '--cached', '--name-only'), '');
+  });
+
   test('build failure is a 422 with the log', async () => {
     await open();
     write(fx.site, 'build.js', BUILD_FAIL);

@@ -110,6 +110,16 @@ test('commitPaths takes a message function given the staged files', async () => 
   assert.match(git(a, 'status', '--porcelain'), /^A {2}other\.txt$/m);
 });
 
+test('commitPaths commits a rename as delete plus add, leaving the index clean', async () => {
+  write(a, 'content/posts/old.json', '{"slug":"old"}\n');
+  await commitPaths(a, ['content'], 'add');
+  rmSync(join(a, 'content/posts/old.json'));
+  write(a, 'content/posts/new.json', '{"slug":"old"}\n'); // same content: git would call it a rename
+  await commitPaths(a, ['content'], 'rename');
+  assert.deepEqual(git(a, 'ls-tree', '-r', '--name-only', 'HEAD').split('\n').sort(), ['README.md', 'content/posts/new.json']);
+  assert.equal(git(a, 'diff', '--cached', '--name-only'), '');
+});
+
 test('commitPaths returns null when nothing changed', async () => {
   write(a, 'content/x.json', '{}');
   await commitPaths(a, ['content'], 'add');
@@ -238,6 +248,23 @@ test('push refuses, changing nothing, when the remote touches a file the user is
   assert.equal(git(remote, 'rev-parse', 'main'), remoteBefore);
   assert.equal(git(a, 'rev-parse', 'HEAD'), headBefore);
   assert.equal(git(a, 'status', '--porcelain'), statusBefore);
+  assert.equal(readFileSync(join(a, 'README.md'), 'utf8'), 'my local edit\n');
+  assert.equal(git(a, 'stash', 'list'), '');
+});
+
+test('push refuses when the remote renamed a file the user is editing', async () => {
+  git(b, 'mv', 'README.md', 'READ.md');
+  git(b, 'commit', '-m', 'rename readme');
+  git(b, 'push');
+  write(a, 'README.md', 'my local edit\n');
+  write(a, 'content/x.json', '{}');
+  await commitPaths(a, ['content'], 'Draft: X');
+  await assert.rejects(push(a), (err) => {
+    assert.ok(err instanceof GitStashConflictError);
+    assert.deepEqual(err.files, ['README.md']);
+    assert.match(err.message, /Commit or discard/);
+    return true;
+  });
   assert.equal(readFileSync(join(a, 'README.md'), 'utf8'), 'my local edit\n');
   assert.equal(git(a, 'stash', 'list'), '');
 });

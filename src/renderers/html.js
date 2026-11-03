@@ -174,6 +174,7 @@ function renderBlock(block) {
     case 'definition_list': return renderDefinitionList(block);
     case 'definition_term': return renderDefinitionTerm(block);
     case 'definition_desc': return renderDefinitionDesc(block);
+    case 'component':    return renderComponentBlock(block);
     default:
       // Unknown block: render children if present
       if (block.children) {
@@ -363,6 +364,53 @@ function renderDefinitionDesc(block) {
   return `<dd>${inner}</dd>`;
 }
 
+// --- Component rendering ---
+
+/**
+ * Serialize component attrs in name order: true -> bare, false -> omitted.
+ * @param {Object} [attrs]
+ * @returns {string}
+ */
+function renderComponentAttrs(attrs) {
+  return Object.keys(attrs || {}).sort().map(name => {
+    const v = attrs[name];
+    if (v === true) return ` ${name}`;
+    if (v === false) return '';
+    return ` ${name}="${escapeAttr(String(v))}"`;
+  }).join('');
+}
+
+/**
+ * Render a block-position component node. Exported so the markdown renderer
+ * can emit the same raw HTML.
+ * @param {Object} block - { tag, attrs, value?, wrap?, children? }
+ * @returns {string}
+ */
+export function renderComponentBlock(block) {
+  const { tag } = block;
+  let inner = '';
+  if (Array.isArray(block.children) && block.children.length) {
+    inner = block.children.map(renderBlock).join('\n');
+  } else if (typeof block.value === 'string') {
+    const v = block.value;
+    switch (block.wrap || 'text') {
+      case 'template': inner = `<template>${escapeHtml(v)}</template>`; break;
+      case 'script':   inner = `<script type="text/plain">${v.replace(/<\/script/gi, '<\\/script')}</script>`; break;
+      default:         inner = escapeHtml(v);
+    }
+  }
+  return `<${tag}${renderComponentAttrs(block.attrs)}>${inner}</${tag}>`;
+}
+
+/**
+ * Render an inline-position component node.
+ * @param {Object} node - { tag, attrs, children }
+ * @returns {string}
+ */
+export function renderComponentInline(node) {
+  return `<${node.tag}${renderComponentAttrs(node.attrs)}>${renderInline(node.children)}</${node.tag}>`;
+}
+
 // --- Inline rendering ---
 
 /**
@@ -390,6 +438,8 @@ function renderInlineNode(node) {
       return renderLinkNode(node);
     case 'footnote_ref':
       return renderFootnoteRef(node);
+    case 'component':
+      return renderComponentInline(node);
     default:
       return '';
   }

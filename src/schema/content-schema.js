@@ -62,6 +62,10 @@ export const blockTypes = {
   tab:          { category: 'component', children: 'block',      attrs: { label: { type: 'string', required: true } } },
   steps:        { category: 'component', children: 'step' },
   step:         { category: 'component', children: 'block',      attrs: { title: { type: 'string', required: true } } },
+
+  // Generic web-component node. tag/attrs/value/wrap/children are checked by
+  // validate.js (children depend on the component's kind), not by this table.
+  component:    { category: 'component', children: 'component' },
 };
 
 /**
@@ -71,6 +75,7 @@ export const inlineTypes = {
   text:         { marks: ['strong', 'em', 'code', 'strikethrough', 'mark', 'kbd', 'sub', 'sup'] },
   link:         { children: 'inline', attrs: { href: { type: 'string', required: true }, title: { type: 'string' } } },
   footnote_ref: { leaf: true,          attrs: { id: { type: 'string', required: true } } },
+  component:    { children: 'inline' },
 };
 
 /**
@@ -86,6 +91,7 @@ export function categorizedBlocks() {
   const groups = {};
   for (const [name, def] of Object.entries(blockTypes)) {
     // Skip child-only types that aren't inserted independently
+    if (name === 'component') continue; // palette lists components from descriptors
     if (['list_item', 'figcaption', 'tab', 'step', 'table_row', 'table_header', 'table_cell', 'definition_term', 'definition_desc'].includes(name)) continue;
     const cat = def.category;
     if (!groups[cat]) groups[cat] = [];

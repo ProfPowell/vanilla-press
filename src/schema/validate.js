@@ -9,13 +9,24 @@
 
 import { blockTypes, inlineTypes, validMarks, requiredMeta, validStatuses } from './content-schema.js';
 
+const TAG_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/;
+const RESERVED_TAGS = new Set(['annotation-xml', 'color-profile', 'font-face', 'font-face-src', 'font-face-uri', 'font-face-format', 'font-face-name', 'missing-glyph']);
+const ATTR_NAME_RE = /^[a-z][a-z0-9-]*$/;
+const WRAPS = ['text', 'template', 'script'];
+
 /**
  * Validate a document against the content schema.
+ *
+ * Without `options.components` validation is structural only. With a
+ * descriptor index, component nodes are also checked against their descriptors.
  * @param {Object} doc
+ * @param {Object} [options]
+ * @param {Map<string, import('../components/describe.js').ComponentDescriptor>} [options.components]
  * @returns {{ valid: boolean, errors: string[] }}
  */
-export function validate(doc) {
+export function validate(doc, { components } = {}) {
   const errors = [];
+  const ctx = { components };
 
   if (!doc || typeof doc !== 'object') {
     return { valid: false, errors: ['Document must be an object'] };
@@ -47,7 +58,7 @@ export function validate(doc) {
   // Block validation
   if (Array.isArray(doc.blocks)) {
     for (let i = 0; i < doc.blocks.length; i++) {
-      validateBlock(doc.blocks[i], `blocks[${i}]`, errors);
+      validateBlock(doc.blocks[i], `blocks[${i}]`, errors, ctx);
     }
   }
 
@@ -59,8 +70,9 @@ export function validate(doc) {
  * @param {Object} block
  * @param {string} path - dot-path for error messages
  * @param {string[]} errors - accumulator
+ * @param {{ components?: Map }} ctx
  */
-function validateBlock(block, path, errors) {
+function validateBlock(block, path, errors, ctx) {
   if (!block || typeof block !== 'object') {
     errors.push(`${path}: block must be an object`);
     return;
@@ -75,6 +87,11 @@ function validateBlock(block, path, errors) {
   const def = blockTypes[type];
   if (!def) {
     errors.push(`${path}: unknown block type "${type}"`);
+    return;
+  }
+
+  if (type === 'component') {
+    validateComponent(block, path, errors, ctx, false);
     return;
   }
 
@@ -105,11 +122,11 @@ function validateBlock(block, path, errors) {
 
   if (model === 'inline') {
     for (let i = 0; i < block.children.length; i++) {
-      validateInline(block.children[i], `${path}.children[${i}]`, errors);
+      validateInline(block.children[i], `${path}.children[${i}]`, errors, ctx);
     }
   } else if (model === 'block') {
     for (let i = 0; i < block.children.length; i++) {
-      validateBlock(block.children[i], `${path}.children[${i}]`, errors);
+      validateBlock(block.children[i], `${path}.children[${i}]`, errors, ctx);
     }
   } else if (typeof model === 'string') {
     // Specific child type (e.g., 'list_item', 'tab', 'step')
@@ -118,7 +135,7 @@ function validateBlock(block, path, errors) {
       if (child && child.type !== model) {
         errors.push(`${path}.children[${i}]: expected type "${model}", got "${child.type}"`);
       }
-      validateBlock(block.children[i], `${path}.children[${i}]`, errors);
+      validateBlock(block.children[i], `${path}.children[${i}]`, errors, ctx);
     }
   } else if (Array.isArray(model)) {
     // Array of allowed child types (e.g., figure allows ['figcaption'])
@@ -127,7 +144,7 @@ function validateBlock(block, path, errors) {
       if (child && !model.includes(child.type)) {
         errors.push(`${path}.children[${i}]: type "${child.type}" not allowed (expected: ${model.join(', ')})`);
       }
-      validateBlock(block.children[i], `${path}.children[${i}]`, errors);
+      validateBlock(block.children[i], `${path}.children[${i}]`, errors, ctx);
     }
   }
 }
@@ -137,8 +154,9 @@ function validateBlock(block, path, errors) {
  * @param {Object} node
  * @param {string} path
  * @param {string[]} errors
+ * @param {{ components?: Map }} ctx
  */
-function validateInline(node, path, errors) {
+function validateInline(node, path, errors, ctx) {
   if (!node || typeof node !== 'object') {
     errors.push(`${path}: inline node must be an object`);
     return;
@@ -153,6 +171,11 @@ function validateInline(node, path, errors) {
   const def = inlineTypes[type];
   if (!def) {
     errors.push(`${path}: unknown inline type "${type}"`);
+    return;
+  }
+
+  if (type === 'component') {
+    validateComponent(node, path, errors, ctx, true);
     return;
   }
 
@@ -177,7 +200,7 @@ function validateInline(node, path, errors) {
     }
     if (Array.isArray(node.children)) {
       for (let i = 0; i < node.children.length; i++) {
-        validateInline(node.children[i], `${path}.children[${i}]`, errors);
+        validateInline(node.children[i], `${path}.children[${i}]`, errors, ctx);
       }
     }
   } else if (type === 'footnote_ref') {
@@ -228,5 +251,112 @@ function validateAttrs(attrs, attrDefs, path, errors) {
         errors.push(`${path}: attr "${name}" must be <= ${def.max}`);
       }
     }
+  }
+}
+
+/**
+ * Validate a generic component node (block or inline).
+ * Always checks tag/attr-name safety and value types; with a descriptor index
+ * also checks the tag is enabled, placement, declared attrs and content shape.
+ * @param {Object} node
+ * @param {string} path
+ * @param {string[]} errors
+ * @param {{ components?: Map }} ctx
+ * @param {boolean} inline - true when the node sits in an inline position
+ */
+function validateComponent(node, path, errors, ctx, inline) {
+  const { tag } = node;
+  if (typeof tag !== 'string' || !TAG_RE.test(tag) || RESERVED_TAGS.has(tag)) {
+    errors.push(`${path}: component tag ${JSON.stringify(tag)} is not a valid custom element name`);
+    return;
+  }
+
+  const attrs = node.attrs === undefined ? {} : node.attrs;
+  const attrsOk = attrs && typeof attrs === 'object' && !Array.isArray(attrs);
+  if (!attrsOk) {
+    errors.push(`${path}: component "${tag}" attrs must be an object`);
+  } else {
+    for (const [name, value] of Object.entries(attrs)) {
+      if (!ATTR_NAME_RE.test(name) || name.startsWith('on')) {
+        errors.push(`${path}: component "${tag}" attr name "${name}" is not allowed`);
+      } else if (!['string', 'number', 'boolean'].includes(typeof value)) {
+        errors.push(`${path}: component "${tag}" attr "${name}" must be a string, number or boolean`);
+      }
+    }
+  }
+
+  if (node.value !== undefined && typeof node.value !== 'string') {
+    errors.push(`${path}: component "${tag}" value must be a string`);
+  }
+  if (node.wrap !== undefined && !WRAPS.includes(node.wrap)) {
+    errors.push(`${path}: component "${tag}" wrap must be one of ${WRAPS.join(', ')}`);
+  }
+  if (node.children !== undefined && !Array.isArray(node.children)) {
+    errors.push(`${path}: component "${tag}" children must be an array`);
+    return;
+  }
+  if (inline && !Array.isArray(node.children)) {
+    errors.push(`${path}: inline component "${tag}" must have a "children" array`);
+  }
+
+  const index = ctx && ctx.components;
+  const children = node.children || [];
+  const walk = (asInline) => children.forEach((c, i) => {
+    const cp = `${path}.children[${i}]`;
+    if (asInline) validateInline(c, cp, errors, ctx);
+    else validateBlock(c, cp, errors, ctx);
+  });
+
+  if (!index) {
+    // Structural only: recurse by position.
+    walk(inline);
+    return;
+  }
+
+  const desc = index.get(tag);
+  if (!desc) {
+    errors.push(`${path}: component "${tag}" is not on for this site`);
+    return;
+  }
+
+  const kind = desc.kind;
+  if (inline && kind !== 'inline') {
+    errors.push(`${path}: component "${tag}" (kind ${kind}) cannot be used inline`);
+  } else if (!inline && kind === 'inline') {
+    errors.push(`${path}: component "${tag}" is inline-only and cannot be used as a block`);
+  }
+
+  if (attrsOk) {
+    const declared = new Map((desc.attributes || []).map(a => [a.name, a]));
+    for (const [name, value] of Object.entries(attrs)) {
+      const def = declared.get(name);
+      if (!def) {
+        if (ATTR_NAME_RE.test(name) && !name.startsWith('on')) {
+          errors.push(`${path}: component "${tag}" has no attr "${name}"`);
+        }
+        continue;
+      }
+      if (typeof value !== def.type) {
+        errors.push(`${path}: component "${tag}" attr "${name}" must be a ${def.type}`);
+      } else if (def.enum && !def.enum.includes(value)) {
+        errors.push(`${path}: component "${tag}" attr "${name}" value "${value}" not in allowed values (${def.enum.join(', ')})`);
+      }
+    }
+  }
+
+  const hasValue = node.value !== undefined;
+  const hasChildren = children.length > 0;
+  if (kind === 'none') {
+    if (hasValue || hasChildren) errors.push(`${path}: component "${tag}" takes no content`);
+  } else if (kind === 'text' || kind === 'code') {
+    if (typeof node.value !== 'string') errors.push(`${path}: component "${tag}" (${kind}) must have a string "value"`);
+    if (hasChildren) errors.push(`${path}: component "${tag}" (${kind}) must not have children`);
+  } else if (kind === 'blocks') {
+    if (hasValue) errors.push(`${path}: component "${tag}" (blocks) must not have a value`);
+    if (!Array.isArray(node.children)) errors.push(`${path}: component "${tag}" (blocks) must have a "children" array`);
+    else walk(false);
+  } else if (kind === 'inline') {
+    if (hasValue) errors.push(`${path}: component "${tag}" (inline) must not have a value`);
+    walk(true);
   }
 }

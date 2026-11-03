@@ -7,6 +7,8 @@
  * @module renderers/markdown
  */
 
+import { renderComponentBlock, renderComponentInline } from './html.js';
+
 /**
  * Render a document to markdown with YAML frontmatter.
  * @param {Object} doc
@@ -83,6 +85,7 @@ function renderBlock(block, depth = 0) {
     case 'table':        return renderTableBlock(block);
     case 'definition_list': return renderDefinitionListBlock(block);
     case 'embed':        return renderEmbed(block);
+    case 'component':    return renderComponentBlock(block); // raw HTML is valid Markdown
     default:
       if (block.children) {
         return block.children.map(b => renderBlock(b, depth)).join('\n\n');
@@ -265,6 +268,8 @@ function renderInlineNode(node) {
       return renderLinkNode(node);
     case 'footnote_ref':
       return `[^${node.attrs?.id || ''}]`;
+    case 'component':
+      return renderComponentInline(node);
     default:
       return '';
   }

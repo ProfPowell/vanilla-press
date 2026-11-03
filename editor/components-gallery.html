@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Vanilla Press component gallery</title>
+<link rel="stylesheet" href="/assets/vb/vanilla-breeze.css"/>
+<style>
+  body { margin: 0; }
+  .bar { position: sticky; top: 0; z-index: 10; display: flex; gap: 1rem; align-items: center; padding: .75rem 1rem; background: #222; color: #fff; font: 14px system-ui, sans-serif; }
+  .bar select { font: inherit; }
+  .bar small { opacity: .7; }
+  main { padding: 1rem 1.5rem 4rem; max-width: 70rem; margin: 0 auto; }
+  section.item { margin: 1.5rem 0; padding-top: 1rem; border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
+  section.item h2 { margin: 0; font-size: 1.1rem; }
+  section.item p.meta { margin: .25rem 0 .75rem; font-size: .8rem; opacity: .7; }
+  .stage { min-height: 3rem; }
+  .note { font-size: .85rem; padding: .5rem; border: 1px dashed currentColor; margin: .5rem 0; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <strong>Component gallery</strong>
+  <label>Theme <select id="theme"><option value="default">Default</option></select></label>
+  <small id="status">Loading...</small>
+</div>
+<main id="gallery" data-theme=""></main>
+
+<script type="module">
+import { api } from './assets/js/api-client.js';
+import { loadComponent, createComponentElement, setComponentValue } from './assets/js/component-loader.js';
+
+const gallery = document.getElementById('gallery');
+const select = document.getElementById('theme');
+const status = document.getElementById('status');
+
+const el = (tag, props = {}, ...kids) => {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') node.className = v; else node.setAttribute(k, v);
+  }
+  node.append(...kids);
+  return node;
+};
+
+const SAMPLE_CODE = { js: 'const answer = 6 * 7;\nconsole.log(answer);', javascript: 'const answer = 6 * 7;\nconsole.log(answer);' };
+
+/** Sample content for the element's content kind, built as DOM. */
+function fill(node, d) {
+  switch (d.kind) {
+    case 'text': node.append(document.createTextNode('Sample text for ' + d.label)); break;
+    case 'code': {
+      const lang = d.codeLanguage ? d.defaults?.[d.codeLanguage] : '';
+      setComponentValue(node, SAMPLE_CODE[lang] || 'const answer = 6 * 7;', d.codeWrap || 'text');
+      break;
+    }
+    case 'blocks': node.append(el('p', {}, 'Sample block content inside ' + d.label + '.')); break;
+    default: break;
+  }
+}
+
+async function renderItem(d) {
+  const section = el('section', { class: 'item', id: d.tag });
+  section.append(el('h2', {}, `${d.label} `, el('code', {}, `<${d.tag}>`)));
+  section.append(el('p', { class: 'meta' }, `${d.package}${d.bundled ? ' (bundled with Vanilla Breeze)' : ''} - kind ${d.kind} - ${d.description}`));
+  const stage = el('div', { class: 'stage' });
+  section.append(stage);
+  gallery.append(section);
+
+  const result = await loadComponent(d);
+  if (result === 'failed') {
+    stage.append(el('p', { class: 'note' }, `Script did not load for ${d.package}; showing the unupgraded element.`));
+  }
+  const node = createComponentElement(d.tag, d.defaults || {});
+  fill(node, d);
+  if (d.kind === 'inline') stage.append(el('p', {}, 'Before ', node, ' after.'));
+  else stage.append(node);
+}
+
+async function loadThemes() {
+  try {
+    const themes = await api.listThemes();
+    const groups = new Map();
+    for (const t of themes) {
+      if (!groups.has(t.tier)) groups.set(t.tier, el('optgroup', { label: t.tier }));
+      const opt = el('option', { value: t.id }, t.name);
+      groups.get(t.tier).append(opt);
+    }
+    select.replaceChildren(...groups.values());
+    select.value = themes.some(t => t.id === 'default') ? 'default' : themes[0]?.id;
+    select._themes = themes;
+  } catch (err) {
+    console.error('Themes not loaded:', err);
+    select._themes = [];
+  }
+}
+
+function applyTheme() {
+  const id = select.value;
+  const theme = (select._themes || []).find(t => t.id === id);
+  if (!theme || id === 'default') gallery.removeAttribute('data-theme');
+  else gallery.setAttribute('data-theme', id);
+  document.documentElement.toggleAttribute('data-theme-active', Boolean(theme && id !== 'default'));
+  let link = document.getElementById('theme-link');
+  if (theme?.file) {
+    if (!link) { link = el('link', { id: 'theme-link', rel: 'stylesheet' }); document.head.append(link); }
+    link.href = `/assets/vb/themes/${theme.file}`;
+  } else link?.remove();
+}
+select.addEventListener('change', applyTheme);
+
+await loadThemes();
+applyTheme();
+
+let states = [];
+try {
+  const res = await api.listComponents();
+  states = Array.isArray(res) ? res : res.packages;
+} catch (err) {
+  status.textContent = 'Could not load /api/components: ' + err.message;
+}
+// Packages first, then the Vanilla Breeze bundled elements.
+const all = states.flatMap(s => s.elements);
+all.sort((a, b) => Number(a.bundled) - Number(b.bundled));
+for (const d of all) await renderItem(d);
+status.textContent = `${all.length} elements`;
+
+// The bundled elements need the Vanilla Breeze script. The gallery defines no
+// <theme-picker>, so there is no clash with VB's own.
+await import('/assets/vb/vanilla-breeze.js');
+</script>
+</body>
+</html>

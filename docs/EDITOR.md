@@ -76,6 +76,14 @@ The editor opens with the document browser in the sidebar showing all seeded doc
 | `Mod+Shift+8` | Toggle bullet list |
 | `Mod+Shift+9` | Toggle ordered list |
 
+### Components
+
+- **Insert:** type `/` in an empty paragraph and choose a component from the palette (grouped, filterable). Block components land as a block; an inline one (like blink-wc) lands in the paragraph.
+- **Settings:** with the cursor in a component (or the component selected) a settings panel shows its attributes as a form, built from the package's manifest; rarely used attributes sit under an advanced heading. Text, code and block content is edited in the page itself.
+- **Inline wrap:** select text and use the component select in the toolbar to wrap it in an inline component; the same select unwraps it.
+- **States:** a component whose package is not turned on for the site shows the label "<name> is not on for this site"; one whose script fails to import shows "<name> couldn't load". The post still saves; Publish and Update refuse a post that uses a package that is not on. Turn packages on from the site's Components screen.
+- **Gallery:** `/editor/components-gallery.html` on `vp serve` shows every element with a theme switcher.
+
 ### AST inspector
 
 Click the **AST** button in the toolbar to toggle the debug inspector. It shows the live Vanilla Press block AST as the document is edited — useful for verifying the round-trip between ProseMirror and the content model.

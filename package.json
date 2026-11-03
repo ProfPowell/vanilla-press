@@ -40,7 +40,7 @@
     "vanilla-breeze": "file:../vanilla-breeze"
   },
   "devDependencies": {
-    "cook-ssg": "^2.4.0",
+    "cook-ssg": "^2.5.0",
     "gray-matter": "^4.0.3"
   }
 }

@@ -5,6 +5,8 @@
  * - PM link marks → VP link nodes with children (and back)
  * - PM bullet_list/ordered_list → VP list with ordered boolean (and back)
  * - PM code_block (text content) → VP code_block (leaf with value)
+ * - PM component_leaf / component_blocks / component_inline → VP component
+ *   (`value`/`wrap` on leaves only when set, `children` for blocks and inline)
  *
  * @module editor/ast
  */
@@ -224,6 +226,21 @@ function nodeToBlock(node) {
         attrs: { url: node.attrs.url, type: node.attrs.type },
       };
 
+    case 'component_leaf': {
+      const comp = { type: 'component', tag: node.attrs.tag, attrs: { ...(node.attrs.attrs || {}) } };
+      if (node.attrs.value != null) comp.value = node.attrs.value;
+      if (node.attrs.wrap != null) comp.wrap = node.attrs.wrap;
+      return comp;
+    }
+
+    case 'component_blocks':
+      return {
+        type: 'component',
+        tag: node.attrs.tag,
+        attrs: { ...(node.attrs.attrs || {}) },
+        children: childBlocks(node),
+      };
+
     default:
       return null;
   }
@@ -256,6 +273,16 @@ function inlineToVp(node) {
       result.push({
         type: 'footnote_ref',
         attrs: { id: child.attrs.id },
+      });
+      return;
+    }
+
+    if (child.type.name === 'component_inline') {
+      result.push({
+        type: 'component',
+        tag: child.attrs.tag,
+        attrs: { ...(child.attrs.attrs || {}) },
+        children: inlineToVp(child),
       });
       return;
     }
@@ -451,6 +478,22 @@ function blockToNode(block, s) {
         type: block.attrs?.type || 'video',
       });
 
+    case 'component': {
+      const attrs = { ...(block.attrs || {}) };
+      if (Array.isArray(block.children)) {
+        const children = block.children.map(b => blockToNode(b, s)).filter(Boolean);
+        // block+ needs one child; an empty list comes back as one empty paragraph
+        if (children.length === 0) children.push(s.node('paragraph'));
+        return s.node('component_blocks', { tag: block.tag, attrs }, children);
+      }
+      return s.node('component_leaf', {
+        tag: block.tag,
+        attrs,
+        value: typeof block.value === 'string' ? block.value : null,
+        wrap: block.wrap ?? null,
+      });
+    }
+
     default:
       return null;
   }
@@ -490,6 +533,11 @@ function vpInlineToPm(children, s) {
       }
     } else if (child.type === 'footnote_ref') {
       result.push(s.node('footnote_ref', { id: child.attrs?.id || '1' }));
+    } else if (child.type === 'component') {
+      // component_inline holds text* (marks allowed, links are marks)
+      const inner = (child.children || []).filter(c => c && (c.type === 'text' || c.type === 'link'));
+      result.push(s.node('component_inline', { tag: child.tag, attrs: { ...(child.attrs || {}) } },
+        vpInlineToPm(inner, s)));
     }
   }
 

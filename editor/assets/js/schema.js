@@ -375,6 +375,99 @@ const embed = {
   },
 };
 
+// --- Web components (generic `component` AST node) ---
+// Plain display for now: a labeled box showing the tag. The attrs are the
+// AST's own (`attrs` is the element's attribute object). data-* attributes
+// carry them so copy/paste inside the editor keeps the component.
+
+function componentDomAttrs(node, cls) {
+  const attrs = {
+    class: cls,
+    'data-vp-component': node.attrs.tag,
+    'data-vp-attrs': JSON.stringify(node.attrs.attrs || {}),
+  };
+  if (node.attrs.value != null) attrs['data-vp-value'] = node.attrs.value;
+  if (node.attrs.wrap != null) attrs['data-vp-wrap'] = node.attrs.wrap;
+  return attrs;
+}
+
+function parseComponentAttrs(dom) {
+  let attrs = {};
+  try {
+    const parsed = JSON.parse(dom.getAttribute('data-vp-attrs') || '{}');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) attrs = parsed;
+  } catch { /* keep {} */ }
+  return { tag: dom.getAttribute('data-vp-component'), attrs };
+}
+
+/** none, text and code kinds: no PM content; `value` holds text/code. */
+const component_leaf = {
+  group: 'block',
+  atom: true,
+  attrs: {
+    tag: { default: '' },
+    attrs: { default: {} },
+    value: { default: null },
+    wrap: { default: null },
+  },
+  parseDOM: [{
+    tag: 'div[data-vp-component].pm-component-leaf',
+    getAttrs(dom) {
+      return {
+        ...parseComponentAttrs(dom),
+        value: dom.hasAttribute('data-vp-value') ? dom.getAttribute('data-vp-value') : null,
+        wrap: dom.getAttribute('data-vp-wrap') || null,
+      };
+    },
+  }],
+  toDOM(node) {
+    const label = `<${node.attrs.tag}>`;
+    const value = node.attrs.value ? ` ${node.attrs.value.slice(0, 80)}` : '';
+    return ['div', { ...componentDomAttrs(node, 'pm-component pm-component-leaf'), contenteditable: 'false' },
+      ['span', { class: 'pm-component-label' }, label], value];
+  },
+};
+
+/** blocks kind: block children. */
+const component_blocks = {
+  content: 'block+',
+  group: 'block',
+  defining: true,
+  isolating: true,
+  attrs: {
+    tag: { default: '' },
+    attrs: { default: {} },
+  },
+  parseDOM: [{
+    tag: 'div[data-vp-component].pm-component-blocks',
+    getAttrs: parseComponentAttrs,
+    contentElement: ':scope > .pm-component-body',
+  }],
+  toDOM(node) {
+    return ['div', componentDomAttrs(node, 'pm-component pm-component-blocks'),
+      ['div', { class: 'pm-component-label', contenteditable: 'false' }, `<${node.attrs.tag}>`],
+      ['div', { class: 'pm-component-body' }, 0]];
+  },
+};
+
+/** inline kind: wraps (possibly marked) text inside a paragraph. */
+const component_inline = {
+  group: 'inline',
+  inline: true,
+  content: 'text*',
+  attrs: {
+    tag: { default: '' },
+    attrs: { default: {} },
+  },
+  parseDOM: [{
+    tag: 'span[data-vp-component].pm-component-inline',
+    getAttrs: parseComponentAttrs,
+  }],
+  toDOM(node) {
+    return ['span', componentDomAttrs(node, 'pm-component pm-component-inline'), 0];
+  },
+};
+
 const table = {
   content: 'table_row+',
   group: 'block',
@@ -632,6 +725,9 @@ export const schema = new Schema({
     figure,
     figcaption,
     embed,
+    component_leaf,
+    component_blocks,
+    component_inline,
     footnote_ref,
     text,
   },

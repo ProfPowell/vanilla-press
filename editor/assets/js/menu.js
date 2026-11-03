@@ -6,8 +6,10 @@
  */
 
 import { toggleMark, setBlockType, wrapIn, lift } from 'prosemirror-commands';
+import { TextSelection } from 'prosemirror-state';
 import { wrapInList } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
+import { initialAttrs } from './component-model.js';
 
 /**
  * @typedef {Object} ToolbarItem
@@ -55,6 +57,33 @@ function insertHr(state, dispatch) {
     dispatch(state.tr.replaceSelectionWith(schema.nodes.hr.create()).scrollIntoView());
   }
   return true;
+}
+
+/**
+ * Wrap the selected text in an inline component. Applies only when the
+ * selection is non-empty, inside one textblock, and covers text alone
+ * (no footnotes or other components); the text keeps its marks.
+ * @param {{ tag: string, attrs: Object }} attrs
+ */
+export function wrapInComponent(attrs) {
+  return (state, dispatch) => {
+    const type = schema.nodes.component_inline;
+    const sel = state.selection;
+    if (sel.empty || !(sel instanceof TextSelection)) return false;
+    const { $from, $to, from, to } = sel;
+    if (!$from.sameParent($to) || !$from.parent.inlineContent) return false;
+    const parent = $from.parent;
+    const start = $from.start();
+    const content = parent.cut(from - start, to - start).content;
+    let textOnly = content.size > 0;
+    content.forEach(n => { if (!n.isText) textOnly = false; });
+    if (!textOnly || !type.validContent(content)) return false;
+    if (!parent.canReplaceWith($from.index(), $to.indexAfter(), type)) return false;
+    if (dispatch) {
+      dispatch(state.tr.replaceWith(from, to, type.create(attrs, content)).scrollIntoView());
+    }
+    return true;
+  };
 }
 
 /** Build toolbar items config */
@@ -170,6 +199,8 @@ export class EditorToolbar {
     this.items = buildToolbarItems();
     this.buttons = [];
     this.linkButton = null;
+    this.wrapSelect = null;
+    this.inlineComponents = [];
     this.render();
   }
 
@@ -217,6 +248,52 @@ export class EditorToolbar {
     });
     this.container.appendChild(linkBtn);
     this.linkButton = linkBtn;
+
+    // Wrap in component (inline kinds); hidden until components are loaded
+    const wrap = document.createElement('select');
+    wrap.className = 'toolbar-wrap-component';
+    wrap.title = 'Wrap the selected text in a component';
+    wrap.setAttribute('aria-label', 'Wrap in component');
+    wrap.hidden = true;
+    wrap.addEventListener('change', () => {
+      const desc = this.inlineComponents.find(d => d.tag === wrap.value);
+      wrap.value = '';
+      if (desc) {
+        const { tag, attrs } = initialAttrs(desc);
+        wrapInComponent({ tag, attrs })(this.view.state, this.view.dispatch);
+      }
+      this.view.focus();
+    });
+    this.container.appendChild(wrap);
+    this.wrapSelect = wrap;
+    this._renderWrapOptions();
+  }
+
+  /**
+   * Offer these inline components in the wrap select.
+   * @param {Array} descriptors - enabled descriptors of kind 'inline'
+   */
+  setInlineComponents(descriptors) {
+    this.inlineComponents = descriptors;
+    this._renderWrapOptions();
+    this.update(this.view.state);
+  }
+
+  _renderWrapOptions() {
+    const wrap = this.wrapSelect;
+    if (!wrap) return;
+    wrap.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Wrap in component\u2026';
+    wrap.append(placeholder);
+    for (const d of this.inlineComponents) {
+      const opt = document.createElement('option');
+      opt.value = d.tag;
+      opt.textContent = d.label || d.tag;
+      wrap.append(opt);
+    }
+    wrap.hidden = this.inlineComponents.length === 0;
   }
 
   toggleLink() {
@@ -245,6 +322,9 @@ export class EditorToolbar {
       if (item.enabled) {
         btn.disabled = !item.enabled(state);
       }
+    }
+    if (this.wrapSelect) {
+      this.wrapSelect.disabled = !wrapInComponent({ tag: '', attrs: {} })(state);
     }
     // Link button active state
     if (this.linkButton) {

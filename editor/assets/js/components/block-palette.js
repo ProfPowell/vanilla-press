@@ -10,6 +10,7 @@
 
 import { schema } from '../schema.js';
 import { openMediaPicker } from './media-picker.js';
+import { nodeTypeFor, initialAttrs, paletteEntries } from '../component-model.js';
 
 /**
  * Palette entries: each has an id, label, description, icon, category,
@@ -154,6 +155,14 @@ const PALETTE_ENTRIES = [
   },
 ];
 
+// Catalog icon names → palette glyphs (the icon slot is one character wide)
+const COMPONENT_ICON_GLYPHS = {
+  accordion: '\u25be', audio: '\u266b', blink: '\u2733', browser: '\u25a3', carousel: '\u21c4',
+  code: '<>', diagram: '\u25c7', 'edit-image': '\u270e', file: '\u2399', footnote: '\u2020',
+  frame: '\u25a2', gallery: '\u25a6', image: '\u25a7', map: '\u2316', marquee: '\u21e0',
+  play: '\u25b6', qr: '\u25a9', share: '\u21aa', terminal: '>_', video: '\u25b6', youtube: '\u25b6',
+};
+
 const CATEGORY_LABELS = {
   prose: 'Prose',
   component: 'Components',
@@ -177,6 +186,7 @@ export class BlockPalette {
 
     this._entries = [...PALETTE_ENTRIES];
     this._patternEntries = [];
+    this._componentEntries = [];
 
     // Close on outside click
     document.addEventListener('mousedown', (e) => {
@@ -192,6 +202,25 @@ export class BlockPalette {
    */
   registerPatterns(patterns) {
     this._patternEntries = patterns;
+  }
+
+  /**
+   * Register web-component entries from descriptors (enabled packages only).
+   * Inline kinds are skipped: they are offered by the toolbar's wrap select.
+   * @param {Array} descriptors
+   */
+  registerComponents(descriptors) {
+    const byTag = new Map(descriptors.map(d => [d.tag, d]));
+    this._componentEntries = paletteEntries(descriptors).map(entry => {
+      const desc = byTag.get(entry.tag);
+      const type = nodeTypeFor(desc);
+      return {
+        ...entry,
+        icon: COMPONENT_ICON_GLYPHS[entry.icon] || '\u29c9',
+        create: () => schema.nodes[type].create(initialAttrs(desc),
+          type === 'component_blocks' ? [schema.nodes.paragraph.create()] : null),
+      };
+    });
   }
 
   open(view, pos) {
@@ -330,7 +359,7 @@ export class BlockPalette {
   }
 
   get _allEntries() {
-    return [...this._entries, ...this._patternEntries];
+    return [...this._entries, ...this._componentEntries, ...this._patternEntries];
   }
 
   render() {
@@ -364,13 +393,20 @@ export class BlockPalette {
         if (this.items.length === this.selected) {
           item.classList.add('selected');
         }
-        item.innerHTML = `
-          <span class="palette-icon">${entry.icon || '\u25a1'}</span>
-          <span class="palette-text">
-            <span class="palette-label">${entry.label}</span>
-            <span class="palette-description">${entry.description}</span>
-          </span>
-        `;
+        // textContent: component labels/descriptions come from package manifests
+        const icon = document.createElement('span');
+        icon.className = 'palette-icon';
+        icon.textContent = entry.icon || '\u25a1';
+        const textEl = document.createElement('span');
+        textEl.className = 'palette-text';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'palette-label';
+        labelEl.textContent = entry.label;
+        const descEl = document.createElement('span');
+        descEl.className = 'palette-description';
+        descEl.textContent = entry.description;
+        textEl.append(labelEl, descEl);
+        item.append(icon, textEl);
         item.addEventListener('mousedown', (e) => {
           e.preventDefault();
           if (entry.isPattern) {

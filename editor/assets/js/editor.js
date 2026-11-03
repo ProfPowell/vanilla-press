@@ -36,6 +36,7 @@ import './components/meta-panel.js';
 import './components/doc-browser.js';
 import './components/theme-picker.js';
 import { initPatterns } from './patterns.js';
+import { enabledDescriptors } from './component-model.js';
 import { isSiteMode, initSiteMode } from './site-mode.js';
 
 // Re-export meta-state functions for convenience
@@ -217,6 +218,7 @@ export function initEditor() {
 
   setupExportButton();
   initPatterns();
+  loadComponents();
   initSiteMode();
 
   // Trigger initial AST inspector update
@@ -231,6 +233,21 @@ export function initEditor() {
   }
 
   editorView.focus();
+}
+
+/**
+ * Load component descriptors once and offer the enabled ones: block kinds
+ * in the `/` palette, inline kinds in the toolbar's wrap select. A failure
+ * leaves the editor without component entries.
+ */
+async function loadComponents() {
+  try {
+    const descriptors = enabledDescriptors(await api.listComponents());
+    getBlockPalette().registerComponents(descriptors);
+    toolbar?.setInlineComponents(descriptors.filter(d => d.kind === 'inline'));
+  } catch (err) {
+    console.warn('Components unavailable:', err);
+  }
 }
 
 function setupExportButton() {

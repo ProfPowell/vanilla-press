@@ -112,3 +112,31 @@
   outline-offset: 2px;
   border-radius: var(--radius-m);
 }
+
+/* Web components (plain display until live rendering) */
+.ProseMirror .pm-component-leaf,
+.ProseMirror .pm-component-blocks {
+  border: 1px dashed var(--color-border, #999);
+  border-radius: 4px;
+  padding: 0.5em 0.75em;
+  margin: 0.75em 0;
+}
+
+.ProseMirror .pm-component-label {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  opacity: 0.7;
+  user-select: none;
+}
+
+.ProseMirror .pm-component-inline {
+  border-bottom: 1px dashed currentColor;
+}
+
+.ProseMirror .pm-component-inline::before {
+  content: "<" attr(data-vp-component) ">";
+  font-family: var(--font-mono);
+  font-size: 0.7em;
+  opacity: 0.6;
+  margin-inline-end: 0.15em;
+}

@@ -10,6 +10,8 @@
 /** @typedef {import('../../../src/components/describe.js').ComponentDescriptor} ComponentDescriptor */
 /** @typedef {import('../../../src/components/manifest.js').AttrDef} AttrDef */
 
+import { blockTypes } from '../../../src/schema/content-schema.js';
+
 /** Attribute names whose values are URLs: text inputs with `inputmode="url"`. */
 const URL_NAMES = new Set(['src', 'url', 'href', 'poster']);
 
@@ -120,4 +122,46 @@ export function paletteEntries(descriptors) {
       tag: desc.tag,
     }))
     .sort((a, b) => a.category.localeCompare(b.category) || a.label.localeCompare(b.label));
+}
+
+/** Block types whose children are inline nodes. */
+const INLINE_PARENTS = new Set(Object.entries(blockTypes)
+  .filter(([, def]) => def.children === 'inline').map(([name]) => name));
+
+/**
+ * Paths of nodes in a block AST that the editor cannot hold as written, so
+ * saving after loading would change them. The editor refuses to auto-save
+ * such a post rather than drop content silently. Covers:
+ * - a block component with a `children` array that is empty, or that also
+ *   has `value` or `wrap` (it becomes a component_blocks node);
+ * - an inline component with `value` or `wrap` (component_inline has neither);
+ * - a link inside a link (PM links are marks; one link per run of content).
+ * @param {Object[]} blocks
+ * @returns {string[]}
+ */
+export function unrepresentable(blocks) {
+  const found = [];
+
+  const walk = (node, path, { inline, inLink }) => {
+    if (!node || typeof node !== 'object') return;
+    let childCtx = { inline: INLINE_PARENTS.has(node.type), inLink: false };
+
+    if (node.type === 'link') {
+      if (inLink) found.push(path);
+      childCtx = { inline: true, inLink: true };
+    } else if (node.type === 'component' && inline) {
+      if (node.value !== undefined || node.wrap !== undefined) found.push(path);
+      childCtx = { inline: true, inLink: false };
+    } else if (node.type === 'component' && Array.isArray(node.children)) {
+      if (node.children.length === 0 || node.value !== undefined || node.wrap !== undefined) found.push(path);
+      childCtx = { inline: false, inLink: false };
+    }
+
+    if (Array.isArray(node.children)) {
+      node.children.forEach((c, i) => walk(c, `${path}.children[${i}]`, childCtx));
+    }
+  };
+
+  (blocks || []).forEach((b, i) => walk(b, `blocks[${i}]`, { inline: false, inLink: false }));
+  return found;
 }

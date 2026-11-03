@@ -36,7 +36,7 @@ import './components/meta-panel.js';
 import './components/doc-browser.js';
 import './components/theme-picker.js';
 import { initPatterns } from './patterns.js';
-import { enabledDescriptors } from './component-model.js';
+import { enabledDescriptors, unrepresentable } from './component-model.js';
 import { isSiteMode, initSiteMode } from './site-mode.js';
 
 // Re-export meta-state functions for convenience
@@ -48,6 +48,11 @@ let saveTimer = null;
 let saveStatus = 'saved'; // 'saved' | 'saving' | 'unsaved' | 'conflict' | 'error'
 /** Documents whose JSON changed on disk: id → message. Auto-save is paused for these. */
 const conflicts = new Map();
+/**
+ * Why the open document must not be auto-saved, or null: set on load when
+ * the post holds content the editor cannot represent (saving would drop it).
+ */
+let saveHold = null;
 
 function createToolbarPlugin() {
   return new Plugin({
@@ -87,8 +92,14 @@ function createSlashPlugin() {
               palette.close();
               return true;
             case 'Backspace':
-              event.preventDefault();
-              palette.backspace();
+              // With a filter, Backspace edits the filter only; with none it
+              // closes the palette and deletes the '/' as usual.
+              if (palette.filter.length > 0) {
+                event.preventDefault();
+                palette.backspace();
+                return true;
+              }
+              palette.close();
               return false;
             default:
               if (event.key.length === 1 && !event.metaKey && !event.ctrlKey) {
@@ -105,9 +116,8 @@ function createSlashPlugin() {
         if (text === '/') {
           const { $from } = view.state.selection;
           if ($from.parent.type.name === 'paragraph' && $from.parent.textContent === '') {
-            setTimeout(() => {
-              palette.open(view, from);
-            }, 0);
+            // Open now (not on a timer) so the very next keys reach the filter
+            palette.open(view, from);
           }
         }
         return false;
@@ -166,6 +176,9 @@ export function initEditor() {
       schema.node('paragraph'),
     ]),
     plugins: [
+      // First: while the palette is open it owns Enter, Escape, arrows and
+      // Backspace, which the keymaps below would otherwise consume.
+      createSlashPlugin(),
       buildInputRules(),
       history(),
       buildKeymap(),
@@ -174,7 +187,6 @@ export function initEditor() {
       gapCursor(),
       createToolbarPlugin(),
       createLinkPlugin(),
-      createSlashPlugin(),
       tableEditing(),
     ],
   });
@@ -286,6 +298,7 @@ export function exportDocument() {
  */
 export function setEditorDoc(doc) {
   if (!editorView) return;
+  getBlockPalette().close(); // its trigger position belongs to the old doc
   const state = EditorState.create({
     schema,
     doc,
@@ -314,6 +327,11 @@ export async function loadDocument(id) {
 
     setCurrentDocId(doc.id);
     if (doc.meta) resetCurrentMeta(doc.meta);
+    const lossy = unrepresentable(doc.blocks || []);
+    saveHold = lossy.length
+      ? `Not saving: this post has content the editor can't show (${lossy.join(', ')}). Edit it in its file instead.`
+      : null;
+    if (lossy.length) console.warn('Unrepresentable content, auto-save off:', lossy);
 
     if (doc.blocks && doc.blocks.length > 0) {
       const pmDoc = fromBlockAst(doc.blocks, schema);
@@ -333,7 +351,8 @@ export async function loadDocument(id) {
       window.__onMetaUpdate(getCurrentMeta());
     }
 
-    setSaveStatus(conflicts.has(doc.id) ? 'conflict' : 'saved');
+    if (saveHold) setSaveStatus('error', saveHold);
+    else setSaveStatus(conflicts.has(doc.id) ? 'conflict' : 'saved');
     notifyConflict();
   } catch (err) {
     console.error('Error loading document:', err);
@@ -354,6 +373,10 @@ export async function saveDocument() {
   // The page the editor opens on (or shows after a delete) is not stored
   // yet: its first save creates the document.
   if (!docId || docId === 'doc_new') return createFromEditor();
+  if (saveHold) {
+    setSaveStatus('error', saveHold);
+    return false;
+  }
   if (conflicts.has(docId)) {
     setSaveStatus('conflict');
     return false;
@@ -494,6 +517,7 @@ export async function deleteDoc(id) {
 function clearIfCurrent(id) {
   if (id === getCurrentDocId()) {
     setCurrentDocId(null);
+    saveHold = null;
     resetCurrentMeta({
       title: 'Untitled',
       slug: 'untitled',

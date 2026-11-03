@@ -237,7 +237,23 @@ export class BlockPalette {
 
   close() {
     this.visible = false;
+    this.filter = '';
+    this.selected = 0;
+    this.triggerPos = null;
     this.el.classList.remove('open');
+  }
+
+  /**
+   * The positions just before and after the paragraph the palette was
+   * opened from, or null when the trigger position no longer points into a
+   * paragraph (the doc was replaced or changed under the open palette).
+   */
+  _triggerRange() {
+    const { doc } = this.view.state;
+    if (this.triggerPos == null || this.triggerPos > doc.content.size) return null;
+    const $pos = doc.resolve(this.triggerPos);
+    if ($pos.parent.type.name !== 'paragraph' || $pos.depth < 1) return null;
+    return [$pos.before(), $pos.after()];
   }
 
   position() {
@@ -290,15 +306,13 @@ export class BlockPalette {
   insertBlock(entry) {
     if (!this.view || this.triggerPos == null) return;
 
+    const range = this._triggerRange();
+    if (!range) { this.close(); return; }
     const node = entry.create();
     const { state, dispatch } = this.view;
 
-    const $pos = state.doc.resolve(this.triggerPos);
-    const from = $pos.start();
-    const to = $pos.end();
-
     let tr = state.tr;
-    tr = tr.replaceRangeWith(from - 1, to + 1, node);
+    tr = tr.replaceRangeWith(range[0], range[1], node);
     dispatch(tr.scrollIntoView());
     this.view.focus();
     this.close();
@@ -315,14 +329,14 @@ export class BlockPalette {
     const nodes = entry.createNodes();
     if (!nodes || nodes.length === 0) return;
 
+    const range = this._triggerRange();
+    if (!range) { this.close(); return; }
     const { state, dispatch } = this.view;
-    const $pos = state.doc.resolve(this.triggerPos);
-    const from = $pos.start();
-    const to = $pos.end();
+    const from = range[0] + 1;
 
     let tr = state.tr;
     // Replace the paragraph with the first node
-    tr = tr.replaceRangeWith(from - 1, to + 1, nodes[0]);
+    tr = tr.replaceRangeWith(range[0], range[1], nodes[0]);
 
     // Insert remaining nodes after the first one
     if (nodes.length > 1) {

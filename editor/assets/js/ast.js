@@ -267,72 +267,64 @@ function childBlocks(node) {
 function inlineToVp(node) {
   const result = [];
 
-  // Walk through text nodes, splitting on link marks
+  // Consecutive inline nodes carrying the same link mark form one VP link
+  // node; the link mark may sit on text, footnote refs and inline components.
   node.forEach(child => {
-    if (child.type.name === 'footnote_ref') {
-      result.push({
-        type: 'footnote_ref',
-        attrs: { id: child.attrs.id },
-      });
+    const vp = inlineNodeToVp(child);
+    if (!vp) return;
+
+    const linkMark = child.marks.find(m => m.type.name === 'link');
+    if (!linkMark) {
+      result.push(vp);
       return;
     }
 
-    if (child.type.name === 'component_inline') {
-      result.push({
-        type: 'component',
-        tag: child.attrs.tag,
-        attrs: { ...(child.attrs.attrs || {}) },
-        children: inlineToVp(child),
-      });
-      return;
-    }
-
-    if (child.type.name !== 'text') return;
-
-    const text = child.text;
-    const marks = child.marks;
-
-    // Check for link mark
-    const linkMark = marks.find(m => m.type.name === 'link');
-
-    if (linkMark) {
-      // This text is part of a link. We need to group consecutive texts
-      // with the same link into one VP link node.
-      const otherMarks = marks.filter(m => m.type.name !== 'link')
-        .map(m => PM_TO_VP_MARK[m.type.name] || m.type.name);
-
-      // Check if previous result item is a link with same href
-      const prevLink = result[result.length - 1];
-      if (prevLink && prevLink.type === 'link' &&
-          prevLink.attrs.href === linkMark.attrs.href &&
-          prevLink.attrs.title === linkMark.attrs.title) {
-        // Append to existing link
-        const textNode = { type: 'text', value: text };
-        if (otherMarks.length) textNode.marks = otherMarks;
-        prevLink.children.push(textNode);
-      } else {
-        // Create new link node
-        const textNode = { type: 'text', value: text };
-        if (otherMarks.length) textNode.marks = otherMarks;
-        const linkNode = {
-          type: 'link',
-          attrs: cleanAttrs({
-            href: linkMark.attrs.href,
-            title: linkMark.attrs.title || undefined,
-          }),
-          children: [textNode],
-        };
-        result.push(linkNode);
-      }
+    const prevLink = result[result.length - 1];
+    if (prevLink && prevLink.type === 'link' && prevLink._mark &&
+        prevLink._mark.eq(linkMark)) {
+      prevLink.children.push(vp);
     } else {
-      const vpMarks = marks.map(m => PM_TO_VP_MARK[m.type.name] || m.type.name);
-      const textNode = { type: 'text', value: text };
-      if (vpMarks.length) textNode.marks = vpMarks;
-      result.push(textNode);
+      const linkNode = {
+        type: 'link',
+        attrs: cleanAttrs({
+          href: linkMark.attrs.href,
+          title: linkMark.attrs.title || undefined,
+        }),
+        children: [vp],
+      };
+      Object.defineProperty(linkNode, '_mark', { value: linkMark, enumerable: false });
+      result.push(linkNode);
     }
   });
 
   return result;
+}
+
+/**
+ * One PM inline node as a VP inline node, ignoring its link mark (the
+ * caller groups by link). Null for node types the AST doesn't know.
+ */
+function inlineNodeToVp(child) {
+  switch (child.type.name) {
+    case 'text': {
+      const vpMarks = child.marks.filter(m => m.type.name !== 'link')
+        .map(m => PM_TO_VP_MARK[m.type.name] || m.type.name);
+      const textNode = { type: 'text', value: child.text };
+      if (vpMarks.length) textNode.marks = vpMarks;
+      return textNode;
+    }
+    case 'footnote_ref':
+      return { type: 'footnote_ref', attrs: { id: child.attrs.id } };
+    case 'component_inline':
+      return {
+        type: 'component',
+        tag: child.attrs.tag,
+        attrs: { ...(child.attrs.attrs || {}) },
+        children: inlineToVp(child),
+      };
+    default:
+      return null;
+  }
 }
 
 /**
@@ -503,41 +495,29 @@ function blockToNode(block, s) {
  * Convert VP inline nodes to PM inline content.
  * Handles link node → link mark conversion.
  */
-function vpInlineToPm(children, s) {
+function vpInlineToPm(children, s, linkMark = null) {
   const result = [];
+  const withLink = (marks) => (linkMark ? linkMark.addToSet(marks) : marks);
 
   for (const child of children) {
     if (!child) continue;
 
     if (child.type === 'text') {
-      if (!child.value && child.value !== '') continue;
-      if (child.value === '') continue; // Skip empty text nodes
-      const marks = (child.marks || []).map(m => {
-        const pmName = VP_TO_PM_MARK[m] || m;
-        return s.mark(pmName);
-      }).filter(Boolean);
-      result.push(s.text(child.value, marks));
+      if (typeof child.value !== 'string' || child.value === '') continue; // Skip empty text nodes
+      const marks = (child.marks || []).map(m => s.mark(VP_TO_PM_MARK[m] || m));
+      result.push(s.text(child.value, withLink(marks)));
     } else if (child.type === 'link') {
-      // Convert VP link node to PM text nodes with link mark
-      const linkMark = s.mark('link', {
+      // VP link node → its content carrying a PM link mark
+      const mark = s.mark('link', {
         href: child.attrs?.href || '',
         title: child.attrs?.title || null,
       });
-      const linkChildren = child.children || [];
-      for (const linkChild of linkChildren) {
-        if (linkChild.type === 'text') {
-          if (!linkChild.value) continue;
-          const otherMarks = (linkChild.marks || []).map(m => s.mark(VP_TO_PM_MARK[m] || m));
-          result.push(s.text(linkChild.value, [...otherMarks, linkMark]));
-        }
-      }
+      result.push(...vpInlineToPm(child.children || [], s, mark));
     } else if (child.type === 'footnote_ref') {
-      result.push(s.node('footnote_ref', { id: child.attrs?.id || '1' }));
+      result.push(s.node('footnote_ref', { id: child.attrs?.id || '1' }, null, withLink([])));
     } else if (child.type === 'component') {
-      // component_inline holds text* (marks allowed, links are marks)
-      const inner = (child.children || []).filter(c => c && (c.type === 'text' || c.type === 'link'));
       result.push(s.node('component_inline', { tag: child.tag, attrs: { ...(child.attrs || {}) } },
-        vpInlineToPm(inner, s)));
+        vpInlineToPm(child.children || [], s), withLink([])));
     }
   }
 

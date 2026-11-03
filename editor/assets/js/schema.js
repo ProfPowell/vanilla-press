@@ -450,11 +450,11 @@ const component_blocks = {
   },
 };
 
-/** inline kind: wraps (possibly marked) text inside a paragraph. */
+/** inline kind: inline content (marked text, links, footnotes, nested components). */
 const component_inline = {
   group: 'inline',
   inline: true,
-  content: 'text*',
+  content: 'inline*',
   attrs: {
     tag: { default: '' },
     attrs: { default: {} },

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  nodeTypeFor, initialAttrs, formFields, coerce, paletteEntries, enabledDescriptors,
+  nodeTypeFor, initialAttrs, formFields, coerce, paletteEntries, enabledDescriptors, unrepresentable,
 } from '../../editor/assets/js/component-model.js';
 
 const d = (tag, kind, extra = {}) => ({
@@ -116,5 +116,36 @@ describe('enabledDescriptors', () => {
     assert.deepEqual(enabledDescriptors(res).map(e => e.tag), ['x-a']);
     assert.deepEqual(enabledDescriptors(null), []);
     assert.deepEqual(enabledDescriptors({}), []);
+  });
+});
+
+describe('unrepresentable', () => {
+  const t = (value) => ({ type: 'text', value });
+  const para = (...children) => ({ type: 'paragraph', children });
+  const inl = (children, extra = {}) => ({ type: 'component', tag: 'x-i', attrs: {}, children, ...extra });
+
+  it('accepts every shape the editor holds', () => {
+    assert.deepEqual(unrepresentable([
+      { type: 'component', tag: 'x-n', attrs: {} },
+      { type: 'component', tag: 'x-t', attrs: {}, value: '' },
+      { type: 'component', tag: 'x-c', attrs: {}, value: 'a', wrap: 'script' },
+      { type: 'component', tag: 'x-b', attrs: {}, children: [para(t('a'), inl([t('b')]))] },
+      para(inl([{ type: 'footnote_ref', attrs: { id: '1' } }, inl([t('n')])]),
+        { type: 'link', attrs: { href: '/' }, children: [inl([{ type: 'link', attrs: { href: '/in' }, children: [t('x')] }])] }),
+      { type: 'table', children: [{ type: 'table_row', children: [{ type: 'table_cell', children: [inl([t('c')])] }] }] },
+    ]), []);
+  });
+  it('reports what the editor would change', () => {
+    assert.deepEqual(unrepresentable([
+      { type: 'component', tag: 'x-b', attrs: {}, children: [] },
+      { type: 'component', tag: 'x-b', attrs: {}, value: 'v', children: [para(t('a'))] },
+      { type: 'component', tag: 'x-b', attrs: {}, wrap: 'text', children: [para(t('a'))] },
+      para(inl([t('a')], { value: 'v' }), inl([], { wrap: 'text' })),
+      para({ type: 'link', attrs: { href: '/' }, children: [{ type: 'link', attrs: { href: '/b' }, children: [t('x')] }] }),
+    ]), [
+      'blocks[0]', 'blocks[1]', 'blocks[2]',
+      'blocks[3].children[0]', 'blocks[3].children[1]',
+      'blocks[4].children[0].children[0]',
+    ]);
   });
 });

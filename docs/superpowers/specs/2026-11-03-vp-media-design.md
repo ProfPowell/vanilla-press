@@ -1,6 +1,17 @@
 # Vanilla Press step 2: media management
 
-Date: 2026-11-03 · Status: draft for approval
+Date: 2026-11-03 · Status: approved, now step 3. It waits on the
+component system (`2026-11-03-vp-components-design.md`).
+
+**To revise before planning:** the user wants media to use the VB family.
+Two changes follow:
+- `<image-editor>` (`@profpowell/image-editor`) in the Media detail panel
+  for crop, rotate and filters. Saving creates a new copy, so existing posts
+  never change.
+- Audio, video and PDF as media types, inserted with VB's `audio-player`
+  and `video-player` and `<pdf-viewer>`.
+
+Both build on the component system.
 
 Builds on step 1, `docs/superpowers/specs/2026-11-02-vp-app-core-design.md`.
 The user asked to go straight to a design, so everything below the "Decided

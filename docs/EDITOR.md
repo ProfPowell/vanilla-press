@@ -129,6 +129,26 @@ All endpoints return JSON. Errors return `{ error: "message" }`.
 | `POST` | `/api/documents/:id/reload` | Replace the stored document with its JSON on disk (after a conflict) |
 | `GET` | `/api/workspace` | Which site is being edited (`{ site, syncEnabled }`) |
 
+### App routes
+
+`vp` starts the app server (`src/app/server.js`), which serves many Cook sites. Everything above is per site, under `/api/sites/<id>` (for example `GET /api/sites/<id>/documents`). Unknown site ids are 404. The server listens on `127.0.0.1` only and rejects other `Host` headers and cross-origin writes.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/sites` | Registered sites, each with `git: { connected, branch }` |
+| `POST` | `/api/sites` | Register a site (`{ path, name }`); the folder must depend on `cook-ssg` |
+| `POST` | `/api/sites/clone` | Clone a repo (`{ url, dest, name }`) and register it |
+| `DELETE` | `/api/sites/:id` | Unregister a site (files are left alone) |
+| `GET` | `/api/folders` | List folders for the picker (query: `path`) |
+| `POST` | `/api/sites/:id/preview` | Start the site's dev server; `{ url }` |
+| `GET` | `/api/sites/:id/info` | `{ siteUrl }` from the site's `config/data.js` |
+| `POST` | `/api/sites/:id/documents/:docId/publish` | Build check, commit, push; `{ status: 'pushed'\|'saved', url }`. 422 with `log` if the build fails; 409 with `files` on a rebase conflict |
+| `POST` | `/api/sites/:id/documents/:docId/unpublish` | Same, back to draft |
+| `GET` | `/api/sites/:id/documents/:docId/live` | `{ live, url }`: whether the deployed page matches the local build |
+| `GET` | `/api/sites/:id/status` | Draft backup state |
+| `POST` | `/api/sites/:id/backup` | Commit and push pending saves now |
+| `GET` | `/sites/:id/media/:file` | A site's uploaded file (`src/media`) |
+
 ### Editor files
 
 The editor lives in `editor/` and is served as static files. No build step — ProseMirror is loaded via import maps from esm.sh. Key files:
@@ -155,7 +175,7 @@ The editor lives in `editor/` and is served as static files. No build step — P
 
 ## CLI
 
-The `vp serve` command also starts the editor server:
+`vp` starts the multi-site app (see App routes). The `vp serve` command still starts the single-site editor server:
 
 ```bash
 vp serve              # Start on default port 3007

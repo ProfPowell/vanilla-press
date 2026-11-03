@@ -79,6 +79,19 @@ Vanilla Press no longer builds a site itself. It edits content and syncs files i
 - Old `content/.vp-manifest.json` files are obsolete and ignored; delete them. Pages synced before `vp_id` existed have no owner: delete them and run `vp sync`.
 - Site layouts (`src/layouts/post.html`, `page.html`) and `collections: { html: true }` in the Cook config are the site's responsibility.
 
+## App
+
+`vp` (or `vp app [--port <n>]`) starts the app: sites list, then posts, editor and Publish, in the browser at `http://127.0.0.1:3007` (next free port if taken; `VP_NO_OPEN=1` skips opening the browser). `vp serve --site <path>` still starts the single-site editor server as before.
+
+- **Registry:** the sites the app manages are in `~/.config/vanilla-press/sites.json` (override the directory with `VP_CONFIG_DIR`; tests always do). A folder is a site when its `package.json` has `cook-ssg` in `dependencies` or `devDependencies`.
+- **Routes:** registry routes are `/api/sites`, `/api/sites/clone`, `/api/folders`; each site's document API is under `/api/sites/<id>/...`; a site's uploads are served at `/sites/<id>/media/<file>`. See `docs/EDITOR.md`.
+- **Localhost only:** the server listens on `127.0.0.1`; requests need `Host` of `127.0.0.1:<port>` or `localhost:<port>`, and writes need a same-origin (or absent) `Origin`.
+- **VP-owned paths:** VP stages only `content/`, `src/media`, `config/vp.json`, and `src/<dir>` for each collection's output dir. For a collection whose output dir is `''` (pages) it stages individual files (each `src/*.html` with a `vp_id`, plus html paths in `.vp/manifest.json`), never `src/` wholesale. It never runs `git add -A` on the tree, so your own uncommitted work (a layout, `config/main.js`) is never committed.
+- **Publish:** runs the site's `npm run build` (install first if there is no `node_modules`); a failed build reverts the post to draft and commits and pushes nothing. Otherwise it commits and pushes; GitHub triggers the Cloudflare deploy. If the remote moved, VP rebases once; if GitHub changed files you are also editing outside VP, it refuses up front and leaves the repo untouched.
+- **Commit messages:** `Draft: <title>[, <title>] [CI Skip]` (up to three titles, then `and N more`), `Update: <title>`, `Publish: <title>`, `Unpublish: <title>`.
+- **Draft backup:** saves are committed and pushed 30 s after the last save (at most 120 s after the first unpushed one). Draft-only commits carry `[CI Skip]` so Cloudflare does not spend builds from its free-plan limit on content nobody can see. A backup that touches a published page is titled `Update: …` and is not skipped, so the repo never holds live-page changes that were not deployed: edits to a published post go live after the backup pause.
+- **Live check:** `GET /api/sites/<id>/documents/<docId>/live` compares the deployed page's text with the local `dist/` build; the client polls every 10 s and gives up after 300 s ("Still deploying, check Cloudflare").
+
 ## Project Phases
 
 See `docs/IMPLEMENTATION.md` for the full plan. The current phase determines what's in scope:

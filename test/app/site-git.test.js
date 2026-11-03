@@ -177,3 +177,80 @@ test('dispose cancels the pending timer', () => {
   backup.dispose();
   assert.equal(clock.pending(), 0);
 });
+
+test('a mixed batch with a published edit is an Update without the skip marker', async () => {
+  fx = makeGitSite();
+  const backup = backupFor(fakeClock());
+  write(fx.site, 'content/posts/other.json', draft('other', 'Other'));
+  backup.noteSaved({ title: 'Other', status: 'draft' });
+  write(fx.site, 'content/posts/hello.json', draft('hello', 'Hello'));
+  write(fx.site, 'src/posts/hello.html', '---\nvp_id: "doc_hello"\n---\n<p>Hi</p>\n');
+  backup.noteSaved({ title: 'Hello', status: 'published' });
+  await backup.flush();
+  assert.equal(lastRemote(), 'Update: Other, Hello');
+});
+
+const localCount = () => Number(git(fx.site, 'rev-list', '--count', 'HEAD'));
+
+for (const kind of ['disconnected', 'failing']) {
+  test(`after a ${kind} push, later saves still wait for the pause`, async () => {
+    fx = makeGitSite({ remote: kind === 'failing' });
+    const clock = fakeClock();
+    const failing = { ...realGit, push: async () => { throw new realGit.GitError('git push failed: down', 'down'); } };
+    const backup = backupFor(clock, kind === 'failing' ? { git: failing } : {});
+    write(fx.site, 'content/posts/a.json', draft('a', 'A'));
+    backup.noteSaved({ title: 'A', status: 'draft' });
+    await clock.advance(30_000); // first backup: a local commit, push fails
+    await clock.advance(200_000); // idle, well past the first save's 120 s window
+    const base = localCount();
+    for (let i = 0; i < 5; i++) {
+      write(fx.site, 'content/posts/a.json', draft('a', 'A') + i);
+      backup.noteSaved({ title: 'A', status: 'draft' });
+      await clock.advance(1_000);
+    }
+    await clock.advance(28_000); // 29 s after the last save
+    assert.equal(localCount(), base);
+    await clock.advance(1_000);
+    assert.equal(localCount(), base + 1);
+  });
+}
+
+test('a save during a slow push stays pending and is backed up next', async () => {
+  fx = makeGitSite();
+  let entered, release;
+  const inPush = new Promise((r) => { entered = r; });
+  const gate = new Promise((r) => { release = r; });
+  const slow = { ...realGit, push: async (dir) => { entered(); await gate; return realGit.push(dir); } };
+  const backup = backupFor(fakeClock(), { git: slow });
+  write(fx.site, 'content/posts/a.json', draft('a', 'A'));
+  backup.noteSaved({ title: 'A', status: 'draft' });
+  const first = backup.flush();
+  await inPush;
+  write(fx.site, 'content/posts/b.json', draft('b', 'B'));
+  backup.noteSaved({ title: 'B', status: 'draft' });
+  release();
+  await first;
+  assert.equal(lastRemote(), 'Draft: A [CI Skip]');
+  assert.equal(backup.state().pending, 1);
+  const second = await backup.flush();
+  assert.equal(second.pending, 0);
+  assert.equal(lastRemote(), 'Draft: B [CI Skip]');
+});
+
+test('a save during a publish stays pending', async () => {
+  fx = makeGitSite();
+  const clock = fakeClock();
+  const backup = backupFor(clock);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const publishing = backup.exclusive(async () => { await gate; return { status: 'pushed' }; });
+  await new Promise((r) => setImmediate(r));
+  write(fx.site, 'content/posts/b.json', draft('b', 'B'));
+  backup.noteSaved({ title: 'B', status: 'draft' });
+  release();
+  await publishing;
+  assert.equal(backup.state().pending, 1);
+  await clock.advance(30_000);
+  assert.equal(lastRemote(), 'Draft: B [CI Skip]');
+  assert.equal(backup.state().pending, 0);
+});

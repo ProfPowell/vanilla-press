@@ -153,8 +153,17 @@ export async function setPublished({ ws, db, docId, publish, deps }) {
     build = { ok: false, log: err.message };
   }
   if (!build.ok) {
-    const restored = saveDocument(db, previous);
-    syncDocument(ws, restored, { collectionsConfig, previousDoc: saved });
+    // Revert only the status change on the current stored version: an edit
+    // saved while the build ran is kept. `updated` goes back only if nothing else touched the doc.
+    const current = getDocument(db, docId) || saved;
+    const revert = {
+      ...current.meta,
+      status: previous.meta.status,
+      published: previous.meta.published,
+      updated: current.meta.updated === saved.meta.updated ? previous.meta.updated : current.meta.updated,
+    };
+    const restored = saveDocument(db, { ...current, meta: revert });
+    syncDocument(ws, restored, { collectionsConfig, previousDoc: current });
     throw new BuildError(build.log);
   }
 

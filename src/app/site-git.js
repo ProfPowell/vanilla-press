@@ -118,19 +118,24 @@ export function createBackup({
   },
   clearTimer = (h) => clearTimeout(h),
 }) {
-  let pending = 0;
+  // Saves are counted in two parts: `uncommitted` (with their `titles`) were
+  // saved after the last commit was taken; `unpushed` went into a local
+  // commit (or a commit attempt) that has not reached the remote yet. Only a
+  // snapshot taken when the commit starts moves from one to the other, so a
+  // save that arrives during a slow commit or push stays pending.
+  let uncommitted = 0;
+  let unpushed = 0;
   let titles = [];
-  let firstAt = null;
+  let firstAt = null; // first save of the current window (uncommitted saves)
   let timer = null;
   let lastPushAt = null;
   let error = null;
   let connected = true;
-  let needsPush = false; // a local commit that has not reached the remote
   let queue = Promise.resolve();
   // Owned paths seen this session: a page VP removed is no longer listed by ownedPaths, but its deletion must be staged.
   const known = new Set();
 
-  const state = () => ({ pending, lastPushAt, error, connected });
+  const state = () => ({ pending: uncommitted + unpushed, lastPushAt, error, connected });
 
   function paths() {
     for (const p of ownedPaths(ws, getCollectionsConfig())) known.add(p);
@@ -155,13 +160,26 @@ export function createBackup({
     return run;
   }
 
-  function pushed() {
-    pending = 0;
+  /** Take the uncommitted saves for a commit; a new window starts for later saves. */
+  function take() {
+    const snapshot = { count: uncommitted, titles };
+    uncommitted = 0;
     titles = [];
     firstAt = null;
+    return snapshot;
+  }
+
+  /** Nothing was committed: the taken saves are uncommitted again (in a fresh window). */
+  function giveBack(snapshot) {
+    uncommitted += snapshot.count;
+    titles = [...snapshot.titles, ...titles.filter((t) => !snapshot.titles.includes(t))];
+    if (uncommitted > 0 && firstAt === null) firstAt = now();
+  }
+
+  function pushed() {
+    unpushed = 0;
     error = null;
     connected = true;
-    needsPush = false;
     lastPushAt = new Date(now()).toISOString();
   }
 
@@ -170,7 +188,7 @@ export function createBackup({
    * @param {{ title?: string, status?: string }} save
    */
   function noteSaved({ title } = {}) {
-    pending++;
+    uncommitted++;
     if (title && !titles.includes(title)) titles.push(title);
     if (firstAt === null) firstAt = now();
     paths();
@@ -184,22 +202,23 @@ export function createBackup({
   function flush() {
     cancel();
     return serial(async () => {
-      if (pending === 0 && !needsPush && error === null) return state();
+      if (uncommitted === 0 && unpushed === 0 && error === null) return state();
+      let snapshot = null;
       try {
         const status = await git.gitStatus(ws.siteDir);
         if (!status.isRepo) {
           connected = false;
+          firstAt = uncommitted > 0 ? now() : null; // next save waits for a full pause
           return state();
         }
-        const committed = titles.slice();
-        const sha = await git.commitPaths(ws.siteDir, paths(), (files) => backupMessage(committed, files));
-        if (sha) {
-          needsPush = true;
-          titles = titles.filter((t) => !committed.includes(t));
-        }
+        snapshot = take();
+        await git.commitPaths(ws.siteDir, paths(), (files) => backupMessage(snapshot.titles, files));
+        unpushed += snapshot.count; // committed (or nothing to commit): only the push is left
+        snapshot = null;
         await git.push(ws.siteDir);
         pushed();
       } catch (err) {
+        if (snapshot) giveBack(snapshot);
         if (err instanceof GitNotConnectedError) {
           connected = false;
           error = null;
@@ -214,7 +233,8 @@ export function createBackup({
   /**
    * Run a publish or unpublish in the git queue: the backup timer is
    * cancelled (pending drafts go into that commit, they are in the owned
-   * paths). `fn` resolves to `{ status: 'pushed'|'saved' }`.
+   * paths). `fn` resolves to `{ status: 'pushed'|'saved' }`. Saves made
+   * while it runs stay pending.
    * @template T
    * @param {() => Promise<T>} fn
    * @returns {Promise<T>}
@@ -222,23 +242,21 @@ export function createBackup({
   function exclusive(fn) {
     cancel();
     return serial(async () => {
+      const snapshot = take();
       try {
         const result = await fn();
+        unpushed += snapshot.count;
         if (result?.status === 'pushed') pushed();
-        else {
-          titles = [];
-          if (result?.status === 'saved') connected = false;
-        }
+        else if (result?.status === 'saved') connected = false;
         return result;
       } catch (err) {
         if (err?.name?.startsWith('Git')) {
-          needsPush = true;
+          unpushed += snapshot.count; // committed; the push is retried on the next flush
           error = err.message;
+        } else {
+          giveBack(snapshot); // e.g. a failed build: nothing was committed
         }
-        if (pending > 0) {
-          if (firstAt === null) firstAt = now();
-          schedule();
-        }
+        if (uncommitted > 0 && timer === null) schedule();
         throw err;
       }
     });

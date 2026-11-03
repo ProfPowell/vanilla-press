@@ -85,6 +85,30 @@ describe('setPublished', () => {
     assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
   });
 
+  test('build failure keeps an edit saved during the build', async () => {
+    const ws = setup();
+    const edited = [{ type: 'paragraph', children: [{ type: 'text', value: 'Edited during the build.' }] }];
+    const failingBuild = async () => {
+      const cur = getDocument(db, ID);
+      const next = saveDocument(db, { ...cur, meta: { ...cur.meta, updated: '2099-01-01T00:00:00.000Z' }, blocks: edited });
+      syncDocument(ws, next, { collectionsConfig: {}, previousDoc: cur });
+      return { ok: false, log: 'boom' };
+    };
+    await assert.rejects(
+      setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: { ...deps(), runBuild: failingBuild } }),
+      BuildError,
+    );
+    const stored = getDocument(db, ID);
+    assert.deepEqual(stored.blocks, edited);
+    assert.equal(stored.meta.status, 'draft');
+    assert.equal(stored.meta.published, undefined);
+    assert.equal(stored.meta.updated, '2099-01-01T00:00:00.000Z');
+    assert.equal(existsSync(join(fx.site, 'src', 'posts', 'hello.html')), false);
+    const onDisk = JSON.parse(readFileSync(join(fx.site, 'content', 'posts', 'hello.json'), 'utf8'));
+    assert.deepEqual(onDisk.blocks, edited);
+    assert.equal(onDisk.meta.status, 'draft');
+  });
+
   test('publish leaves unrelated changes uncommitted', async () => {
     const ws = setup();
     write(fx.site, 'src/programs/p/index.html', '<p>agent</p>');

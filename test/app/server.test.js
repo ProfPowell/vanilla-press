@@ -125,6 +125,17 @@ describe('app server', () => {
     assert.ok(!existsSync(join(siteB, 'content', 'posts', 'only-a.json')));
   });
 
+  it('GET /info returns the site URL, null when not set', async () => {
+    const none = await api(`/api/sites/${idA}/info`);
+    assert.equal(none.status, 200);
+    assert.deepEqual(none.data, { siteUrl: null });
+    mkdirSync(join(siteA, 'config'), { recursive: true });
+    writeFileSync(join(siteA, 'config', 'data.js'), "export default { siteUrl: 'https://example.com' };\n");
+    const set = await api(`/api/sites/${idA}/info`);
+    assert.deepEqual(set.data, { siteUrl: 'https://example.com' });
+    rmSync(join(siteA, 'config'), { recursive: true, force: true });
+  });
+
   it('unknown site id is 404', async () => {
     const res = await api('/api/sites/nope/documents');
     assert.equal(res.status, 404);

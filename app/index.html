@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Sites - Vanilla Press</title>
+<link rel="stylesheet" href="/assets/vb/vanilla-breeze.css"/>
+<link rel="stylesheet" href="/app/assets/app.css"/>
+<script src="/assets/vb/vanilla-breeze.js" defer></script>
+<script type="module" src="/app/assets/js/sites-page.js"></script>
+</head>
+<body>
+<main class="app-page">
+  <header class="page-head">
+    <h1>Sites</h1>
+    <div class="actions">
+      <button type="button" id="add-btn" aria-expanded="false" aria-controls="add-panel">Add site</button>
+      <button type="button" id="clone-btn" aria-expanded="false" aria-controls="clone-panel">Clone from GitHub</button>
+    </div>
+  </header>
+
+  <section id="add-panel" class="panel" aria-labelledby="add-title" hidden>
+    <h2 id="add-title">Add a site</h2>
+    <form id="add-form">
+      <label for="add-path">Site folder</label>
+      <div class="row">
+        <input id="add-path" name="path" type="text" autocomplete="off" required placeholder="/Users/you/my-site"/>
+        <button type="submit">Add site</button>
+      </div>
+    </form>
+    <h3 id="browse-title">Browse folders</h3>
+    <nav class="browser" aria-labelledby="browse-title">
+      <p class="browser-path"><button type="button" id="browse-up">Up</button> <span id="browse-current"></span></p>
+      <ul id="browse-list"></ul>
+    </nav>
+    <p id="add-error" class="error" role="alert" hidden></p>
+  </section>
+
+  <section id="clone-panel" class="panel" aria-labelledby="clone-title" hidden>
+    <h2 id="clone-title">Clone from GitHub</h2>
+    <form id="clone-form">
+      <label for="clone-url">Repository URL</label>
+      <input id="clone-url" name="url" type="text" autocomplete="off" required placeholder="https://github.com/you/my-site.git"/>
+      <label for="clone-dest">Destination folder</label>
+      <input id="clone-dest" name="dest" type="text" autocomplete="off" required placeholder="/Users/you/my-site"/>
+      <p><button type="submit">Clone</button></p>
+    </form>
+    <p id="clone-error" class="error" role="alert" hidden></p>
+  </section>
+
+  <p id="status" role="status"></p>
+  <ul id="sites" class="site-list" aria-label="Your sites"></ul>
+</main>
+</body>
+</html>

@@ -11,7 +11,9 @@ vp            # or: npx vp
 
 `vp` (same as `vp app`) starts the app at `http://127.0.0.1:3007`, opens it in your browser, and shows your sites. Add a site by choosing a folder (its `package.json` must depend on `cook-ssg`) or by cloning a GitHub repo. `VP_NO_OPEN=1` skips opening the browser; `--port <n>` picks the port.
 
-Open a site, pick or create a post, and edit. Saves are backed up to GitHub about 30 seconds after you stop typing. Backups carry `[CI Skip]` and never include a page, so **a backup never changes the live site**. **Publish** runs the site's `npm run build`, then commits and pushes the page.
+The Sites screen lists your sites; opening one shows its page with a rail on the left (Posts, Media, Components, Theme, at `site.html?site=<id>&section=<name>`). Pick or create a post on the Posts screen and edit: the title is the first line of the page, `/` or the gutter **+** inserts blocks, selecting text brings up the format toolbar (`Alt+F10` moves into it, `Mod+K` links), `Alt+Shift+↑/↓` moves a block, and the top bar's "⋯" menu holds Export, the block tree, View live page, Delete and Unpublish. The editor's shortcuts are listed in `docs/EDITOR.md`.
+
+Saves happen as you type. Saves are backed up to GitHub about 30 seconds after you stop typing. Backups carry `[CI Skip]` and never include a page, so **a backup never changes the live site**. **Publish** runs the site's `npm run build`, then commits and pushes the page.
 
 **Edits to a published post go live only when you click Update.** Until then they are saved and backed up to GitHub (the editor says "Saved · not live yet", then "Backed up · not live yet"), and the live site keeps the version you last published. **Update** runs the same build check as Publish, commits that post's page (and nothing of any other post's), and pushes; the editor says "Updating…" and then "Live" (or "Still deploying, check Cloudflare"). **Unpublish** takes the page down. **Preview** opens the site's dev server, which builds from your working copy, so it shows a published post's edits before you Update; Preview shows published pages only, so publish a post first to preview it.
 

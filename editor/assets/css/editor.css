@@ -13,3 +13,4 @@
 @import "./_theme-picker.css" layer(editor);
 @import "./_component-settings.css" layer(editor);
 @import "./_site-mode.css" layer(editor);
+@import "./_format-toolbar.css" layer(editor);

@@ -1,6 +1,5 @@
-/* Editor layout grid: toolbar / editor / sidebar / inspector */
+/* Editor layout grid: editor / sidebar / inspector */
 :root {
-  --editor-toolbar-h: 3rem;
   --editor-sidebar-w: 280px;
   --editor-inspector-w: 320px;
 }
@@ -16,9 +15,8 @@ body {
 editor-shell {
   display: grid;
   grid-template-columns: 1fr var(--editor-sidebar-w);
-  grid-template-rows: var(--editor-toolbar-h) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   grid-template-areas:
-    "toolbar toolbar"
     "editor  sidebar";
   flex: 1;
   min-height: 0;
@@ -27,74 +25,9 @@ editor-shell {
 
 editor-shell.inspector-open {
   grid-template-columns: 1fr var(--editor-sidebar-w) var(--editor-inspector-w);
-  grid-template-rows: var(--editor-toolbar-h) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   grid-template-areas:
-    "toolbar toolbar toolbar"
     "editor  sidebar inspector";
-}
-
-/* Toolbar */
-editor-shell .editor-toolbar {
-  grid-area: toolbar;
-  display: flex;
-  align-items: center;
-  gap: var(--size-xs);
-  padding-inline: var(--size-m);
-  background: var(--color-surface);
-  border-block-end: 1px solid var(--color-border);
-  overflow-x: auto;
-  z-index: 10;
-}
-
-.editor-toolbar .separator {
-  width: 1px;
-  height: 1.5rem;
-  background: var(--color-border);
-  margin-inline: var(--size-xs);
-  flex-shrink: 0;
-}
-
-.editor-toolbar button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  height: 2rem;
-  padding: 0 var(--size-s);
-  border: 1px solid transparent;
-  border-radius: var(--radius-m);
-  background: transparent;
-  color: var(--color-text);
-  font-size: var(--font-size-s);
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.editor-toolbar button:hover {
-  background: var(--color-background);
-  border-color: var(--color-border);
-}
-
-.editor-toolbar button.active {
-  background: var(--color-accent);
-  color: #fff;
-  border-color: var(--color-accent);
-}
-
-.editor-toolbar .spacer {
-  flex: 1;
-}
-
-.editor-toolbar select {
-  height: 2rem;
-  padding: 0 var(--size-s);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-m);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--font-size-s);
-  cursor: pointer;
 }
 
 /* Editor pane — themed content preview area */

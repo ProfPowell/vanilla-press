@@ -1,6 +1,6 @@
 /**
  * Main editor initialization.
- * Sets up ProseMirror with schema, keymap, toolbar, and view.
+ * Sets up ProseMirror with schema, keymap, format toolbar, and view.
  * Uses the content API for persistence instead of localStorage.
  *
  * @module editor/editor
@@ -18,7 +18,7 @@ import { tableEditing, goToNextCell } from 'prosemirror-tables';
 import { schema } from './schema.js';
 import { buildKeymap, buildBaseKeymap } from './keymap.js';
 import { buildInputRules } from './input-rules.js';
-import { EditorToolbar } from './menu.js';
+import { formatToolbarPlugin, setFormatToolbarComponents } from './format-toolbar.js';
 import { toBlockAst, fromBlockAst } from './ast.js';
 import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
 import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
@@ -53,7 +53,6 @@ import { saveErrorMessage } from './site-context.js';
 export { getCurrentMeta, setCurrentMeta, getCurrentDocId } from './meta-state.js';
 
 let editorView = null;
-let toolbar = null;
 let saveTimer = null;
 let saveStatus = 'saved'; // 'saved' | 'saving' | 'unsaved' | 'conflict' | 'error'
 /** Documents whose JSON changed on disk: id → message. Auto-save is paused for these. */
@@ -123,18 +122,6 @@ function createTitleDecorationsPlugin() {
 /** Redraw the meta line after the meta changed without an edit (status, collection). */
 export function refreshMetaLine() {
   if (editorView) editorView.dispatch(editorView.state.tr.setMeta('addToHistory', false));
-}
-
-function createToolbarPlugin() {
-  return new Plugin({
-    view() {
-      return {
-        update(view) {
-          if (toolbar) toolbar.update(view.state);
-        },
-      };
-    },
-  });
 }
 
 // --- Slash command plugin ---
@@ -231,14 +218,11 @@ function createLinkPlugin() {
 /** Initialize the editor */
 export function initEditor() {
   const editorEl = document.querySelector('.editor-content');
-  const toolbarEl = document.querySelector('.editor-toolbar');
 
-  if (!editorEl || !toolbarEl) {
+  if (!editorEl) {
     console.error('Editor mount points not found');
     return;
   }
-
-  // Save utility buttons before toolbar render wipes them
 
   slugHandEdited = handEditedOnLoad(getCurrentMeta());
   const state = EditorState.create({
@@ -258,7 +242,7 @@ export function initEditor() {
       buildBaseKeymap(),
       dropCursor(),
       gapCursor(),
-      createToolbarPlugin(),
+      formatToolbarPlugin(),
       createLinkPlugin(),
       tableEditing(),
       componentSettingsPlugin(),
@@ -300,9 +284,6 @@ export function initEditor() {
     },
   });
 
-  toolbar = new EditorToolbar(toolbarEl, editorView);
-  toolbar.update(editorView.state);
-
   // Expose for external use
   window.__editorView = editorView;
   window.__editorSchema = schema;
@@ -327,7 +308,7 @@ export function initEditor() {
 
 /**
  * Load component descriptors once and offer the enabled ones: block kinds
- * in the `/` palette, inline kinds in the toolbar's wrap select. The live
+ * in the `/` palette, inline kinds under the format toolbar's More menu. The live
  * component views get all of them (to label the ones not on for this site).
  * A failure leaves the editor without component entries.
  */
@@ -336,7 +317,7 @@ async function loadComponents() {
     const res = await api.listComponents();
     const descriptors = enabledDescriptors(res);
     getBlockPalette().registerComponents(descriptors);
-    toolbar?.setInlineComponents(descriptors.filter(d => d.kind === 'inline'));
+    setFormatToolbarComponents(descriptors.filter(d => d.kind === 'inline'));
     setComponentDescriptors(res);
     // Refresh the settings panel for a component selected before this arrived
     if (editorView) editorView.dispatch(editorView.state.tr);

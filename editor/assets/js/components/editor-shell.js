@@ -9,18 +9,12 @@
  * @module editor/components/editor-shell
  */
 
-import { loadDocument, createNewDocument, deleteDoc, getSaveStatus } from '../editor.js';
+import { loadDocument, createNewDocument, deleteDoc } from '../editor.js';
 import { api } from '../api-client.js';
-import { isSiteMode, onSaveStatus } from '../site-mode.js';
+import { onSaveStatus } from '../site-mode.js';
 
 export class EditorShell extends HTMLElement {
   connectedCallback() {
-    // Inspector toggle
-    this.inspectorToggle = this.querySelector('[data-toggle-inspector]');
-    if (this.inspectorToggle) {
-      this.inspectorToggle.addEventListener('click', () => this.toggleInspector());
-    }
-
     // Doc browser events (bubble up from <doc-browser>)
     this.addEventListener('doc-select', async (e) => {
       await loadDocument(e.detail.id);
@@ -36,38 +30,16 @@ export class EditorShell extends HTMLElement {
       try {
         await deleteDoc(e.detail.id);
       } catch (err) {
-        // Not deleted (409: its JSON changed on disk; 500: unexpected): say why
+        // Not deleted (409: its JSON changed on disk, or a published post; 500: unexpected): say why
         console.error('Delete error:', err);
-        if (isSiteMode) {
-          onSaveStatus('error', err.message);
-        } else if (this.saveIndicator) {
-          this.saveIndicator.className = 'save-indicator error';
-          this.saveIndicator.textContent = err.message;
-          this.saveIndicator.title = err.message;
-        }
+        onSaveStatus('error', err.message);
         return;
       }
       this.querySelector('doc-browser')?.refresh();
     });
 
-    // Save status indicator
-    this.saveIndicator = this.querySelector('.save-indicator');
-    window.__onSaveStatusChange = (status, message) => {
-      // In the app (?site=) the header shows the save state
-      if (isSiteMode) return onSaveStatus(status, message);
-      if (this.saveIndicator) {
-        this.saveIndicator.className = `save-indicator ${status}`;
-        const labels = {
-          saved: 'Saved', saving: 'Saving...', unsaved: 'Unsaved',
-          conflict: 'Changed on disk', error: 'Not saved',
-        };
-        // A rejected save (422) shows its message; auto-save keeps running.
-        // A save's notices (attributes it removed) follow "Saved".
-        const text = status === 'saved' && message ? `${labels.saved} · ${message}` : labels[status] || '';
-        this.saveIndicator.textContent = (status === 'error' && message) || text;
-        this.saveIndicator.title = message || '';
-      }
-    };
+    // The header's save pill shows the save state (in the app and in vp serve)
+    window.__onSaveStatusChange = (status, message) => onSaveStatus(status, message);
 
     this.showSite();
   }

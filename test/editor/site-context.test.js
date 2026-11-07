@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   siteFromSearch, apiBase, displayMediaUrl, storedMediaUrl, backupOutcome, publishFailure,
-  keepPollingBackup, createLiveTracker, saveStateText, headerActions, actionPendingText, afterAction, heldOnLoad,
+  keepPollingBackup, createLiveTracker, saveStateText, primaryAction, moreMenuItems, confirmText, savePill, actionPendingText, afterAction, heldOnLoad,
   saveErrorMessage,
 } from '../../editor/assets/js/site-context.js';
 
@@ -111,10 +111,69 @@ describe('editor site context', () => {
     assert.equal(saveStateText('saved', { published: false, held: false, notices: [] }), 'Saved');
   });
 
-  it('headerActions: a published post gets Unpublish and Update; a draft gets Publish only', () => {
-    assert.deepEqual(headerActions({ status: 'published' }), { publish: { text: 'Unpublish', className: 'btn-unpublish', action: 'unpublish' }, update: true });
-    assert.deepEqual(headerActions({ status: 'draft' }), { publish: { text: 'Publish', className: 'btn-publish', action: 'publish' }, update: false });
-    assert.deepEqual(headerActions({ status: 'archived' }).update, false);
+  it('primaryAction: Publish for a draft, Update for a published post', () => {
+    assert.deepEqual(primaryAction({ status: 'published' }), { text: 'Update', action: 'update' });
+    assert.deepEqual(primaryAction({ status: 'draft' }), { text: 'Publish', action: 'publish' });
+    assert.deepEqual(primaryAction({ status: 'archived' }), { text: 'Publish', action: 'publish' });
+  });
+
+  const ids = (items) => items.map((i) => i.id);
+  const byId = (items, id) => items.find((i) => i.id === id);
+
+  it('moreMenuItems: a published post in site mode with a live url', () => {
+    const items = moreMenuItems({ status: 'published' }, { siteMode: true, liveUrl: 'https://x.test/a/' });
+    assert.deepEqual(ids(items), ['export', 'ast', 'live', 'delete', 'unpublish']);
+    assert.equal(byId(items, 'delete').text, 'Delete post…');
+    assert.equal(byId(items, 'delete').danger, true);
+    assert.equal(byId(items, 'delete').disabled, true);
+    assert.equal(byId(items, 'unpublish').text, 'Unpublish…');
+    assert.equal(byId(items, 'unpublish').danger, true);
+  });
+
+  it('moreMenuItems: a draft can be deleted and has no Unpublish', () => {
+    const items = moreMenuItems({ status: 'draft' }, { siteMode: true, liveUrl: null });
+    assert.deepEqual(ids(items), ['export', 'ast', 'delete']);
+    assert.notEqual(byId(items, 'delete').disabled, true);
+  });
+
+  it('moreMenuItems: fixture mode keeps Unpublish in the meta panel', () => {
+    const items = moreMenuItems({ status: 'published' }, { siteMode: false, liveUrl: null });
+    assert.deepEqual(ids(items), ['export', 'ast', 'delete']);
+    assert.equal(byId(items, 'delete').disabled, true);
+  });
+
+  it('moreMenuItems: View live page needs a live url', () => {
+    assert.ok(!ids(moreMenuItems({ status: 'published' }, { siteMode: true, liveUrl: null })).includes('live'));
+    assert.ok(ids(moreMenuItems({ status: 'draft' }, { siteMode: true, liveUrl: 'https://x.test/' })).includes('live'));
+  });
+
+  it('confirmation for unpublish names the live url', () => {
+    assert.deepEqual(confirmText('unpublish', { title: 'Hello', liveUrl: 'https://x.test/hello/' }), {
+      heading: 'Unpublish "Hello"?',
+      body: 'https://x.test/hello/ stops working once the site rebuilds. The post stays here as a draft.',
+      confirm: 'Unpublish',
+    });
+  });
+
+  it('confirmation for unpublish without a url says the live page', () => {
+    assert.equal(confirmText('unpublish', { title: 'Hello', liveUrl: null }).body,
+      'The live page stops working once the site rebuilds. The post stays here as a draft.');
+  });
+
+  it('confirmation for delete explains what is lost', () => {
+    assert.deepEqual(confirmText('delete', { title: 'Hello', liveUrl: null }), {
+      heading: 'Delete "Hello"?',
+      body: 'This removes the post and its page file. It can be recovered only from git history.',
+      confirm: 'Delete post',
+    });
+  });
+
+  it('savePill: warn exactly when the post is published and its edits are not live', () => {
+    assert.deepEqual(savePill('saved', { status: 'published' }, true), { text: 'Saved · not live yet', tone: 'warn' });
+    assert.deepEqual(savePill('backed-up', { status: 'published' }, true), { text: 'Backed up · not live yet', tone: 'warn' });
+    assert.deepEqual(savePill('saved', { status: 'published' }, false), { text: 'Saved', tone: 'plain' });
+    assert.deepEqual(savePill('saved', { status: 'draft' }, true), { text: 'Saved', tone: 'plain' });
+    assert.deepEqual(savePill('backed-up', { status: 'draft' }, false), { text: 'Backed up', tone: 'plain' });
   });
 
   it('actionPendingText names the running action', () => {

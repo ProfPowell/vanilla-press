@@ -1,32 +1,34 @@
 /**
- * The app's editor (`/editor/?site=<id>#doc-<docId>`): a quiet writing
- * screen for one site.
+ * The editor's top bar and layout: the app's editor
+ * (`/editor/?site=<id>#doc-<docId>`, "site mode") and `vp serve`.
  *
- * - The header shows `← Posts`, the save state, Preview and Publish (a
- *   draft) or Unpublish plus Update (a published post).
- * - The doc browser, theme picker, block inspector and Export live behind
- *   Tools (closed by default); the settings panel can be hidden, which is
- *   remembered in localStorage.
- * - Save states: `Saving…`, `Saved`, then `Backed up` once the backup has
- *   pushed (GET /status). A backup never changes the live site: after a save
- *   of a published post it says `Saved · not live yet` / `Backed up · not
- *   live yet`, and any `Live` link is cleared, until Update.
+ * - The top bar shows `← Posts` and the site name (site mode only), the
+ *   save pill, Preview, the Post settings toggle, the "⋯" menu (Export JSON,
+ *   block tree, View live page, Delete, and in site mode Unpublish) and the
+ *   primary button (Publish for a draft, Update for a published post).
+ *   Unpublish and Delete ask first, in a `<confirm-panel>`.
+ * - The settings panel can be hidden, which is remembered in localStorage.
+ * - Save states (site mode): `Saving…`, `Saved`, then `Backed up` once the
+ *   backup has pushed (GET /status). A backup never changes the live site:
+ *   after a save of a published post the pill says `Saved · not live yet`
+ *   (warning tone), and any `Live` link is cleared, until Update.
  * - Publish / Update save, then POST publish / update (build, commit, push)
  *   and poll the live check until the page is up.
- *
- * Without `?site=` nothing here runs: every export is a no-op.
+ * - In `vp serve` (no `?site=`) the sidebar keeps the doc browser and theme
+ *   picker; the primary button runs the meta panel's publish toggle, and
+ *   Unpublish stays in the meta panel.
  *
  * @module editor/site-mode
  */
 
 import {
   SITE, backupOutcome, publishFailure, keepPollingBackup, createLiveTracker,
-  saveStateText, headerActions, actionPendingText, afterAction, heldOnLoad,
+  savePill, primaryAction, moreMenuItems, confirmText, actionPendingText, afterAction, heldOnLoad,
 } from './site-context.js';
 import { api } from './api-client.js';
 import { postUrlPath } from '../../../src/sync/paths.js';
 import { getCurrentMeta, getCurrentDocId } from './meta-state.js';
-import { saveDocument, loadDocument } from './editor.js';
+import { saveDocument, loadDocument, deleteDoc, exportDocument } from './editor.js';
 
 const SETTINGS_KEY = 'vp.settingsHidden';
 const BACKUP_POLL_MS = 5000;
@@ -54,61 +56,92 @@ let saveCount = 0;
 /** Whether the editor runs in the app for one site. */
 export const isSiteMode = Boolean(SITE);
 
+/** The site's name and public address (GET /api/sites); null in `vp serve` or before they load. */
+let siteInfo = null;
+/** The site's collections config, for a post's public path. */
+let collections = {};
+
 /**
  * Wire the header and layout. Call once, after the editor view exists.
  */
 export function initSiteMode() {
-  if (!SITE) return;
   shell = document.querySelector('editor-shell');
   const header = shell?.querySelector('[data-site-header]');
   if (!header) return;
   els = {
     header,
     back: header.querySelector('[data-back-to-posts]'),
+    rule: header.querySelector('[data-site-name-rule]'),
+    siteName: header.querySelector('[data-site-name]'),
     saveState: header.querySelector('[data-save-state]'),
     actionState: header.querySelector('[data-action-state]'),
-    tools: header.querySelector('[data-tools-toggle]'),
     settings: header.querySelector('[data-settings-toggle]'),
     preview: header.querySelector('[data-site-preview]'),
-    publish: header.querySelector('[data-site-publish]'),
-    update: header.querySelector('[data-site-update]'),
+    more: header.querySelector('[data-more-menu]'),
+    primary: header.querySelector('[data-site-primary]'),
+    confirm: shell.querySelector('[data-confirm]'),
     report: header.querySelector('[data-action-report]'),
     reportBody: header.querySelector('[data-action-report-body]'),
   };
 
-  shell.classList.add('site-mode');
+  shell.classList.add('has-header');
   header.hidden = false;
-  els.back.href = `/app/site.html?site=${encodeURIComponent(SITE)}`;
+  if (SITE) {
+    shell.classList.add('site-mode');
+    els.back.href = `/app/site.html?site=${encodeURIComponent(SITE)}`;
+    loadSiteInfo();
+  } else {
+    // vp serve: no site to go back to or name
+    els.back.hidden = true;
+    els.rule.hidden = true;
+    els.siteName.hidden = true;
+  }
 
   // Status is set by Publish/Unpublish, not by hand (that would skip the build and push)
   const statusSelect = document.querySelector('#meta-status');
-  if (statusSelect) {
+  if (SITE && statusSelect) {
     statusSelect.disabled = true;
-    statusSelect.title = 'Use Publish / Unpublish / Update in the header';
+    statusSelect.title = 'Use Publish / Update / Unpublish in the header';
   }
 
-  els.tools.addEventListener('click', () => setToolsOpen(!shell.classList.contains('tools-open')));
   els.settings.addEventListener('click', () => setSettingsHidden(!shell.classList.contains('settings-hidden'), true));
-  els.preview.addEventListener('click', preview);
-  els.publish.addEventListener('click', () => runAction(headerActions(getCurrentMeta()).publish.action));
-  els.update.addEventListener('click', () => runAction('update'));
+  els.preview.addEventListener('click', SITE ? preview : () => document.querySelector('meta-panel [data-preview]')?.click());
+  els.primary.addEventListener('click', onPrimary);
+  els.more.addEventListener('more-select', (e) => onMore(e.detail.id));
   header.querySelector('[data-action-report-close]').addEventListener('click', clearReport);
 
   setSettingsHidden(readSettingsHidden(), false);
-  setToolsOpen(false);
   onMetaUpdate(getCurrentMeta());
 
   window.addEventListener('pagehide', stopPolling);
 }
 
-// --- Layout ---
-
-function setToolsOpen(open) {
-  shell.classList.toggle('tools-open', open);
-  if (!open) shell.classList.remove('inspector-open');
-  els.tools.setAttribute('aria-expanded', String(open));
-  updateSidebar();
+/** The site's name for the bar, and its address and collections for "View live page". */
+async function loadSiteInfo() {
+  try {
+    const res = await fetch('/api/sites');
+    const sites = res.ok ? await res.json() : [];
+    siteInfo = (Array.isArray(sites) ? sites : sites.sites || []).find((s) => s.id === SITE) || null;
+  } catch { /* the bar just has no name */ }
+  els.siteName.textContent = siteInfo?.name || '';
+  try {
+    const { value } = await api.getConfig('collections');
+    collections = value ? JSON.parse(value) : {};
+  } catch { /* defaults */ }
+  refreshMenu(getCurrentMeta());
 }
+
+/** The public URL of the open post when it is published and the site has an address, else null. */
+function liveUrl(meta) {
+  if (!SITE || !siteInfo?.siteUrl || meta?.status !== 'published') return null;
+  return siteInfo.siteUrl.replace(/\/+$/, '') + postUrlPath({ meta }, collections);
+}
+
+function refreshMenu(meta) {
+  els.more.setItems(moreMenuItems(meta, { siteMode: Boolean(SITE), liveUrl: liveUrl(meta) }));
+}
+
+// --- Layout ---
 
 /**
  * @param {boolean} hidden
@@ -127,17 +160,17 @@ function readSettingsHidden() {
   try { return localStorage.getItem(SETTINGS_KEY) === '1'; } catch { return false; }
 }
 
+/** In the app the sidebar is only the settings panel: it goes with it. vp serve keeps the doc browser and theme picker, so its sidebar stays. */
 function updateSidebar() {
-  const hidden = shell.classList.contains('settings-hidden') && !shell.classList.contains('tools-open');
-  shell.classList.toggle('sidebar-hidden', hidden);
+  shell.classList.toggle('sidebar-hidden', Boolean(SITE) && shell.classList.contains('settings-hidden'));
 }
 
 // --- Header text ---
 
-/** Set the save slot or the action slot (Publish, Preview) to `text`; kind: '' | 'done' | 'error'. */
+/** Set the save pill or the action slot (Publish, Preview) to `text`; kind: '' | 'done' | 'warn' | 'error'. */
 function show(el, text, kind = '') {
   el.textContent = text;
-  el.className = [el === els.saveState ? 'save-state' : 'action-state', kind].filter(Boolean).join(' ');
+  el.className = [el === els.saveState ? 'save-pill' : 'action-state', kind].filter(Boolean).join(' ');
 }
 
 /** Show `text` in a header slot with a link to `url`. */
@@ -211,7 +244,7 @@ export function onSaveStatus(status, message) {
       // A save's notices (message) stay with its saved state; any other 'saved' (a load) clears them
       savedNotices = realSave && message ? [message] : [];
       if (realSave) saveCount++;
-      if (realSave && getCurrentMeta()?.status === 'published') {
+      if (SITE && realSave && getCurrentMeta()?.status === 'published') {
         // This edit is not live: a Live link (or a running live check) is out of date.
         held = true;
         cancelLive();
@@ -219,7 +252,7 @@ export function onSaveStatus(status, message) {
         show(els.actionState, '');
       }
       showSaved('saved');
-      if (realSave) watchBackup();
+      if (SITE && realSave) watchBackup();
       break;
     case 'unsaved': show(els.saveState, 'Unsaved'); break;
     case 'conflict':
@@ -230,14 +263,14 @@ export function onSaveStatus(status, message) {
   }
 }
 
-/** Show `Saved` / `Backed up` (with `· not live yet` for a published post's held edits). */
+/** Show `Saved` / `Backed up` (with `· not live yet`, in the warning tone, for a published post's held edits). */
 function showSaved(outcome) {
   savedShown = outcome;
-  const published = getCurrentMeta()?.status === 'published';
-  const text = saveStateText(outcome, { published, held, notices: savedNotices });
-  show(els.saveState, text, outcome === 'backed-up' ? 'done' : '');
+  const meta = getCurrentMeta();
+  const pill = savePill(outcome, meta, held, savedNotices);
+  show(els.saveState, pill.text, pill.tone === 'warn' ? 'warn' : '');
   els.saveState.title = [
-    published && held ? 'Backed up to GitHub; click Update to put these edits on the live site' : '',
+    pill.tone === 'warn' ? 'Backed up to GitHub; click Update to put these edits on the live site' : '',
     ...savedNotices,
   ].filter(Boolean).join('\n');
 }
@@ -282,7 +315,7 @@ function stopPolling() {
 // --- Publish / Unpublish ---
 
 /**
- * The current document's meta changed (loaded, saved, published): label the button.
+ * The current document's meta changed (loaded, saved, published): label the button and the menu.
  * @param {Object} meta
  */
 export function onMetaUpdate(meta) {
@@ -295,12 +328,10 @@ export function onMetaUpdate(meta) {
     for (const el of [els.actionState, els.saveState]) el.title = '';
     show(els.actionState, '');
     if (savedShown) showSaved(savedShown);
-    loadHeld(getCurrentDocId());
+    if (SITE) loadHeld(getCurrentDocId());
   }
-  const actions = headerActions(meta);
-  els.publish.textContent = actions.publish.text;
-  els.publish.className = actions.publish.className;
-  els.update.hidden = !actions.update;
+  els.primary.textContent = primaryAction(meta).text;
+  refreshMenu(meta);
 }
 
 /** Ask the server whether the opened post has saved edits that are not live yet (survives a reload). */
@@ -327,8 +358,7 @@ function editsApplied() {
 async function runAction(action) {
   if (busy) return;
   busy = true;
-  els.publish.disabled = true;
-  els.update.disabled = true;
+  els.primary.disabled = true;
   clearReport();
   cancelLive();
   try {
@@ -367,8 +397,7 @@ async function runAction(action) {
     watchLive(docId, result.url, actionPendingText(action));
   } finally {
     busy = false;
-    els.publish.disabled = false;
-    els.update.disabled = false;
+    els.primary.disabled = false;
   }
 }
 
@@ -433,6 +462,58 @@ function watchLive(docId, url, pendingText) {
   tick();
 }
 
+// --- Primary button and the "⋯" menu ---
+
+/** The header's primary button: Publish or Update in the app; in vp serve the meta panel's publish toggle (or a plain save for a published post). */
+function onPrimary() {
+  const { action } = primaryAction(getCurrentMeta());
+  if (SITE) return runAction(action);
+  if (action === 'publish') return document.querySelector('meta-panel [data-publish]')?.click();
+  return saveDocument(); // a published post's edits already sync when saved
+}
+
+/**
+ * A "⋯" menu item was chosen.
+ * @param {'export'|'ast'|'live'|'delete'|'unpublish'} id
+ */
+async function onMore(id) {
+  const meta = getCurrentMeta();
+  switch (id) {
+    case 'export': return exportDocument();
+    case 'ast': return shell.toggleInspector();
+    case 'live': {
+      const url = liveUrl(meta);
+      if (url) window.open(url, '_blank', 'noopener');
+      return;
+    }
+    case 'unpublish':
+      if (await els.confirm.ask(confirmText('unpublish', { title: meta.title, liveUrl: liveUrl(meta) }))) runAction('unpublish');
+      return;
+    case 'delete':
+      if (await els.confirm.ask(confirmText('delete', { title: meta.title, liveUrl: null }))) deleteCurrent();
+      return;
+    default:
+  }
+}
+
+/** Delete the open post (the server refuses a published one: its text is shown), then leave the editor. */
+async function deleteCurrent() {
+  const docId = getCurrentDocId();
+  if (!docId || docId === 'doc_new') return show(els.actionState, 'This post is not saved yet', 'error');
+  clearReport();
+  try {
+    await deleteDoc(docId);
+  } catch (err) {
+    return show(els.actionState, err.message, 'error');
+  }
+  if (SITE) {
+    window.location.href = els.back.href;
+    return;
+  }
+  document.querySelector('doc-browser')?.refresh();
+  show(els.actionState, 'Deleted', 'done');
+}
+
 // --- Preview ---
 
 async function preview() {
@@ -454,11 +535,6 @@ async function preview() {
   } catch (err) {
     return fail(err.message);
   }
-  let collections = {};
-  try {
-    const { value } = await api.getConfig('collections');
-    collections = value ? JSON.parse(value) : {};
-  } catch { /* defaults */ }
   const pageUrl = `${url.replace(/\/+$/, '')}${postUrlPath({ meta }, collections)}`;
   show(els.actionState, '');
   if (tab) tab.location.href = pageUrl;

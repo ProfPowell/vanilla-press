@@ -18,7 +18,7 @@ function ruleFor(selector) {
 describe('editor site-mode css', () => {
   // VB styles `header` (and other elements) with a display, which beats the UA
   // [hidden] rule: without this the app header shows in `vp serve`.
-  for (const selector of ['.site-header[hidden]', '.site-header .action-report[hidden]', '.site-header button[hidden]']) {
+  for (const selector of ['.site-header[hidden]', '.site-header .action-report[hidden]', '.site-header button[hidden]', '.more-menu [role=menu][hidden]']) {
     it(`${selector} is display: none !important`, () => {
       const decls = ruleFor(selector);
       assert.ok(decls, `no rule for ${selector}`);

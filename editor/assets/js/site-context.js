@@ -83,17 +83,72 @@ export function saveStateText(outcome, { published, held, notices = [] }) {
 }
 
 /**
- * The header's buttons for a post: Publish for a draft; Unpublish plus Update for a published post.
+ * The pill by the site name: the save state, in the warning tone exactly
+ * when this published post has saved edits that are not live yet.
+ * @param {'saved'|'backed-up'} outcome
  * @param {{ status?: string }} meta
- * @returns {{ publish: { text: string, className: string, action: 'publish'|'unpublish' }, update: boolean }}
+ * @param {boolean} held - the post has saved edits that are not live
+ * @param {string[]} [notices] - what the last save changed, shown after the state
+ * @returns {{ text: string, tone: 'warn'|'plain' }}
  */
-export function headerActions(meta) {
+export function savePill(outcome, meta, held, notices = []) {
   const published = meta?.status === 'published';
   return {
-    publish: published
-      ? { text: 'Unpublish', className: 'btn-unpublish', action: 'unpublish' }
-      : { text: 'Publish', className: 'btn-publish', action: 'publish' },
-    update: published,
+    text: saveStateText(outcome, { published, held, notices }),
+    tone: published && held ? 'warn' : 'plain',
+  };
+}
+
+/**
+ * The header's one primary button: Publish for a draft, Update for a published post.
+ * @param {{ status?: string }} meta
+ * @returns {{ text: 'Publish'|'Update', action: 'publish'|'update' }}
+ */
+export function primaryAction(meta) {
+  return meta?.status === 'published'
+    ? { text: 'Update', action: 'update' }
+    : { text: 'Publish', action: 'publish' };
+}
+
+/**
+ * The items of the header's "⋯" menu, in order. Unpublish is in the menu
+ * only in the app (site mode); in `vp serve` it stays in the meta panel.
+ * @param {{ status?: string }} meta
+ * @param {{ siteMode: boolean, liveUrl: string|null }} ctx
+ * @returns {Array<{ id: 'export'|'ast'|'live'|'delete'|'unpublish', text: string, danger?: boolean, disabled?: boolean, title?: string }>}
+ */
+export function moreMenuItems(meta, { siteMode, liveUrl }) {
+  const published = meta?.status === 'published';
+  const items = [
+    { id: 'export', text: 'Export JSON' },
+    { id: 'ast', text: 'Show block tree (AST)' },
+  ];
+  if (liveUrl) items.push({ id: 'live', text: 'View live page' });
+  items.push(published
+    ? { id: 'delete', text: 'Delete post…', danger: true, disabled: true, title: 'Unpublish it first' }
+    : { id: 'delete', text: 'Delete post…', danger: true });
+  if (siteMode && published) items.push({ id: 'unpublish', text: 'Unpublish…', danger: true });
+  return items;
+}
+
+/**
+ * The words of an Unpublish or Delete confirmation.
+ * @param {'unpublish'|'delete'} kind
+ * @param {{ title: string, liveUrl: string|null }} post
+ * @returns {{ heading: string, body: string, confirm: string }}
+ */
+export function confirmText(kind, { title, liveUrl }) {
+  if (kind === 'delete') {
+    return {
+      heading: `Delete "${title}"?`,
+      body: 'This removes the post and its page file. It can be recovered only from git history.',
+      confirm: 'Delete post',
+    };
+  }
+  return {
+    heading: `Unpublish "${title}"?`,
+    body: `${liveUrl || 'The live page'} stops working once the site rebuilds. The post stays here as a draft.`,
+    confirm: 'Unpublish',
   };
 }
 

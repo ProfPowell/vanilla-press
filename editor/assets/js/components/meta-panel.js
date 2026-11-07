@@ -22,7 +22,7 @@ export class MetaPanel extends HTMLElement {
     // Listen for meta updates (e.g. from doc loading)
     window.__onMetaUpdate = (meta) => {
       this.syncFromMeta(meta);
-      onSiteMetaUpdate(meta); // the app's header Publish button (no-op without ?site=)
+      onSiteMetaUpdate(meta); // the header: primary button and "⋯" menu
     };
     // Show / hide the "changed on disk" notice for the current document
     window.__onConflictChange = (docId, message) => this.showConflict(docId, message);

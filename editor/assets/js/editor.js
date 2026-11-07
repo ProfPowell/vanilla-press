@@ -39,6 +39,8 @@ import './components/meta-panel.js';
 import './components/doc-browser.js';
 import './components/theme-picker.js';
 import './components/component-settings.js';
+import './components/more-menu.js';
+import './components/confirm-panel.js';
 import { initPatterns } from './patterns.js';
 import { enabledDescriptors, unrepresentable, withoutDropped } from './component-model.js';
 import { isSiteMode, initSiteMode } from './site-mode.js';
@@ -173,7 +175,6 @@ export function initEditor() {
   }
 
   // Save utility buttons before toolbar render wipes them
-  const utilitySection = toolbarEl.querySelector('.toolbar-utils');
 
   const state = EditorState.create({
     schema,
@@ -228,17 +229,12 @@ export function initEditor() {
   });
 
   toolbar = new EditorToolbar(toolbarEl, editorView);
-  // Re-append utility section after toolbar renders
-  if (utilitySection) {
-    toolbarEl.appendChild(utilitySection);
-  }
   toolbar.update(editorView.state);
 
   // Expose for external use
   window.__editorView = editorView;
   window.__editorSchema = schema;
 
-  setupExportButton();
   initPatterns();
   loadComponents();
   initSiteMode();
@@ -275,15 +271,6 @@ async function loadComponents() {
   } catch (err) {
     console.warn('Components unavailable:', err);
   }
-}
-
-function setupExportButton() {
-  const btn = document.querySelector('[data-export-json]');
-  if (!btn) return;
-
-  btn.addEventListener('click', () => {
-    exportDocument();
-  });
 }
 
 export function exportDocument() {
@@ -564,6 +551,7 @@ export async function deleteDoc(id) {
 /** If `id` is the open document, clear the editor (it no longer exists). */
 function clearIfCurrent(id) {
   if (id === getCurrentDocId()) {
+    if (saveTimer) clearTimeout(saveTimer); // a pending auto-save must not re-create it
     setCurrentDocId(null);
     saveHold = null;
     resetCurrentMeta({

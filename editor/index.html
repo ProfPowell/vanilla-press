@@ -32,17 +32,25 @@
 </head>
 <body>
 <editor-shell>
-  <!-- The app's header (?site=): shown and wired by site-mode.js; vp serve never shows it -->
+  <!-- Top bar: shown and wired by site-mode.js (the app, ?site=, and vp serve; "← Posts" and the site name are the app's only) -->
   <header class="site-header" data-site-header hidden>
-    <a class="back-to-posts" data-back-to-posts href="/app/">&larr; Posts</a>
-    <p class="save-state" data-save-state role="status" aria-live="polite"></p>
+    <a class="back-to-posts" data-back-to-posts href="/app/">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>
+      Posts
+    </a>
+    <span class="header-rule" data-site-name-rule aria-hidden="true"></span>
+    <p class="site-name" data-site-name></p>
+    <p class="save-pill" data-save-state role="status" aria-live="polite"></p>
     <div class="spacer"></div>
     <p class="action-state" data-action-state role="status" aria-live="polite"></p>
-    <button type="button" data-tools-toggle aria-expanded="false">Tools</button>
-    <button type="button" data-settings-toggle aria-pressed="true">Settings</button>
-    <button type="button" data-site-preview>Preview</button>
-    <button type="button" class="btn-publish" data-site-publish>Publish</button>
-    <button type="button" class="btn-update" data-site-update hidden title="Put your saved edits on the live site">Update</button>
+    <div class="header-actions">
+      <button type="button" class="quiet" data-site-preview>Preview</button>
+      <button type="button" class="icon-btn" data-settings-toggle aria-label="Post settings" aria-pressed="true">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path></svg>
+      </button>
+      <more-menu data-more-menu></more-menu>
+      <button type="button" class="primary" data-site-primary>Publish</button>
+    </div>
     <div class="action-report" data-action-report hidden role="alert">
       <div data-action-report-body></div>
       <button type="button" data-action-report-close>Dismiss</button>
@@ -51,12 +59,6 @@
 
   <div class="editor-toolbar">
     <!-- Formatting buttons injected by menu.js -->
-    <div class="toolbar-utils">
-      <div class="spacer"></div>
-      <span class="save-indicator">Saved</span>
-      <button data-export-json title="Export JSON">Export</button>
-      <button data-toggle-inspector title="Toggle AST Inspector">AST</button>
-    </div>
   </div>
 
   <div class="editor-pane">
@@ -76,6 +78,7 @@
   <div class="editor-inspector">
     <ast-inspector></ast-inspector>
   </div>
+  <confirm-panel data-confirm></confirm-panel>
 </editor-shell>
 
 <script type="module" src="assets/js/editor.js"></script>

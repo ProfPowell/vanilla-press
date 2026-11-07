@@ -1,18 +1,17 @@
-/* The app's editor (?site=): a quiet writing screen.
- * editor-shell.site-mode adds a header row; the doc browser, theme picker,
- * block inspector and Export live behind Tools (.tools-open); the settings
- * panel hides with .settings-hidden. .sidebar-hidden is set by site-mode.js
- * when neither settings nor tools are showing. Without ?site= none of these
- * classes are set, so the layout is the one in _shell.css. */
+/* The editor's top bar (the app, and vp serve): "← Posts" and the site name
+ * (app only), the save pill, then Preview, Post settings, the "⋯" menu and
+ * the primary button. .has-header is set by site-mode.js in both; .site-mode
+ * only in the app, where the sidebar is the settings panel alone
+ * (.sidebar-hidden when it is hidden). vp serve keeps the doc browser and
+ * theme picker in its sidebar. */
 
 /* VB gives `header` a display, which beats the UA [hidden] rule: the app
- * header must never show outside site mode (vp serve). */
+ * header must never show before site-mode.js wires it. */
 .site-header[hidden] {
   display: none !important;
 }
 
-editor-shell.site-mode {
-  grid-template-columns: 1fr var(--editor-sidebar-w);
+editor-shell.has-header {
   grid-template-rows: auto var(--editor-toolbar-h) minmax(0, 1fr);
   grid-template-areas:
     "header  header"
@@ -20,7 +19,7 @@ editor-shell.site-mode {
     "editor  sidebar";
 }
 
-editor-shell.site-mode.inspector-open {
+editor-shell.has-header.inspector-open {
   grid-template-columns: 1fr var(--editor-sidebar-w) var(--editor-inspector-w);
   grid-template-areas:
     "header  header  header"
@@ -36,97 +35,310 @@ editor-shell.site-mode.sidebar-hidden {
     "editor";
 }
 
+/* The block tree can open with the settings panel hidden */
+editor-shell.site-mode.sidebar-hidden.inspector-open {
+  grid-template-columns: 1fr var(--editor-inspector-w);
+  grid-template-areas:
+    "header  header"
+    "toolbar toolbar"
+    "editor  inspector";
+}
+
 editor-shell.site-mode.sidebar-hidden .editor-sidebar {
   display: none;
 }
 
-/* Header: back link, save state ... action state, Tools, Settings, Preview, Publish */
-editor-shell.site-mode .site-header {
+editor-shell.has-header .site-header {
   grid-area: header;
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--size-s);
+  gap: var(--size-xs) var(--size-s);
   padding: var(--size-xs) var(--size-m);
-  background: var(--color-surface);
-  border-block-end: 1px solid var(--color-border);
+  min-height: 3.75rem;
+  box-sizing: border-box;
+  background: var(--color-background);
+  border-block-end: 1px solid var(--color-border-subtle);
+  font-family: var(--font-sans);
 }
 
 .site-header .spacer {
-  flex: 1;
+  flex: 1 1 0;
 }
 
 .site-header .back-to-posts {
-  color: var(--color-text);
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-xs);
+  min-height: var(--size-touch-min);
+  padding-inline: var(--size-xs);
+  color: var(--color-text-muted);
   font-size: var(--font-size-s);
+  text-decoration: none;
 }
 
 .site-header .back-to-posts:hover {
-  text-decoration: underline;
-}
-
-.site-header .save-state,
-.site-header .action-state {
-  margin: 0;
-  font-size: var(--font-size-s);
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.site-header .save-state.error,
-.site-header .action-state.error {
-  color: var(--color-error, #d9534f);
-  white-space: normal;
-}
-
-.site-header .action-state.done {
-  color: var(--color-success, #5cb85c);
-}
-
-.site-header button {
-  height: 2rem;
-  padding: 0 var(--size-m);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-m);
-  background: transparent;
   color: var(--color-text);
+}
+
+.site-header .header-rule {
+  width: 1px;
+  height: 1.25rem;
+  background: var(--color-border);
+}
+
+.site-header .site-name {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
   font-size: var(--font-size-s);
-  cursor: pointer;
 }
 
-.site-header button[aria-expanded="true"],
-.site-header button[aria-pressed="true"] {
-  background: var(--color-background);
-  border-color: var(--color-accent);
-}
-
-.site-header .btn-publish {
-  background: var(--color-success, #5cb85c);
-  border-color: var(--color-success, #5cb85c);
-  color: #fff;
-}
-
-.site-header .btn-unpublish {
-  background: var(--color-warning, #f0ad4e);
-  border-color: var(--color-warning, #f0ad4e);
-  color: #fff;
-}
-
-/* Update shows only for a published post; a button's display would beat [hidden] */
+.site-header [hidden],
 .site-header button[hidden] {
   display: none !important;
 }
 
-.site-header .btn-update {
-  background: var(--color-accent, #0275d8);
-  border-color: var(--color-accent, #0275d8);
-  color: #fff;
+/* The save state, as a pill; warning tone while a published post's edits are not live */
+.site-header .save-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-s);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.site-header .save-pill:empty {
+  display: none;
+}
+
+.site-header .save-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.site-header .save-pill.warn {
+  background: var(--color-warning-subtle);
+  color: var(--color-warning-text);
+}
+
+.site-header .save-pill.error {
+  color: var(--color-error-text);
+  white-space: normal;
+}
+
+.site-header .action-state {
+  margin: 0;
+  font-size: var(--font-size-s);
+  color: var(--color-text-muted);
+}
+
+.site-header .action-state.error {
+  color: var(--color-error-text);
+}
+
+.site-header .action-state.done,
+.site-header .action-state.done a {
+  color: var(--color-success-text);
+}
+
+.site-header .header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Quiet by default; the primary button is the one filled control */
+.site-header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0 var(--size-m);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-s);
+  cursor: pointer;
+}
+
+.site-header button:hover {
+  background: var(--color-surface-alt);
+}
+
+.site-header .icon-btn,
+.site-header more-menu > button {
+  width: 2.5rem;
+  padding: 0;
+}
+
+.site-header button[aria-pressed="true"] {
+  background: var(--color-surface-alt);
+}
+
+.site-header button.primary {
+  min-height: var(--size-touch-min);
+  padding-inline: 1.125rem;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-weight: 600;
+}
+
+.site-header button.primary:hover {
+  background: var(--color-primary);
+  filter: brightness(0.92);
 }
 
 .site-header button:disabled {
   opacity: 0.6;
   cursor: progress;
+}
+
+.site-header :is(a, button):focus-visible,
+confirm-panel button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* The "⋯" menu */
+.more-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.more-menu [role=menu] {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 20;
+  width: 15rem;
+  max-width: calc(100vw - 2rem);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.08);
+}
+
+/* A button's or flex container's display beats the UA [hidden] rule */
+.more-menu [role=menu][hidden] {
+  display: none !important;
+}
+
+.site-header .more-menu [role=menuitem] {
+  justify-content: flex-start;
+  min-height: 2.5rem;
+  padding: 0 var(--size-s);
+  text-align: start;
+}
+
+.site-header .more-menu [role=menuitem]:focus-visible {
+  outline-offset: -2px;
+  background: var(--color-surface-alt);
+}
+
+.site-header .more-menu .danger {
+  color: var(--color-error-text);
+}
+
+.site-header .more-menu [aria-disabled=true] {
+  color: var(--color-text-subtle);
+  cursor: not-allowed;
+}
+
+.site-header .more-menu [aria-disabled=true]:hover {
+  background: transparent;
+}
+
+.more-menu .menu-rule {
+  height: 1px;
+  margin-block: 6px;
+  background: var(--color-border-subtle);
+}
+
+/* The confirmation: in the page, over everything */
+confirm-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--size-m);
+  background: rgb(0 0 0 / 0.35);
+  font-family: var(--font-sans);
+}
+
+confirm-panel[hidden] {
+  display: none !important;
+}
+
+confirm-panel .confirm-box {
+  width: min(28rem, 100%);
+  padding: var(--size-l);
+  background: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.08);
+}
+
+confirm-panel h2 {
+  margin: 0 0 var(--size-xs);
+  font-family: var(--font-serif);
+  font-size: var(--font-size-l);
+}
+
+confirm-panel p {
+  margin: 0 0 var(--size-m);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+confirm-panel .confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--size-s);
+}
+
+confirm-panel button {
+  min-height: var(--size-touch-min);
+  padding: 0 1.125rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-s);
+  cursor: pointer;
+}
+
+confirm-panel button:hover {
+  background: var(--color-surface-alt);
+}
+
+confirm-panel button.danger {
+  border-color: var(--color-error-text);
+  background: var(--color-error-text);
+  color: var(--color-text-on-primary);
+  font-weight: 600;
 }
 
 /* Build log / conflicting files, under the header row */
@@ -163,15 +375,10 @@ editor-shell.site-mode .site-header {
   white-space: pre-wrap;
 }
 
-/* The writing screen: tools and the old save indicator stay out of sight */
-editor-shell.site-mode .toolbar-utils .save-indicator,
-editor-shell.site-mode meta-panel .actions {
-  display: none;
-}
-
-editor-shell.site-mode:not(.tools-open) :is(doc-browser, theme-picker, .site-label),
-editor-shell.site-mode:not(.tools-open) :is([data-export-json], [data-toggle-inspector]),
-editor-shell.site-mode.settings-hidden meta-panel {
+/* The writing screen. In the app the sidebar is the settings panel only. */
+editor-shell.site-mode :is(doc-browser, theme-picker, .site-label),
+editor-shell.site-mode meta-panel .actions,
+editor-shell.has-header.settings-hidden meta-panel {
   display: none;
 }
 

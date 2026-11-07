@@ -86,14 +86,6 @@ editor-shell .editor-toolbar {
   flex: 1;
 }
 
-.editor-toolbar .toolbar-utils {
-  display: flex;
-  align-items: center;
-  gap: var(--size-xs);
-  flex: 1;
-  min-width: 0;
-}
-
 .editor-toolbar select {
   height: 2rem;
   padding: 0 var(--size-s);
@@ -133,21 +125,6 @@ editor-shell .editor-sidebar {
   gap: var(--size-m);
 }
 
-/* Save status indicator in toolbar */
-.save-indicator {
-  font-size: var(--font-size-s);
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.save-indicator.saving {
-  color: var(--color-accent);
-}
-
-.save-indicator.unsaved {
-  color: var(--color-warning, #f0ad4e);
-}
-
 /* Inspector */
 editor-shell .editor-inspector {
   grid-area: inspector;
@@ -163,11 +140,6 @@ editor-shell .editor-inspector {
 
 editor-shell.inspector-open .editor-inspector {
   display: block;
-}
-
-.save-indicator.conflict,
-.save-indicator.error {
-  color: var(--color-error, #d9534f);
 }
 
 /* Which site the editor is exporting to */

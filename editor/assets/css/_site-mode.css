@@ -234,7 +234,7 @@ confirm-panel button:focus-visible {
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-l);
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.08);
+  box-shadow: var(--shadow-l);
 }
 
 /* A button's or flex container's display beats the UA [hidden] rule */
@@ -281,7 +281,7 @@ confirm-panel {
   display: grid;
   place-items: center;
   padding: var(--size-m);
-  background: rgb(0 0 0 / 0.35);
+  background: var(--color-backdrop);
   font-family: var(--font-sans);
 }
 
@@ -296,7 +296,7 @@ confirm-panel .confirm-box {
   color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-l);
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.08);
+  box-shadow: var(--shadow-l);
 }
 
 confirm-panel h2 {
@@ -384,4 +384,8 @@ editor-shell.has-header.settings-hidden meta-panel {
 
 editor-shell.site-mode .editor-pane {
   padding-block: var(--size-2xl, 3rem);
+}
+
+.site-header .action-state:empty {
+  display: none;
 }

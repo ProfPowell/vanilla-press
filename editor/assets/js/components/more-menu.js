@@ -53,6 +53,8 @@ export class MoreMenu extends HTMLElement {
 
   /** @param {Array<{ id: string, text: string, danger?: boolean, disabled?: boolean, title?: string }>} items */
   setItems(items) {
+    // Rebuilding while open would detach the focused item: remember its place and restore focus
+    const focusedAt = this.menu.hidden ? -1 : this.items.indexOf(document.activeElement);
     const nodes = [];
     for (const item of items) {
       if (item.danger && !nodes.some((n) => n.className === 'menu-rule')) {
@@ -73,6 +75,7 @@ export class MoreMenu extends HTMLElement {
       nodes.push(b);
     }
     this.menu.replaceChildren(...nodes);
+    if (focusedAt >= 0) this.items[Math.min(focusedAt, this.items.length - 1)]?.focus();
   }
 
   get items() {

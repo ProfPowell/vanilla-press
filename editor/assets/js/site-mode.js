@@ -488,8 +488,13 @@ async function onMore(id) {
   switch (id) {
     case 'export': return exportDocument();
     case 'ast':
-      // The block tree takes the panel's place: show the panel if it is hidden (not remembered)
-      if (!shell.inspectorOpen) setSettingsHidden(false, false);
+      // The block tree takes the panel's place. A hidden panel opens (not
+      // remembered) on the tree, even if the tree was left open in it; a
+      // shown panel switches between the tree and the settings.
+      if (shell.classList.contains('settings-hidden')) {
+        setSettingsHidden(false, false);
+        return shell.toggleInspector(true);
+      }
       return shell.toggleInspector();
     case 'live': {
       const url = liveUrl(meta);

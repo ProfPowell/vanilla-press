@@ -1,11 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { statusBox, collectionOptions, urlPrefix } from '../../editor/assets/js/settings-view.js';
+import { statusBox, collectionOptions, urlPrefix, publishedDay } from '../../editor/assets/js/settings-view.js';
 
 const NOT_LIVE = "Your saved edits aren't on the live site yet. Update builds the site and pushes them.";
 
 describe('statusBox', () => {
-  const published = { status: 'published', published: '2026-11-03T12:00:00.000Z' };
+  // Noon on Nov 3 local time: Nov 3 in any time zone the tests run in
+  const published = { status: 'published', published: new Date(2026, 10, 3, 12).toISOString() };
 
   it('a published post with its edits live: the date, no note', () => {
     assert.deepEqual(statusBox(published, { liveOutOfDate: false, locale: 'en-US' }),
@@ -74,5 +75,25 @@ describe('urlPrefix', () => {
     for (const collection of ['posts', 'notes', 'pages']) {
       assert.equal(urlPrefix(collection, config) + 'hello/', postUrlPath({ meta: { slug: 'hello', collection } }, config));
     }
+  });
+});
+
+describe('publishedDay', () => {
+  it('a date-only value keeps its written day in any time zone', () => {
+    // Run under TZ=America/Los_Angeles too (see npm test note in the report); the check is the same either way
+    assert.equal(publishedDay({ published: '2026-11-03' }, 'en-US'), 'Nov 3, 2026');
+    assert.equal(statusBox({ status: 'published', published: '2026-11-03' }, { liveOutOfDate: false, locale: 'en-US' }).title,
+      'Published Nov 3, 2026');
+  });
+
+  it('a full timestamp is shown in local time, as before', () => {
+    const value = '2026-11-03T12:00:00.000Z';
+    const expected = new Date(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    assert.equal(publishedDay({ published: value }, 'en-US'), expected);
+  });
+
+  it('no date, or not a date: empty', () => {
+    assert.equal(publishedDay({}, 'en-US'), '');
+    assert.equal(publishedDay({ published: 'soon' }, 'en-US'), '');
   });
 });

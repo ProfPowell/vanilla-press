@@ -337,9 +337,11 @@ describe('title in the document', () => {
 
 describe('metaLineText', () => {
   it('names the status, published day and collection', () => {
-    assert.equal(metaLineText({ status: 'published', published: '2026-11-03T12:00:00.000Z', collection: 'posts' }, 'en-US'),
+    assert.equal(metaLineText({ status: 'published', published: new Date(2026, 10, 3, 12).toISOString(), collection: 'posts' }, 'en-US'),
       'Published Nov 3, 2026 · posts');
     assert.equal(metaLineText({ status: 'draft', collection: 'posts' }), 'Draft · posts');
+    assert.equal(metaLineText({ status: 'published', published: '2026-11-03', collection: 'posts' }, 'en-US'),
+      'Published Nov 3, 2026 · posts');
     assert.equal(metaLineText({ status: 'draft' }), 'Draft · posts');
     assert.equal(metaLineText({ status: 'published', collection: 'notes' }), 'Published · notes');
   });

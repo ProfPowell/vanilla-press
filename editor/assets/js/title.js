@@ -14,6 +14,7 @@
 import { Plugin, TextSelection } from 'prosemirror-state';
 import { Slice } from 'prosemirror-model';
 import { dropPoint } from 'prosemirror-transform';
+import { publishedDay } from './settings-view.js';
 
 /** @typedef {import('prosemirror-state').EditorState} EditorState */
 /** @typedef {import('prosemirror-state').Command} Command */
@@ -294,9 +295,6 @@ export function titlePastePlugin() {
 export function metaLineText(meta, locale) {
   const collection = meta.collection || 'posts';
   if (meta.status !== 'published') return `Draft · ${collection}`;
-  const date = meta.published ? new Date(meta.published) : null;
-  const day = date && !Number.isNaN(date.getTime())
-    ? ` ${date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })}`
-    : '';
-  return `Published${day} · ${collection}`;
+  const day = publishedDay(meta, locale);
+  return `Published${day ? ` ${day}` : ''} · ${collection}`;
 }

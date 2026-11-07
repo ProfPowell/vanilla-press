@@ -202,6 +202,11 @@ export function initEditor() {
       // First: while the palette is open it owns Enter, Escape, arrows and
       // Backspace, which the keymaps below would otherwise consume.
       createSlashPlugin(),
+      // Before titlePastePlugin: a dragged list item, tab or step never
+      // drops out of its kind of parent (onto the title either)
+      blockHandlesPlugin({
+        addAt: (view, pos) => getBlockPalette().open(view, pos, { insertAfter: pos }),
+      }),
       buildInputRules(),
       history(),
       // Before the other keymaps: Enter, Backspace, Delete and Mod-a at the title's edge
@@ -213,9 +218,6 @@ export function initEditor() {
       dropCursor(),
       gapCursor(),
       formatToolbarPlugin(),
-      blockHandlesPlugin({
-        addAt: (view, pos) => getBlockPalette().open(view, pos, { insertAfter: pos }),
-      }),
       tableEditing(),
       componentSettingsPlugin(),
     ],

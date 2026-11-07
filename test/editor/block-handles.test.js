@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { schema } from '../../editor/assets/js/schema.js';
 import { toBlockAst } from '../../editor/assets/js/ast.js';
-import { movableBlockAt, moveBlock, blockHandlesPlugin } from '../../editor/assets/js/block-handles.js';
+import { movableBlockAt, moveBlock, blockHandlesPlugin, itemDropRefused } from '../../editor/assets/js/block-handles.js';
 
 const { node, text } = { node: schema.node.bind(schema), text: schema.text.bind(schema) };
 const p = (s) => node('paragraph', null, s ? [text(s)] : []);
@@ -69,6 +69,32 @@ describe('moveBlock', () => {
     assert.equal(moveBlock(1)(last), false);
   });
 
+  it('moveBlock moves a tab within its tabs', () => {
+    const tab = (label, s) => node('tab', { label }, [p(s)]);
+    const doc = docOf(p('Before'), node('tabs', null, [tab('A', 'Tab A'), tab('B', 'Tab B'), tab('C', 'Tab C')]), p('After'));
+    const found = movableBlockAt(doc.resolve(posOf(doc, 'Tab B')));
+    assert.equal(doc.nodeAt(found.pos).type.name, 'tab');
+    const up = run(stateAt(doc, 'Tab B', 2), moveBlock(-1));
+    up.doc.check();
+    assert.equal(up.doc.child(2).type.name, 'tabs', 'the tab stays in its tabs');
+    assert.deepEqual(texts(up.doc.child(2)), ['Tab B', 'Tab A', 'Tab C']);
+    assert.equal(up.selection.$from.parent.textContent, 'Tab B');
+    assert.equal(moveBlock(-1)(up), false, 'the first tab does not move up');
+    const last = stateAt(doc, 'Tab C');
+    assert.equal(moveBlock(1)(last), false, 'the last tab does not move down');
+  });
+
+  it('moveBlock moves a step within its steps', () => {
+    const step = (title, s) => node('step', { title }, [p(s)]);
+    const doc = docOf(node('steps', null, [step('1', 'Step one'), step('2', 'Step two')]), p('After'));
+    const down = run(stateAt(doc, 'Step one'), moveBlock(1));
+    down.doc.check();
+    assert.deepEqual(texts(down.doc.child(1)), ['Step two', 'Step one']);
+    assert.deepEqual([0, 1].map((i) => down.doc.child(1).child(i).attrs.title), ['2', '1']);
+    assert.equal(down.selection.$from.parent.textContent, 'Step one');
+    assert.equal(moveBlock(1)(down), false, 'the last step does not move out');
+  });
+
   it('moveBlock never moves above the title', () => {
     const state = stateAt(docOf(p('First'), p('Second')), 'First');
     assert.equal(moveBlock(-1)(state), false);
@@ -127,6 +153,23 @@ describe('movableBlockAt', () => {
     const doc = docOf(p('Before'), table);
     const found = movableBlockAt(doc.resolve(posOf(doc, 'b')));
     assert.equal(doc.nodeAt(found.pos).type.name, 'table');
+  });
+});
+
+describe('dragging an item by its grip', () => {
+  const tab = (label, s) => node('tab', { label }, [p(s)]);
+  const doc = docOf(p('Before'), node('tabs', null, [tab('A', 'Tab A'), tab('B', 'Tab B')]), p('After'));
+  const tabA = NodeSelection.create(doc, doc.child(0).nodeSize + doc.child(1).nodeSize + 1);
+  const refused = (pos) => itemDropRefused(doc, pos, tabA.content(), tabA.node);
+
+  it('drops a tab among its tabs', () => {
+    assert.equal(refused(posOf(doc, 'Tab B') + 2), false);
+  });
+
+  it('never drops a tab out of its tabs', () => {
+    assert.equal(refused(posOf(doc, 'After') + 2), true, 'not into a body paragraph');
+    assert.equal(refused(posOf(doc, 'Before')), true);
+    assert.equal(refused(2), true, 'not onto the title');
   });
 });
 

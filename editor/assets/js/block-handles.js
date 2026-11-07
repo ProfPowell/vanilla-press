@@ -3,8 +3,9 @@
  * hovered (or cursor) block, the keyboard move (Alt+Shift+↑/↓), and the
  * "Type / for blocks" placeholder on the cursor's empty line.
  *
- * The movable block is a list item, or a block that shares its parent with
- * other blocks (a lone child moves with its container). The title never
+ * The movable block is a list item, tab or step (always within its parent),
+ * or a block that shares its parent with other blocks (a lone child moves
+ * with its container). The title never
  * moves and nothing moves above it.
  *
  * @module editor/block-handles
@@ -13,6 +14,7 @@
 import { Plugin, Selection, TextSelection, NodeSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Fragment } from 'prosemirror-model';
+import { dropPoint } from 'prosemirror-transform';
 
 /** @typedef {import('prosemirror-model').Node} PMNode */
 /** @typedef {import('prosemirror-model').ResolvedPos} ResolvedPos */
@@ -22,6 +24,8 @@ import { Fragment } from 'prosemirror-model';
 export const PLACEHOLDER = 'Type / for blocks';
 
 const mac = typeof navigator !== 'undefined' && /Mac|iP(hone|[oa]d)/.test(navigator.platform || '');
+/** Items that move within their parent (a list, tabs, steps), never out of it */
+const ITEMS = new Set(['list_item', 'tab', 'step']);
 const isBlock = (node) => (node.type.spec.group || '').split(' ').includes('block');
 
 /**
@@ -31,15 +35,15 @@ const isBlock = (node) => (node.type.spec.group || '').split(' ').includes('bloc
  * @param {number} index
  */
 function isMovable(node, parent, index) {
-  if (node.type.name === 'list_item') return true;
+  if (ITEMS.has(node.type.name)) return true;
   if (!isBlock(node) || parent.childCount < 2) return false;
-  // A list item's first line stands for the item (and its nested list)
-  return !(index === 0 && parent.type.name === 'list_item' && node.isTextblock);
+  // An item's first line stands for the item (and its nested list)
+  return !(index === 0 && ITEMS.has(parent.type.name) && node.isTextblock);
 }
 
 /**
- * The innermost ancestor of `$pos` that moves as a block: a list item, or a
- * block whose parent holds more than one child. Never the title.
+ * The innermost ancestor of `$pos` that moves as a block: a list item, tab
+ * or step, or a block whose parent holds more than one child. Never the title.
  * @param {ResolvedPos} $pos
  * @returns {BlockRef | null}
  */
@@ -131,6 +135,23 @@ export function moveBlock(dir) {
 }
 
 /**
+ * Whether dropping a dragged item (list item, tab, step) at `pos` must be
+ * refused: it lands only where its kind of parent holds it directly, never
+ * unwrapped into a paragraph or the title, or wrapped into a new container.
+ * @param {PMNode} doc
+ * @param {number} pos - the drop position
+ * @param {import('prosemirror-model').Slice} slice - the dragged item
+ * @param {PMNode} item
+ * @returns {boolean}
+ */
+export function itemDropRefused(doc, pos, slice, item) {
+  const at = dropPoint(doc, pos, slice);
+  if (at == null) return true;
+  const $at = doc.resolve(at);
+  return !$at.parent.canReplaceWith($at.index(), $at.index(), item.type);
+}
+
+/**
  * "Type / for blocks" on the empty paragraph that holds the cursor
  * (a decoration: never part of the document).
  * @param {import('prosemirror-state').EditorState} state
@@ -164,10 +185,12 @@ class BlockHandles {
   /**
    * @param {import('prosemirror-view').EditorView} view
    * @param {(view: import('prosemirror-view').EditorView, pos: number) => void} [addAt]
+   * @param {{ item: PMNode | null }} drag - the item being dragged by the grip, shared with handleDrop
    */
-  constructor(view, addAt) {
+  constructor(view, addAt, drag) {
     this.view = view;
     this.addAt = addAt;
+    this.drag = drag;
     /** @type {BlockRef | null} the block under the pointer */
     this.hovered = null;
     /** @type {BlockRef | null} the block the handles are showing for */
@@ -197,7 +220,11 @@ class BlockHandles {
     this.dragButton.addEventListener('dragstart', (e) => this.dragStart(e));
     this.dragButton.addEventListener('dragend', () => {
       const { dragging } = this.view;
-      setTimeout(() => { if (this.view.dragging === dragging) this.view.dragging = null; }, 50);
+      const { item } = this.drag;
+      setTimeout(() => {
+        if (this.view.dragging === dragging) this.view.dragging = null;
+        if (this.drag.item === item) this.drag.item = null;
+      }, 50);
     });
   }
 
@@ -239,6 +266,8 @@ class BlockHandles {
     if (blockDom instanceof Element) event.dataTransfer.setDragImage(blockDom, 0, 0);
     // ProseMirror's drop reads this: it moves `node` (Alt/Ctrl-drag copies)
     view.dragging = { slice, move: !event[mac ? 'altKey' : 'ctrlKey'], node: selection };
+    // ProseMirror may clear view.dragging before handleDrop runs: keep the item here
+    this.drag.item = ITEMS.has(selection.node.type.name) ? selection.node : null;
   }
 
   /** The block to show handles for: hovered, else the cursor's (while focused). None over a text selection. */
@@ -302,10 +331,18 @@ class BlockHandles {
  * @returns {Plugin}
  */
 export function blockHandlesPlugin({ addAt } = {}) {
+  const drag = { item: null };
   return new Plugin({
-    view: (view) => new BlockHandles(view, addAt),
+    view: (view) => new BlockHandles(view, addAt, drag),
     props: {
       decorations: placeholderDecorations,
+      // A list item, tab or step dragged by the grip stays in its kind of parent
+      handleDrop(view, event, slice) {
+        const { item } = drag;
+        if (!item || slice.content.firstChild !== item) return false;
+        const found = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        return !found || itemDropRefused(view.state.doc, found.pos, slice, item);
+      },
     },
   });
 }

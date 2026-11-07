@@ -1,7 +1,9 @@
 /**
  * <meta-panel> — sidebar form for document metadata.
  *
- * Fields: title, slug (auto-derived), collection, description, status, tags.
+ * Fields: slug, collection, description, status, tags. The title is the
+ * document's first line (title.js); the slug follows it until edited here
+ * or the post is published (editor.js, slug.js).
  * Actions: publish/unpublish, preview.
  * Updates the current document metadata stored in meta-state.js.
  *
@@ -12,7 +14,9 @@ import { validStatuses } from '../../../../src/schema/content-schema.js';
 import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.js';
 import { api } from '../api-client.js';
 import { postUrlPath } from '../../../../src/sync/paths.js';
-import { saveDocument, loadDocument, handleSaveError, loadVersionOnDisk } from '../editor.js';
+import {
+  saveDocument, loadDocument, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine,
+} from '../editor.js';
 import { onMetaUpdate as onSiteMetaUpdate, isSiteMode } from '../site-mode.js';
 
 export class MetaPanel extends HTMLElement {
@@ -45,11 +49,6 @@ export class MetaPanel extends HTMLElement {
     this.className = 'meta-panel';
     this.innerHTML = `
       <h3>Document</h3>
-
-      <div class="field">
-        <label for="meta-title">Title</label>
-        <input type="text" id="meta-title" value="" placeholder="Document title"/>
-      </div>
 
       <div class="field">
         <label for="meta-slug">Slug</label>
@@ -97,7 +96,6 @@ export class MetaPanel extends HTMLElement {
   }
 
   wireEvents() {
-    const titleInput = this.querySelector('#meta-title');
     const slugInput = this.querySelector('#meta-slug');
     const collectionInput = this.querySelector('#meta-collection');
     const descInput = this.querySelector('#meta-description');
@@ -106,26 +104,15 @@ export class MetaPanel extends HTMLElement {
     const publishBtn = this.querySelector('[data-publish]');
     const previewBtn = this.querySelector('[data-preview]');
 
-    titleInput.addEventListener('input', () => {
-      setCurrentMeta({ title: titleInput.value });
-      // Auto-derive slug if slug hasn't been manually edited
-      if (!this._slugManuallyEdited) {
-        const slug = titleInput.value
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '');
-        slugInput.value = slug;
-        setCurrentMeta({ slug });
-      }
-    });
-
     slugInput.addEventListener('input', () => {
-      this._slugManuallyEdited = true;
+      // Edited by hand: it stops following the title (cleared, it follows again)
+      setSlugHandEdited(!!slugInput.value);
       setCurrentMeta({ slug: slugInput.value });
     });
 
     collectionInput.addEventListener('input', () => {
       setCurrentMeta({ collection: collectionInput.value });
+      refreshMetaLine();
     });
 
     descInput.addEventListener('input', () => {
@@ -135,6 +122,7 @@ export class MetaPanel extends HTMLElement {
     statusSelect.addEventListener('change', () => {
       if (isSiteMode) return; // disabled there; status changes only through the header actions
       setCurrentMeta({ status: statusSelect.value });
+      refreshMetaLine();
     });
 
     tagInput.addEventListener('keydown', (e) => {
@@ -286,16 +274,13 @@ export class MetaPanel extends HTMLElement {
 
   syncFromMeta(meta) {
     if (!meta) return;
-    this._slugManuallyEdited = false;
 
-    const titleInput = this.querySelector('#meta-title');
     const slugInput = this.querySelector('#meta-slug');
     const collectionInput = this.querySelector('#meta-collection');
     const descInput = this.querySelector('#meta-description');
     const statusSelect = this.querySelector('#meta-status');
     const publishBtn = this.querySelector('[data-publish]');
 
-    if (titleInput) titleInput.value = meta.title || '';
     if (slugInput) slugInput.value = meta.slug || '';
     if (collectionInput) collectionInput.value = meta.collection || '';
     if (descInput) descInput.value = meta.description || '';

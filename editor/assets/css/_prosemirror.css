@@ -1,15 +1,48 @@
 /* ProseMirror overrides for Vanilla Breeze harmony */
 
-/* Core PM editor */
+/* Core PM editor: the writing column (centered measure, serif, 20px) */
 .ProseMirror {
   outline: none;
   min-height: 400px;
-  line-height: var(--line-height-normal);
-  font-family: var(--font-body);
-  font-size: var(--font-size-m);
+  max-inline-size: var(--measure-normal);
+  margin-inline: auto;
+  line-height: var(--line-height-relaxed);
+  font-family: var(--font-serif);
+  font-size: var(--font-size-xl);
   color: var(--color-text);
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+/* The meta line above the title (a widget, not part of the document) */
+.ProseMirror .doc-meta-line {
+  margin-block-end: var(--size-s);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-s);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+/* The title: the document's first line */
+.ProseMirror h1.doc-title {
+  margin-block: 0 var(--size-xl);
+  font-family: var(--font-serif);
+  font-size: var(--font-size-5xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+/* Empty title: the "Untitled" placeholder. The attribute is set by a
+ * decoration only while the title is empty (PM keeps a <br> in an empty
+ * textblock, so :empty never matches). */
+.ProseMirror h1.doc-title[data-placeholder]::before {
+  content: attr(data-placeholder);
+  float: inline-start;
+  block-size: 0;
+  color: var(--color-text-subtle);
+  pointer-events: none;
 }
 
 .ProseMirror:focus {

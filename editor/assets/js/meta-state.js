@@ -6,7 +6,7 @@
  */
 
 let currentMeta = {
-  title: 'Untitled',
+  title: '', // a new post starts untitled (the title line shows an "Untitled" placeholder)
   slug: 'untitled',
   collection: 'posts',
   status: 'draft',

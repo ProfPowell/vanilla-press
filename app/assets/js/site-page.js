@@ -134,7 +134,7 @@ $('new-post').addEventListener('click', async (e) => {
     const doc = await api(`${base}/documents`, {
       method: 'POST',
       body: {
-        meta: { title: 'Untitled', slug: `untitled-${stamp}`, collection: 'posts', status: 'draft' },
+        meta: { title: '', slug: `untitled-${stamp}`, collection: 'posts', status: 'draft' },
         blocks: [{ type: 'paragraph', children: [] }],
       },
     });

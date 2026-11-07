@@ -43,7 +43,14 @@ export function validate(doc, { components } = {}) {
 
   // Meta validation
   if (doc.meta && typeof doc.meta === 'object') {
+    // A draft may be untitled (title ''); publishing needs a title (plan ruling P1).
+    const untitledDraft = doc.meta.title === '' && doc.meta.status === 'draft';
     for (const field of requiredMeta) {
+      if (field === 'title' && untitledDraft) continue;
+      if (field === 'title' && doc.meta.title === '' && doc.meta.status === 'published') {
+        errors.push('a published post needs a title'); // shown as "Not saved: …" in the editor
+        continue;
+      }
       if (!doc.meta[field]) {
         errors.push(`meta is missing required field "${field}"`);
       }

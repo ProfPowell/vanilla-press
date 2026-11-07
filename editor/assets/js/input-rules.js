@@ -78,6 +78,7 @@ function hrRule() {
   return new InputRule(
     /^(?:---|___|\*\*\*)\s$/,
     (state, match, start, end) => {
+      if (state.doc.resolve(start).parent.type === schema.nodes.title) return null; // the title is plain text
       const hr = schema.nodes.hr.create();
       const tr = state.tr.delete(start, end).replaceSelectionWith(hr);
       return tr;

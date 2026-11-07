@@ -25,7 +25,19 @@ const headingAttrs = blockTypes.heading.attrs;
 
 /** @type {import('prosemirror-model').NodeSpec} */
 const doc = {
-  content: 'block+',
+  content: 'title block+',
+};
+
+/**
+ * The post title: the document's first line, edited as plain text. It holds
+ * `meta.title` and never enters the stored block AST (ast.js skips it).
+ */
+const title = {
+  content: 'text*',
+  marks: '',
+  defining: true,
+  parseDOM: [{ tag: 'h1.doc-title' }],
+  toDOM() { return ['h1', { class: 'doc-title' }, 0]; },
 };
 
 const paragraph = {
@@ -701,6 +713,7 @@ const link = {
 export const schema = new Schema({
   nodes: {
     doc,
+    title,
     paragraph,
     heading,
     blockquote,

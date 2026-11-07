@@ -487,10 +487,10 @@ async function onMore(id) {
       return;
     }
     case 'unpublish':
-      if (await els.confirm.ask(confirmText('unpublish', { title: meta.title, liveUrl: liveUrl(meta) }))) runAction('unpublish');
+      if (await els.confirm.ask(confirmText('unpublish', { title: meta.title || 'Untitled', liveUrl: liveUrl(meta) }))) runAction('unpublish');
       return;
     case 'delete':
-      if (await els.confirm.ask(confirmText('delete', { title: meta.title, liveUrl: null }))) deleteCurrent();
+      if (await els.confirm.ask(confirmText('delete', { title: meta.title || 'Untitled', liveUrl: null }))) deleteCurrent();
       return;
     default:
   }

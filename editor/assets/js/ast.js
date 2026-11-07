@@ -28,13 +28,15 @@ const VP_TO_PM_MARK = {
 // --- PM Doc → VP Block AST ---
 
 /**
- * Convert a ProseMirror document to a VP block AST.
+ * Convert a ProseMirror document to a VP block AST. The title node (the
+ * document's first line, which holds `meta.title`) is not a block: skipped.
  * @param {import('prosemirror-model').Node} pmDoc
  * @returns {Object[]} Array of VP blocks
  */
 export function toBlockAst(pmDoc) {
   const blocks = [];
   pmDoc.forEach(child => {
+    if (child.type.name === 'title') return;
     const block = nodeToBlock(child);
     if (block) blocks.push(block);
   });
@@ -342,18 +344,21 @@ function cleanAttrs(attrs) {
 // --- VP Block AST → PM Doc ---
 
 /**
- * Convert VP block AST to a ProseMirror document.
+ * Convert VP block AST to a ProseMirror document, with the post title as its
+ * first node.
  * @param {Object[]} blocks - Array of VP blocks
  * @param {import('prosemirror-model').Schema} pmSchema
+ * @param {{ title?: string }} [options] - title: `meta.title`
  * @returns {import('prosemirror-model').Node}
  */
-export function fromBlockAst(blocks, pmSchema) {
+export function fromBlockAst(blocks, pmSchema, { title = '' } = {}) {
   const s = pmSchema || schema;
   const children = blocks.map(b => blockToNode(b, s)).filter(Boolean);
   if (children.length === 0) {
     children.push(s.node('paragraph'));
   }
-  return s.node('doc', null, children);
+  const titleNode = s.node('title', null, title ? [s.text(title)] : []);
+  return s.node('doc', null, [titleNode, ...children]);
 }
 
 /**

@@ -125,6 +125,28 @@ describe('setPublished', () => {
     assert.equal(off.kind, 'unpublish');
   });
 
+  test('publish and update refuse a post with no title', async () => {
+    const ws = setup();
+    const cur = getDocument(db, ID);
+    saveDocument(db, { ...cur, meta: { ...cur.meta, title: '' } });
+    const localBefore = git(fx.site, 'rev-parse', 'HEAD');
+    let built = 0;
+    const d = { ...deps(), runBuild: async () => { built++; return { ok: true, log: '' } } };
+    const refused = (err) => err instanceof PublishRejectedError && err.status === 422 &&
+      err.body.error === 'Give the post a title before publishing.';
+    await assert.rejects(setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d }), refused);
+    assert.equal(getDocument(db, ID).meta.status, 'draft');
+    // A published post whose title was cleared (stored directly): Update is refused too.
+    const pub = getDocument(db, ID);
+    saveDocument(db, { ...pub, meta: { ...pub.meta, title: '  ', status: 'published', published: new Date().toISOString() } });
+    await assert.rejects(setPublished({ site: {}, ws, db, docId: ID, publish: true, update: true, deps: d }), refused);
+    assert.equal(built, 0);
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
+    // Unpublish is never refused.
+    const off = await setPublished({ site: {}, ws, db, docId: ID, publish: false, deps: d });
+    assert.equal(off.kind, 'unpublish');
+  });
+
   test('publish and update refuse a post using a component that will not load on the live site (R14)', async () => {
     const ws = setup();
     const cur = getDocument(db, ID);
@@ -563,6 +585,15 @@ describe('app routes', () => {
     assert.equal(existsSync(join(fx.site, 'src', 'posts', 'hello.html')), false);
     assert.equal(headJson.meta.status, 'draft');
     assert.ok(!headFiles().includes('src/posts/hello.html'));
+  });
+
+  test('publish route on an untitled draft is a 422 with the reason', async () => {
+    await open();
+    const put = await api(`/api/sites/${siteId}/documents/${ID}`, { method: 'PUT', body: { meta: { title: '' } } });
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    const res = await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    assert.equal(res.status, 422, JSON.stringify(res.data));
+    assert.deepEqual(res.data, { error: 'Give the post a title before publishing.' });
   });
 
   test('update route on a draft is a 422', async () => {

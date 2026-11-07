@@ -41,6 +41,12 @@
   },
   "devDependencies": {
     "cook-ssg": "^2.5.0",
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "prosemirror-commands": "1.6.2",
+    "prosemirror-history": "1.4.1",
+    "prosemirror-keymap": "1.2.2",
+    "prosemirror-model": "1.25.1",
+    "prosemirror-state": "1.4.3",
+    "prosemirror-transform": "1.10.4"
   }
 }

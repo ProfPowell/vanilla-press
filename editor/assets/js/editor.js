@@ -7,7 +7,8 @@
  */
 
 import { EditorState, Plugin } from 'prosemirror-state';
-import { EditorView } from 'prosemirror-view';
+import { EditorView, Decoration, DecorationSet } from 'prosemirror-view';
+import { keymap } from 'prosemirror-keymap';
 import { history } from 'prosemirror-history';
 import { dropCursor } from 'prosemirror-dropcursor';
 import { gapCursor } from 'prosemirror-gapcursor';
@@ -19,6 +20,8 @@ import { buildKeymap, buildBaseKeymap } from './keymap.js';
 import { buildInputRules } from './input-rules.js';
 import { EditorToolbar } from './menu.js';
 import { toBlockAst, fromBlockAst } from './ast.js';
+import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
+import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
 import { getCurrentMeta, setCurrentMeta, resetCurrentMeta,
   getCurrentDocId, setCurrentDocId } from './meta-state.js';
 import { CodeBlockView } from './blocks/code-block-view.js';
@@ -60,6 +63,67 @@ const conflicts = new Map();
  * the post holds content the editor cannot represent (saving would drop it).
  */
 let saveHold = null;
+/**
+ * The open post's slug was set by hand, so it no longer follows the title
+ * (plan ruling P2). Taken from the stored meta on load (it survives a reload);
+ * set when the slug is edited in the meta panel.
+ */
+let slugHandEdited = false;
+
+/** Whether a loaded post's slug was set by hand. A new post's `untitled-<stamp>` follows its first title. */
+const handEditedOnLoad = (meta) => slugIsHandEdited(meta) && !isPlaceholderSlug(meta.slug);
+
+/**
+ * Record whether the slug was edited by hand (the meta panel's slug field).
+ * @param {boolean} edited
+ */
+export function setSlugHandEdited(edited) {
+  slugHandEdited = edited;
+}
+
+/**
+ * The title (the document's first line) changed: it is `meta.title`, and the
+ * slug follows it unless the post is published or its slug was set by hand.
+ * @param {string} title
+ */
+function titleEdited(title) {
+  const meta = getCurrentMeta();
+  setCurrentMeta({ title, slug: slugAfterTitleEdit(meta, title, { handEdited: slugHandEdited }) });
+  if (window.__onMetaUpdate) window.__onMetaUpdate(getCurrentMeta());
+}
+
+/**
+ * The title's placeholder ("Untitled", while it is empty) and the meta line
+ * above it ("Published Nov 3, 2026 · posts" / "Draft · posts"). Recomputed on
+ * every view update; `refreshMetaLine()` updates it after a meta-only change.
+ */
+function createTitleDecorationsPlugin() {
+  return new Plugin({
+    props: {
+      decorations(state) {
+        const text = metaLineText(getCurrentMeta());
+        const metaLine = Decoration.widget(0, () => {
+          const el = document.createElement('div');
+          el.className = 'doc-meta-line';
+          el.contentEditable = 'false';
+          el.textContent = text;
+          return el;
+        }, { side: -1, key: `meta-line:${text}`, ignoreSelection: true });
+        const title = state.doc.firstChild;
+        const decorations = [metaLine];
+        if (title.content.size === 0) {
+          decorations.push(Decoration.node(0, title.nodeSize, { 'data-placeholder': 'Untitled' }));
+        }
+        return DecorationSet.create(state.doc, decorations);
+      },
+    },
+  });
+}
+
+/** Redraw the meta line after the meta changed without an edit (status, collection). */
+export function refreshMetaLine() {
+  if (editorView) editorView.dispatch(editorView.state.tr.setMeta('addToHistory', false));
+}
 
 function createToolbarPlugin() {
   return new Plugin({
@@ -176,17 +240,20 @@ export function initEditor() {
 
   // Save utility buttons before toolbar render wipes them
 
+  slugHandEdited = handEditedOnLoad(getCurrentMeta());
   const state = EditorState.create({
     schema,
-    doc: schema.node('doc', null, [
-      schema.node('paragraph'),
-    ]),
+    doc: fromBlockAst([], schema, { title: getCurrentMeta().title }),
     plugins: [
       // First: while the palette is open it owns Enter, Escape, arrows and
       // Backspace, which the keymaps below would otherwise consume.
       createSlashPlugin(),
       buildInputRules(),
       history(),
+      // Before the other keymaps: Enter, Backspace, Delete and Mod-a at the title's edge
+      keymap(titleKeymap()),
+      titlePastePlugin(),
+      createTitleDecorationsPlugin(),
       buildKeymap(),
       buildBaseKeymap(),
       dropCursor(),
@@ -213,8 +280,13 @@ export function initEditor() {
       component_inline: (node, view, getPos) => new InlineComponentView(node, view, getPos),
     },
     dispatchTransaction(transaction) {
+      const oldDoc = editorView.state.doc;
       const newState = editorView.state.apply(transaction);
       editorView.updateState(newState);
+
+      if (transaction.docChanged && titleOf(newState.doc) !== titleOf(oldDoc)) {
+        titleEdited(titleOf(newState.doc));
+      }
 
       if (window.__onEditorUpdate) {
         window.__onEditorUpdate(newState);
@@ -329,18 +401,15 @@ export async function loadDocument(id) {
 
     setCurrentDocId(doc.id);
     if (doc.meta) resetCurrentMeta(doc.meta);
+    slugHandEdited = handEditedOnLoad(getCurrentMeta());
     const lossy = unrepresentable(doc.blocks || []);
     saveHold = lossy.length
       ? `Not saving: this post has content the editor can't show (${lossy.join(', ')}). Edit it in its file instead.`
       : null;
     if (lossy.length) console.warn('Unrepresentable content, auto-save off:', lossy);
 
-    if (doc.blocks && doc.blocks.length > 0) {
-      const pmDoc = fromBlockAst(doc.blocks, schema);
-      setEditorDoc(pmDoc);
-    } else {
-      setEditorDoc(schema.node('doc', null, [schema.node('paragraph')]));
-    }
+    // The title is the document's first line (an empty post still gets a paragraph)
+    setEditorDoc(fromBlockAst(doc.blocks || [], schema, { title: getCurrentMeta().title || '' }));
 
     // Update URL hash
     window.location.hash = `doc-${doc.id}`;
@@ -522,7 +591,7 @@ export async function createNewDocument(options = {}) {
 
   const doc = await api.createDocument({
     meta: {
-      title: 'Untitled',
+      title: '',
       slug: 'untitled-' + Date.now().toString(36),
       collection,
       status: 'draft',
@@ -555,12 +624,13 @@ function clearIfCurrent(id) {
     setCurrentDocId(null);
     saveHold = null;
     resetCurrentMeta({
-      title: 'Untitled',
+      title: '',
       slug: 'untitled',
       collection: 'posts',
       status: 'draft',
     });
-    setEditorDoc(schema.node('doc', null, [schema.node('paragraph')]));
+    slugHandEdited = false;
+    setEditorDoc(fromBlockAst([], schema));
     window.location.hash = '';
 
     if (window.__onMetaUpdate) {

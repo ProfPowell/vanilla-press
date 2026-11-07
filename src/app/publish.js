@@ -129,7 +129,8 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  *     collectionsConfig?: Object, readSiteUrl?: Function,
  *     components?: () => Map<string, Object>,
  *   },
- * }} options - update: refuse (422) unless the post is already published;
+ * }} options - publish/update refuse (422) a post with no title;
+ *   update: refuse (422) unless the post is already published;
  *   deps.components: the components on for the site; publish/update refuse (422), before
  *   saving or building, a post that uses a component not in it, or one whose descriptor
  *   has `loadsOnLiveSite: false` (R14)
@@ -146,6 +147,9 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   const wasPublished = previous.meta.status === 'published';
   if (update && !wasPublished) throw new PublishRejectedError(422, { error: 'This post is not published: use Publish' });
   const kind = !publish ? 'unpublish' : wasPublished ? 'update' : 'publish';
+  if (publish && !String(previous.meta.title ?? '').trim()) {
+    throw new PublishRejectedError(422, { error: 'Give the post a title before publishing.' });
+  }
   if (publish && deps.components) {
     const on = deps.components();
     const off = [...componentTags(previous.blocks)].find((tag) => !on.has(tag));

@@ -56,6 +56,17 @@ describe('validate', () => {
       assert.ok(result.errors.some(e => e.includes('"title"')));
     });
 
+    it('allows an empty title on a draft', () => {
+      const result = validate({ id: 'x', meta: { ...baseMeta, title: '' }, blocks: [] });
+      assert.equal(result.valid, true, result.errors.join('; '));
+    });
+
+    it('requires a title on a published post', () => {
+      const result = validate({ id: 'x', meta: { ...baseMeta, title: '', status: 'published' }, blocks: [] });
+      assert.equal(result.valid, false);
+      assert.deepEqual(result.errors, ['a published post needs a title']);
+    });
+
     it('requires slug', () => {
       const { slug, ...rest } = baseMeta;
       const result = validate({ id: 'x', meta: rest, blocks: [] });

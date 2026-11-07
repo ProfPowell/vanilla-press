@@ -163,7 +163,20 @@ describe('API with a site workspace', () => {
     assert.deepEqual(JSON.parse(readFileSync(at('config/vp.json'), 'utf8')), { theme: 'default' });
   });
 
+  it('DELETE of a published doc is refused (409) and deletes nothing', async () => {
+    const published = await api(`/api/documents/${id}`);
+    assert.equal(published.data.meta.status, 'published');
+    const res = await api(`/api/documents/${id}`, { method: 'DELETE' });
+    assert.equal(res.status, 409);
+    assert.equal(res.data.error, 'Unpublish this post before deleting it.');
+    assert.ok(existsSync(at(JSON_REL)));
+    assert.ok(existsSync(at(HTML_REL)));
+    const list = await api('/api/documents');
+    assert.ok(JSON.stringify(list.data).includes(id));
+  });
+
   it('DELETE removes both files', async () => {
+    await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { status: 'draft' } } });
     const { status } = await api(`/api/documents/${id}`, { method: 'DELETE' });
     assert.equal(status, 200);
     assert.ok(!existsSync(at(JSON_REL)));
@@ -287,6 +300,8 @@ describe('API errors are JSON (final fix)', () => {
   });
 
   it('a corrupt local manifest makes PUT a JSON 500 naming the manifest, and saves nothing', async () => {
+    // A published post can't be deleted at all; make it a draft so the delete reaches the manifest.
+    assert.equal((await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { status: 'draft' } } })).status, 200);
     const good = readFileSync(at('.vp/manifest.json'), 'utf8');
     writeFileSync(at('.vp/manifest.json'), '{not json');
     mock.method(console, 'error', () => {});

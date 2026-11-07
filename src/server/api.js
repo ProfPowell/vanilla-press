@@ -283,6 +283,11 @@ export function mountApi(router, db, options) {
       return;
     }
 
+    if (ws && existing.meta.status === 'published') {
+      sendJson(res, 409, { error: 'Unpublish this post before deleting it.' });
+      return;
+    }
+
     if (ws) {
       try {
         unsyncDocument(ws, req.params.id, { previousDoc: existing, collectionsConfig: getCollectionsConfig(db) });

@@ -111,6 +111,32 @@ export async function gitStatus(dir) {
 }
 
 /**
+ * Commits the clone has and the upstream lacks (ahead), and the reverse (behind).
+ * Does not fetch, so it reflects the last fetch.
+ * @param {string} dir
+ * @returns {Promise<{ahead: number, behind: number}|null>} null with no upstream
+ */
+export async function aheadBehind(dir) {
+  const out = await tryGit(dir, ['rev-list', '--left-right', '--count', 'HEAD...@{u}']);
+  if (!out) return null;
+  const [ahead, behind] = out.split(/\s+/).map(Number);
+  return Number.isFinite(ahead) && Number.isFinite(behind) ? { ahead, behind } : null;
+}
+
+/** Subjects of the commits Vanilla Press makes (see site-git.js and publish). */
+const VP_COMMIT_SUBJECT = '^(Draft|Edit|Publish|Update|Unpublish|Components): ';
+
+/**
+ * Commit time of the newest Vanilla Press commit on the upstream (the last backup).
+ * @param {string} dir
+ * @returns {Promise<string|null>} ISO 8601, or null when there is none or no upstream
+ */
+export async function lastVpCommitAt(dir) {
+  const out = await tryGit(dir, ['log', '-1', '--format=%cI', '-E', `--grep=${VP_COMMIT_SUBJECT}`, '@{u}']);
+  return out || null;
+}
+
+/**
  * Stage and commit only the given paths. Paths that neither exist nor are tracked are skipped.
  * @param {string} dir
  * @param {string[]} paths

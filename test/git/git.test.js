@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import {
-  gitStatus, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead, hasHead,
+  gitStatus, aheadBehind, lastVpCommitAt, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead, hasHead,
   GitConflictError, GitNotConnectedError, GitError, GitStashConflictError,
 } from '../../src/git/git.js';
 
@@ -348,3 +348,33 @@ test('hasHead is false before the first commit, true after', async () => {
   assert.equal(await hasHead(a), true);
 });
 
+
+test('aheadBehind counts local and upstream-only commits, null without an upstream', async () => {
+  assert.deepEqual(await aheadBehind(a), { ahead: 0, behind: 0 });
+  write(a, 'one.txt', '1');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'local');
+  assert.deepEqual(await aheadBehind(a), { ahead: 1, behind: 0 });
+  const plain = join(root, 'plain');
+  mkdirSync(plain);
+  execFileSync('git', ['init', '-b', 'main', plain], { stdio: 'ignore' });
+  assert.equal(await aheadBehind(plain), null);
+});
+
+test('lastVpCommitAt is the newest pushed Vanilla Press commit, null before any or without upstream', async () => {
+  assert.equal(await lastVpCommitAt(a), null);
+  write(a, 'd.txt', 'd');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'Draft: x [CI Skip]');
+  git(a, 'push');
+  const pushed = git(a, 'log', '-1', '--format=%cI');
+  assert.equal(await lastVpCommitAt(a), pushed);
+  write(a, 'e.txt', 'e');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'Edit: y');
+  assert.equal(await lastVpCommitAt(a), pushed);
+  const plain = join(root, 'plain');
+  mkdirSync(plain);
+  execFileSync('git', ['init', '-b', 'main', plain], { stdio: 'ignore' });
+  assert.equal(await lastVpCommitAt(plain), null);
+});

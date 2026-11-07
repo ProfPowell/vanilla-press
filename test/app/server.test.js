@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { startApp } from '../../src/app/server.js';
 import { createRouter, sendJson } from '../../src/server/router.js';
 import { mountApi } from '../../src/server/api.js';
+import { makeGitSite, git as gitCmd, write as writeIn } from './git-site-fixture.js';
 import { resolveWorkspace, openWorkspaceDb } from '../../src/workspace/workspace.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -87,7 +88,10 @@ describe('app server', () => {
     const list = await api('/api/sites');
     assert.equal(list.status, 200);
     assert.deepEqual(list.data.map((s) => s.id), [idA, idB]);
-    assert.deepEqual(list.data[0].git, { connected: false, branch: 'main' });
+    assert.deepEqual(list.data[0].git, {
+      connected: false, branch: 'main', ahead: null, behind: null, lastBackupAt: null,
+    });
+    assert.equal(list.data[0].siteUrl, null);
   });
 
   it('rejects a non-Cook folder with 422', async () => {
@@ -574,5 +578,44 @@ describe('mountApi components options', () => {
       assert.deepEqual(data.blocks[0].attrs, { bogus: 'x' });
       assert.equal(data.notices, undefined);
     });
+  });
+});
+
+describe('GET /api/sites with a real git clone', () => {
+  let fx, app;
+  before(async () => {
+    fx = makeGitSite();
+    // Cook-shaped enough for addSite; the fixture's package.json already names cook-ssg.
+    app = await startApp({ port: 0, env: { VP_CONFIG_DIR: join(fx.root, 'config') } });
+    const res = await fetch(`${app.url}/api/sites`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: fx.site }),
+    });
+    assert.equal(res.status, 201);
+  });
+  after(async () => {
+    await app.close();
+    rmSync(fx.root, { recursive: true, force: true });
+  });
+
+  it('carries siteUrl, ahead/behind and lastBackupAt without opening the workspace', async () => {
+    const get = async () => (await (await fetch(`${app.url}/api/sites`)).json())[0];
+    rmSync(join(fx.site, '.vp'), { recursive: true, force: true }); // adding the site may have opened it
+    let site = await get();
+    assert.equal(site.siteUrl, 'https://example.com');
+    assert.deepEqual(site.git, { connected: true, branch: 'main', ahead: 0, behind: 0, lastBackupAt: null });
+
+    writeIn(fx.site, 'content/posts/a.json', '{}');
+    gitCmd(fx.site, 'add', '-A');
+    gitCmd(fx.site, 'commit', '-m', 'Draft: a [CI Skip]');
+    site = await get();
+    assert.equal(site.git.ahead, 1);
+    assert.equal(site.git.lastBackupAt, null);
+
+    gitCmd(fx.site, 'push');
+    const when = gitCmd(fx.site, 'log', '-1', '--format=%cI');
+    site = await get();
+    assert.equal(site.git.ahead, 0);
+    assert.equal(site.git.lastBackupAt, when);
+    assert.equal(existsSync(join(fx.site, '.vp')), false, 'listing must not open the workspace');
   });
 });

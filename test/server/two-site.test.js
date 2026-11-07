@@ -136,6 +136,10 @@ describe('two sites sharing tracked files', () => {
   it('(e) a delete pulled from A is detected on B, and reload removes it from B', async () => {
     pull(B, A);
     syncFromSite(A.ws, A.db);
+    // Published posts can't be deleted: A unpublishes, B picks that up, then A deletes.
+    assert.equal((await A.api(`/api/documents/${ID}`, { method: 'PUT', body: { meta: { status: 'draft' } } })).status, 200);
+    pull(A, B);
+    assert.equal((await B.api(`/api/documents/${ID}/reload`, { method: 'POST' })).status, 200);
     assert.equal((await A.api(`/api/documents/${ID}`, { method: 'DELETE' })).status, 200);
     pull(A, B);
 
@@ -146,6 +150,7 @@ describe('two sites sharing tracked files', () => {
 
     const del = await B.api(`/api/documents/${ID}`, { method: 'DELETE' });
     assert.equal(del.status, 409, JSON.stringify(del.data));
+    assert.match(del.data.error, /^Not deleted/);
 
     const reload = await B.api(`/api/documents/${ID}/reload`, { method: 'POST' });
     assert.equal(reload.status, 200, JSON.stringify(reload.data));

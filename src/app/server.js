@@ -319,7 +319,20 @@ export async function startApp({
     const sites = await Promise.all(listSites({ env }).map(async (site) => {
       let status = { hasRemote: false, hasUpstream: false, branch: null };
       try { status = await git.gitStatus(site.path); } catch { /* missing folder: not connected */ }
-      return { ...site, git: { connected: Boolean(status.hasRemote && status.hasUpstream), branch: status.branch ?? null } };
+      const counts = status.hasUpstream ? await git.aheadBehind(site.path).catch(() => null) : null;
+      const lastBackupAt = status.hasUpstream ? await git.lastVpCommitAt(site.path).catch(() => null) : null;
+      const siteUrl = await readSiteUrl(site.path).catch(() => null);
+      return {
+        ...site,
+        siteUrl,
+        git: {
+          connected: Boolean(status.hasRemote && status.hasUpstream),
+          branch: status.branch ?? null,
+          ahead: counts ? counts.ahead : null,
+          behind: counts ? counts.behind : null,
+          lastBackupAt,
+        },
+      };
     }));
     sendJson(res, 200, sites);
   });

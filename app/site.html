@@ -40,12 +40,21 @@
         <div class="section-head">
           <h1 id="posts-title">Posts</h1>
           <div class="actions">
-            <button type="button" id="preview-btn" disabled title="Open a post to preview it">Preview</button>
-            <button type="button" id="new-post" class="primary">New post</button>
+            <button type="button" id="preview-btn">Preview site</button>
+            <button type="button" id="new-post" class="primary"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>New post</button>
           </div>
         </div>
-        <p id="empty" hidden>No posts yet. Start with a new post.</p>
+        <p id="preview-error" class="error" role="alert" hidden></p>
+        <div class="posts-bar">
+          <div id="post-filters" role="group" aria-label="Filter posts" class="filter-group">
+            <button type="button" data-filter="all" aria-pressed="true">All <span class="count"></span></button>
+            <button type="button" data-filter="published" aria-pressed="false">Published <span class="count"></span></button>
+            <button type="button" data-filter="drafts" aria-pressed="false">Drafts <span class="count"></span></button>
+          </div>
+          <label class="search"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="visually-hidden">Search posts</span><input type="search" id="post-search" placeholder="Search posts" autocomplete="off"/></label>
+        </div>
         <ul id="posts" class="post-list" aria-labelledby="posts-title"></ul>
+        <p id="empty" class="empty" hidden></p>
       </section>
 
       <section id="media-section" aria-labelledby="media-title" hidden>

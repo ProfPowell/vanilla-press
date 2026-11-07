@@ -1,4 +1,5 @@
-import { api, h, formatDate, listComponents, setComponent } from './app-api.js';
+import { api, h, listComponents, setComponent } from './app-api.js';
+import { filterPosts, filterCounts, rowModel, emptyText } from './posts-view.js';
 import { packageRows, toggleOutcome } from './components-view.js';
 import { SECTIONS, LATER, sectionFromSearch, sectionHref } from './site-nav.js';
 import { syncText, backupText } from './sites-view.js';
@@ -15,26 +16,76 @@ function showError(message) {
 
 const editorUrl = (docId) => `/editor/?site=${encodeURIComponent(siteId)}#doc-${encodeURIComponent(docId)}`;
 
+let allDocs = [];
+const view = { filter: 'all', query: '' };
+
 function postRow(doc) {
-  const status = doc.meta?.status || 'draft';
+  const m = rowModel(doc);
   return h('li', {},
     h('a', { href: editorUrl(doc.id) },
-      h('span', { class: 'post-title' }, doc.meta?.title || 'Untitled'),
-      h('span', { class: 'status', 'data-status': status }, status),
-      h('span', { class: 'date' }, formatDate(doc.meta?.updated || doc.meta?.created))));
+      h('span', { class: 'post-main' },
+        h('span', { class: 'post-title' }, m.title),
+        h('span', { class: m.descriptionMissing ? 'post-desc missing' : 'post-desc' }, m.description),
+        h('span', { class: 'post-path' }, m.path)),
+      h('span', { class: 'post-side' },
+        h('span', { class: 'post-status', 'data-state': m.statusText.toLowerCase() },
+          h('span', { class: 'dot', 'aria-hidden': 'true' }), m.statusText),
+        h('span', { class: 'date' }, m.date))));
 }
+
+function renderPosts() {
+  const counts = filterCounts(allDocs);
+  for (const btn of document.querySelectorAll('#post-filters button')) {
+    btn.setAttribute('aria-pressed', String(btn.dataset.filter === view.filter));
+    btn.querySelector('.count').textContent = counts[btn.dataset.filter];
+  }
+  const shown = filterPosts(allDocs, view);
+  $('posts').replaceChildren(...shown.map(postRow));
+  $('empty').textContent = emptyText(view.filter, view.query);
+  $('empty').hidden = shown.length > 0;
+}
+
+$('post-filters').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-filter]');
+  if (!btn) return;
+  view.filter = btn.dataset.filter;
+  renderPosts();
+});
+$('post-search').addEventListener('input', (e) => {
+  view.query = e.target.value;
+  renderPosts();
+});
 
 async function loadPosts() {
   try {
-    const docs = (await api(`${base}/documents`)).filter((d) => d.meta?.collection === 'posts');
-    docs.sort((a, b) => String(b.meta?.updated || '').localeCompare(String(a.meta?.updated || '')));
-    $('posts').replaceChildren(...docs.map(postRow));
-    $('empty').hidden = docs.length > 0;
+    allDocs = await api(`${base}/documents`);
+    renderPosts();
     showError('');
   } catch (err) {
     showError(err.message);
   }
 }
+
+$('preview-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const out = $('preview-error');
+  out.hidden = true;
+  btn.disabled = true;
+  btn.textContent = 'Starting preview\u2026';
+  // Open the tab inside the click so it is not blocked as a popup, then point it at the preview.
+  const tab = window.open('about:blank', '_blank');
+  try {
+    const { url } = await api(`${base}/preview`, { method: 'POST' });
+    if (tab) tab.location.href = url;
+    else window.open(url, '_blank');
+  } catch (err) {
+    tab?.close();
+    out.textContent = `${err.message.trim()}\nTo check the site yourself, run "npm run dev" in the site folder.`;
+    out.hidden = false;
+  }
+  btn.disabled = false;
+  btn.textContent = 'Preview site';
+});
 
 async function loadSite() {
   try {

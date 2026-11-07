@@ -159,6 +159,132 @@ describe('title in the document', () => {
     assert.equal(plugin.props.handlePaste(view, null, Slice.empty), false);
   });
 
+  /** A minimal view over `state` for the plugin's props. */
+  function fakeView(initial, posAtCoords = () => null) {
+    let state = initial;
+    return { get state() { return state; }, dispatch(tr) { state = state.apply(tr); }, posAtCoords };
+  }
+  const richSlice = () => new Slice(Fragment.from([
+    schema.node('heading', { level: 2 }, [schema.text('Big')]),
+    schema.node('paragraph', null, [schema.text('bold', [schema.marks.strong.create()])]),
+  ]), 1, 1);
+  const across = (doc) => TextSelection.create(doc, 3, bodyStart(doc) + 4);
+
+  it('typing over a selection across the title/body edge keeps the body out of the title', () => {
+    const plugin = titlePastePlugin();
+    const start = stateFor([para('Body text', ['strong']), para('Two')], 'My title', 3, [plugin]);
+    const view = fakeView(start.apply(start.tr.setSelection(across(start.doc))));
+    const { from, to } = view.state.selection;
+    assert.equal(plugin.props.handleTextInput(view, from, to, 'X'), true);
+    view.state.doc.check();
+    assert.equal(titleOf(view.state.doc), 'MyX');
+    assert.deepEqual(view.state.doc.firstChild.firstChild.marks, []);
+    assert.deepEqual(toBlockAst(view.state.doc), [para(' text', ['strong']), para('Two')]);
+    assert.equal(view.state.selection.from, 4, 'cursor after the typed text, in the title');
+  });
+
+  it('typing inside the title or the body is left to the editor', () => {
+    const plugin = titlePastePlugin();
+    const inTitle = fakeView(stateFor([para('Body')], 'Title', 3, [plugin]));
+    assert.equal(plugin.props.handleTextInput(inTitle, 3, 3, 'X'), false);
+    const inBody = fakeView(stateFor([para('Body')], 'Title', bodyStart, [plugin]));
+    assert.equal(plugin.props.handleTextInput(inBody, 8, 8, 'X'), false);
+  });
+
+  it('paste over a selection across the title/body edge is plain text in the title', () => {
+    const plugin = titlePastePlugin();
+    const start = stateFor([para('Body text'), para('Two')], 'My title', 3, [plugin]);
+    const view = fakeView(start.apply(start.tr.setSelection(across(start.doc))));
+    assert.equal(plugin.props.handlePaste(view, null, richSlice()), true);
+    view.state.doc.check();
+    assert.equal(titleOf(view.state.doc), 'MyBig bold');
+    assert.equal(view.state.doc.firstChild.childCount, 1, 'one unmarked text node');
+    assert.deepEqual(toBlockAst(view.state.doc), [para(' text'), para('Two')]);
+  });
+
+  it('enter over a selection across the title/body edge moves to the first block', () => {
+    const start = stateFor([para('Body text'), para('Two')], 'My title', 3);
+    const next = run(start.apply(start.tr.setSelection(across(start.doc))), titleKeymap().Enter);
+    assert.ok(next);
+    next.doc.check();
+    assert.equal(titleOf(next.doc), 'My');
+    assert.deepEqual(toBlockAst(next.doc), [para(' text'), para('Two')]);
+    assert.equal(next.selection.from, bodyStart(next.doc));
+  });
+
+  it('backspace and delete over a selection across the edge never join the body into the title', () => {
+    for (const key of ['Backspace', 'Delete']) {
+      const start = stateFor([para('Body text'), para('Two')], 'My title', 3);
+      const next = run(start.apply(start.tr.setSelection(across(start.doc))), titleKeymap()[key]);
+      assert.ok(next, key);
+      next.doc.check();
+      assert.equal(titleOf(next.doc), 'My', key);
+      assert.deepEqual(toBlockAst(next.doc), [para(' text'), para('Two')], key);
+      assert.equal(next.selection.from, 3, key);
+    }
+  });
+
+  it('a selection across the edge into a later block keeps the rest of that block', () => {
+    const start = stateFor([para('One'), para('Two'), para('Three')], 'My title', 3);
+    const into = start.doc.child(1).nodeSize + start.doc.child(2).nodeSize;
+    const sel = start.apply(start.tr.setSelection(TextSelection.create(start.doc, 3, bodyStart(start.doc) + into + 2)));
+    const next = run(sel, titleKeymap().Backspace);
+    next.doc.check();
+    assert.equal(titleOf(next.doc), 'My');
+    assert.deepEqual(toBlockAst(next.doc), [para('ree')]);
+  });
+
+  it('paste over a selection inside the title keeps the rest of the title', () => {
+    const plugin = titlePastePlugin();
+    const start = stateFor([para('Body')], 'My long title', 1, [plugin]);
+    const view = fakeView(start.apply(start.tr.setSelection(TextSelection.create(start.doc, 4, 8))));
+    assert.equal(plugin.props.handlePaste(view, null, richSlice()), true);
+    assert.equal(titleOf(view.state.doc), 'My Big bold title');
+  });
+
+  it('cut over a selection across the edge never joins the body into the title', async () => {
+    const plugin = titlePastePlugin();
+    const start = stateFor([para('Body text'), para('Two')], 'My title', 3, [plugin]);
+    const view = fakeView(start.apply(start.tr.setSelection(across(start.doc))));
+    assert.equal(plugin.props.handleDOMEvents.cut(view), false, 'the clipboard is still filled by ProseMirror');
+    const cutTr = view.state.tr.deleteSelection().setMeta('uiEvent', 'cut');
+    assert.equal(plugin.spec.filterTransaction(cutTr, view.state), false, 'the joining delete is replaced');
+    await new Promise((r) => queueMicrotask(r));
+    view.state.doc.check();
+    assert.equal(titleOf(view.state.doc), 'My');
+    assert.deepEqual(toBlockAst(view.state.doc), [para(' text'), para('Two')]);
+  });
+
+  it('a drop onto the title is plain text and never splits it', () => {
+    const plugin = titlePastePlugin();
+    const view = fakeView(stateFor([para('Body text')], 'My title', 1, [plugin]), () => ({ pos: 3, inside: -1 }));
+    assert.equal(plugin.props.handleDrop(view, { clientX: 0, clientY: 0 }, richSlice(), false), true);
+    view.state.doc.check();
+    assert.equal(titleOf(view.state.doc), 'MyBig bold title');
+    assert.equal(view.state.doc.firstChild.childCount, 1, 'one unmarked text node');
+    assert.deepEqual(toBlockAst(view.state.doc), [para('Body text')]);
+  });
+
+  it('a drag from the body onto the title moves its plain text', () => {
+    const plugin = titlePastePlugin();
+    const start = stateFor([para('Body text', ['strong'])], 'My title', 1, [plugin]);
+    const b = bodyStart(start.doc);
+    const view = fakeView(start.apply(start.tr.setSelection(TextSelection.create(start.doc, b, b + 4))), () => ({ pos: 3, inside: -1 }));
+    const slice = view.state.selection.content();
+    assert.equal(plugin.props.handleDrop(view, { clientX: 0, clientY: 0 }, slice, true), true);
+    view.state.doc.check();
+    assert.equal(titleOf(view.state.doc), 'MyBody title');
+    assert.deepEqual(view.state.doc.firstChild.firstChild.marks, []);
+    assert.deepEqual(toBlockAst(view.state.doc), [para(' text', ['strong'])]);
+  });
+
+  it('a drop onto the body is left to the editor', () => {
+    const plugin = titlePastePlugin();
+    const state = stateFor([para('Body text')], 'My title', 1, [plugin]);
+    const view = fakeView(state, () => ({ pos: bodyStart(state.doc) + 2, inside: -1 }));
+    assert.equal(plugin.props.handleDrop(view, { clientX: 0, clientY: 0 }, richSlice(), false), false);
+  });
+
   it('deleting a selection across the title/body edge keeps both', () => {
     const state = stateFor([para('Body text', ['strong'])], 'My title', 3);
     const sel = state.apply(state.tr.setSelection(TextSelection.create(state.doc, 3, bodyStart(state.doc) + 4)));

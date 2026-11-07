@@ -4,7 +4,8 @@
  * The title holds `meta.title` as plain text: no marks, no blocks. These
  * commands keep the edge between the title and the first block behaving
  * like a title: Enter leaves it, Backspace returns to it, Delete never pulls
- * a block into it, Mod-a selects it, and a paste lands as one line of text.
+ * a block into it, Mod-a selects it, and a paste, a drop or typing over a
+ * selection that runs into the body lands as one line of text.
  * The node never enters the stored block AST (ast.js skips it).
  *
  * @module editor/title
@@ -52,15 +53,17 @@ const titleEnd = (doc) => doc.firstChild.nodeSize;
 
 /**
  * Enter in the title: move to the start of the first block, inserting an
- * empty paragraph first when that block can't hold the cursor.
+ * empty paragraph first when that block can't hold the cursor. A selection
+ * that runs from the title into the body is deleted first.
  * @type {Command}
  */
 function enterFromTitle(state, dispatch) {
-  if (!selectionInTitle(state)) return false;
+  if (!selectionInTitle(state) && !selectionCrossesTitleEnd(state)) return false;
   if (dispatch) {
-    const at = titleEnd(state.doc);
     const tr = state.tr;
-    if (!state.doc.child(1).isTextblock) tr.insert(at, state.schema.nodes.paragraph.create());
+    if (selectionCrossesTitleEnd(state)) deleteAcrossTitleEnd(tr);
+    const at = titleEnd(tr.doc);
+    if (!tr.doc.child(1).isTextblock) tr.insert(at, state.schema.nodes.paragraph.create());
     tr.setSelection(TextSelection.create(tr.doc, at + 1));
     dispatch(tr.scrollIntoView());
   }
@@ -103,6 +106,24 @@ function deleteAtTitleEnd(state, dispatch) {
 }
 
 /**
+ * Backspace or Delete over a selection that runs from the title into the
+ * body: remove it without joining the body's text into the title.
+ * @type {Command}
+ */
+function deleteSelectionAcrossTitleEnd(state, dispatch) {
+  if (!selectionCrossesTitleEnd(state)) return false;
+  if (dispatch) {
+    const tr = state.tr;
+    deleteAcrossTitleEnd(tr);
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+/** The first command that applies. */
+const first = (...commands) => (state, dispatch, view) => commands.some((c) => c(state, dispatch, view));
+
+/**
  * Mod-a in the title: select the title text only.
  * @type {Command}
  */
@@ -124,24 +145,100 @@ export function titleKeymap() {
   // The keys prosemirror-commands' base keymap binds to joinBackward / joinForward
   const back = ['Backspace', 'Mod-Backspace', 'Shift-Backspace', ...(mac ? ['Ctrl-h', 'Alt-Backspace'] : [])];
   const forward = ['Delete', 'Mod-Delete', ...(mac ? ['Ctrl-d', 'Alt-Delete', 'Ctrl-Alt-Backspace', 'Alt-d'] : [])];
-  for (const key of back) keys[key] = backspaceIntoTitle;
-  for (const key of forward) keys[key] = deleteAtTitleEnd;
+  for (const key of back) keys[key] = first(deleteSelectionAcrossTitleEnd, backspaceIntoTitle);
+  for (const key of forward) keys[key] = first(deleteSelectionAcrossTitleEnd, deleteAtTitleEnd);
   return keys;
 }
 
+/** The selection starts in the title and ends in a block below it. */
+function selectionCrossesTitleEnd(state) {
+  const { $from, $to } = state.selection;
+  return isTitle($from.parent) && !isTitle($to.parent);
+}
+
+/** A slice's text on one line: blocks and newlines become spaces, marks are dropped. */
+const plainText = (slice) => slice.content.textBetween(0, slice.content.size, ' ', ' ').replace(/\r\n?|\n/g, ' ');
+
 /**
- * Pasting into the title inserts the pasted content's plain text on one line.
+ * Remove a selection that runs from the title into the body, keeping the
+ * title and the rest of the block it ends in as separate nodes (a plain
+ * deleteSelection would join that block's text into the title). Removes the
+ * body part first, then the title part, so the title positions hold.
+ * @param {import('prosemirror-state').Transaction} tr
+ * @returns {number} where the cursor lands, in the title
+ */
+function deleteAcrossTitleEnd(tr) {
+  const { from, to } = tr.selection;
+  const end = titleEnd(tr.doc);
+  if (to > end) tr.delete(end, to);
+  tr.delete(from, end - 1);
+  tr.setSelection(TextSelection.create(tr.doc, from));
+  return from;
+}
+
+/**
+ * Text that lands in the title stays one line of plain text:
+ * - pasting into the title, or over a selection that starts in it, inserts
+ *   the slice's plain text (newlines turned into spaces);
+ * - typing over a selection that runs from the title into the body replaces
+ *   it without moving body text into the title;
+ * - dropping onto the title inserts the dropped content's plain text;
+ * - cutting a selection that runs from the title into the body removes it
+ *   the same way (the clipboard keeps what was cut).
  * @returns {Plugin}
  */
 export function titlePastePlugin() {
+  let pendingCut = null;
   return new Plugin({
+    filterTransaction(tr, state) {
+      if (!pendingCut || tr.getMeta('uiEvent') !== 'cut') return true;
+      const view = pendingCut;
+      pendingCut = null;
+      if (!selectionCrossesTitleEnd(state)) return true;
+      queueMicrotask(() => deleteSelectionAcrossTitleEnd(view.state, view.dispatch));
+      return false;
+    },
     props: {
       handlePaste(view, event, slice) {
         const { state } = view;
-        if (!selectionInTitle(state)) return false;
-        const text = slice.content.textBetween(0, slice.content.size, ' ', ' ').replace(/\r\n?|\n/g, ' ');
-        const { from, to } = state.selection;
-        view.dispatch(state.tr.insertText(text, from, to).scrollIntoView());
+        const { $from, from, to } = state.selection;
+        if (!isTitle($from.parent)) return false;
+        const tr = state.tr;
+        if (selectionCrossesTitleEnd(state)) tr.insertText(plainText(slice), deleteAcrossTitleEnd(tr));
+        else tr.insertText(plainText(slice), from, to);
+        view.dispatch(tr.scrollIntoView());
+        return true;
+      },
+      // Cut over a selection across the edge: the clipboard is already filled
+      // when ProseMirror dispatches its deleteSelection; replace that delete.
+      handleDOMEvents: {
+        cut(view) {
+          if (selectionCrossesTitleEnd(view.state)) pendingCut = view;
+          return false;
+        },
+      },
+      handleTextInput(view, from, to, text) {
+        const { state } = view;
+        if (!selectionCrossesTitleEnd(state)) return false;
+        const tr = state.tr;
+        const at = deleteAcrossTitleEnd(tr);
+        view.dispatch(tr.insertText(text, at).scrollIntoView());
+        return true;
+      },
+      handleDrop(view, event, slice, moved) {
+        const found = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        if (!found) return false;
+        const { state } = view;
+        if (!isTitle(state.doc.resolve(found.pos).parent)) return false;
+        const tr = state.tr;
+        // A drag within the editor moves its selection
+        if (moved && selectionCrossesTitleEnd(state)) deleteAcrossTitleEnd(tr);
+        else if (moved) tr.deleteSelection();
+        const at = tr.mapping.map(found.pos);
+        const text = plainText(slice);
+        tr.insertText(text, at);
+        tr.setSelection(TextSelection.create(tr.doc, at, at + text.length));
+        view.dispatch(tr.scrollIntoView());
         return true;
       },
     },

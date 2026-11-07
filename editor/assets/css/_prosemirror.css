@@ -49,13 +49,14 @@
   outline: none;
 }
 
-/* Placeholder */
-.ProseMirror p.is-empty:first-child::before {
-  content: "Start writing, or type / for commands...";
-  color: var(--color-text-muted);
+/* The cursor's empty line: "Type / for blocks" (a decoration from
+ * block-handles.js, set only while the cursor is in the empty paragraph) */
+.ProseMirror p[data-placeholder]::before {
+  content: attr(data-placeholder);
+  float: inline-start;
+  block-size: 0;
+  color: var(--color-text-subtle);
   pointer-events: none;
-  float: left;
-  height: 0;
 }
 
 /* Selection */
@@ -94,6 +95,18 @@
   padding-inline-start: var(--size-m);
   color: var(--color-text-muted);
 }
+
+/* Headings in a quote look like headings: normal sizes, roman, text color */
+.ProseMirror blockquote :is(h2, h3, h4, h5, h6) {
+  font-style: normal;
+  color: var(--color-text);
+}
+
+.ProseMirror blockquote h2 { font-size: var(--font-size-3xl); }
+.ProseMirror blockquote h3 { font-size: var(--font-size-2xl); }
+.ProseMirror blockquote h4 { font-size: var(--font-size-xl); }
+.ProseMirror blockquote h5 { font-size: var(--font-size-l); }
+.ProseMirror blockquote h6 { font-size: var(--font-size-m); }
 
 /* Horizontal rule */
 .ProseMirror hr {

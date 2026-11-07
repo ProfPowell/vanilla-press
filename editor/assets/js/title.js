@@ -12,6 +12,8 @@
  */
 
 import { Plugin, TextSelection } from 'prosemirror-state';
+import { Slice } from 'prosemirror-model';
+import { dropPoint } from 'prosemirror-transform';
 
 /** @typedef {import('prosemirror-state').EditorState} EditorState */
 /** @typedef {import('prosemirror-state').Command} Command */
@@ -177,12 +179,41 @@ function deleteAcrossTitleEnd(tr) {
 }
 
 /**
+ * Move a selection that runs from the title into the body to `pos` in the
+ * body (ProseMirror's own moved drop would join body text into the title):
+ * the source is removed edge-safely, and the title part lands as a paragraph.
+ * @param {EditorState} state
+ * @param {number} pos - the drop position, in the body
+ * @param {Slice} slice - the dragged selection's content
+ * @returns {import('prosemirror-state').Transaction}
+ */
+function dropAcrossTitleEnd(state, pos, slice) {
+  const { content } = slice;
+  const head = content.firstChild;
+  const body = isTitle(head)
+    ? new Slice(content.replaceChild(0, state.schema.nodes.paragraph.create(null, head.content)), slice.openStart, slice.openEnd)
+    : slice;
+  const insertAt = dropPoint(state.doc, pos, body) ?? pos;
+  const tr = state.tr;
+  deleteAcrossTitleEnd(tr);
+  const from = tr.mapping.map(insertAt);
+  const steps = tr.mapping.maps.length;
+  tr.replaceRange(from, from, body);
+  const to = tr.mapping.slice(steps).map(from, 1);
+  tr.setSelection(TextSelection.between(tr.doc.resolve(from), tr.doc.resolve(Math.max(from, to))));
+  return tr.setMeta('uiEvent', 'drop').scrollIntoView();
+}
+
+/**
  * Text that lands in the title stays one line of plain text:
  * - pasting into the title, or over a selection that starts in it, inserts
  *   the slice's plain text (newlines turned into spaces);
  * - typing over a selection that runs from the title into the body replaces
  *   it without moving body text into the title;
- * - dropping onto the title inserts the dropped content's plain text;
+ * - dropping onto the title inserts the dropped content's plain text (a
+ *   drop with no text, such as a rule, changes nothing);
+ * - dragging a selection that runs from the title into the body and dropping
+ *   it in the body moves it without joining body text into the title;
  * - cutting a selection that runs from the title into the body removes it
  *   the same way (the clipboard keeps what was cut).
  * @returns {Plugin}
@@ -229,13 +260,22 @@ export function titlePastePlugin() {
         const found = view.posAtCoords({ left: event.clientX, top: event.clientY });
         if (!found) return false;
         const { state } = view;
-        if (!isTitle(state.doc.resolve(found.pos).parent)) return false;
+        // A drag within the editor moves its source: a dragged node (the
+        // gutter handle), otherwise the selection
+        const draggedNode = view.dragging?.node;
+        if (!isTitle(state.doc.resolve(found.pos).parent)) {
+          if (!moved || draggedNode || !selectionCrossesTitleEnd(state)) return false;
+          view.dispatch(dropAcrossTitleEnd(state, found.pos, slice));
+          return true;
+        }
+        const text = plainText(slice);
+        // Nothing to put in the title (a rule, an image): keep the source
+        if (!text.trim()) return true;
         const tr = state.tr;
-        // A drag within the editor moves its selection
-        if (moved && selectionCrossesTitleEnd(state)) deleteAcrossTitleEnd(tr);
+        if (moved && draggedNode) draggedNode.replace(tr);
+        else if (moved && selectionCrossesTitleEnd(state)) deleteAcrossTitleEnd(tr);
         else if (moved) tr.deleteSelection();
         const at = tr.mapping.map(found.pos);
-        const text = plainText(slice);
         tr.insertText(text, at);
         tr.setSelection(TextSelection.create(tr.doc, at, at + text.length));
         view.dispatch(tr.scrollIntoView());

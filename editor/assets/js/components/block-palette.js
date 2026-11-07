@@ -1,13 +1,17 @@
 /**
  * <block-palette> — slash command menu for inserting block types.
  *
- * Triggered by typing `/` in an empty paragraph. Shows a popover
+ * Triggered by typing `/` in an empty paragraph (the entry replaces that
+ * paragraph), or by a block's `+` handle (the entry goes after the block:
+ * the `insertAfter` position). Shows a popover
  * with block types grouped by category. Filter by typing, keyboard
  * navigation, Enter selects.
  *
  * @module editor/components/block-palette
  */
 
+import { Selection, NodeSelection } from 'prosemirror-state';
+import { Fragment } from 'prosemirror-model';
 import { schema } from '../schema.js';
 import { openMediaPicker } from './media-picker.js';
 import { nodeTypeFor, initialAttrs, paletteEntries } from '../component-model.js';
@@ -183,6 +187,8 @@ export class BlockPalette {
     this.visible = false;
     this.view = null;
     this.triggerPos = null;
+    /** Where the entry goes when opened from a `+` handle, else null */
+    this.insertAfter = null;
 
     this._entries = [...PALETTE_ENTRIES];
     this._patternEntries = [];
@@ -223,9 +229,16 @@ export class BlockPalette {
     });
   }
 
-  open(view, pos) {
+  /**
+   * @param {import('prosemirror-view').EditorView} view
+   * @param {number} pos - where the palette shows (the `/` it was typed at)
+   * @param {{ insertAfter?: number }} [options] - insert the entry at this
+   *   position (just after a block) instead of replacing the `/` paragraph
+   */
+  open(view, pos, { insertAfter = null } = {}) {
     this.view = view;
     this.triggerPos = pos;
+    this.insertAfter = insertAfter;
     this.filter = '';
     this.selected = 0;
     this.visible = true;
@@ -240,6 +253,7 @@ export class BlockPalette {
     this.filter = '';
     this.selected = 0;
     this.triggerPos = null;
+    this.insertAfter = null;
     this.el.classList.remove('open');
   }
 
@@ -303,8 +317,35 @@ export class BlockPalette {
     }
   }
 
+  /**
+   * Insert `nodes` at the `insertAfter` position and put the cursor in the
+   * first (or select it, when it holds no text).
+   * @returns {boolean} false when the position no longer fits the doc
+   */
+  _insertAfterBlock(nodes) {
+    const { state, dispatch } = this.view;
+    const at = this.insertAfter;
+    if (at > state.doc.content.size) return false;
+    const tr = state.tr.insert(at, Fragment.fromArray(nodes));
+    if (!tr.docChanged) return false;
+    const inserted = tr.doc.nodeAt(at);
+    const text = Selection.findFrom(tr.doc.resolve(at), 1, true);
+    if (text && inserted && text.from < at + inserted.nodeSize) tr.setSelection(text);
+    else if (inserted) tr.setSelection(NodeSelection.create(tr.doc, at));
+    dispatch(tr.scrollIntoView());
+    return true;
+  }
+
   insertBlock(entry) {
     if (!this.view || this.triggerPos == null) return;
+
+    if (this.insertAfter != null) {
+      const done = this._insertAfterBlock([entry.create()]);
+      this.view.focus();
+      this.close();
+      if (done && entry.afterInsert === 'media-picker') this._openMediaPickerForFigure();
+      return;
+    }
 
     const range = this._triggerRange();
     if (!range) { this.close(); return; }
@@ -328,6 +369,13 @@ export class BlockPalette {
 
     const nodes = entry.createNodes();
     if (!nodes || nodes.length === 0) return;
+
+    if (this.insertAfter != null) {
+      this._insertAfterBlock(nodes);
+      this.view.focus();
+      this.close();
+      return;
+    }
 
     const range = this._triggerRange();
     if (!range) { this.close(); return; }

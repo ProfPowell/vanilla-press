@@ -11,6 +11,7 @@ import { undoInputRule } from 'prosemirror-inputrules';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
 import { schema } from './schema.js';
 import { goToNextCell } from 'prosemirror-tables';
+import { moveBlock, movableBlockAt } from './block-handles.js';
 
 /**
  * Set heading at given level, or toggle back to paragraph if already at that level.
@@ -63,6 +64,13 @@ function codeBlockTab(state, dispatch) {
   return true;
 }
 
+/**
+ * Move the cursor's block; at the first or last sibling the key is still
+ * taken (not the browser's extend-selection), so nothing else happens.
+ */
+const moveBlockKey = (dir) => (state, dispatch) =>
+  moveBlock(dir)(state, dispatch) || movableBlockAt(state.selection.$from) != null;
+
 const keys = {
   'Mod-z': undo,
   'Mod-y': redo,
@@ -97,6 +105,8 @@ const keys = {
   'Mod-[': lift,
   'Alt-ArrowUp': joinUp,
   'Alt-ArrowDown': joinDown,
+  'Alt-Shift-ArrowUp': moveBlockKey(-1),
+  'Alt-Shift-ArrowDown': moveBlockKey(1),
   'Escape': selectParentNode,
 
   // Exit code block

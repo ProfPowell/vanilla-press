@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { Slice, Fragment } from 'prosemirror-model';
 import { history, undo } from 'prosemirror-history';
 import { schema } from '../../editor/assets/js/schema.js';
@@ -283,6 +283,29 @@ describe('title in the document', () => {
     const state = stateFor([para('Body text')], 'My title', 1, [plugin]);
     const view = fakeView(state, () => ({ pos: bodyStart(state.doc) + 2, inside: -1 }));
     assert.equal(plugin.props.handleDrop(view, { clientX: 0, clientY: 0 }, richSlice(), false), false);
+  });
+
+  it('a dragged block with no text dropped onto the title changes nothing', () => {
+    const plugin = titlePastePlugin();
+    const start = stateFor([para('Before'), { type: 'hr' }, para('After')], 'My title', 1, [plugin]);
+    const hrPos = bodyStart(start.doc) - 1 + start.doc.child(1).nodeSize;
+    const selected = start.apply(start.tr.setSelection(NodeSelection.create(start.doc, hrPos)));
+    const view = fakeView(selected, () => ({ pos: 3, inside: -1 }));
+    const slice = view.state.selection.content();
+    assert.equal(plugin.props.handleDrop(view, { clientX: 0, clientY: 0 }, slice, true), true, 'the drop is handled');
+    assert.equal(view.state.doc, selected.doc, 'the rule stays in the body, the title is unchanged');
+  });
+
+  it('a drag across the title edge dropped in the body keeps the body text out of the title', () => {
+    const plugin = titlePastePlugin();
+    const start = stateFor([para('Body text'), para('Two words')], 'My title', 1, [plugin]);
+    const view = fakeView(start.apply(start.tr.setSelection(across(start.doc))), ({ left }) => ({ pos: left, inside: -1 }));
+    const twoAt = bodyStart(start.doc) + start.doc.child(1).nodeSize + 4; // after "Two "
+    const slice = view.state.selection.content();
+    assert.equal(plugin.props.handleDrop(view, { clientX: twoAt, clientY: 0 }, slice, true), true);
+    view.state.doc.check();
+    assert.equal(titleOf(view.state.doc), 'My', 'nothing joined into the title');
+    assert.deepEqual(toBlockAst(view.state.doc), [para(' text'), para('Two  title'), para('Bodywords')]);
   });
 
   it('deleting a selection across the title/body edge keeps both', () => {

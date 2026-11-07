@@ -1,0 +1,72 @@
+/* Gutter handles: `+` (add a block after) and the drag grip, beside the
+ * hovered or cursor block. block-handles.js sets top (the block's first
+ * line) and left (the column's text edge). In a wide pane they sit in the
+ * gutter left of the writing column; in a narrow one (a phone) the column
+ * makes room for them inside. */
+.editor-content {
+  --block-handle-size: var(--size-touch-min);
+  --block-gutter: calc(2 * var(--block-handle-size) + var(--size-2xs) + 2px);
+  position: relative;
+  container: editor-column / inline-size;
+}
+
+.block-handles {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  gap: 2px;
+  translate: calc(-100% - var(--size-2xs)) 0;
+  font-family: var(--font-sans);
+}
+
+.block-handles[hidden] {
+  display: none;
+}
+
+.block-handles > button {
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--block-handle-size);
+  block-size: var(--block-handle-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.block-handles > button:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.block-handles > button:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 1px;
+}
+
+.block-handles > button[draggable="true"] {
+  cursor: grab;
+}
+
+.block-handles > button[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Wide: keep a gutter beside the column for the handles */
+.editor-content > .ProseMirror {
+  max-inline-size: min(var(--measure-normal), 100% - 2 * var(--block-gutter));
+}
+
+/* Narrow: the handles stack inside the column's start */
+@container editor-column (width < 40rem) {
+  .editor-content > .ProseMirror {
+    max-inline-size: none;
+    padding-inline-start: calc(var(--block-handle-size) + var(--size-2xs));
+  }
+
+  .block-handles {
+    flex-direction: column;
+  }
+}

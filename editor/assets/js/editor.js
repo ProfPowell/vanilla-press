@@ -1,6 +1,6 @@
 /**
  * Main editor initialization.
- * Sets up ProseMirror with schema, keymap, format toolbar, and view.
+ * Sets up ProseMirror with schema, keymap, format toolbar, block handles, and view.
  * Uses the content API for persistence instead of localStorage.
  *
  * @module editor/editor
@@ -18,6 +18,7 @@ import { schema } from './schema.js';
 import { buildKeymap, buildBaseKeymap } from './keymap.js';
 import { buildInputRules } from './input-rules.js';
 import { formatToolbarPlugin, setFormatToolbarComponents } from './format-toolbar.js';
+import { blockHandlesPlugin } from './block-handles.js';
 import { toBlockAst, fromBlockAst } from './ast.js';
 import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
 import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
@@ -150,8 +151,9 @@ function createSlashPlugin() {
               return true;
             case 'Backspace':
               // With a filter, Backspace edits the filter only; with none it
-              // closes the palette and deletes the '/' as usual.
-              if (palette.filter.length > 0) {
+              // closes the palette and deletes the '/' as usual (opened from
+              // a `+` handle there is no '/': it only closes).
+              if (palette.filter.length > 0 || palette.insertAfter != null) {
                 event.preventDefault();
                 palette.backspace();
                 return true;
@@ -211,6 +213,9 @@ export function initEditor() {
       dropCursor(),
       gapCursor(),
       formatToolbarPlugin(),
+      blockHandlesPlugin({
+        addAt: (view, pos) => getBlockPalette().open(view, pos, { insertAfter: pos }),
+      }),
       tableEditing(),
       componentSettingsPlugin(),
     ],

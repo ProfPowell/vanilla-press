@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vanilla Press — Posts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#121212}a:hover{color:#555555}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; background: #ffffff; color: #121212; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.5; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Site" style="flex: 1 1 220px; max-width: 272px; box-sizing: border-box; padding: 24px 16px; background: #f8f8f8; border-right: 1px solid #f1f1f1; display: flex; flex-direction: column; gap: 24px">
+    <a href="Main.dc.html" style="display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 8px; font-size: 14px; color: #555555; text-decoration: none">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>
+      All sites
+    </a>
+    <div style="padding: 0 8px">
+      <p style="margin: 0; font-family: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif; font-weight: 700; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere">thomasapowell.com</p>
+      <a href="https://thomasapowell.com" style="display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 13px; color: #555555">View live site
+        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg>
+      </a>
+    </div>
+    <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+      <li><button type="button" aria-current="page" style="width: 100%; min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: #ececec; color: #121212; font: inherit; font-size: 15px; font-weight: 600; text-align: left; cursor: pointer">Posts</button></li>
+      <li><a href="Media.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; font-size: 15px; text-decoration: none">Media</a></li>
+      <li><a href="Theme.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; font-size: 15px; text-decoration: none">Theme</a></li>
+      <li style="margin-top: 12px; padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #6b6b6b">Coming later</li>
+      <li><button type="button" disabled style="width: 100%; min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #6b6b6b; font: inherit; font-size: 15px; text-align: left">Programs</button></li>
+      <li><button type="button" disabled style="width: 100%; min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #6b6b6b; font: inherit; font-size: 15px; text-align: left">Analytics</button></li>
+      <li><button type="button" disabled style="width: 100%; min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #6b6b6b; font: inherit; font-size: 15px; text-align: left">Social</button></li>
+    </ul>
+    <div role="status" style="margin-top: auto; padding: 12px; border-top: 1px solid #e6e6e6; font-size: 13px; color: #555555; display: flex; flex-direction: column; gap: 4px">
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #2f8a3e"></span>In sync with GitHub · main</span>
+      <span>Backed up 8:48 AM</span>
+    </div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 56px 48px 96px">
+    <div style="max-width: 820px; margin: 0 auto">
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 28px">
+        <h1 style="margin: 0; font-family: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif; font-weight: 700; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em">Posts</h1>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button type="button" style="min-height: 44px; padding: 0 16px; border: 1px solid #dedede; border-radius: 8px; background: #ffffff; color: #121212; font: inherit; font-size: 15px; font-weight: 500; cursor: pointer">Preview site</button>
+          <a href="Editor.dc.html" style="display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 18px; border-radius: 8px; background: {{accent}}; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+            New post
+          </a>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #dedede">
+        <div role="group" aria-label="Filter posts" style="display: flex; gap: 4px">
+          <sc-for list="{{filters}}" as="f" hint-placeholder-count="3">
+            <button type="button" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}" style="{{f.style}}">{{f.label}} <span style="color: #6b6b6b; font-weight: 400">{{f.count}}</span></button>
+          </sc-for>
+        </div>
+        <label style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid #dedede; border-radius: 8px; color: #555555; flex: 0 1 260px">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search posts</span>
+          <input type="search" placeholder="Search posts" style="border: 0; outline-offset: 4px; font: inherit; font-size: 15px; width: 100%; background: transparent; color: #121212">
+        </label>
+      </div>
+
+      <ul style="list-style: none; margin: 0; padding: 0">
+        <sc-for list="{{shown}}" as="p" hint-placeholder-count="2">
+          <li style="border-bottom: 1px solid #f1f1f1">
+            <a href="Editor.dc.html" style="display: flex; flex-wrap: wrap; gap: 6px 24px; justify-content: space-between; padding: 22px 4px; text-decoration: none">
+              <div style="flex: 1 1 360px; min-width: 0">
+                <p style="margin: 0; font-family: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif; font-size: 21px; font-weight: 700; line-height: 1.3">{{p.title}}</p>
+                <p style="{{p.descStyle}}">{{p.desc}}</p>
+                <p style="margin: 6px 0 0; font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace; font-size: 12px; color: #6b6b6b">{{p.path}}</p>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 13px; color: #555555; white-space: nowrap">
+                <span style="display: inline-flex; align-items: center; gap: 6px; color: #1d6b2a; font-weight: 600"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #2f8a3e"></span>{{p.status}}</span>
+                <span>{{p.date}}</span>
+              </div>
+            </a>
+          </li>
+        </sc-for>
+      </ul>
+      <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+        <p style="margin: 48px 0; text-align: center; color: #555555">No drafts. Start a <a href="Editor.dc.html">new post</a>.</p>
+      </sc-if>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2b59c3","options":["#2b59c3","#121212","#1d6b5a","#a3401f"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { filter: 'all' };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#2b59c3';
+    const posts = [
+      { title: 'Do It Yourself Blogging', desc: 'Should you prompt or code in the age of LLMs? Same thing, as long as you are thinking…', path: '/posts/do-it-yourself-blogging', status: 'Published', date: 'Nov 3, 2026', kind: 'published' },
+      { title: 'Another Post', desc: 'No description', path: '/posts/another-post', status: 'Published', date: 'Nov 3, 2026', kind: 'published', missing: true }
+    ].map((p) => ({
+      ...p,
+      descStyle: p.missing
+        ? 'margin: 4px 0 0; font-size: 15px; color: #6b6b6b; font-style: italic'
+        : 'margin: 4px 0 0; font-size: 15px; color: #555555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap'
+    }));
+    const defs = [
+      { id: 'all', label: 'All' },
+      { id: 'published', label: 'Published' },
+      { id: 'draft', label: 'Drafts' }
+    ];
+    const count = (id) => id === 'all' ? posts.length : posts.filter((p) => p.kind === id).length;
+    const filters = defs.map((d) => {
+      const on = this.state.filter === d.id;
+      return {
+        ...d,
+        count: String(count(d.id)),
+        pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ filter: d.id }),
+        style: 'min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; font: inherit; font-size: 15px; cursor: pointer; ' +
+          (on ? 'background: #f1f1f1; color: #121212; font-weight: 600' : 'background: transparent; color: #555555')
+      };
+    });
+    const shown = this.state.filter === 'all' ? posts : posts.filter((p) => p.kind === this.state.filter);
+    return { accent, filters, shown, empty: shown.length === 0 };
+  }
+}
+</script>
+</body>
+</html>

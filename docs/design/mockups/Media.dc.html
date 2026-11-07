@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vanilla Press — Media</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#121212}a:hover{color:#555555}
+</style>
+</helmet>
+<div style="min-height: 1000px; box-sizing: border-box; background: #ffffff; color: #121212; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.5; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Site" style="flex: 1 1 220px; max-width: 272px; box-sizing: border-box; padding: 24px 16px; background: #f8f8f8; border-right: 1px solid #f1f1f1; display: flex; flex-direction: column; gap: 24px">
+    <a href="Main.dc.html" style="display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 8px; font-size: 14px; color: #555555; text-decoration: none">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>
+      All sites
+    </a>
+    <div style="padding: 0 8px">
+      <p style="margin: 0; font-family: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif; font-weight: 700; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere">thomasapowell.com</p>
+    </div>
+    <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+      <li><a href="Site.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; font-size: 15px; text-decoration: none">Posts</a></li>
+      <li><a href="Media.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; background: #ececec; font-size: 15px; font-weight: 600; text-decoration: none">Media</a></li>
+      <li><a href="Theme.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; font-size: 15px; text-decoration: none">Theme</a></li>
+      <li style="margin-top: 12px; padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #6b6b6b">Coming later</li>
+      <li style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; font-size: 15px; color: #6b6b6b">Programs</li>
+      <li style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; font-size: 15px; color: #6b6b6b">Analytics</li>
+      <li style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; font-size: 15px; color: #6b6b6b">Social</li>
+    </ul>
+    <div role="status" style="margin-top: auto; padding: 12px; border-top: 1px solid #e6e6e6; font-size: 13px; color: #555555; display: flex; flex-direction: column; gap: 4px">
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #2f8a3e"></span>In sync with GitHub · main</span>
+      <span>Backed up 8:48 AM</span>
+    </div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 56px 40px 80px; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+    <div style="flex: 999 1 480px; min-width: 0">
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px">
+        <div>
+          <h1 style="margin: 0; font-family: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif; font-weight: 700; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em">Media</h1>
+          <p style="margin: 6px 0 0; font-size: 14px; color: #555555">{{count}} files in <span style="font-family: ui-monospace, Menlo, monospace; font-size: 13px">src/media</span> · <span style="color: #6b4a00">{{missingAlt}} missing alt text</span></p>
+        </div>
+        <button type="button" style="display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: {{accent}}; color: #ffffff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"></path><path d="m6 10 6-6 6 6"></path><path d="M4 20h16"></path></svg>
+          Upload
+        </button>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid #dedede; margin-bottom: 20px">
+        <div role="group" aria-label="Filter media" style="display: flex; gap: 4px">
+          <button type="button" aria-pressed="true" style="min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: #f1f1f1; color: #121212; font: inherit; font-size: 15px; font-weight: 600">All</button>
+          <button type="button" aria-pressed="false" style="min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #555555; font: inherit; font-size: 15px">Needs alt text</button>
+          <button type="button" aria-pressed="false" style="min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: #555555; font: inherit; font-size: 15px">Unused</button>
+        </div>
+        <label style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid #dedede; border-radius: 8px; color: #555555; flex: 0 1 240px">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search media</span>
+          <input type="search" placeholder="Search by name or alt" style="border: 0; font: inherit; font-size: 15px; width: 100%; background: transparent; color: #121212">
+        </label>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: 16px">
+        <sc-for list="{{items}}" as="m" hint-placeholder-count="10">
+          <button type="button" aria-pressed="{{m.pressed}}" onClick="{{m.pick}}" style="{{m.cardStyle}}">
+            <span style="display: grid; place-items: center; aspect-ratio: 4 / 3; border-radius: 6px; background: #f1f1f1; color: #8a8a8a">
+              <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="2"></circle><path d="m21 16-5-5-9 9"></path></svg>
+            </span>
+            <span style="display: block; margin-top: 8px; font-size: 13px; font-weight: 500; color: #121212; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{m.name}}</span>
+            <sc-if value="{{m.noAlt}}" hint-placeholder-val="{{ false }}">
+              <span style="display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px; background: #fbf3e2; color: #6b4a00; font-size: 12px">No alt text</span>
+            </sc-if>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="margin-top: 24px; padding: 28px; border: 1.5px dashed #cfcfcf; border-radius: 12px; text-align: center; color: #555555; font-size: 14px">
+        Drop images here, or paste from the clipboard. Files go to <span style="font-family: ui-monospace, Menlo, monospace; font-size: 13px">src/media</span> and back up with your next save.
+      </div>
+    </div>
+
+    <aside aria-labelledby="detail-title" style="flex: 1 1 300px; max-width: 360px; box-sizing: border-box; padding: 20px; border: 1px solid #ececec; border-radius: 12px; background: #fbfbfb; display: flex; flex-direction: column; gap: 18px; font-size: 14px">
+      <div style="display: grid; place-items: center; aspect-ratio: 4 / 3; border-radius: 8px; background: #f1f1f1; color: #8a8a8a; font-size: 13px">[Image preview]</div>
+      <div>
+        <h2 id="detail-title" style="margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere">{{sel.name}}</h2>
+        <p style="margin: 4px 0 0; color: #555555">SVG image · [size] · added [date]</p>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="vp-alt" style="font-weight: 600">Alt text</label>
+        <textarea id="vp-alt" rows="3" placeholder="Describe what the image shows, for people who can't see it" style="{{altStyle}}">{{sel.alt}}</textarea>
+        <sc-if value="{{sel.noAlt}}" hint-placeholder-val="{{ false }}">
+          <p style="margin: 0; font-size: 12px; color: #6b4a00">Screen readers will announce only the file name. Leave empty only for decorative images, and mark it so:</p>
+        </sc-if>
+        <label style="display: flex; align-items: center; gap: 8px; min-height: 32px; color: #333333">
+          <input type="checkbox" style="width: 16px; height: 16px">
+          Decorative (alt="")
+        </label>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <p style="margin: 0; font-weight: 600">URL</p>
+        <div style="display: flex; gap: 6px">
+          <code style="flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #dedede; border-radius: 8px; background: #ffffff; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">/media/{{sel.name}}</code>
+          <button type="button" style="min-height: 36px; padding: 0 12px; border: 1px solid #dedede; border-radius: 8px; background: #ffffff; font: inherit; font-size: 13px; cursor: pointer">Copy</button>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <p style="margin: 0; font-weight: 600">Used in</p>
+        <p style="margin: 0; color: #555555">[posts that reference this file]</p>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; border-top: 1px solid #ececec">
+        <button type="button" style="min-height: 40px; padding: 0 14px; border: 1px solid #dedede; border-radius: 8px; background: #ffffff; font: inherit; font-size: 14px; cursor: pointer">Replace file</button>
+        <button type="button" style="min-height: 40px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: #9b1c1c; font: inherit; font-size: 14px; cursor: pointer">Delete…</button>
+      </div>
+    </aside>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2b59c3","options":["#2b59c3","#121212","#1d6b5a","#a3401f"]},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picked: 'css-box-model.svg' };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#2b59c3';
+    const files = [
+      { name: 'browser-rendering-pipeline.svg', alt: 'Diagram of the browser rendering pipeline' },
+      { name: 'css-box-model.svg', alt: '' },
+      { name: 'css-cascade-layers-diagram.svg', alt: 'How cascade layers order competing styles' },
+      { name: 'decorative-divider.svg', alt: '' },
+      { name: 'devtools-layers-panel.svg', alt: '' },
+      { name: 'dom-tree-visualization.svg', alt: 'A DOM tree drawn as nested boxes' },
+      { name: 'layer-cascade.svg', alt: '' },
+      { name: 'lighthouse-score.svg', alt: '' },
+      { name: 'logo.svg', alt: 'Site logo' },
+      { name: 'placeholder.svg', alt: '' }
+    ];
+    const items = files.map((f) => {
+      const on = this.state.picked === f.name;
+      return {
+        ...f,
+        noAlt: !f.alt,
+        pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ picked: f.name }),
+        cardStyle: 'display: block; width: 100%; padding: 8px; border-radius: 10px; background: #ffffff; font: inherit; text-align: left; cursor: pointer; ' +
+          (on ? 'border: 2px solid ' + accent + '; margin: -1px' : 'border: 1px solid #ececec')
+      };
+    });
+    const sel = items.find((i) => i.name === this.state.picked) || items[0];
+    return {
+      accent,
+      items,
+      sel,
+      count: String(files.length),
+      missingAlt: String(files.filter((f) => !f.alt).length),
+      altStyle: 'padding: 8px 10px; border-radius: 8px; font: inherit; font-size: 14px; line-height: 1.45; color: #121212; background: #ffffff; resize: vertical; border: 1px solid ' + (sel.noAlt ? '#d9a531' : '#dedede')
+    };
+  }
+}
+</script>
+</body>
+</html>

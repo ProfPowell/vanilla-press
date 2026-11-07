@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vanilla Press — Theme</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Press+Start+2P&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#121212}a:hover{color:#555555}
+</style>
+</helmet>
+<div style="min-height: 1240px; box-sizing: border-box; background: #ffffff; color: #121212; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.5; display: flex; flex-wrap: wrap">
+
+  <nav aria-label="Site" style="flex: 1 1 220px; max-width: 272px; box-sizing: border-box; padding: 24px 16px; background: #f8f8f8; border-right: 1px solid #f1f1f1; display: flex; flex-direction: column; gap: 24px">
+    <a href="Main.dc.html" style="display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 8px; font-size: 14px; color: #555555; text-decoration: none">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>
+      All sites
+    </a>
+    <div style="padding: 0 8px">
+      <p style="margin: 0; font-family: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif; font-weight: 700; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere">thomasapowell.com</p>
+    </div>
+    <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+      <li><a href="Site.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; font-size: 15px; text-decoration: none">Posts</a></li>
+      <li><a href="Media.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; font-size: 15px; text-decoration: none">Media</a></li>
+      <li><a href="Theme.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; background: #ececec; font-size: 15px; font-weight: 600; text-decoration: none">Theme</a></li>
+      <li style="margin-top: 12px; padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #6b6b6b">Coming later</li>
+      <li style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; font-size: 15px; color: #6b6b6b">Programs</li>
+      <li style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; font-size: 15px; color: #6b6b6b">Analytics</li>
+      <li style="display: flex; align-items: center; min-height: 40px; padding: 0 12px; font-size: 15px; color: #6b6b6b">Social</li>
+    </ul>
+    <div role="status" style="margin-top: auto; padding: 12px; border-top: 1px solid #e6e6e6; font-size: 13px; color: #555555; display: flex; flex-direction: column; gap: 4px">
+      <span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #2f8a3e"></span>In sync with GitHub · main</span>
+      <span>Backed up 8:48 AM</span>
+    </div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 48px 40px 80px">
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 28px">
+      <div>
+        <h1 style="margin: 0; font-family: Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif; font-weight: 700; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em">Theme</h1>
+        <p style="margin: 6px 0 0; font-size: 14px; color: #555555">The look of every page on the site. A post can override it in Post settings.</p>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+        <sc-if value="{{dirty}}" hint-placeholder-val="{{ false }}">
+          <span style="font-size: 13px; color: #6b4a00">Unapplied changes</span>
+        </sc-if>
+        <a href="https://profpowell.github.io/vb-design-system/tools/theme-composer/" style="display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 1px solid #dedede; border-radius: 8px; font-size: 15px; text-decoration: none">Open in Theme Composer
+          <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg>
+        </a>
+        <button type="button" style="min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: {{accent}}; color: #ffffff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer">Apply to site</button>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+      <div style="flex: 1 1 320px; max-width: 380px; display: flex; flex-direction: column; gap: 28px">
+
+        <section aria-labelledby="pick-title">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 12px">
+            <h2 id="pick-title" style="margin: 0; font-size: 15px; font-weight: 600">Start from a theme</h2>
+            <a href="https://profpowell.github.io/vb-design-system/tools/theme-library/" style="font-size: 13px; color: #555555">All 54 themes</a>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+            <sc-for list="{{themes}}" as="t" hint-placeholder-count="8">
+              <button type="button" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}" style="{{t.cardStyle}}">
+                <span style="{{t.swatchStyle}}">
+                  <span style="{{t.aaStyle}}">Aa</span>
+                  <span style="{{t.barStyle}}"></span>
+                </span>
+                <span style="display: flex; justify-content: space-between; gap: 6px; padding: 8px 2px 0; font-size: 13px">
+                  <span style="font-weight: 600; color: #121212">{{t.name}}</span>
+                  <span style="color: #6b6b6b">{{t.tier}}</span>
+                </span>
+              </button>
+            </sc-for>
+          </div>
+        </section>
+
+        <section aria-labelledby="adj-title" style="display: flex; flex-direction: column; gap: 18px; padding-top: 24px; border-top: 1px solid #ececec">
+          <h2 id="adj-title" style="margin: 0; font-size: 15px; font-weight: 600">Adjust {{cur.name}}</h2>
+
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; font-size: 14px">
+              <label for="hue" style="font-weight: 600">Main color hue</label>
+              <span style="display: inline-flex; align-items: center; gap: 6px; color: #555555; font-variant-numeric: tabular-nums"><span aria-hidden="true" style="{{hueChip}}"></span>{{hue}}°</span>
+            </div>
+            <input id="hue" type="range" min="0" max="360" value="{{hue}}" onChange="{{setHue}}" style="width: 100%; accent-color: {{primary}}">
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <p style="margin: 0; font-size: 14px; font-weight: 600">Color scheme</p>
+            <div role="group" aria-label="Color scheme" style="display: flex; padding: 3px; border-radius: 9px; background: #f1f1f1">
+              <button type="button" aria-pressed="true" style="flex: 1; min-height: 34px; border: 0; border-radius: 7px; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); font: inherit; font-size: 13px; font-weight: 600">Light</button>
+              <button type="button" aria-pressed="false" style="flex: 1; min-height: 34px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 13px; color: #555555">Dark</button>
+              <button type="button" aria-pressed="false" style="flex: 1; min-height: 34px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 13px; color: #555555">Reader's choice</button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="hfont" style="font-size: 14px; font-weight: 600">Headings</label>
+              <select id="hfont" style="min-height: 38px; padding: 0 8px; border: 1px solid #dedede; border-radius: 8px; font: inherit; font-size: 14px; background: #ffffff"><option>{{cur.headingName}}</option></select>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="bfont" style="font-size: 14px; font-weight: 600">Body</label>
+              <select id="bfont" style="min-height: 38px; padding: 0 8px; border: 1px solid #dedede; border-radius: 8px; font: inherit; font-size: 14px; background: #ffffff"><option>{{cur.bodyName}}</option></select>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <p style="margin: 0; font-size: 14px; font-weight: 600">Corners</p>
+            <div role="group" aria-label="Corners" style="display: flex; padding: 3px; border-radius: 9px; background: #f1f1f1">
+              <button type="button" aria-pressed="true" style="flex: 1; min-height: 34px; border: 0; border-radius: 7px; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); font: inherit; font-size: 13px; font-weight: 600">Theme's</button>
+              <button type="button" aria-pressed="false" style="flex: 1; min-height: 34px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 13px; color: #555555">Square</button>
+              <button type="button" aria-pressed="false" style="flex: 1; min-height: 34px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 13px; color: #555555">Round</button>
+            </div>
+          </div>
+
+          <p style="margin: 0; font-size: 13px; color: #555555">Fine-tune every token (spacing, shadows, icons) in the Theme Composer, then import its <span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px">theme.css</span> here.</p>
+        </section>
+
+        <section aria-labelledby="ovr-title" style="padding: 16px; border-radius: 10px; background: #f8f8f8">
+          <h2 id="ovr-title" style="margin: 0 0 4px; font-size: 14px; font-weight: 600">Pages with their own theme</h2>
+          <p style="margin: 0; font-size: 13px; color: #555555">None yet. Give a post its own look under <a href="EditorTheme.dc.html">Post settings › Appearance</a>.</p>
+        </section>
+      </div>
+
+      <section aria-label="Preview" style="flex: 999 1 520px; min-width: 0">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px">
+          <p style="margin: 0; font-size: 14px; color: #555555">Preview · <strong style="color: #121212; font-weight: 600">Do It Yourself Blogging</strong></p>
+          <div role="group" aria-label="Preview width" style="display: flex; padding: 3px; border-radius: 9px; background: #f1f1f1">
+            <button type="button" aria-pressed="{{deskPressed}}" onClick="{{toDesk}}" style="{{deskStyle}}">Desktop</button>
+            <button type="button" aria-pressed="{{phonePressed}}" onClick="{{toPhone}}" style="{{phoneStyle}}">Phone</button>
+          </div>
+        </div>
+
+        <div style="padding: 20px; border-radius: 14px; background: #f1f1f1; display: flex; justify-content: center">
+          <div style="{{frameStyle}}">
+            <header style="{{siteHeadStyle}}">
+              <span style="{{brandStyle}}">thomasapowell.com</span>
+              <span style="display: flex; gap: 16px; font-size: 14px"><span style="{{linkStyle}}">Posts</span><span style="{{linkStyle}}">Feed</span></span>
+            </header>
+            <article style="{{articleStyle}}">
+              <p style="{{metaStyle}}">Nov 3, 2026</p>
+              <h1 style="{{h1Style}}">Do It Yourself Blogging</h1>
+              <p style="margin: 0 0 16px">These days you hear lots of opinions on if vibe coding is real coding or not. In the traditional sense of coding, no vibe coding is not real coding.</p>
+              <p style="margin: 0 0 20px">Obviously be it a post or be it a program I could just go ask <span style="{{linkStyle}}">my friend Claude</span> to do it for me.</p>
+              <blockquote style="{{quoteStyle}}">
+                <p style="{{h2Style}}">Hello, World (Again)</p>
+                <p style="margin: 0">I've been building for the web since before most people knew what a web page was.</p>
+              </blockquote>
+              <span style="{{btnStyle}}">More posts</span>
+            </article>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2b59c3","options":["#2b59c3","#121212","#1d6b5a","#a3401f"]},"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { theme: 'default', hue: 260, phone: false };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#2b59c3';
+    const sans = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+    const defs = [
+      { id: 'default', name: 'Default', tier: 'Core', bg: '#ffffff', surface: '#ffffff', text: '#121212', muted: '#555555', border: '#dedede', L: 0.5, C: 0.18, h: 260, head: sans, body: sans, headingName: 'System sans', bodyName: 'System sans', r: 8, onP: '#ffffff', size: 17 },
+      { id: 'classic', name: 'Classic', tier: 'Core', bg: '#fdfcf8', surface: '#fdfcf8', text: '#1c1b18', muted: '#55524a', border: '#dcd8cc', L: 0.45, C: 0.12, h: 220, head: "Charter, 'Bitstream Charter', Cambria, serif", body: "Charter, 'Bitstream Charter', Cambria, serif", headingName: 'Charter', bodyName: 'Charter', r: 4, onP: '#ffffff', size: 18 },
+      { id: 'modern', name: 'Modern', tier: 'Core', bg: '#ffffff', surface: '#ffffff', text: '#16131f', muted: '#56526a', border: '#e3e0ec', L: 0.5, C: 0.2, h: 270, head: "Inter, system-ui, sans-serif", body: "Inter, system-ui, sans-serif", headingName: 'Inter', bodyName: 'Inter', r: 12, onP: '#ffffff', size: 17 },
+      { id: 'editorial', name: 'Editorial', tier: 'Showcase', bg: 'oklch(0.99 0 0)', surface: 'oklch(0.99 0 0)', text: 'oklch(0.1 0 0)', muted: 'oklch(0.35 0 0)', border: 'oklch(0.85 0 0)', L: 0.5, C: 0.22, h: 25, head: "Georgia, 'Times New Roman', serif", body: "Georgia, 'Times New Roman', serif", headingName: 'Georgia', bodyName: 'Georgia', r: 0, onP: '#ffffff', size: 18 },
+      { id: 'nord', name: 'Nord', tier: 'Community', bg: 'oklch(0.95 0.01 230)', surface: 'oklch(0.925 0.012 230)', text: 'oklch(0.25 0.02 230)', muted: 'oklch(0.42 0.02 230)', border: 'oklch(0.82 0.012 230)', L: 0.5, C: 0.08, h: 240, head: sans, body: sans, headingName: 'System sans', bodyName: 'System sans', r: 6, onP: '#ffffff', size: 17 },
+      { id: 'swiss', name: 'Swiss', tier: 'Showcase', bg: '#ffffff', surface: '#ffffff', text: 'oklch(0.15 0 0)', muted: 'oklch(0.4 0 0)', border: 'oklch(0.85 0 0)', L: 0.5, C: 0.25, h: 25, head: "'Helvetica Neue', Helvetica, Arial, sans-serif", body: "'Helvetica Neue', Helvetica, Arial, sans-serif", headingName: 'Helvetica Neue', bodyName: 'Helvetica Neue', r: 0, onP: '#ffffff', size: 17 },
+      { id: '8bit', name: '8bit', tier: 'Showcase', bg: 'oklch(0.12 0.02 250)', surface: 'oklch(0.2 0.02 250)', text: 'oklch(0.95 0.02 60)', muted: 'oklch(0.7 0.02 60)', border: 'oklch(0.45 0.05 250)', L: 0.7, C: 0.2, h: 145, head: "'Press Start 2P', monospace", body: "VT323, 'Courier New', monospace", headingName: 'Press Start 2P', bodyName: 'VT323', r: 0, onP: '#0b0b0b', size: 22 },
+      { id: 'win9x', name: 'Win9x', tier: 'Showcase', bg: 'oklch(0.42 0.06 195)', surface: '#c0c0c0', text: '#000000', muted: '#333333', border: '#000000', L: 0.3, C: 0.15, h: 250, head: "Tahoma, Verdana, sans-serif", body: "Tahoma, Verdana, sans-serif", headingName: 'Tahoma', bodyName: 'Tahoma', r: 0, onP: '#ffffff', size: 15 }
+    ];
+    const cur = defs.find((d) => d.id === this.state.theme) || defs[0];
+    const hue = this.state.hue;
+    const primary = 'oklch(' + cur.L + ' ' + cur.C + ' ' + hue + ')';
+    const themes = defs.map((d) => {
+      const on = d.id === cur.id;
+      const p = 'oklch(' + d.L + ' ' + d.C + ' ' + d.h + ')';
+      return {
+        ...d,
+        pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ theme: d.id, hue: d.h }),
+        cardStyle: 'display: block; width: 100%; padding: 6px; border-radius: 10px; background: #ffffff; font: inherit; text-align: left; cursor: pointer; ' + (on ? 'border: 2px solid ' + accent + '; margin: -1px' : 'border: 1px solid #e6e6e6'),
+        swatchStyle: 'display: flex; align-items: flex-end; justify-content: space-between; height: 64px; padding: 8px 10px; box-sizing: border-box; border-radius: 6px; border: 1px solid rgba(0,0,0,0.08); background: ' + d.bg,
+        aaStyle: 'font-family: ' + d.head + '; font-size: ' + (d.id === '8bit' ? '15px' : '24px') + '; font-weight: 700; line-height: 1; color: ' + (d.id === 'win9x' ? '#ffffff' : d.text),
+        barStyle: 'width: 28px; height: 12px; border-radius: ' + Math.min(d.r, 6) + 'px; background: ' + p
+      };
+    });
+    const phone = this.state.phone;
+    const seg = (on) => 'min-height: 32px; padding: 0 12px; border: 0; border-radius: 7px; font: inherit; font-size: 13px; cursor: pointer; ' + (on ? 'background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); font-weight: 600; color: #121212' : 'background: transparent; color: #555555');
+    const win = cur.id === 'win9x';
+    return {
+      accent, cur, hue: String(hue), primary,
+      dirty: cur.id !== 'default' || hue !== 260,
+      themes,
+      setHue: (e) => this.setState({ hue: Number(e.target.value) }),
+      hueChip: 'display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: ' + primary,
+      deskPressed: phone ? 'false' : 'true', phonePressed: phone ? 'true' : 'false',
+      toDesk: () => this.setState({ phone: false }), toPhone: () => this.setState({ phone: true }),
+      deskStyle: seg(!phone), phoneStyle: seg(phone),
+      frameStyle: 'width: 100%; max-width: ' + (phone ? '390px' : '860px') + '; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: ' + (win ? 0 : 10) + 'px; background: ' + cur.bg + '; color: ' + cur.text + '; font-family: ' + cur.body + '; font-size: ' + (phone ? cur.size - 1 : cur.size) + 'px; line-height: 1.6; padding: ' + (win ? '12px' : '0'),
+      siteHeadStyle: 'display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px ' + (phone ? 18 : 32) + 'px; ' + (win ? 'background: oklch(0.3 0.15 250); color: #ffffff' : 'border-bottom: 1px solid ' + cur.border),
+      brandStyle: 'font-family: ' + cur.head + '; font-weight: 700; font-size: ' + (cur.id === '8bit' ? '11px' : '16px'),
+      linkStyle: 'color: ' + (win ? 'inherit' : primary) + '; text-decoration: underline; text-underline-offset: 3px',
+      articleStyle: 'padding: ' + (phone ? '28px 18px 32px' : '44px 56px 48px') + '; background: ' + cur.surface + (win ? '; border: 2px solid; border-color: #ffffff #000000 #000000 #ffffff' : ''),
+      metaStyle: 'margin: 0 0 8px; font-size: 0.8em; color: ' + cur.muted,
+      h1Style: 'margin: 0 0 20px; font-family: ' + cur.head + '; font-weight: 700; line-height: 1.2; font-size: ' + (cur.id === '8bit' ? (phone ? '18px' : '24px') : (phone ? '30px' : '40px')),
+      h2Style: 'margin: 0 0 8px; font-family: ' + cur.head + '; font-weight: 700; font-size: ' + (cur.id === '8bit' ? '13px' : '1.2em'),
+      quoteStyle: 'margin: 0 0 24px; padding: 4px 0 4px 18px; border-left: 3px solid ' + primary + '; color: ' + cur.muted,
+      btnStyle: 'display: inline-block; padding: 10px 18px; font-size: 0.85em; font-weight: 600; background: ' + primary + '; color: ' + cur.onP + '; border-radius: ' + cur.r + 'px' + (win ? '; border: 2px solid; border-color: #ffffff #000000 #000000 #ffffff' : '')
+    };
+  }
+}
+</script>
+</body>
+</html>

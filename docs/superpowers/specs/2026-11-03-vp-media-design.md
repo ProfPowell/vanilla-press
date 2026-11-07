@@ -13,6 +13,19 @@ Two changes follow:
 
 Both build on the component system.
 
+**Decided 2026-11-07:**
+- Media is step 3b. It is built in the new look
+  (`2026-11-07-vp-new-look-design.md`), following
+  `docs/design/mockups/Media.dc.html`.
+- There is no "Replace file".
+- Add the mockup's **"Decorative (alt="")"** checkbox. An empty alt set on
+  purpose is stored apart from alt text never written, and only the second
+  counts as missing.
+- Keep the **Missing file** filter alongside the mockup's All / Needs alt
+  text / Unused.
+- Fit the image editor and audio, video and PDF into the same detail
+  panel.
+
 Builds on step 1, `docs/superpowers/specs/2026-11-02-vp-app-core-design.md`.
 The user asked to go straight to a design, so everything below the "Decided
 by the user" line is my call. They can override any of it.

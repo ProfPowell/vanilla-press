@@ -118,3 +118,4 @@ See `docs/IMPLEMENTATION.md` for the full plan. The current phase determines wha
 - `docs/EDITOR.md` — Production editor guide, API reference, demo walkthrough (Phase 4)
 - `docs/CONTENT-MODEL.md` — Block AST specification and examples
 - `docs/RENDERING.md` — Renderer API, scope negotiation, output formats
+- `docs/design/README.md` — Target UI design for the app and editor (quiet writing tool on Vanilla Breeze tokens); mockups in `docs/design/mockups/`. Read before changing `app/` or `editor/` UI

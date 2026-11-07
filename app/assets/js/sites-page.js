@@ -1,38 +1,51 @@
 import { api, h } from './app-api.js';
+import { countPosts, syncText, backupText } from './sites-view.js';
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
 const listEl = $('sites');
+$('local-address').textContent = location.host;
 
 function showError(el, message) {
   el.textContent = message || '';
   el.hidden = !message;
 }
 
-function gitText(git) {
-  return git?.connected ? `Connected to GitHub (${git.branch})` : 'Not connected to GitHub';
+const ARROW = '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg>';
+
+function strong(n) {
+  return h('strong', {}, String(n));
 }
 
-async function postCounts(site) {
+async function fillCounts(site, el) {
   try {
     const docs = await api(`/api/sites/${encodeURIComponent(site.id)}/documents`);
-    const drafts = docs.filter((d) => d.meta?.status === 'draft').length;
-    const published = docs.filter((d) => d.meta?.status === 'published').length;
-    return `${drafts} ${drafts === 1 ? 'draft' : 'drafts'}, ${published} published`;
+    const { published, drafts } = countPosts(docs);
+    el.replaceChildren(strong(published), ' published', h('span', { class: 'sep', 'aria-hidden': 'true' }, ' · '), strong(drafts), drafts === 1 ? ' draft' : ' drafts');
   } catch (err) {
-    return `Cannot read posts: ${err.message}`;
+    el.textContent = `Cannot read posts: ${err.message}`;
   }
 }
 
 function card(site) {
-  const counts = h('p', { class: 'muted' }, 'Loading posts...');
-  postCounts(site).then((text) => { counts.textContent = text; });
-  const link = h('a', { href: `/app/site.html?site=${encodeURIComponent(site.id)}` }, site.name);
+  const counts = h('span', {}, 'Loading posts...');
+  fillCounts(site, counts);
+  const sync = syncText(site.git);
+  const live = site.siteUrl ? h('a', { class: 'btn-quiet', href: site.siteUrl, target: '_blank', rel: 'noopener' }, 'View live') : null;
+  if (live) live.insertAdjacentHTML('beforeend', ARROW);
+  const href = `/app/site.html?site=${encodeURIComponent(site.id)}`;
   return h('li', {},
-    h('h2', {}, link),
-    h('p', { class: 'muted' }, site.path),
-    counts,
-    h('p', { class: 'muted' }, gitText(site.git)));
+    h('article', { class: 'site-card' },
+      h('div', { class: 'site-card-main' },
+        h('h2', {}, h('a', { href }, site.name)),
+        h('p', { class: 'site-path' }, site.path),
+        h('p', { class: 'site-meta' },
+          counts,
+          h('span', { class: 'sync', 'data-tone': sync.tone }, h('span', { class: 'dot', 'aria-hidden': 'true' }), sync.text),
+          h('span', {}, backupText(site.git?.lastBackupAt ?? null, new Date())))),
+      h('div', { class: 'site-card-actions' },
+        live,
+        h('a', { class: 'btn', href }, 'Open'))));
 }
 
 async function loadSites() {

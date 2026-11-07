@@ -10,12 +10,19 @@
 <script type="module" src="/app/assets/js/sites-page.js"></script>
 </head>
 <body>
-<main class="app-page">
+<header class="topbar">
+  <p class="wordmark">Vanilla Press</p>
+  <p class="topbar-address">Local · <span id="local-address"></span></p>
+</header>
+<main class="app-page sites-page">
   <header class="page-head">
-    <h1>Sites</h1>
+    <div>
+      <h1>Sites</h1>
+      <p class="lede">Cook sites this machine edits. Each one is a Git repo.</p>
+    </div>
     <div class="actions">
-      <button type="button" id="add-btn" aria-expanded="false" aria-controls="add-panel">Add site</button>
       <button type="button" id="clone-btn" aria-expanded="false" aria-controls="clone-panel">Clone from GitHub</button>
+      <button type="button" id="add-btn" class="primary" aria-expanded="false" aria-controls="add-panel">Add site</button>
     </div>
   </header>
 
@@ -25,7 +32,7 @@
       <label for="add-path">Site folder</label>
       <div class="row">
         <input id="add-path" name="path" type="text" autocomplete="off" required placeholder="/Users/you/my-site"/>
-        <button type="submit">Add site</button>
+        <button type="submit" class="primary">Add site</button>
       </div>
     </form>
     <h3 id="browse-title">Browse folders</h3>
@@ -43,7 +50,7 @@
       <input id="clone-url" name="url" type="text" autocomplete="off" required placeholder="https://github.com/you/my-site.git"/>
       <label for="clone-dest">Destination folder</label>
       <input id="clone-dest" name="dest" type="text" autocomplete="off" required placeholder="/Users/you/my-site"/>
-      <p><button type="submit">Clone</button></p>
+      <p><button type="submit" class="primary">Clone</button></p>
     </form>
     <p id="clone-error" class="error" role="alert" hidden></p>
   </section>

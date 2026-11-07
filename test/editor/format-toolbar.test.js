@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatItems, PRIMARY_IDS } from '../../editor/assets/js/menu.js';
-import { toolbarPosition, toolbarKeyNav } from '../../editor/assets/js/format-toolbar.js';
+import { toolbarPosition, toolbarKeyNav, normalizeLinkUrl } from '../../editor/assets/js/format-toolbar.js';
 
 describe('formatItems', () => {
   const { primary, more } = formatItems();
@@ -82,5 +82,22 @@ describe('toolbarKeyNav', () => {
   it('ignores other keys', () => {
     assert.equal(toolbarKeyNav(3, 6, 'a'), null);
     assert.equal(toolbarKeyNav(3, 6, 'ArrowDown'), null);
+  });
+});
+
+describe('normalizeLinkUrl', () => {
+  it('adds https:// to a bare address', () => {
+    assert.equal(normalizeLinkUrl('example.com/a'), 'https://example.com/a');
+    assert.equal(normalizeLinkUrl('  example.com  '), 'https://example.com');
+  });
+  it('keeps full URLs, paths, anchors, mailto and tel as typed', () => {
+    for (const u of ['https://a.test/x', 'http://a.test', '/about', '#top', '../x', 'mailto:a@b.test', 'tel:+15551234']) {
+      assert.equal(normalizeLinkUrl(u), u);
+    }
+  });
+  it('refuses empty text, spaces and script-capable schemes', () => {
+    for (const u of ['', '   ', null, 'two words', 'javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,x', 'vbscript:x']) {
+      assert.equal(normalizeLinkUrl(u), null, String(u));
+    }
   });
 });

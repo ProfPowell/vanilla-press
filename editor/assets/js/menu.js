@@ -54,18 +54,39 @@ export function wrapInComponent(attrs) {
 /** The toolbar's visible buttons, in order. */
 export const PRIMARY_IDS = ['bold', 'italic', 'code', 'highlight', 'link'];
 
-/**
- * Link command: removes the link when the selection has one, else asks for a URL.
- * Same behavior as the Mod+K shortcut.
- */
-function toggleLink(state, dispatch) {
-  const { link } = schema.marks;
-  if (markActive(state, link)) return toggleMark(link)(state, dispatch);
-  if (!dispatch) return true;
-  const href = prompt('Enter URL:');
-  if (!href) return true;
-  return toggleMark(link, { href, title: null })(state, dispatch);
+/** The href of the first link in the selection, or '' when it has none. */
+export function linkHref(state) {
+  const { from, to } = state.selection;
+  let href = '';
+  state.doc.nodesBetween(from, to, (node) => {
+    if (href) return false;
+    const mark = schema.marks.link.isInSet(node.marks);
+    if (mark) href = mark.attrs.href;
+    return true;
+  });
+  return href;
 }
+
+/** Make the selection a link to `href`, replacing any link it already has. */
+export function setLink(href) {
+  return (state, dispatch) => {
+    const { from, to, empty } = state.selection;
+    if (empty) return false;
+    if (dispatch) {
+      const { link } = schema.marks;
+      dispatch(state.tr.removeMark(from, to, link).addMark(from, to, link.create({ href, title: null })).scrollIntoView());
+    }
+    return true;
+  };
+}
+
+/** Remove the link from the selection. */
+export const removeLink = (state, dispatch) => {
+  const { from, to, empty } = state.selection;
+  if (empty || !markActive(state, schema.marks.link)) return false;
+  if (dispatch) dispatch(state.tr.removeMark(from, to, schema.marks.link));
+  return true;
+};
 
 const markItem = (id, label, title, markType) => ({
   id, label, title,
@@ -76,7 +97,8 @@ const markItem = (id, label, title, markType) => ({
 /**
  * The format toolbar's commands. `primary` are its buttons; `more` fill the
  * More menu. The `wrap` item has no command: the toolbar lists one menu entry
- * per inline component in its place (see wrapInComponent).
+ * per inline component in its place (see wrapInComponent). The `link`
+ * item's command removes the link; the toolbar's URL field sets it.
  * Block types are not here; the `/` palette and input rules cover them.
  * @returns {{ primary: FormatItem[], more: FormatItem[] }}
  */
@@ -89,7 +111,7 @@ export function formatItems() {
     markItem('highlight', 'Highlight', 'Highlight', marks.highlight),
     {
       id: 'link', label: 'Link', title: 'Link (Mod+K)',
-      command: toggleLink,
+      command: removeLink,
       active: (state) => markActive(state, marks.link),
     },
     markItem('strikethrough', 'Strikethrough', 'Strikethrough (Mod+Shift+X)', marks.strikethrough),

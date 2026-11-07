@@ -12,7 +12,6 @@ import { keymap } from 'prosemirror-keymap';
 import { history } from 'prosemirror-history';
 import { dropCursor } from 'prosemirror-dropcursor';
 import { gapCursor } from 'prosemirror-gapcursor';
-import { toggleMark } from 'prosemirror-commands';
 import { tableEditing, goToNextCell } from 'prosemirror-tables';
 
 import { schema } from './schema.js';
@@ -184,37 +183,6 @@ function createSlashPlugin() {
   });
 }
 
-// --- Link shortcut plugin (Mod+K) ---
-function createLinkPlugin() {
-  return new Plugin({
-    props: {
-      handleKeyDown(view, event) {
-        if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-          event.preventDefault();
-          const { state, dispatch } = view;
-          const { link: linkMark } = schema.marks;
-
-          const { from, $from, to, empty } = state.selection;
-          const hasLink = empty
-            ? !!linkMark.isInSet(state.storedMarks || $from.marks())
-            : state.doc.rangeHasMark(from, to, linkMark);
-
-          if (hasLink) {
-            toggleMark(linkMark)(state, dispatch);
-            return true;
-          }
-
-          const href = prompt('Enter URL:');
-          if (!href) return true;
-          toggleMark(linkMark, { href })(state, dispatch);
-          return true;
-        }
-        return false;
-      },
-    },
-  });
-}
-
 /** Initialize the editor */
 export function initEditor() {
   const editorEl = document.querySelector('.editor-content');
@@ -243,7 +211,6 @@ export function initEditor() {
       dropCursor(),
       gapCursor(),
       formatToolbarPlugin(),
-      createLinkPlugin(),
       tableEditing(),
       componentSettingsPlugin(),
     ],

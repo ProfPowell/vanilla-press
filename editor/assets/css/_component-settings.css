@@ -90,7 +90,6 @@ editor-shell.site-mode.sidebar-hidden.component-open {
   grid-template-columns: 1fr var(--editor-sidebar-w);
   grid-template-areas:
     "header  header"
-    "toolbar toolbar"
     "editor  sidebar";
 }
 

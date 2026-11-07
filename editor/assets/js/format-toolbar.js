@@ -8,7 +8,7 @@
  */
 
 import { Plugin, TextSelection } from 'prosemirror-state';
-import { formatItems, wrapInComponent } from './menu.js';
+import { formatItems, wrapInComponent, linkHref, setLink, removeLink } from './menu.js';
 import { initialAttrs } from './component-model.js';
 
 /**
@@ -44,6 +44,22 @@ export function toolbarKeyNav(index, count, key) {
     case 'End': return count - 1;
     default: return null;
   }
+}
+
+/**
+ * Turn what was typed in the link field into an href, or null when there is
+ * nothing usable. Web addresses without a scheme get https://; relative paths,
+ * anchors, mailto: and tel: stay as typed; other schemes (javascript:, data:) are refused.
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function normalizeLinkUrl(text) {
+  const t = String(text ?? '').trim();
+  if (!t || /\s/.test(t)) return null;
+  if (/^(\/|#|\?|\.\.?\/)/.test(t)) return t;
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(t);
+  if (scheme) return /^(https?|mailto|tel)$/i.test(scheme[1]) ? t : null;
+  return `https://${t}`;
 }
 
 const svg = (paths) => '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" '
@@ -108,7 +124,9 @@ class FormatToolbarView {
     this.moreWrap.className = 'format-toolbar-more-wrap';
     this.moreWrap.append(this.moreButton, this.menu);
 
-    this.el.append(...this.buttons, rule, this.moreWrap);
+    this.buildLinkForm();
+    this.chrome = [...this.buttons, rule, this.moreWrap];
+    this.el.append(...this.chrome, this.linkForm);
     document.body.append(this.el);
     this.controls = [...this.buttons, this.moreButton];
     for (const c of this.controls) c.tabIndex = -1;
@@ -117,6 +135,77 @@ class FormatToolbarView {
     refreshMenu = () => this.renderMenu();
     this.renderMenu();
     this.update(view);
+  }
+
+  buildLinkForm() {
+    const form = document.createElement('form');
+    form.className = 'format-toolbar-link';
+    form.hidden = true;
+    form.noValidate = true;
+    this.linkInput = document.createElement('input');
+    this.linkInput.type = 'text';
+    this.linkInput.inputMode = 'url';
+    this.linkInput.autocomplete = 'off';
+    this.linkInput.placeholder = 'https://';
+    this.linkInput.setAttribute('aria-label', 'Link address');
+    this.linkInput.setAttribute('aria-describedby', 'format-toolbar-link-error');
+    this.linkError = document.createElement('span');
+    this.linkError.id = 'format-toolbar-link-error';
+    this.linkError.className = 'format-toolbar-link-error';
+    this.linkError.setAttribute('role', 'alert');
+    const apply = document.createElement('button');
+    apply.type = 'submit';
+    apply.textContent = 'Apply';
+    this.linkRemove = document.createElement('button');
+    this.linkRemove.type = 'button';
+    this.linkRemove.textContent = 'Remove';
+    this.linkRemove.addEventListener('click', () => {
+      removeLink(this.view.state, this.view.dispatch);
+      this.closeLink();
+    });
+    this.linkInput.addEventListener('input', () => this.setLinkError(''));
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const raw = this.linkInput.value;
+      const href = normalizeLinkUrl(raw);
+      if (!href) {
+        this.setLinkError(raw.trim() ? 'Enter a web address, path or email link' : 'Enter an address');
+        return;
+      }
+      setLink(href)(this.view.state, this.view.dispatch);
+      this.closeLink();
+    });
+    form.append(this.linkInput, apply, this.linkRemove, this.linkError);
+    this.linkForm = form;
+  }
+
+  setLinkError(text) {
+    this.linkError.textContent = text;
+    this.linkInput.setAttribute('aria-invalid', text ? 'true' : 'false');
+  }
+
+  /** Swap the buttons for the link address field, prefilled when the selection is a link. */
+  openLink() {
+    if (this.el.hidden) return false;
+    this.closeMenu();
+    const href = linkHref(this.view.state);
+    this.linkInput.value = href;
+    this.linkRemove.hidden = !href;
+    this.setLinkError('');
+    for (const c of this.chrome) c.hidden = true;
+    this.linkForm.hidden = false;
+    this.place();
+    this.linkInput.focus();
+    this.linkInput.select();
+    return true;
+  }
+
+  /** Back to the buttons; focus returns to the editor with its selection. */
+  closeLink() {
+    this.view.focus();
+    this.linkForm.hidden = true;
+    for (const c of this.chrome) c.hidden = false;
+    this.update(this.view);
   }
 
   buildButton(item) {
@@ -128,7 +217,7 @@ class FormatToolbarView {
     btn.setAttribute('aria-pressed', 'false');
     if (ICONS[item.id]) btn.innerHTML = ICONS[item.id];
     else btn.textContent = item.label;
-    btn.addEventListener('click', () => this.run(item));
+    btn.addEventListener('click', () => (item.id === 'link' ? this.openLink() : this.run(item)));
     return btn;
   }
 
@@ -149,7 +238,7 @@ class FormatToolbarView {
     this.moreButton.addEventListener('click', () => (this.menu.hidden ? this.openMenu() : this.closeMenu()));
     this.menu.addEventListener('keydown', (e) => this.onMenuKey(e));
     this.menu.addEventListener('click', (e) => {
-      const entry = e.target.closest('[role=menuitem]');
+      const entry = e.target.closest('[role^=menuitem]');
       if (!entry || entry.getAttribute('aria-disabled') === 'true') return;
       this.closeMenu();
       this.runMenuEntry(entry);
@@ -195,7 +284,7 @@ class FormatToolbarView {
     this.menu.replaceChildren(...entries.map((e) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.setAttribute('role', 'menuitem');
+      b.setAttribute('role', e.item.active ? 'menuitemcheckbox' : 'menuitem');
       b.tabIndex = -1;
       b.dataset.id = e.id;
       b.title = e.title;
@@ -218,7 +307,7 @@ class FormatToolbarView {
   }
 
   menuItems() {
-    return [...this.menu.querySelectorAll('[role=menuitem]')];
+    return [...this.menu.querySelectorAll('[role^=menuitem]')];
   }
 
   openMenu(at = 0) {
@@ -261,6 +350,7 @@ class FormatToolbarView {
   onKey(e) {
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (!this.linkForm.hidden) { this.closeLink(); return; }
       this.closeMenu();
       this.view.focus();
       return;
@@ -322,6 +412,8 @@ class FormatToolbarView {
   hide() {
     if (this.el.hidden) return;
     this.closeMenu();
+    this.linkForm.hidden = true;
+    for (const c of this.chrome) c.hidden = false;
     this.el.hidden = true;
   }
 
@@ -348,6 +440,11 @@ export function formatToolbarPlugin() {
       handleKeyDown(view, event) {
         if (event.altKey && event.key === 'F10' && toolbar?.focusFirst()) {
           event.preventDefault();
+          return true;
+        }
+        if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key === 'k') {
+          event.preventDefault();
+          toolbar?.openLink();
           return true;
         }
         return false;

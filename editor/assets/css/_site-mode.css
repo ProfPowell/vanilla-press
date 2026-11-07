@@ -12,10 +12,9 @@
 }
 
 editor-shell.has-header {
-  grid-template-rows: auto var(--editor-toolbar-h) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
     "header  header"
-    "toolbar toolbar"
     "editor  sidebar";
 }
 
@@ -23,7 +22,6 @@ editor-shell.has-header.inspector-open {
   grid-template-columns: 1fr var(--editor-sidebar-w) var(--editor-inspector-w);
   grid-template-areas:
     "header  header  header"
-    "toolbar toolbar toolbar"
     "editor  sidebar inspector";
 }
 
@@ -31,7 +29,6 @@ editor-shell.site-mode.sidebar-hidden {
   grid-template-columns: 1fr;
   grid-template-areas:
     "header"
-    "toolbar"
     "editor";
 }
 
@@ -40,7 +37,6 @@ editor-shell.site-mode.sidebar-hidden.inspector-open {
   grid-template-columns: 1fr var(--editor-inspector-w);
   grid-template-areas:
     "header  header"
-    "toolbar toolbar"
     "editor  inspector";
 }
 

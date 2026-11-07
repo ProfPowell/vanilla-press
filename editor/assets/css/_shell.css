@@ -1,7 +1,7 @@
-/* Editor layout grid: editor / sidebar / inspector */
+/* Editor layout grid: the writing area and the Post settings panel.
+ * The top bar's rows (.has-header) and the phone layout are in _site-mode.css. */
 :root {
-  --editor-sidebar-w: 280px;
-  --editor-inspector-w: 320px;
+  --editor-sidebar-w: 20rem;
 }
 
 body {
@@ -14,20 +14,13 @@ body {
 
 editor-shell {
   display: grid;
-  grid-template-columns: 1fr var(--editor-sidebar-w);
+  grid-template-columns: minmax(0, 1fr) var(--editor-sidebar-w);
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas:
     "editor  sidebar";
   flex: 1;
   min-height: 0;
   overflow: hidden;
-}
-
-editor-shell.inspector-open {
-  grid-template-columns: 1fr var(--editor-sidebar-w) var(--editor-inspector-w);
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-areas:
-    "editor  sidebar inspector";
 }
 
 /* Editor pane — themed content preview area */
@@ -46,33 +39,108 @@ editor-shell .editor-content {
   width: 100%;
 }
 
-/* Sidebar — doc browser + meta panel stacked vertically */
-editor-shell .editor-sidebar {
+/* Post settings: component settings, the post's fields, and in vp serve the
+ * doc browser and theme picker. App chrome: sans, never themed. */
+editor-shell .settings-panel {
   grid-area: sidebar;
   overflow-y: auto;
-  border-inline-start: 1px solid var(--color-border);
-  background: var(--color-surface);
-  padding: var(--size-m);
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-m);
+  border-inline-start: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  padding: var(--size-l) var(--size-l) var(--size-2xl);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-s);
 }
 
-/* Inspector */
-editor-shell .editor-inspector {
-  grid-area: inspector;
-  overflow-y: auto;
-  border-inline-start: 1px solid var(--color-border);
-  background: #1e1e2e;
-  color: #cdd6f4;
-  padding: var(--size-m);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-s);
+editor-shell .settings-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-l);
+}
+
+editor-shell .settings-main[hidden],
+editor-shell ast-inspector[hidden] {
   display: none;
 }
 
-editor-shell.inspector-open .editor-inspector {
-  display: block;
+editor-shell .settings-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-m);
+  font-weight: 600;
+}
+
+editor-shell :is(.settings-title, .ast-title):focus {
+  outline: none;
+}
+
+/* vp serve: which content, the document list and the theme, after the post's fields */
+editor-shell .fixture-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-m);
+  padding-block-start: var(--size-l);
+  border-block-start: 1px solid var(--color-border);
+}
+
+/* The block tree, in place of the settings ("Show block tree") */
+editor-shell ast-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-s);
+}
+
+ast-inspector .ast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--size-s);
+}
+
+ast-inspector .ast-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-m);
+  font-weight: 600;
+}
+
+ast-inspector .ast-block-count {
+  color: var(--color-text-muted);
+}
+
+ast-inspector .ast-back {
+  align-self: flex-start;
+  min-height: 2.5rem;
+  padding: 0 var(--size-m);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+ast-inspector .ast-back:hover {
+  background: var(--color-surface-alt);
+}
+
+ast-inspector .ast-back:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+ast-inspector .ast-output {
+  margin: 0;
+  padding: var(--size-s);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* Which site the editor is exporting to */

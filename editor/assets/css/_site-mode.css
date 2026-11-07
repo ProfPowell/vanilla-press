@@ -1,9 +1,8 @@
 /* The editor's top bar (the app, and vp serve): "← Posts" and the site name
  * (app only), the save pill, then Preview, Post settings, the "⋯" menu and
  * the primary button. .has-header is set by site-mode.js in both; .site-mode
- * only in the app, where the sidebar is the settings panel alone
- * (.sidebar-hidden when it is hidden). vp serve keeps the doc browser and
- * theme picker in its sidebar. */
+ * only in the app. .settings-hidden hides the Post settings panel (in vp
+ * serve its doc browser and theme picker go with it). */
 
 /* VB gives `header` a display, which beats the UA [hidden] rule: the app
  * header must never show before site-mode.js wires it. */
@@ -18,29 +17,14 @@ editor-shell.has-header {
     "editor  sidebar";
 }
 
-editor-shell.has-header.inspector-open {
-  grid-template-columns: 1fr var(--editor-sidebar-w) var(--editor-inspector-w);
-  grid-template-areas:
-    "header  header  header"
-    "editor  sidebar inspector";
-}
-
-editor-shell.site-mode.sidebar-hidden {
-  grid-template-columns: 1fr;
+editor-shell.has-header.settings-hidden {
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "header"
     "editor";
 }
 
-/* The block tree can open with the settings panel hidden */
-editor-shell.site-mode.sidebar-hidden.inspector-open {
-  grid-template-columns: 1fr var(--editor-inspector-w);
-  grid-template-areas:
-    "header  header"
-    "editor  inspector";
-}
-
-editor-shell.site-mode.sidebar-hidden .editor-sidebar {
+editor-shell.has-header.settings-hidden .settings-panel {
   display: none;
 }
 
@@ -371,10 +355,9 @@ confirm-panel button.danger {
   white-space: pre-wrap;
 }
 
-/* The writing screen. In the app the sidebar is the settings panel only. */
-editor-shell.site-mode :is(doc-browser, theme-picker, .site-label),
-editor-shell.site-mode meta-panel .actions,
-editor-shell.has-header.settings-hidden meta-panel {
+/* The writing screen. In the app the panel is the post's settings only. */
+editor-shell.site-mode .fixture-tools,
+editor-shell.site-mode meta-panel .actions {
   display: none;
 }
 
@@ -384,4 +367,63 @@ editor-shell.site-mode .editor-pane {
 
 .site-header .action-state:empty {
   display: none;
+}
+
+/* The settings toggle while the panel is hidden and the cursor is in a
+ * component: a dot says component settings are there. */
+.site-header [data-settings-toggle] {
+  position: relative;
+}
+
+.site-header [data-settings-toggle][data-attention]::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-background);
+}
+
+/* Phone width: one column that scrolls as a page; the top bar stays put and
+ * the Post settings panel comes after the writing area. */
+@media (max-width: 48rem) {
+  body:has(editor-shell.has-header) {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  editor-shell.has-header,
+  editor-shell.has-header.settings-hidden {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "header"
+      "editor"
+      "sidebar";
+    overflow: visible;
+  }
+
+  editor-shell.has-header .site-header {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 10;
+  }
+
+  editor-shell.has-header .editor-pane,
+  editor-shell.site-mode .editor-pane {
+    overflow: visible;
+    min-height: 60dvh;
+    padding: var(--size-l) var(--size-m);
+  }
+
+  editor-shell.has-header .settings-panel {
+    overflow: visible;
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--color-border);
+    padding: var(--size-l) var(--size-m) var(--size-2xl);
+  }
 }

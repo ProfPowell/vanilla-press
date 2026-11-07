@@ -1,4 +1,4 @@
-/* Document browser sidebar panel */
+/* Document browser (vp serve: at the bottom of the Post settings panel) */
 .doc-browser {
   display: flex;
   flex-direction: column;
@@ -76,8 +76,8 @@
 }
 
 .status-tab.active {
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
 }
 
 .status-tab:hover:not(.active) {
@@ -110,7 +110,7 @@
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-m);
   background: transparent;
-  color: var(--color-accent);
+  color: var(--color-primary);
   font-size: var(--font-size-s);
   cursor: pointer;
   font-family: var(--font-body);
@@ -181,13 +181,13 @@
 }
 
 .browser-item-status.status-draft {
-  background: color-mix(in srgb, var(--color-warning, #f0ad4e) 20%, transparent);
-  color: var(--color-warning, #f0ad4e);
+  background: var(--color-warning-subtle);
+  color: var(--color-warning-text);
 }
 
 .browser-item-status.status-published {
-  background: color-mix(in srgb, var(--color-success, #5cb85c) 20%, transparent);
-  color: var(--color-success, #5cb85c);
+  background: color-mix(in oklch, var(--color-success) 15%, transparent);
+  color: var(--color-success-text);
 }
 
 .browser-item-status.status-archived {
@@ -208,10 +208,11 @@
   opacity: 0;
 }
 
-.browser-item:hover .browser-item-delete {
+.browser-item:hover .browser-item-delete,
+.browser-item-delete:focus-visible {
   opacity: 1;
 }
 
 .browser-item-delete:hover {
-  color: var(--color-error, #d9534f);
+  color: var(--color-error-text);
 }

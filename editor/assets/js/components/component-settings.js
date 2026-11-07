@@ -1,12 +1,15 @@
 /**
  * <component-settings> — the settings panel for the selected web component.
  *
- * Part of the editor chrome (it sits in the sidebar, outside the themed
- * content pane). Basic fields come first, advanced ones under a <details>;
+ * Part of the editor chrome: the Component section at the top of the Post
+ * settings panel, outside the themed content pane. Basic fields come first, advanced ones under a <details>;
  * text and code kinds get a textarea for their content. Every edit is
  * applied at once through the callback the editor passes to `show()`.
  *
  * Shown and hidden by componentSettingsPlugin (blocks/component-view.js).
+ * Showing it never opens a hidden settings panel: it sets `component-open`
+ * on <editor-shell> and fires `component-settings-change` (bubbles,
+ * `detail.open`), and the top bar marks the settings toggle instead.
  *
  * @module editor/components/component-settings
  */
@@ -35,6 +38,8 @@ export class ComponentSettings extends HTMLElement {
   connectedCallback() {
     this.hidden = true;
     this.classList.add('component-settings');
+    this.setAttribute('role', 'region');
+    this.setAttribute('aria-label', 'Component');
     this._key = null;
     this._fields = [];
     this._apply = null;
@@ -62,7 +67,7 @@ export class ComponentSettings extends HTMLElement {
     }
     if (this.hidden) {
       this.hidden = false;
-      this.closest('editor-shell')?.classList.add('component-open');
+      this.announce(true);
     }
   }
 
@@ -72,7 +77,13 @@ export class ComponentSettings extends HTMLElement {
     this._key = null;
     this._node = null;
     this.replaceChildren();
-    this.closest('editor-shell')?.classList.remove('component-open');
+    this.announce(false);
+  }
+
+  /** Tell the shell (and the top bar) whether component settings are available. */
+  announce(open) {
+    this.closest('editor-shell')?.classList.toggle('component-open', open);
+    this.dispatchEvent(new CustomEvent('component-settings-change', { bubbles: true, detail: { open } }));
   }
 
   render({ node, descriptor, availability, label }) {

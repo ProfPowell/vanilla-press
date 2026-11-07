@@ -1,7 +1,10 @@
 /**
- * <ast-inspector> — live AST debug panel.
- * Updates on every editor change, showing the VP block AST
- * as formatted JSON.
+ * <ast-inspector> — the block tree (the VP block AST as formatted JSON),
+ * updated on every editor change.
+ *
+ * It lives in the Post settings panel: "Show block tree" (the "⋯" menu)
+ * swaps the panel's contents for it, and its "Back to settings" button
+ * fires `ast-close` (bubbles) for editor-shell to swap them back.
  *
  * @module editor/components/ast-inspector
  */
@@ -16,15 +19,20 @@ export class AstInspector extends HTMLElement {
   }
 
   connectedCallback() {
+    this.classList.add('ast-inspector');
     this.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-block-end: var(--size-s);">
-        <strong style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">AST Inspector</strong>
-        <span class="ast-block-count" style="font-size: 0.75rem; opacity: 0.6;"></span>
+      <div class="ast-header">
+        <h2 class="ast-title" tabindex="-1">Block tree</h2>
+        <span class="ast-block-count"></span>
       </div>
-      <pre class="ast-output" style="margin: 0; white-space: pre-wrap; word-break: break-all; line-height: 1.5; font-size: 0.8rem;"></pre>
+      <button type="button" class="ast-back" data-ast-back>Back to settings</button>
+      <pre class="ast-output"></pre>
     `;
     this._pre = this.querySelector('.ast-output');
     this._meta = this.querySelector('.ast-block-count');
+    this.querySelector('[data-ast-back]').addEventListener('click', () => {
+      this.dispatchEvent(new CustomEvent('ast-close', { bubbles: true }));
+    });
 
     // Hook into editor updates
     window.__onEditorUpdate = (state) => this.update(state);

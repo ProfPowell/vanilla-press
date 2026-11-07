@@ -1,8 +1,9 @@
 /**
  * <editor-shell> — layout container for the editor.
  * No Shadow DOM — uses light DOM with CSS grid for layout.
- * Manages toolbar, editor pane, sidebar (doc browser + meta panel),
- * and inspector areas.
+ * Holds the top bar, the editor pane and the Post settings panel (component
+ * settings, meta panel; in vp serve also the doc browser and theme picker).
+ * The panel shows either the settings or the block tree (`ast-open`).
  *
  * Listens for doc-browser custom events and delegates to editor functions.
  *
@@ -38,6 +39,9 @@ export class EditorShell extends HTMLElement {
       this.querySelector('doc-browser')?.refresh();
     });
 
+    // "Back to settings" in the block tree
+    this.addEventListener('ast-close', () => this.toggleInspector(false));
+
     // The header's save pill shows the save state (in the app and in vp serve)
     window.__onSaveStatusChange = (status, message) => onSaveStatus(status, message);
 
@@ -59,16 +63,27 @@ export class EditorShell extends HTMLElement {
     }
   }
 
-  toggleInspector() {
-    this.classList.toggle('inspector-open');
+  /**
+   * Swap the settings panel's contents for the block tree, or back.
+   * Focus moves to the heading of what is shown.
+   * @param {boolean} [open] - default: the other one
+   */
+  toggleInspector(open = !this.inspectorOpen) {
+    this.inspectorOpen = open;
+    const target = open ? '.ast-title' : '.settings-title';
+    this.querySelector(target)?.focus();
   }
 
   get inspectorOpen() {
-    return this.classList.contains('inspector-open');
+    return this.classList.contains('ast-open');
   }
 
   set inspectorOpen(val) {
-    this.classList.toggle('inspector-open', val);
+    this.classList.toggle('ast-open', val);
+    const main = this.querySelector('[data-settings-main]');
+    const tree = this.querySelector('ast-inspector');
+    if (main) main.hidden = val;
+    if (tree) tree.hidden = !val;
   }
 }
 

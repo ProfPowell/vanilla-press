@@ -7,14 +7,18 @@
  *   block tree, View live page, Delete, and in site mode Unpublish) and the
  *   primary button (Publish for a draft, Update for a published post).
  *   Unpublish and Delete ask first, in a `<confirm-panel>`.
- * - The settings panel can be hidden, which is remembered in localStorage.
+ * - The Post settings panel can be hidden, which is remembered in
+ *   localStorage. While it is hidden, a component under the cursor marks the
+ *   toggle with a dot (`data-attention`) instead of opening it; a save
+ *   conflict opens it (not remembered). "Show block tree" swaps its contents
+ *   for the block tree.
  * - Save states (site mode): `Saving…`, `Saved`, then `Backed up` once the
  *   backup has pushed (GET /status). A backup never changes the live site:
  *   after a save of a published post the pill says `Saved · not live yet`
  *   (warning tone), and any `Live` link is cleared, until Update.
  * - Publish / Update save, then POST publish / update (build, commit, push)
  *   and poll the live check until the page is up.
- * - In `vp serve` (no `?site=`) the sidebar keeps the doc browser and theme
+ * - In `vp serve` (no `?site=`) the panel ends with the doc browser and theme
  *   picker; the primary button runs the meta panel's publish toggle, and
  *   Unpublish stays in the meta panel.
  *
@@ -46,6 +50,12 @@ const live = createLiveTracker();
 let liveTimer = null;
 /** The open published post has saved edits that are not live yet (until Update). */
 let held = false;
+
+/** Set `held`, and tell the settings panel's status box. */
+function setHeld(value) {
+  held = value;
+  document.querySelector('meta-panel')?.setLiveOutOfDate?.(value);
+}
 /** What the save slot shows once saved: 'saved' or 'backed-up' (null: something else). */
 let savedShown = null;
 /** What the last save changed (its `notices`), shown with the saved state until the next save. */
@@ -97,18 +107,12 @@ export function initSiteMode() {
     els.siteName.hidden = true;
   }
 
-  // Status is set by Publish/Unpublish, not by hand (that would skip the build and push)
-  const statusSelect = document.querySelector('#meta-status');
-  if (SITE && statusSelect) {
-    statusSelect.disabled = true;
-    statusSelect.title = 'Use Publish / Update / Unpublish in the header';
-  }
-
   els.settings.addEventListener('click', () => setSettingsHidden(!shell.classList.contains('settings-hidden'), true));
   els.preview.addEventListener('click', SITE ? preview : () => document.querySelector('meta-panel [data-preview]')?.click());
   els.primary.addEventListener('click', onPrimary);
   els.more.addEventListener('more-select', (e) => onMore(e.detail.id));
   header.querySelector('[data-action-report-close]').addEventListener('click', clearReport);
+  shell.addEventListener('component-settings-change', updateAttention);
 
   setSettingsHidden(readSettingsHidden(), false);
   onMetaUpdate(getCurrentMeta());
@@ -153,16 +157,18 @@ function setSettingsHidden(hidden, remember) {
   if (remember) {
     try { localStorage.setItem(SETTINGS_KEY, hidden ? '1' : '0'); } catch { /* storage off */ }
   }
-  updateSidebar();
+  updateAttention();
 }
 
 function readSettingsHidden() {
   try { return localStorage.getItem(SETTINGS_KEY) === '1'; } catch { return false; }
 }
 
-/** In the app the sidebar is only the settings panel: it goes with it. vp serve keeps the doc browser and theme picker, so its sidebar stays. */
-function updateSidebar() {
-  shell.classList.toggle('sidebar-hidden', Boolean(SITE) && shell.classList.contains('settings-hidden'));
+/** With the panel hidden, a component under the cursor puts a dot on the settings toggle. */
+function updateAttention() {
+  const attention = shell.classList.contains('settings-hidden') && shell.classList.contains('component-open');
+  els.settings.toggleAttribute('data-attention', attention);
+  els.settings.setAttribute('aria-label', attention ? 'Post settings (component settings available)' : 'Post settings');
 }
 
 // --- Header text ---
@@ -246,7 +252,7 @@ export function onSaveStatus(status, message) {
       if (realSave) saveCount++;
       if (SITE && realSave && getCurrentMeta()?.status === 'published') {
         // This edit is not live: a Live link (or a running live check) is out of date.
-        held = true;
+        setHeld(true);
         cancelLive();
         els.actionState.title = '';
         show(els.actionState, '');
@@ -258,6 +264,7 @@ export function onSaveStatus(status, message) {
     case 'conflict':
       show(els.saveState, 'Changed on disk: see Settings', 'error');
       setSettingsHidden(false, false); // the conflict notice lives in the settings panel
+      shell.inspectorOpen = false; // with the settings, not the block tree
       break;
     default: show(els.saveState, message || 'Not saved', 'error');
   }
@@ -324,7 +331,7 @@ export function onMetaUpdate(meta) {
     // Another post is open: a live poll (and its result) belonged to the last one.
     clearTimeout(liveTimer);
     liveTimer = null;
-    held = false;
+    setHeld(false);
     for (const el of [els.actionState, els.saveState]) el.title = '';
     show(els.actionState, '');
     if (savedShown) showSaved(savedShown);
@@ -341,13 +348,13 @@ async function loadHeld(docId) {
   let state = null;
   try { state = await api.getDocumentState(docId); } catch { return; }
   if (getCurrentDocId() !== docId || !heldOnLoad(getCurrentMeta(), state)) return;
-  held = true;
+  setHeld(true);
   if (lastStatus === 'saved') showSaved(savedShown || 'saved');
 }
 
 /** The open post's edits are on the live site now (or committed for it): drop `· not live yet`. */
 function editsApplied() {
-  held = false;
+  setHeld(false);
   if (savedShown && lastStatus === 'saved') showSaved(savedShown);
 }
 
@@ -480,7 +487,10 @@ async function onMore(id) {
   const meta = getCurrentMeta();
   switch (id) {
     case 'export': return exportDocument();
-    case 'ast': return shell.toggleInspector();
+    case 'ast':
+      // The block tree takes the panel's place: show the panel if it is hidden (not remembered)
+      if (!shell.inspectorOpen) setSettingsHidden(false, false);
+      return shell.toggleInspector();
     case 'live': {
       const url = liveUrl(meta);
       if (url) window.open(url, '_blank', 'noopener');

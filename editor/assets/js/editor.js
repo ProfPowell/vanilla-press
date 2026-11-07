@@ -124,6 +124,12 @@ export function refreshMetaLine() {
   if (editorView) editorView.dispatch(editorView.state.tr.setMeta('addToHistory', false));
 }
 
+/** A Post settings field changed the meta: auto-save it like an edit to the text. */
+export function metaEdited() {
+  setSaveStatus('unsaved');
+  debouncedSave();
+}
+
 // --- Slash command plugin ---
 function createSlashPlugin() {
   const palette = getBlockPalette();

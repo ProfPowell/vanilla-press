@@ -1,13 +1,13 @@
-/* <component-settings>: the selected component's settings, in the sidebar
- * (editor chrome, never themed). In the app (site mode) the sidebar may be
- * hidden; a selected component brings it back with only this panel. */
+/* <component-settings>: the Component section at the top of the Post
+ * settings panel (editor chrome, never themed), while the cursor is in a
+ * component. A hidden panel stays hidden: the toggle gets a dot instead. */
 component-settings[hidden] {
   display: none;
 }
 
 component-settings {
   display: block;
-  padding-block-end: var(--size-m);
+  padding-block-end: var(--size-l);
   border-block-end: 1px solid var(--color-border);
 }
 
@@ -26,7 +26,7 @@ component-settings .component-tag {
 component-settings .component-note {
   margin: 0 0 var(--size-s);
   padding: var(--size-xs) var(--size-s);
-  border-inline-start: 3px solid var(--color-warning, #b8860b);
+  border-inline-start: 3px solid var(--color-warning-text);
   font-size: var(--font-size-s);
 }
 
@@ -61,6 +61,7 @@ component-settings .field-check .hint {
 
 component-settings :is(input:not([type="checkbox"]), select, textarea) {
   width: 100%;
+  min-height: 2.5rem;
   padding: var(--size-xs) var(--size-s);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-m);
@@ -84,15 +85,4 @@ component-settings summary {
   cursor: pointer;
   font-size: var(--font-size-s);
   margin-block: var(--size-xs);
-}
-
-editor-shell.site-mode.sidebar-hidden.component-open {
-  grid-template-columns: 1fr var(--editor-sidebar-w);
-  grid-template-areas:
-    "header  header"
-    "editor  sidebar";
-}
-
-editor-shell.site-mode.sidebar-hidden.component-open .editor-sidebar {
-  display: flex;
 }

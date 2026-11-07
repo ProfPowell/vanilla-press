@@ -2,12 +2,15 @@
  * <doc-browser> — sidebar document list with collection/status filters and search.
  *
  * Displays documents from the content API. Click to load, create new,
- * filter by collection/status, or search.
+ * filter by collection/status, or search. In `vp serve` it sits at the
+ * bottom of the Post settings panel. Delete asks first, in the page's
+ * <confirm-panel>.
  *
  * @module editor/components/doc-browser
  */
 
 import { api } from '../api-client.js';
+import { confirmText } from '../site-context.js';
 
 export class DocBrowser extends HTMLElement {
   connectedCallback() {
@@ -148,12 +151,12 @@ export class DocBrowser extends HTMLElement {
 
     list.innerHTML = this._docs.map(doc => `
       <div class="browser-item" data-doc-id="${doc.id}">
-        <div class="browser-item-title">${escapeHtml(doc.meta.title)}</div>
+        <div class="browser-item-title">${escapeHtml(doc.meta.title || 'Untitled')}</div>
         <div class="browser-item-meta">
           <span class="browser-item-collection">${escapeHtml(doc.meta.collection)}</span>
           <span class="browser-item-status status-${doc.meta.status}">${doc.meta.status}</span>
         </div>
-        <button class="browser-item-delete" data-delete-id="${doc.id}" title="Delete">&times;</button>
+        <button type="button" class="browser-item-delete" data-delete-id="${doc.id}" title="Delete" aria-label="Delete ${escapeHtml(doc.meta.title || 'Untitled').replace(/"/g, '&quot;')}">&times;</button>
       </div>
     `).join('');
 
@@ -170,16 +173,16 @@ export class DocBrowser extends HTMLElement {
 
     // Wire delete events
     list.querySelectorAll('.browser-item-delete').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const id = btn.dataset.deleteId;
         const title = btn.closest('.browser-item').querySelector('.browser-item-title').textContent;
-        if (confirm(`Delete "${title}"?`)) {
-          this.dispatchEvent(new CustomEvent('doc-delete', {
-            bubbles: true,
-            detail: { id },
-          }));
-        }
+        const panel = document.querySelector('confirm-panel');
+        if (!panel || !(await panel.ask(confirmText('delete', { title, liveUrl: null })))) return;
+        this.dispatchEvent(new CustomEvent('doc-delete', {
+          bubbles: true,
+          detail: { id },
+        }));
       });
     });
 

@@ -1,11 +1,14 @@
 /**
- * <meta-panel> — sidebar form for document metadata.
+ * <meta-panel> — the post's fields in the Post settings panel.
  *
- * Fields: slug, collection, description, status, tags. The title is the
- * document's first line (title.js); the slug follows it until edited here
- * or the post is published (editor.js, slug.js).
- * Actions: publish/unpublish, preview.
- * Updates the current document metadata stored in meta-state.js.
+ * Top to bottom: the "changed on disk" notice (when in conflict), the
+ * publishing status box (site mode; `vp serve` keeps its Status select),
+ * URL (the collection's prefix plus the slug), Description with its hint,
+ * Tags, Collection (a select from the site's `collections` config) and
+ * Appearance. The title is the document's first line (title.js); the slug
+ * follows it until edited here or the post is published (editor.js, slug.js).
+ * In `vp serve` the Publish/Unpublish and Preview actions stay here too.
+ * Every field edit auto-saves.
  *
  * @module editor/components/meta-panel
  */
@@ -15,13 +18,19 @@ import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.j
 import { api } from '../api-client.js';
 import { postUrlPath } from '../../../../src/sync/paths.js';
 import {
-  saveDocument, loadDocument, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine,
+  saveDocument, loadDocument, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine, metaEdited,
 } from '../editor.js';
 import { onMetaUpdate as onSiteMetaUpdate, isSiteMode } from '../site-mode.js';
+import { statusBox, collectionOptions, urlPrefix } from '../settings-view.js';
 
 export class MetaPanel extends HTMLElement {
   connectedCallback() {
+    /** The site's `collections` config (Collection choices, URL prefix). */
+    this._collections = {};
+    /** The open published post has saved edits that are not live (site-mode.js sets it). */
+    this._liveOutOfDate = false;
     this.render();
+    this.loadCollections();
 
     // Listen for meta updates (e.g. from doc loading)
     window.__onMetaUpdate = (meta) => {
@@ -30,6 +39,24 @@ export class MetaPanel extends HTMLElement {
     };
     // Show / hide the "changed on disk" notice for the current document
     window.__onConflictChange = (docId, message) => this.showConflict(docId, message);
+  }
+
+  async loadCollections() {
+    try {
+      const { value } = await api.getConfig('collections');
+      const parsed = value ? JSON.parse(value) : {};
+      this._collections = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch { /* defaults */ }
+    this.syncFromMeta(getCurrentMeta());
+  }
+
+  /**
+   * Whether the open published post's saved edits are not on the live site yet.
+   * @param {boolean} outOfDate
+   */
+  setLiveOutOfDate(outOfDate) {
+    this._liveOutOfDate = outOfDate;
+    this.renderStatus(getCurrentMeta());
   }
 
   /**
@@ -47,46 +74,59 @@ export class MetaPanel extends HTMLElement {
 
   render() {
     this.className = 'meta-panel';
+    const status = isSiteMode
+      ? `<section class="status-box" data-status-box aria-label="Publishing">
+          <p class="status-title"><span class="status-dot" aria-hidden="true"></span><span data-status-title></span></p>
+          <p class="status-note" data-status-note></p>
+        </section>`
+      : `<div class="field">
+          <label for="meta-status">Status</label>
+          <select id="meta-status">
+            ${validStatuses.map(s => `<option value="${s}">${s}</option>`).join('')}
+          </select>
+        </div>`;
     this.innerHTML = `
-      <h3>Document</h3>
-
-      <div class="field">
-        <label for="meta-slug">Slug</label>
-        <input type="text" id="meta-slug" value="" placeholder="auto-derived-slug"/>
+      <div class="conflict-notice" data-conflict hidden role="alert">
+        <p data-conflict-message></p>
+        <p>Auto-save is paused for this document.</p>
+        <button type="button" class="btn" data-load-disk>Load the version on disk</button>
       </div>
 
+      ${status}
+
       <div class="field">
-        <label for="meta-collection">Collection</label>
-        <input type="text" id="meta-collection" value="posts" placeholder="posts"/>
+        <label for="meta-slug">URL</label>
+        <div class="url-field">
+          <span class="url-prefix" id="meta-url-prefix" data-url-prefix>/posts/</span>
+          <input type="text" id="meta-slug" value="" aria-describedby="meta-url-prefix" spellcheck="false" autocapitalize="off"/>
+        </div>
       </div>
 
       <div class="field">
         <label for="meta-description">Description</label>
-        <textarea id="meta-description" placeholder="Brief description..."></textarea>
-      </div>
-
-      <div class="field">
-        <label for="meta-status">Status</label>
-        <select id="meta-status">
-          ${validStatuses.map(s => `<option value="${s}">${s}</option>`).join('')}
-        </select>
+        <textarea id="meta-description" rows="4" aria-describedby="meta-description-hint"></textarea>
+        <p class="hint" id="meta-description-hint">Used in feeds, search results and link previews.</p>
       </div>
 
       <div class="field">
         <label for="meta-tags">Tags</label>
-        <div class="tag-chips" id="meta-tag-chips"></div>
-        <input type="text" id="meta-tags" placeholder="Add tag + Enter"/>
+        <ul class="tag-chips" id="meta-tag-chips" aria-label="Tags"></ul>
+        <input type="text" id="meta-tags" placeholder="Add a tag, then Enter"/>
       </div>
 
-      <div class="conflict-notice" data-conflict hidden role="alert">
-        <p data-conflict-message></p>
-        <p>Auto-save is paused for this document.</p>
-        <button class="btn" data-load-disk>Load the version on disk</button>
+      <div class="field">
+        <label for="meta-collection">Collection</label>
+        <select id="meta-collection"></select>
       </div>
+
+      <details class="appearance">
+        <summary>Appearance</summary>
+        <p>Page theme: site theme</p>
+      </details>
 
       <div class="actions">
-        <button class="btn btn-publish" data-publish>Publish</button>
-        <button class="btn" data-preview>Preview</button>
+        <button type="button" class="btn btn-publish" data-publish>Publish</button>
+        <button type="button" class="btn" data-preview>Preview</button>
         <div class="build-status" data-build-status></div>
       </div>
     `;
@@ -97,7 +137,7 @@ export class MetaPanel extends HTMLElement {
 
   wireEvents() {
     const slugInput = this.querySelector('#meta-slug');
-    const collectionInput = this.querySelector('#meta-collection');
+    const collectionSelect = this.querySelector('#meta-collection');
     const descInput = this.querySelector('#meta-description');
     const statusSelect = this.querySelector('#meta-status');
     const tagInput = this.querySelector('#meta-tags');
@@ -108,21 +148,26 @@ export class MetaPanel extends HTMLElement {
       // Edited by hand: it stops following the title (cleared, it follows again)
       setSlugHandEdited(!!slugInput.value);
       setCurrentMeta({ slug: slugInput.value });
+      metaEdited();
     });
 
-    collectionInput.addEventListener('input', () => {
-      setCurrentMeta({ collection: collectionInput.value });
+    collectionSelect.addEventListener('change', () => {
+      setCurrentMeta({ collection: collectionSelect.value });
+      this.renderUrlPrefix(getCurrentMeta());
       refreshMetaLine();
+      metaEdited();
     });
 
     descInput.addEventListener('input', () => {
       setCurrentMeta({ description: descInput.value });
+      metaEdited();
     });
 
-    statusSelect.addEventListener('change', () => {
-      if (isSiteMode) return; // disabled there; status changes only through the header actions
+    // vp serve only (site mode shows the status box: status changes only through the header actions)
+    statusSelect?.addEventListener('change', () => {
       setCurrentMeta({ status: statusSelect.value });
       refreshMetaLine();
+      metaEdited();
     });
 
     tagInput.addEventListener('keydown', (e) => {
@@ -137,6 +182,7 @@ export class MetaPanel extends HTMLElement {
           tags.push(tag);
           setCurrentMeta({ tags });
           this.renderTags(tags);
+          metaEdited();
         }
         tagInput.value = '';
       }
@@ -192,11 +238,6 @@ export class MetaPanel extends HTMLElement {
         say('Preview shows published pages: publish first');
         return;
       }
-      let collections = {};
-      try {
-        const { value } = await api.getConfig('collections');
-        collections = value ? JSON.parse(value) : {};
-      } catch { /* defaults */ }
       const base = previewUrl.replace(/\/+$/, '');
       try {
         await fetch(base, { mode: 'no-cors' });
@@ -205,7 +246,7 @@ export class MetaPanel extends HTMLElement {
         say(`Preview needs the site's dev server at ${base}: run "npm run dev" in the site folder`);
         return;
       }
-      const url = `${base}${postUrlPath({ meta }, collections)}`;
+      const url = `${base}${postUrlPath({ meta }, this._collections)}`;
       if (tab) tab.location.href = url;
       else window.open(url, '_blank');
     });
@@ -276,14 +317,12 @@ export class MetaPanel extends HTMLElement {
     if (!meta) return;
 
     const slugInput = this.querySelector('#meta-slug');
-    const collectionInput = this.querySelector('#meta-collection');
     const descInput = this.querySelector('#meta-description');
     const statusSelect = this.querySelector('#meta-status');
     const publishBtn = this.querySelector('[data-publish]');
 
-    if (slugInput) slugInput.value = meta.slug || '';
-    if (collectionInput) collectionInput.value = meta.collection || '';
-    if (descInput) descInput.value = meta.description || '';
+    if (slugInput && slugInput !== document.activeElement) slugInput.value = meta.slug || '';
+    if (descInput && descInput !== document.activeElement) descInput.value = meta.description || '';
     if (statusSelect) statusSelect.value = meta.status || 'draft';
 
     // Update publish button text
@@ -295,29 +334,71 @@ export class MetaPanel extends HTMLElement {
         : 'btn btn-publish';
     }
 
+    this.renderStatus(meta);
+    this.renderCollections(meta);
+    this.renderUrlPrefix(meta);
     this.renderTags(meta.tags || []);
   }
 
+  /** The status box (site mode): "Published <date>" with the not-live note, or "Draft". */
+  renderStatus(meta) {
+    const box = this.querySelector('[data-status-box]');
+    if (!box || !meta) return;
+    const { title, note } = statusBox(meta, { liveOutOfDate: this._liveOutOfDate });
+    box.dataset.state = meta.status === 'published' ? (this._liveOutOfDate ? 'held' : 'published') : 'draft';
+    box.querySelector('[data-status-title]').textContent = title;
+    const noteEl = box.querySelector('[data-status-note]');
+    noteEl.textContent = note || '';
+    noteEl.hidden = !note;
+  }
+
+  /** The Collection select: the config's collections, plus the post's own when not listed. */
+  renderCollections(meta) {
+    const select = this.querySelector('#meta-collection');
+    if (!select) return;
+    const current = meta.collection || '';
+    const names = collectionOptions(this._collections, current);
+    const same = names.length === select.options.length && names.every((n, i) => select.options[i].value === n);
+    if (!same) {
+      select.replaceChildren(...names.map((n) => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        return opt;
+      }));
+    }
+    select.value = current;
+  }
+
+  renderUrlPrefix(meta) {
+    const prefix = this.querySelector('[data-url-prefix]');
+    if (prefix) prefix.textContent = urlPrefix(meta.collection || 'posts', this._collections);
+  }
+
   renderTags(tags) {
-    const container = this.querySelector('#meta-tag-chips');
-    if (!container) return;
-
-    container.innerHTML = tags.map(tag => `
-      <span class="tag-chip">
-        ${tag}
-        <button data-remove-tag="${tag}" title="Remove">&times;</button>
-      </span>
-    `).join('');
-
-    container.querySelectorAll('[data-remove-tag]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tagToRemove = btn.getAttribute('data-remove-tag');
+    const list = this.querySelector('#meta-tag-chips');
+    if (!list) return;
+    list.hidden = !tags.length;
+    list.replaceChildren(...tags.map((tag) => {
+      const li = document.createElement('li');
+      li.className = 'tag-chip';
+      const text = document.createElement('span');
+      text.textContent = tag;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.setAttribute('aria-label', `Remove tag ${tag}`);
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
         const meta = getCurrentMeta();
-        const newTags = (meta.tags || []).filter(t => t !== tagToRemove);
+        const newTags = (meta.tags || []).filter(t => t !== tag);
         setCurrentMeta({ tags: newTags });
         this.renderTags(newTags);
+        metaEdited();
+        this.querySelector('#meta-tags')?.focus();
       });
-    });
+      li.append(text, remove);
+      return li;
+    }));
   }
 }
 

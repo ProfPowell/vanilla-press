@@ -27,6 +27,7 @@ editor-shell {
 editor-shell .editor-pane {
   grid-area: editor;
   overflow-y: auto;
+  margin: 0; /* it is a <main>: VB gives main its own margins */
   padding: var(--size-xl);
   display: flex;
   justify-content: center;

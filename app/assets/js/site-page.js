@@ -1,5 +1,7 @@
 import { api, h, formatDate, listComponents, setComponent } from './app-api.js';
 import { packageRows, toggleOutcome } from './components-view.js';
+import { SECTIONS, LATER, sectionFromSearch, sectionHref } from './site-nav.js';
+import { syncText, backupText } from './sites-view.js';
 import { loadComponent, createComponentElement, setComponentValue } from '/editor/assets/js/component-loader.js';
 
 const $ = (id) => document.getElementById(id);
@@ -41,27 +43,33 @@ async function loadSite() {
     if (!site) throw new Error('Unknown site');
     $('site-name').textContent = site.name;
     document.title = `${site.name} - Vanilla Press`;
+    if (site.siteUrl) {
+      $('view-site').href = site.siteUrl;
+      $('view-site').hidden = false;
+    }
+    const sync = syncText(site.git);
+    $('rail-sync').dataset.tone = sync.tone;
+    $('rail-sync-text').textContent = sync.text;
+    lastBackupAt = site.git?.lastBackupAt || null;
+    $('backup-status').textContent = backupText(lastBackupAt, new Date());
   } catch (err) {
     $('site-name').textContent = 'Site not found';
     showError(err.message);
     return false;
   }
-  api(`${base}/info`).then(({ siteUrl }) => {
-    if (!siteUrl) return;
-    $('view-site').href = siteUrl;
-    $('view-site').hidden = false;
-  }).catch(() => {});
   return true;
 }
+
+let lastBackupAt = null;
 
 async function loadBackupStatus() {
   const el = $('backup-status');
   try {
     const s = await api(`${base}/status`);
     if (s.error) el.textContent = `Backup problem: ${s.error}`;
-    else if (!s.connected) el.textContent = 'Not connected to GitHub';
-    else if (s.lastPushAt) el.textContent = `Backed up ${new Date(s.lastPushAt).toLocaleString()}`;
-    else el.textContent = s.pending ? 'Backup pending' : 'Connected to GitHub';
+    else if (s.lastPushAt) el.textContent = backupText(s.lastPushAt, new Date());
+    else if (s.pending) el.textContent = 'Backup pending';
+    else el.textContent = backupText(lastBackupAt, new Date());
   } catch (err) {
     el.textContent = err.message;
   }
@@ -203,24 +211,34 @@ $('components').addEventListener('change', async (e) => {
   renderComponents();
 });
 
-// Sidebar: Posts and Components are real; every other section is a placeholder.
-document.querySelector('.side-nav').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-section]');
-  if (!btn) return;
-  for (const b of document.querySelectorAll('.side-nav button')) b.removeAttribute('aria-current');
-  btn.setAttribute('aria-current', 'page');
-  const section = btn.dataset.section;
-  $('posts-section').hidden = section !== 'posts';
-  $('components-section').hidden = section !== 'components';
-  $('soon-section').hidden = section === 'posts' || section === 'components';
-  $('soon-title').textContent = btn.textContent;
+// The rail: real links, so each section has an address; clicks swap the section in place.
+const railLinks = [...document.querySelectorAll('#rail-sections a[data-section]')];
+for (const a of railLinks) a.href = siteId ? sectionHref(siteId, a.dataset.section) : '#';
+$('rail-later').replaceChildren(...LATER.map((name) => h('li', {}, name)));
+
+function showSection(section) {
+  for (const name of SECTIONS) $(`${name}-section`).hidden = name !== section;
+  for (const a of railLinks) {
+    if (a.dataset.section === section) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  }
   if (section === 'components' && !componentState) loadComponents();
+}
+
+$('rail-sections').addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-section]');
+  if (!a || !siteId || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+  e.preventDefault();
+  history.pushState(null, '', a.href);
+  showSection(a.dataset.section);
 });
+window.addEventListener('popstate', () => showSection(sectionFromSearch(location.search)));
 
 if (!siteId) {
   $('site-name').textContent = 'Site not found';
   showError('No site given. Go back to Sites and pick one.');
 } else if (await loadSite()) {
+  showSection(sectionFromSearch(location.search));
   loadPosts();
   loadBackupStatus();
 }

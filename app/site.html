@@ -6,58 +6,67 @@
 <title>Site - Vanilla Press</title>
 <link rel="stylesheet" href="/assets/vb/vanilla-breeze.css"/>
 <link rel="stylesheet" href="/app/assets/app.css"/>
+<!-- The editor's theme picker first: VB also ships a <theme-picker>, and its registry skips a tag already defined. -->
+<script type="module" src="/editor/assets/js/components/theme-picker.js"></script>
 <script type="module" src="/assets/vb/vanilla-breeze.js"></script>
 <script type="module" src="/app/assets/js/site-page.js"></script>
 </head>
 <body>
-<div class="app-page wide">
-  <header class="page-head">
-    <div>
-      <a href="/" class="back">&larr; Sites</a>
-      <h1 id="site-name">Site</h1>
+<div class="site-shell">
+  <nav aria-label="Site" class="site-rail">
+    <a href="/" class="rail-back"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>All sites</a>
+    <div class="rail-site">
+      <p id="site-name" class="rail-name">Site</p>
+      <a id="view-site" class="rail-live" href="#" target="_blank" rel="noopener" hidden>View live site <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg></a>
     </div>
-    <div class="actions">
-      <a id="view-site" href="#" target="_blank" rel="noopener" hidden>View site</a>
-      <button type="button" id="preview-btn" disabled title="Open a post to preview it">Preview</button>
+    <ul id="rail-sections" class="rail-list">
+      <li><a href="#" data-section="posts">Posts</a></li>
+      <li><a href="#" data-section="media">Media</a></li>
+      <li><a href="#" data-section="components">Components</a></li>
+      <li><a href="#" data-section="theme">Theme</a></li>
+    </ul>
+    <ul id="rail-later" class="rail-list rail-later" aria-label="Coming later"></ul>
+    <div id="rail-status" class="rail-status" role="status">
+      <span class="sync" id="rail-sync" data-tone="off"><span class="dot" aria-hidden="true"></span><span id="rail-sync-text">Checking GitHub</span></span>
+      <span id="backup-status"></span>
     </div>
-  </header>
+  </nav>
 
-  <div class="site-layout">
-    <nav aria-label="Site sections" class="side-nav">
-      <ul>
-        <li><button type="button" data-section="posts" aria-current="page">Posts</button></li>
-        <li><button type="button" data-section="media">Media</button></li>
-        <li><button type="button" data-section="components">Components</button></li>
-        <li><button type="button" data-section="theme">Theme</button></li>
-        <li><button type="button" data-section="programs">Programs</button></li>
-        <li><button type="button" data-section="analytics">Analytics</button></li>
-        <li><button type="button" data-section="social">Social</button></li>
-      </ul>
-    </nav>
+  <main class="site-main">
+    <div class="site-main-inner">
+      <p id="error" class="error" role="alert" hidden></p>
 
-    <main>
       <section id="posts-section" aria-labelledby="posts-title">
         <div class="section-head">
-          <h2 id="posts-title">Posts</h2>
-          <button type="button" id="new-post">New post</button>
+          <h1 id="posts-title">Posts</h1>
+          <div class="actions">
+            <button type="button" id="preview-btn" disabled title="Open a post to preview it">Preview</button>
+            <button type="button" id="new-post" class="primary">New post</button>
+          </div>
         </div>
-        <p id="error" class="error" role="alert" hidden></p>
         <p id="empty" hidden>No posts yet. Start with a new post.</p>
         <ul id="posts" class="post-list" aria-labelledby="posts-title"></ul>
       </section>
+
+      <section id="media-section" aria-labelledby="media-title" hidden>
+        <div class="section-head"><h1 id="media-title">Media</h1></div>
+        <p class="lede">Coming in the next step</p>
+      </section>
+
       <section id="components-section" aria-labelledby="components-title" hidden>
-        <div class="section-head"><h2 id="components-title">Components</h2></div>
+        <div class="section-head"><h1 id="components-title">Components</h1></div>
         <p id="components-notice" class="notice" role="status" hidden></p>
         <div id="components-error" class="error" role="alert" hidden></div>
         <ul id="components" class="component-list" aria-labelledby="components-title"></ul>
       </section>
-      <section id="soon-section" aria-labelledby="soon-title" hidden>
-        <h2 id="soon-title"></h2>
-        <p>Coming soon</p>
+
+      <section id="theme-section" aria-labelledby="theme-title" hidden>
+        <div class="section-head"><h1 id="theme-title">Theme</h1></div>
+        <p class="lede">The look of every page on the site.</p>
+        <div class="panel theme-panel"><theme-picker id="theme-picker"></theme-picker></div>
       </section>
-      <p id="backup-status" class="muted" role="status"></p>
-    </main>
-  </div>
+    </div>
+  </main>
 </div>
 </body>
 </html>

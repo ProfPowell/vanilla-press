@@ -5,8 +5,8 @@
  * publishing status box (site mode; `vp serve` keeps its Status select),
  * URL (the collection's prefix plus the slug), Description with its hint,
  * Featured image (a thumbnail and file name, Choose… and Remove), Tags, Collection (a select from the site's `collections` config) and
- * Appearance (site mode: the site theme or the post's own theme, its scope;
- * see settings-view.js `appearanceModel`). The title is the document's first line (title.js); the slug
+ * Appearance (<appearance-section>). The title is the document's first line
+ * (title.js); the slug
  * follows it until edited here or the post is published (editor.js, slug.js).
  * In `vp serve` the Publish/Unpublish and Preview actions stay here too.
  * Every field edit auto-saves.
@@ -15,19 +15,17 @@
  */
 
 import { validStatuses } from '../../../../src/schema/content-schema.js';
-import { getCurrentMeta, setCurrentMeta, getCurrentDocId, clearPageTheme } from '../meta-state.js';
+import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.js';
 import { api } from '../api-client.js';
 import { postUrlPath } from '../../../../src/sync/paths.js';
 import {
   saveDocument, loadDocument, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine, metaEdited,
 } from '../editor.js';
-import {
-  onMetaUpdate as onSiteMetaUpdate, isSiteMode, altCheckPasses, loadThemeData, getThemeData, refreshPaneTheme,
-} from '../site-mode.js';
-import { statusBox, collectionOptions, urlPrefix, featuredModel, appearanceModel } from '../settings-view.js';
-import { addThemeLinks } from '../pane-theme.js';
+import { onMetaUpdate as onSiteMetaUpdate, isSiteMode, altCheckPasses } from '../site-mode.js';
+import { statusBox, collectionOptions, urlPrefix, featuredModel } from '../settings-view.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
 import { openMediaPicker } from './media-picker.js';
+import './appearance-section.js';
 
 export class MetaPanel extends HTMLElement {
   connectedCallback() {
@@ -37,8 +35,6 @@ export class MetaPanel extends HTMLElement {
     this._liveOutOfDate = false;
     this.render();
     this.loadCollections();
-    // Appearance needs the site's themes (site mode; GET /theme, loaded once)
-    loadThemeData().then(() => this.renderAppearance(getCurrentMeta()));
 
     // Listen for meta updates (e.g. from doc loading)
     window.__onMetaUpdate = (meta) => {
@@ -140,36 +136,7 @@ export class MetaPanel extends HTMLElement {
         <select id="meta-collection"></select>
       </div>
 
-      <section class="appearance" aria-labelledby="meta-appearance-title" data-appearance hidden>
-        <h3 id="meta-appearance-title">Appearance</h3>
-        <fieldset class="appearance-group">
-          <legend>Page theme</legend>
-          <label class="appearance-option">
-            <input type="radio" name="meta-page-theme" value="site" data-appearance-site/>
-            <span><span class="appearance-option-title">Site theme</span><span class="appearance-option-hint" data-appearance-site-hint></span></span>
-          </label>
-          <label class="appearance-option">
-            <input type="radio" name="meta-page-theme" value="own" data-appearance-own-radio/>
-            <span><span class="appearance-option-title">Its own theme</span><span class="appearance-option-hint">Only this page changes</span></span>
-          </label>
-        </fieldset>
-        <div class="appearance-own" data-appearance-own hidden>
-          <ul class="appearance-cards" data-appearance-cards aria-label="Themes"></ul>
-          <a class="appearance-adjust" data-appearance-adjust href="/app/site.html">Browse all themes, or adjust this one</a>
-          <fieldset class="appearance-group">
-            <legend>Apply to</legend>
-            <label class="appearance-scope">
-              <input type="radio" name="meta-theme-scope" value="page"/>
-              <span>Whole page, header and footer too</span>
-            </label>
-            <label class="appearance-scope">
-              <input type="radio" name="meta-theme-scope" value="article"/>
-              <span>Article only, keep the site's header and footer</span>
-            </label>
-          </fieldset>
-          <p class="appearance-note" data-appearance-note></p>
-        </div>
-      </section>
+      <appearance-section></appearance-section>
 
       <div class="actions">
         <button type="button" class="btn btn-publish" data-publish>Publish</button>
@@ -248,32 +215,6 @@ export class MetaPanel extends HTMLElement {
       this.setFeatured(null);
       chooseBtn.focus();
     });
-
-    // Appearance: the site theme, or the post's own theme and its scope; saved at once
-    this.querySelector('[data-appearance-site]').addEventListener('change', () => {
-      clearPageTheme();
-      this.pageThemeChanged();
-    });
-    this.querySelector('[data-appearance-own-radio]').addEventListener('change', () => {
-      const first = this.firstPageTheme();
-      if (!first) return this.renderAppearance(getCurrentMeta()); // no themes to pick: back to the site theme
-      setCurrentMeta({ theme: first, themeScope: 'page' });
-      this.pageThemeChanged();
-    });
-    this.querySelector('[data-appearance-cards]').addEventListener('click', (e) => {
-      const card = e.target.closest('button[data-theme-id]');
-      if (!card || card.getAttribute('aria-pressed') === 'true') return;
-      const scope = getCurrentMeta().themeScope === 'article' ? 'article' : 'page';
-      setCurrentMeta({ theme: card.dataset.themeId, themeScope: scope });
-      this.pageThemeChanged();
-    });
-    for (const radio of this.querySelectorAll('input[name="meta-theme-scope"]')) {
-      radio.addEventListener('change', () => {
-        if (!getCurrentMeta().theme) return;
-        setCurrentMeta({ themeScope: radio.value });
-        this.pageThemeChanged();
-      });
-    }
 
     // Publish / Unpublish
     publishBtn.addEventListener('click', () => this.togglePublish());
@@ -438,58 +379,7 @@ export class MetaPanel extends HTMLElement {
     this.renderUrlPrefix(meta);
     this.renderTags(meta.tags || []);
     this.renderFeatured(meta);
-    this.renderAppearance(meta);
-  }
-
-  /**
-   * The theme "Its own theme" starts with: the first card that is not the site
-   * theme (the same look would be no change), else the first card.
-   * @returns {string|null}
-   */
-  firstPageTheme() {
-    const data = getThemeData();
-    if (!data) return null;
-    const { cards } = appearanceModel({ theme: 'default' }, data); // any own theme: the cards in order
-    const site = data.setting?.name || 'default';
-    return (cards.find((c) => c.id !== site) || cards[0])?.id || null;
-  }
-
-  /** The post's page theme changed: show it in the section and the writing area, and save. */
-  pageThemeChanged() {
-    this.renderAppearance(getCurrentMeta());
-    refreshPaneTheme();
-    saveDocument(); // a published post then shows "Saved · not live yet" until Update
-  }
-
-  /** The Appearance section (site mode, once the site's themes have loaded). */
-  renderAppearance(meta) {
-    const section = this.querySelector('[data-appearance]');
-    const data = getThemeData();
-    if (!section || !meta) return;
-    section.hidden = !data;
-    if (!data) return;
-    const m = appearanceModel(meta, { ...data, siteId: SITE || '' });
-
-    section.querySelector('[data-appearance-site-hint]').textContent = `${m.siteName}, set under Theme`;
-    section.querySelector('[data-appearance-site]').checked = !m.own;
-    section.querySelector('[data-appearance-own-radio]').checked = m.own;
-    section.querySelector('[data-appearance-own]').hidden = !m.own;
-    section.querySelector('[data-appearance-adjust]').href = m.adjustHref;
-    for (const radio of section.querySelectorAll('input[name="meta-theme-scope"]')) radio.checked = radio.value === m.scope;
-    section.querySelector('[data-appearance-note]').textContent = m.note || '';
-
-    const list = section.querySelector('[data-appearance-cards]');
-    if (!m.own) return; // the cards (and their stylesheets) only once the post has its own theme
-    const shown = [...list.querySelectorAll('button[data-theme-id]')];
-    const same = shown.length === m.cards.length && m.cards.every((c, i) => shown[i].dataset.themeId === c.id);
-    if (!same) {
-      addThemeLinks(m.cards.map((c) => data.themes.find((t) => t.id === c.id)?.href));
-      list.replaceChildren(...m.cards.map((c) => appearanceCard(c)));
-    }
-    for (const button of list.querySelectorAll('button[data-theme-id]')) {
-      const card = m.cards.find((c) => c.id === button.dataset.themeId);
-      button.setAttribute('aria-pressed', String(!!card?.pressed));
-    }
+    this.querySelector('appearance-section')?.render?.(meta);
   }
 
   /**
@@ -580,36 +470,6 @@ export class MetaPanel extends HTMLElement {
       return li;
     }));
   }
-}
-
-/**
- * One Appearance theme card: a swatch in the theme's own CSS (`data-theme`), and its name.
- * @param {{ id: string, name: string, only: 'light'|'dark'|null }} card
- * @returns {HTMLLIElement}
- */
-function appearanceCard(card) {
-  const li = document.createElement('li');
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'appearance-card';
-  button.dataset.themeId = card.id;
-  const swatch = document.createElement('span');
-  swatch.className = 'appearance-swatch';
-  swatch.setAttribute('aria-hidden', 'true');
-  swatch.setAttribute('data-theme', card.id);
-  if (card.only) swatch.setAttribute('data-mode', card.only);
-  const aa = document.createElement('span');
-  aa.className = 'appearance-swatch-aa';
-  aa.textContent = 'Aa';
-  const bar = document.createElement('span');
-  bar.className = 'appearance-swatch-bar';
-  swatch.append(aa, bar);
-  const name = document.createElement('span');
-  name.className = 'appearance-card-name';
-  name.textContent = card.name;
-  button.append(swatch, name);
-  li.append(button);
-  return li;
 }
 
 customElements.define('meta-panel', MetaPanel);

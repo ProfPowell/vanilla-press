@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { statusBox, collectionOptions, urlPrefix, publishedDay, featuredModel, appearanceModel } from '../../editor/assets/js/settings-view.js';
+import { statusBox, collectionOptions, urlPrefix, publishedDay, featuredModel, appearanceModel, pageThemeChoices } from '../../editor/assets/js/settings-view.js';
 
 const NOT_LIVE = "Your saved edits aren't on the live site yet. Update builds the site and pushes them.";
 
@@ -138,11 +138,13 @@ describe('appearanceModel', () => {
     assert.equal(m.scope, 'article');
   });
 
-  it('own theme, page scope: the note names the theme only; cards are custom first, without the adjustments', () => {
+  it('own theme, page scope: the note names the theme only; cards: current, custom, list, without the adjustments', () => {
     const m = appearanceModel({ theme: '8bit', themeScope: 'page' }, { setting: { name: 'swiss', adjust: 'vp-site' }, themes: T, siteId: 's 1' });
     assert.equal(m.own, true); assert.equal(m.scope, 'page');
     assert.equal(m.note, 'Saved with this post as theme: "8bit". The site theme and other pages are unchanged.');
-    assert.deepEqual(m.cards.map((c) => c.id), ['night', 'default', 'swiss', '8bit']);
+    assert.equal(m.noteKeys, 'theme: "8bit"');
+    assert.deepEqual(m.cards.map((c) => c.id), ['8bit', 'night', 'default', 'swiss']);
+    assert.equal(m.toggleText, null);
     assert.deepEqual(m.cards.find((c) => c.id === 'night'), { id: 'night', name: 'Night Owl', pressed: false, only: 'dark' });
     assert.equal(m.adjustHref, '/app/site.html?site=s%201&section=theme');
   });
@@ -155,5 +157,24 @@ describe('appearanceModel', () => {
   it('no theme setting: the site theme is Default', () => {
     assert.equal(appearanceModel({}, { setting: null, themes: T }).siteName, 'Default');
     assert.equal(appearanceModel({}, { setting: null, themes: [] }).siteName, 'Default');
+  });
+
+  it('the first 8 cards, then "All N themes" expands in place', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ id: `t${i}`, name: `T${i}` }));
+    const own = { theme: 't10' };
+    const m = appearanceModel(own, { setting: null, themes: many });
+    assert.equal(m.cards.length, 8); assert.equal(m.cards[0].id, 't10'); assert.equal(m.total, 12);
+    assert.equal(m.toggleText, 'All 12 themes');
+    const all = appearanceModel(own, { setting: null, themes: many, expanded: true });
+    assert.equal(all.cards.length, 12); assert.equal(all.toggleText, 'Fewer themes');
+    assert.equal(appearanceModel({}, { setting: null, themes: many }).toggleText, null);
+  });
+});
+
+describe('pageThemeChoices', () => {
+  it('current first, then custom themes, then the list; never the adjustments', () => {
+    const T = [{ id: 'a' }, { id: 'b', custom: true }, { id: 'vp-site' }, { id: 'c' }, { id: 'adj' }];
+    assert.deepEqual(pageThemeChoices({ setting: { adjust: 'adj' }, themes: T }, 'c').map((t) => t.id), ['c', 'b', 'a']);
+    assert.deepEqual(pageThemeChoices({ setting: null, themes: T }).map((t) => t.id), ['b', 'a', 'c', 'adj']);
   });
 });

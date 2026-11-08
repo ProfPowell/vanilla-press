@@ -80,40 +80,64 @@ export function featuredModel(meta) {
   return { set: true, src, name: mediaFileOf(src) || src };
 }
 
+/** How many theme cards Appearance shows before "All N themes" (as the Theme screen, R14). */
+export const APPEARANCE_CARD_LIMIT = 8;
+
+/**
+ * The themes a post can take, in card order (R14): `current` first, then
+ * custom themes, then the list order. The adjustments file is not a theme.
+ * @param {{ setting: { adjust?: string|null }|null, themes: Array<{ id: string, name?: string, custom?: boolean, only?: string }> }} data
+ * @param {string|null} [current]
+ * @returns {Array<{ id: string, name?: string, custom?: boolean, only?: string }>}
+ */
+export function pageThemeChoices({ setting, themes } = {}, current = null) {
+  const list = (Array.isArray(themes) ? themes : [])
+    .filter((t) => t && SAFE_ID.test(t.id) && t.id !== ADJUST_ID && t.id !== setting?.adjust);
+  return [
+    ...list.filter((t) => t.id === current),
+    ...list.filter((t) => t.id !== current && t.custom),
+    ...list.filter((t) => t.id !== current && !t.custom),
+  ];
+}
+
 /**
  * The Appearance section: the site theme or the post's own theme, the theme
- * cards (custom themes first, then the list order; not the adjustments file),
- * the "Apply to" scope and the note saying what is stored with the post.
+ * cards (`pageThemeChoices` order; the first 8 unless expanded, with an
+ * "All N themes" / "Fewer themes" toggle), the "Apply to" scope and the note
+ * saying what is stored with the post (`noteKeys`: its key part, set as code).
  * An unsafe `meta.theme` counts as none; an empty `themeScope` as page.
  * @param {{ theme?: string, themeScope?: string }} meta
  * @param {{ setting: { name?: string, adjust?: string|null }|null,
- *   themes: Array<{ id: string, name?: string, custom?: boolean, only?: string }>, siteId?: string }} data
+ *   themes: Array<{ id: string, name?: string, custom?: boolean, only?: string }>, siteId?: string, expanded?: boolean }} data
  * @returns {{ own: boolean, siteName: string, cards: Array<{ id: string, name: string, pressed: boolean,
- *   only: 'light'|'dark'|null }>, scope: 'page'|'article', note: string|null, adjustHref: string }}
+ *   only: 'light'|'dark'|null }>, total: number, toggleText: string|null, scope: 'page'|'article',
+ *   note: string|null, noteKeys: string|null, adjustHref: string }}
  */
-export function appearanceModel(meta, { setting, themes, siteId = '' } = {}) {
-  const list = (Array.isArray(themes) ? themes : [])
-    .filter((t) => t && SAFE_ID.test(t.id) && t.id !== ADJUST_ID && t.id !== setting?.adjust);
-  const siteTheme = setting?.name || 'default';
-  const siteName = list.find((t) => t.id === siteTheme)?.name || (siteTheme === 'default' ? 'Default' : siteTheme);
+export function appearanceModel(meta, { setting, themes, siteId = '', expanded = false } = {}) {
   const theme = typeof meta?.theme === 'string' && SAFE_ID.test(meta.theme) ? meta.theme : null;
+  const ordered = pageThemeChoices({ setting, themes }, theme);
+  const siteTheme = setting?.name || 'default';
+  const siteName = ordered.find((t) => t.id === siteTheme)?.name || (siteTheme === 'default' ? 'Default' : siteTheme);
   const scope = theme && meta.themeScope === 'article' ? 'article' : 'page';
-  const ordered = [...list.filter((t) => t.custom), ...list.filter((t) => !t.custom)];
+  const total = ordered.length;
+  const shown = expanded ? ordered : ordered.slice(0, APPEARANCE_CARD_LIMIT);
+  const noteKeys = theme ? `theme: "${theme}"${scope === 'article' ? ', themeScope: "article"' : ''}` : null;
   return {
     own: !!theme,
     siteName,
     cards: theme
-      ? ordered.map((t) => ({
+      ? shown.map((t) => ({
         id: t.id,
         name: t.name || t.id,
         pressed: t.id === theme,
         only: t.only === 'light' || t.only === 'dark' ? t.only : null,
       }))
       : [],
+    total,
+    toggleText: theme && total > APPEARANCE_CARD_LIMIT ? (expanded ? 'Fewer themes' : `All ${total} themes`) : null,
     scope,
-    note: theme
-      ? `Saved with this post as theme: "${theme}"${scope === 'article' ? ', themeScope: "article"' : ''}. The site theme and other pages are unchanged.`
-      : null,
+    note: noteKeys ? `Saved with this post as ${noteKeys}. The site theme and other pages are unchanged.` : null,
+    noteKeys,
     adjustHref: `/app/site.html?site=${encodeURIComponent(siteId)}&section=theme`,
   };
 }

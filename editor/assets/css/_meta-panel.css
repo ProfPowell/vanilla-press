@@ -225,10 +225,12 @@
   outline-offset: -2px;
 }
 
-/* Appearance (the page theme arrives in step 4) */
-/* A divider, not VB's boxed <details> */
 /* Appearance (site mode): the site theme or the post's own theme. The cards'
  * swatches wear the real theme CSS (data-theme), so every value is a token. */
+appearance-section {
+  display: block;
+}
+
 .meta-panel .appearance {
   display: flex;
   flex-direction: column;
@@ -309,11 +311,18 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--size-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* All themes: the grid scrolls within the panel */
+.meta-panel .appearance-cards[data-scroll] {
   max-block-size: 24rem;
   overflow-y: auto;
-  margin: 0;
   padding: 0.25rem;
-  list-style: none;
+  margin-inline: -0.25rem;
+  border-block: 1px solid var(--color-border-subtle, var(--color-border));
   overscroll-behavior: contain;
 }
 
@@ -391,6 +400,28 @@
   font-size: var(--font-size-s);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.meta-panel .appearance-more {
+  align-self: flex-start;
+  min-height: 2.5rem;
+  padding: 0 var(--size-xs);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-s);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.meta-panel .appearance-more[hidden] {
+  display: none;
+}
+
+.meta-panel .appearance-note code {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
 }
 
 .meta-panel .appearance-adjust {

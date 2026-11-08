@@ -25,6 +25,9 @@
  * Recompute them on those elements in VB's tokens layer (not the
  * editor layer), so a theme that sets the colors itself (bundle-theme) still
  * wins. Same as the Theme screen's cards (app/assets/theme.css).
+ * Remove .editor-pane and .editor-content here (and the rest with the Theme
+ * screen's copy) once the site's Vanilla Breeze declares the derived color
+ * tokens on [data-theme] elements itself (VB feat/page-theme has that fix).
  */
 @layer tokens {
   :is(.editor-pane, .editor-content, .appearance-swatch, .page-theme-dot)[data-theme] {

@@ -12,12 +12,19 @@ describe('site-vb', () => {
   const put = (p, c = '') => { mkdirSync(join(root, p, '..'), { recursive: true }); writeFileSync(join(root, p), c); };
 
   it('findSiteVb takes the shallowest vanilla-breeze.css', () => {
-    put('a/src/x/y/z/vanilla-breeze.css');
+    // the deeper copy sorts first, so only breadth-first order picks the right one
+    put('a/src/aaa/b/c/d/vanilla-breeze.css');
     put('a/src/assets/vendor/vanilla-breeze/vanilla-breeze.css');
     put('a/src/node_modules/q/vanilla-breeze.css');
     const vb = findSiteVb(join(root, 'a'));
     assert.equal(vb.url, '/assets/vendor/vanilla-breeze/vanilla-breeze.css');
     assert.equal(vb.dir, join(root, 'a/src/assets/vendor/vanilla-breeze'));
+  });
+  it('a copy directly under src/ gives hrefs without a double slash', () => {
+    put('rootcopy/src/vanilla-breeze.css', '[data-theme~=modern]{}');
+    put('rootcopy/src/themes/nord.css', '');
+    const cat = themeCatalog({ siteDir: join(root, 'rootcopy'), siteId: 's1', vpCdnDir: join(root, 'none') });
+    for (const t of cat.themes) if (t.href) assert.ok(!t.href.includes('//'), t.href);
   });
   it('findSiteVb skips node_modules and returns null when absent', () => {
     put('b/src/node_modules/q/vanilla-breeze.css');

@@ -68,6 +68,7 @@ export function themeCatalog({ siteDir, siteId, vpCdnDir }) {
     };
   }
   const builtIns = builtInThemeIds(readFileSync(join(vb.dir, VB_FILE), 'utf-8'));
-  const hrefBase = `/sites/${siteId}/site${posix.dirname(vb.url)}`;
+  const vbDir = posix.dirname(vb.url);
+  const hrefBase = `/sites/${siteId}/site${vbDir === "/" ? "" : vbDir}`;
   return { source: 'site', vbUrl: vb.url, builtIns, themes: listThemes(vb.dir, { builtIns, hrefBase }) };
 }

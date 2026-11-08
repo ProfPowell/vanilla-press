@@ -5,6 +5,7 @@
  *
  * @module app/theme-view
  */
+import { IMPORT_LIMIT } from '../../../src/themes/theme-css.js';
 
 const MODES = ['auto', 'light', 'dark'];
 const FONTS = ['sans', 'serif', 'mono'];
@@ -199,4 +200,84 @@ export function previewSrcdoc({
     `<main class="preview-article">${body}\n<p><span class="button">More posts</span></p></main>`,
     '</body></html>',
   ].join('\n');
+}
+
+// --- Make your own, and Apply ---
+
+/** The live check after Apply: every 10 s for up to 5 min (as the editor's). */
+export const LIVE_POLL_MS = 10_000;
+export const LIVE_POLL_FOR_MS = 300_000;
+
+
+/**
+ * POST /theme/apply's body. Literal colors go only with a hue (R7).
+ * @param {Draft} draft
+ * @param {{ light: Record<string,string>, dark: Record<string,string> }|null} colors
+ * @returns {{ name: string, mode: Draft['mode'], adjustments: Draft['adjustments'] & { colors: object|null } }}
+ */
+export function applyBody(draft, colors) {
+  const a = draft.adjustments;
+  return {
+    name: draft.name,
+    mode: draft.mode,
+    adjustments: {
+      hue: a.hue,
+      headingFont: a.headingFont,
+      bodyFont: a.bodyFont,
+      corners: a.corners,
+      colors: a.hue == null ? null : colors || null,
+    },
+  };
+}
+
+/** "A", "A and B", "A, B and C". */
+function andList(items) {
+  if (items.length < 2) return items.join('');
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/**
+ * Why a custom theme can't be deleted (DELETE's 409 `usedBy`).
+ * @param {string} name
+ * @param {string[]} usedBy
+ */
+export function deleteRefusalText(name, usedBy) {
+  return `${name} is used by ${andList(usedBy)}. Pick another theme for them first.`;
+}
+
+/**
+ * What the header says after Apply answered 200, and whether to watch for the live site.
+ * @param {{ status: 'pushed'|'saved', url: string|null }} result
+ * @returns {{ text: string, liveUrl: string|null }}
+ */
+export function applyOutcome(result) {
+  if (result?.status === 'saved') return { text: 'Applied on this computer. Connect GitHub to put it live.', liveUrl: null };
+  if (!result?.url) return { text: 'Applied and pushed (set siteUrl to check when it is live)', liveUrl: null };
+  return { text: 'Applying…', liveUrl: result.url };
+}
+
+const LIBRARY_DONE = { save: 'Saved as a new theme.', import: 'Imported.', rename: 'Renamed.', delete: 'Deleted.' };
+
+/**
+ * The note after a library change: what was done, what of the user's CSS was
+ * not kept (import `dropped`, save `skipped`: raw text, show as text only),
+ * and the server's note when it was not committed.
+ * @param {'save'|'import'|'rename'|'delete'} action
+ * @param {{ committed?: boolean, note?: string, dropped?: string[], skipped?: string[] }} res
+ * @returns {string}
+ */
+export function libraryNotice(action, res) {
+  const notKept = [...(res?.dropped || []), ...(res?.skipped || [])];
+  let text = LIBRARY_DONE[action];
+  if (notKept.length) text += ` Not kept: ${notKept.join(', ')}`;
+  if (res?.committed === false && res.note) text += `${notKept.length ? '. ' : ' '}${res.note}`;
+  return text;
+}
+
+/**
+ * Whether a Composer file is over the import limit (bytes, as the server counts).
+ * @param {string} text
+ */
+export function importTooBig(text) {
+  return new TextEncoder().encode(String(text)).length > IMPORT_LIMIT;
 }

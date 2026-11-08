@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   draftFrom, isDirty, cardModels, schemeControl, pagesModel, vbNote, hueOf, schemeOf, previewSrcdoc, escapeHtml,
+  applyBody, deleteRefusalText, applyOutcome, libraryNotice, importTooBig, LIVE_POLL_MS, LIVE_POLL_FOR_MS,
 } from '../../app/assets/js/theme-view.js';
 
 const theme = (id, tier, extra = {}) => ({
@@ -189,5 +190,48 @@ describe('theme-view', () => {
     assert.ok(!doc.includes('</style><script>'));
     assert.ok(doc.includes('<\\/style>'));
     assert.ok(doc.includes('<h1>Sample</h1>') && doc.includes('<p>One &lt;i&gt;</p>') && doc.includes('<p>Two</p>'));
+  });
+
+  it('applyBody sends colors only when the hue is set', () => {
+    assert.equal(applyBody(draftFrom({ name: 'swiss', mode: 'auto' }), null).adjustments.colors, null);
+    const colors = { light: { '--color-primary': 'oklch(0.5 0.2 25)' }, dark: { '--color-primary': 'oklch(0.7 0.2 25)' } };
+    assert.equal(applyBody(draftFrom({ name: 'swiss', mode: 'auto' }), colors).adjustments.colors, null);
+    const d = draftFrom({ name: 'swiss', mode: 'dark', adjustments: { hue: 25, headingFont: 'serif', corners: 'round' } });
+    assert.deepEqual(applyBody(d, colors), {
+      name: 'swiss', mode: 'dark',
+      adjustments: { hue: 25, headingFont: 'serif', bodyFont: null, corners: 'round', colors },
+    });
+  });
+
+  it('deleteRefusalText names every user', () => {
+    assert.equal(deleteRefusalText('Retro Mine', ['the site theme', 'Old Games']), 'Retro Mine is used by the site theme and Old Games. Pick another theme for them first.');
+    assert.equal(deleteRefusalText('X', ['A']), 'X is used by A. Pick another theme for them first.');
+    assert.equal(deleteRefusalText('X', ['A', 'B', 'C']), 'X is used by A, B and C. Pick another theme for them first.');
+  });
+
+  it('applyOutcome: saved, pushed with a site URL (poll), pushed without one', () => {
+    assert.deepEqual(applyOutcome({ status: 'saved', url: 'https://x.test/' }),
+      { text: 'Applied on this computer. Connect GitHub to put it live.', liveUrl: null });
+    assert.deepEqual(applyOutcome({ status: 'pushed', url: 'https://x.test/' }), { text: 'Applying…', liveUrl: 'https://x.test/' });
+    assert.deepEqual(applyOutcome({ status: 'pushed', url: null }),
+      { text: 'Applied and pushed (set siteUrl to check when it is live)', liveUrl: null });
+    assert.equal(LIVE_POLL_MS, 10_000);
+    assert.equal(LIVE_POLL_FOR_MS, 300_000);
+  });
+
+  it('libraryNotice: what a library change kept, left out and whether it was committed', () => {
+    assert.equal(libraryNotice('import', { committed: true, dropped: ['body', '--b'] }), 'Imported. Not kept: body, --b');
+    assert.equal(libraryNotice('import', { committed: true, dropped: [] }), 'Imported.');
+    assert.equal(libraryNotice('save', { committed: true, skipped: ['--A'] }), 'Saved as a new theme. Not kept: --A');
+    assert.equal(libraryNotice('rename', { committed: true }), 'Renamed.');
+    assert.equal(libraryNotice('delete', { committed: false, note: 'Saved on this computer, but not committed (x).' }),
+      'Deleted. Saved on this computer, but not committed (x).');
+    assert.equal(libraryNotice('save', { committed: false, note: 'N.', skipped: ['--a'] }), 'Saved as a new theme. Not kept: --a. N.');
+  });
+
+  it('importTooBig counts bytes against the 256 KB limit', () => {
+    assert.equal(importTooBig('a'.repeat(256 * 1024)), false);
+    assert.equal(importTooBig('a'.repeat(256 * 1024 + 1)), true);
+    assert.equal(importTooBig('é'.repeat(128 * 1024 + 1)), true);
   });
 });

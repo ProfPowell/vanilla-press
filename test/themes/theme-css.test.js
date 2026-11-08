@@ -154,6 +154,22 @@ describe('rewriteComposerCss', () => {
       assert.match(r.css, /\[data-theme~="x"\]\[data-mode="dark"\] \{[^}]*--a: 2;/);
     }
   });
+  it('the VB dark form :root:not([data-mode=light]) inside the dark @media is the dark block', () => {
+    for (const sel of [':root:not([data-mode=light])', ':root:not([data-mode="light"])', 'html:not( [data-mode=\'light\'] )', ':root:not([data-mode=light]), html:not([data-mode=light])']) {
+      const r = rewriteComposerCss(`:root { --a: 1 } @media (prefers-color-scheme: dark) { ${sel} { --a: 2 } }`, 'x');
+      assert.equal(r.schemes, 'both', sel);
+      assert.deepEqual(r.dropped, [], sel);
+      assert.match(r.css, /\[data-theme~="x"\]\[data-mode="dark"\] \{[^}]*--a: 2;/);
+      assertScoped(r.css, 'x');
+    }
+    // Outside a dark @media it says nothing about the scheme: dropped.
+    const top = rewriteComposerCss(':root { --a: 1 } :root:not([data-mode=light]) { --a: 2 }', 'x');
+    assert.deepEqual(top.dropped, [':root:not([data-mode=light])']);
+    assert.equal(top.schemes, 'light');
+    // Inside a light @media it is not dark either.
+    const light = rewriteComposerCss(':root { --a: 1 } @media (prefers-color-scheme: light) { :root:not([data-mode=light]) { --a: 2 } }', 'x');
+    assert.deepEqual(light.dropped, [':root:not([data-mode=light])']);
+  });
   it('a lone dark block is Dark only, written as the theme block', () => {
     const r = rewriteComposerCss('@media (prefers-color-scheme: dark) { :root { --a: 2 } }', 'x');
     assert.equal(r.schemes, 'dark');

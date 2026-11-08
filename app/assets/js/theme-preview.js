@@ -6,6 +6,7 @@
  * @module app/theme-preview
  */
 import { hueColorExpr } from '../../../src/themes/theme-css.js';
+import { ADJUST_ID } from '../../../src/themes/theme-setting.js';
 import { hueOf } from './theme-view.js';
 
 /** The tokens a hue change writes as literal colors, per scheme (R7). */
@@ -107,6 +108,59 @@ export function themeHue(probeHost, base, scheme = 'light') {
     probe.style.color = 'oklch(from var(--color-primary) l c h)';
     return Math.round(hueOf(getComputedStyle(probe).color) ?? 0) % 360;
   });
+}
+
+const cssTexts = new Map();
+
+/**
+ * A stylesheet's text (a theme's file, or the site's vanilla-breeze.css for a
+ * built-in theme), fetched once.
+ * @param {string} href
+ * @returns {Promise<string>}
+ */
+export function cssText(href) {
+  if (!cssTexts.has(href)) {
+    const p = fetch(href).then((r) => {
+      if (!r.ok) throw new Error(`Couldn't read ${href} (${r.status})`);
+      return r.text();
+    });
+    p.catch(() => cssTexts.delete(href));
+    cssTexts.set(href, p);
+  }
+  return cssTexts.get(href);
+}
+
+/**
+ * The computed values of `names` for a base theme with the draft's
+ * adjustments on top, in each scheme (R10): read from a hidden probe with
+ * `data-theme="<base> vp-site"` while the adjustments CSS (scoped to vp-site)
+ * is in the document. Empty values are left out. A theme with one scheme
+ * gives that scheme only, as `light` (the saved theme's one block).
+ * @param {HTMLElement} probeHost
+ * @param {{ id: string, only?: 'light'|'dark' }} base - its stylesheet must be loaded
+ * @param {string[]} names
+ * @param {string} adjustmentsCssText - adjustmentsCss(...) output, '' for none
+ * @returns {{ light: Record<string,string>, dark?: Record<string,string> }}
+ */
+export function computeTokens(probeHost, base, names, adjustmentsCssText) {
+  const style = document.createElement('style');
+  style.textContent = adjustmentsCssText || '';
+  document.head.append(style);
+  try {
+    const read = (scheme) => withProbe(probeHost, `${base.id} ${ADJUST_ID}`, scheme, (probe) => {
+      const cs = getComputedStyle(probe.parentElement);
+      const out = {};
+      for (const name of new Set(names)) {
+        const value = cs.getPropertyValue(name).trim();
+        if (value) out[name] = value;
+      }
+      return out;
+    });
+    if (base.only === 'light' || base.only === 'dark') return { light: read(base.only) };
+    return { light: read('light'), dark: read('dark') };
+  } finally {
+    style.remove();
+  }
 }
 
 /**

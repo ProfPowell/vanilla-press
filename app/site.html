@@ -103,12 +103,17 @@
             <p class="theme-lede">The look of every page on the site. A post can override it in Post settings.</p>
           </div>
           <div class="actions">
-            <p id="theme-dirty" class="theme-dirty" role="status"></p>
+            <p class="theme-status" role="status"><span id="theme-dirty" class="theme-dirty"></span><span id="theme-apply-state" class="theme-apply-state"></span></p>
             <a class="btn" href="https://profpowell.github.io/vb-design-system/tools/theme-composer/" target="_blank" rel="noopener">Open in Theme Composer<span class="visually-hidden"> (opens in a new tab)</span></a>
             <button type="button" id="theme-apply" class="primary">Apply to site</button>
           </div>
         </div>
         <p id="theme-error" class="error" role="alert" hidden></p>
+        <div id="theme-report" class="theme-report" role="alert" hidden>
+          <div id="theme-report-body"></div>
+          <button type="button" id="theme-report-close">Dismiss</button>
+        </div>
+        <p id="theme-notice" class="theme-notice" role="status"></p>
         <div class="theme-layout">
           <div class="theme-controls">
             <section aria-labelledby="theme-pick-title">
@@ -164,6 +169,8 @@
               </div>
               <div class="theme-adjust-actions">
                 <button type="button" id="theme-reset">Reset</button>
+                <button type="button" id="theme-save-new">Save as a new theme…</button>
+                <button type="button" id="theme-import">Import from Theme Composer…</button>
               </div>
               <p id="theme-skipped" class="theme-note theme-warn" role="status"></p>
               <p class="theme-note">Fine-tune every token (spacing, shadows, icons) in the Theme Composer, then import its <code class="mono">theme.css</code> here.</p>
@@ -189,6 +196,46 @@
             </div>
           </section>
         </div>
+
+        <dialog id="theme-name-dialog" class="theme-dialog" aria-labelledby="theme-name-title">
+          <form id="theme-name-form" method="dialog" novalidate>
+            <h2 id="theme-name-title">Save as a new theme</h2>
+            <p id="theme-name-desc" class="theme-note"></p>
+            <div class="theme-field">
+              <label for="theme-name-input">Name</label>
+              <input type="text" id="theme-name-input" maxlength="80" autocomplete="off" required aria-describedby="theme-name-error"/>
+            </div>
+            <p id="theme-name-error" class="error" role="alert"></p>
+            <div class="theme-dialog-actions">
+              <button type="button" data-dialog-cancel>Cancel</button>
+              <button type="submit" id="theme-name-ok" class="primary">Save</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog id="theme-import-dialog" class="theme-dialog" aria-labelledby="theme-import-title" aria-describedby="theme-import-desc">
+          <form id="theme-import-form" method="dialog" novalidate>
+            <h2 id="theme-import-title">Import from Theme Composer</h2>
+            <p id="theme-import-desc" class="theme-note">In the Theme Composer, download <code class="mono">theme.css</code>, then choose it here or paste its text. Only its custom properties are kept.</p>
+            <div class="theme-field">
+              <label for="theme-import-file">theme.css file</label>
+              <input type="file" id="theme-import-file" accept=".css,text/css"/>
+            </div>
+            <div class="theme-field">
+              <label for="theme-import-text">Or paste the CSS</label>
+              <textarea id="theme-import-text" rows="7" spellcheck="false" autocomplete="off"></textarea>
+            </div>
+            <div class="theme-field">
+              <label for="theme-import-name">Name</label>
+              <input type="text" id="theme-import-name" maxlength="80" autocomplete="off" required aria-describedby="theme-import-error"/>
+            </div>
+            <p id="theme-import-error" class="error" role="alert"></p>
+            <div class="theme-dialog-actions">
+              <button type="button" data-dialog-cancel>Cancel</button>
+              <button type="submit" id="theme-import-ok" class="primary">Import</button>
+            </div>
+          </form>
+        </dialog>
       </section>
     </div>
   </main>

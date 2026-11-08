@@ -224,4 +224,13 @@ describe('saveErrorMessage', () => {
     assert.equal(saveErrorMessage(Object.assign(new Error('Saved, but not synced'), { status: 422, data: {} })), 'Saved, but not synced');
     assert.equal(saveErrorMessage(new Error('boom')), 'boom');
   });
+
+  it('publishFailure covers apply', () => {
+    assert.equal(publishFailure({ status: 502, data: { error: 'no network' } }, 'apply').message, "Applied on this computer, but couldn't push: no network");
+    assert.equal(actionPendingText('apply'), 'Applying…');
+    assert.equal(publishFailure({ status: 409, data: { error: 'The theme was changed on another computer. Review it and apply again.' } }, 'apply').message,
+      'The theme was changed on another computer. Review it and apply again.');
+    assert.deepEqual(publishFailure({ status: 422, data: { error: 'Build failed', log: 'boom' } }, 'apply'),
+      { message: 'Build failed', log: 'boom', reload: false, poll: false });
+  });
 });

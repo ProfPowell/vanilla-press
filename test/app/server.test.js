@@ -952,6 +952,22 @@ describe('app server themes', () => {
     assert.equal((await api('/theme/custom/retro-mine', { method: 'DELETE' })).status, 404);
   });
 
+  it('imports a real Theme Composer export (theme-export output) whole, scoped to the new id', async () => {
+    const exported = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'theme-composer-export.css'), 'utf8');
+    const res = await api('/theme/import', { method: 'POST', body: { name: 'Composer Modern', css: exported } });
+    assert.equal(res.status, 201, JSON.stringify(res.data));
+    assert.deepEqual(res.data.dropped, []);
+    assert.equal(res.data.theme.id, 'composer-modern');
+    assert.equal(res.data.theme.only, 'light');
+    const css = readFileSync(join(site, 'src/assets/themes/composer-modern.css'), 'utf8');
+    assert.match(css, /^@layer bundle-theme \{\n  \[data-theme~="composer-modern"\] \{\n/);
+    const declared = [...exported.matchAll(/^ {2}(--[a-z0-9-]+): (.*);$/gm)];
+    assert.equal(declared.length, 41);
+    for (const [, name, value] of declared) assert.ok(css.includes(`    ${name}: ${value};`), name);
+    assert.doesNotMatch(css, /:root|data-mode/);
+    assert.equal((await api('/theme/custom/composer-modern', { method: 'DELETE' })).status, 200);
+  });
+
   it('delete of a theme in use is 409 naming the users', async () => {
     const saved = await api('/theme/custom', { method: 'POST', body: { name: 'Used', base: 'swiss', tokens: T } });
     const doc = { ...post('doc_used0001', 'used-post', 'Uses it'), meta: { ...post('x', 'used-post', 'Uses it').meta, theme: saved.data.theme.id } };

@@ -200,12 +200,19 @@ const label = (s) => {
 
 const LIGHT_SELECTORS = new Set([':root', 'html']);
 const DARK_SELECTORS = new Set([':root[data-mode=dark]', '[data-mode=dark]', 'html[data-mode=dark]']);
+/** VB's own dark form: the reader's dark scheme unless light is forced. Dark only inside a dark @media. */
+const MEDIA_DARK_SELECTORS = new Set([':root:not([data-mode=light])', 'html:not([data-mode=light])']);
 
-/** 'light' | 'dark' | null for a selector list made only of theme selectors. */
-function selectorScheme(prelude) {
+/**
+ * 'light' | 'dark' | null for a selector list made only of theme selectors.
+ * @param {string} prelude
+ * @param {'light'|'dark'|null} inScheme - the enclosing @media's scheme
+ */
+function selectorScheme(prelude, inScheme) {
   const parts = prelude.split(',').map((p) => p.replace(/\s+/g, '').replace(/["']/g, '').toLowerCase());
   if (parts.every((p) => LIGHT_SELECTORS.has(p))) return 'light';
   if (parts.every((p) => DARK_SELECTORS.has(p))) return 'dark';
+  if (inScheme === 'dark' && parts.every((p) => MEDIA_DARK_SELECTORS.has(p))) return 'dark';
   return null;
 }
 
@@ -254,7 +261,7 @@ export function rewriteComposerCss(cssText, id) {
   const walk = (text, inScheme) => {
     for (const item of parseItems(text)) {
       if (item.type === 'rule') {
-        const scheme = selectorScheme(item.prelude);
+        const scheme = selectorScheme(item.prelude, inScheme);
         if (!scheme) { drop(item.prelude); continue; }
         takeBlock(item.block, inScheme === 'dark' || scheme === 'dark' ? dark : light);
       } else if (item.type === 'at') {

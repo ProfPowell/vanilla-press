@@ -74,11 +74,10 @@ Use the custom property, not the hex. Hex values are the mockup's approximations
 
 ### Media (`Media.dc.html`)
 - Header: "Media", "N files in src/media · M missing alt text", "Upload" (primary).
-- Filters: All / Needs alt text / Unused; search by name or alt.
+- Filters: All / Needs alt text / Unused / Missing file (a library entry whose file is gone from `src/media`); a type select (All types, Images, Audio, Video, PDF); search by name or alt.
 - Grid of tiles (thumbnail, filename, "No alt text" badge). Selecting a tile fills the detail panel.
-- Detail panel: preview, name, type · size · date, **Alt text** textarea (warning border and hint when empty) with a "Decorative (alt="")" checkbox, URL with Copy, "Used in" (posts whose AST references the file), "Delete…" (warn when used). No "Replace file" (decided 2026-11-07: an image never changes under a published post).
+- Detail panel: preview, name, type · size · date, **Alt text** textarea (warning border and hint when empty) with a "Decorative (alt="")" checkbox, URL with Copy, "Used in" (posts whose AST references the file), **Edit image** (images only; saves a copy), "Delete…" (blocked while used). No "Replace file" (decided 2026-11-07: an image never changes under a published post).
 - Drop zone: drop or paste; files go to `src/media` and back up with the next save.
-- Data: the `media` table already has `filename`, `mime_type`, `size`, `alt`, `created`. "Decorative" needs a way to store an intentional empty alt distinct from missing (e.g. `alt = ''` vs `NULL`). "Used in" needs a scan of document ASTs for the file's URL.
 
 ### Theme (`Theme.dc.html`)
 - Header: "Theme", "The look of every page on the site. A post can override it in Post settings." Actions: "Open in Theme Composer ↗" (links to the VB design system's Theme Composer), "Apply to site" (primary). "Unapplied changes" note when dirty.

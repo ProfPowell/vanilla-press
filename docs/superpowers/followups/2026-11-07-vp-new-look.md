@@ -56,7 +56,7 @@ Branch feat/new-look, plan docs/superpowers/plans/2026-11-07-vp-new-look.md. Cop
 - Task 6: minor (deferred → Task 9): doc-browser shows blank rows for untitled drafts (needs "Untitled" fallback).
 - Task 6: minor (deferred): MODULE_TYPELESS_PACKAGE_JSON warning in test output; flaky runBuild-timeout test under load.
 - Task 6: minor (deferred → carry to Task 8 drag handles): dragging a non-text node (hr, image, embed) onto the title deletes it (moved drop inserts only leaf text); fix: no-op when plainText(slice).trim() is empty.
-- Task 6: minor (deferred → step 3b media): handleDrop returns true for empty slices (file drops) on the title, so a later image-drop plugin would never see them.
+- Task 6: minor (DONE in step 3b: file drops handled): handleDrop returns true for empty slices (file drops) on the title, so a later image-drop plugin would never see them.
 - Task 6: minor (deferred → carry to Task 8): dragging a selection that crosses the title edge to a body spot joins body text into the title (PM's moved-drop deleteSelection).
 - Task 6: minor (deferred): IME/beforeinput deletes across the title edge not intercepted (unverified).
 - Task 7: minor (deferred): pressed and hover share one background in _format-toolbar.css.
@@ -66,7 +66,7 @@ Branch feat/new-look, plan docs/superpowers/plans/2026-11-07-vp-new-look.md. Cop
 - Task 7: minor (deferred): toolbarPosition ignores viewport height (tall selections put it off-screen).
 - Task 7: minor (deferred): toolbar buttons never in Tab order (Alt+F10 only).
 - Task 7: minor (deferred): Mod+K with an empty selection now does nothing (used to set a stored link mark).
-- Task 7: minor (deferred, pre-existing, global no-dialog constraint): alert() editor.js:379; prompt() blocks/tabs-view.js:70; alert() media-picker.js:76,102 (step 3b); confirm() doc-browser.js:177 (Task 9 area) — final review to triage.
+- Task 7: minor (deferred, pre-existing, global no-dialog constraint): alert() editor.js:379; prompt() blocks/tabs-view.js:70; alert() media-picker.js:76,102 (DONE in step 3b: picker uses inline messages); confirm() doc-browser.js:177 (Task 9 area) — final review to triage.
 - Task 8: minor (deferred): NodeSelection on a top-level leaf (hr after title) lets Alt+Shift+arrow fall through to browser extend-selection (use blockOfSelection in fallback).
 - Task 8: minor (deferred): handle update() forces layout on every transaction (batch with rAF).
 - Task 8: minor (deferred): palette insertAfter only checked against doc size if the doc changes while open.
@@ -87,7 +87,7 @@ Branch feat/new-look, plan docs/superpowers/plans/2026-11-07-vp-new-look.md. Cop
 - Task 10: minor (deferred): EDITOR.md files table lists js files without their js/ root.
 - Task 10: minor (deferred): EDITOR.md "(see Post settings)" for Unpublish, but Post settings doesn't mention vp serve's Publish/Unpublish button.
 - Task 10: complete (commits 92aaee6..769d291, review clean; browser checks UNCHECKED as ledgered above)
-- Final: minor (deferred): M1 tabs-view.js prompt() for tab rename (no keyboard path); M2 media-picker alerts (step 3b); M3 editor.js load-error alert (vp serve); M4 pin prosemirror-view 1.38.1 devDependency; M6 Mod-a in body includes title; M7 spec vs P2 on unpublished posts following the title (confirm with user).
+- Final: minor (deferred): M1 tabs-view.js prompt() for tab rename (no keyboard path); M2 media-picker alerts (DONE in step 3b); M3 editor.js load-error alert (vp serve); M4 pin prosemirror-view 1.38.1 devDependency; M6 Mod-a in body includes title; M7 spec vs P2 on unpublished posts following the title (confirm with user).
 - Final: minor (deferred): editor loads all of vanilla-breeze.js; consider disabling VB analytics in the editor (vbAnalyticsConfig transport 'disabled').
 - Final: minor (deferred, pre-existing): collapsible summary holds an input → axe nested-interactive (serious) on doc_comp01/doc_ks_comp.
 - Final: minor (deferred): code-block control overlay covers the first code line on hover.

@@ -48,14 +48,16 @@ The title is the first line of the document, in the serif heading style. It cann
 - **Move by keyboard:** `Alt+Shift+↑` / `Alt+Shift+↓` move the block with the cursor. List items, tabs and steps move only within their own parent (by drag or by key); nothing moves above the title.
 - **Format toolbar:** select text and a toolbar floats over the selection with Bold, Italic, Code, Highlight, Link and a More menu (inline components). `Alt+F10` moves focus into it, the arrow keys move along it and Escape returns to the text with the selection kept. Link opens an inline field in the toolbar (no browser prompt): Enter (or Apply) sets the link, Remove takes it off, and Escape closes the field. `Mod+K` opens the same field.
 
-### Upload and insert media
+### Media in a post
 
-1. Insert a figure block (type `/` → select "Figure", or use the block palette)
-2. In the figure controls, click **Browse** to open the media picker
-3. Upload an image by clicking the upload zone or dragging a file onto it
-4. Or click an existing image in the media grid to select it
-5. The image appears in the figure block with the correct `src` path
-6. Media files are stored in the `media/` directory and served at `/media/`
+- **Palette:** `/` → Image, Audio, Video or PDF (Media group). Each opens the media picker first and inserts only when you choose a file; Cancel inserts nothing. A PDF becomes a `<pdf-viewer>` when the site has that component turned on, otherwise a link to the file with a note saying so.
+- **Drop or paste:** drop files onto the page, or paste them, to upload and insert them at the cursor in order. Each file ends inserted or with its own error message. Files over 5 MB get a note; files over 25 MB are refused.
+- **Picker:** upload by choosing files or dropping them on the zone, or pick one from the library. Files marked "Missing file" are listed but can't be chosen.
+- **Choose…:** a component attribute that holds a media URL (an image or video `src`, a poster and so on) has a **Choose…** button that opens the picker and fills in `/media/<file>`.
+- **Featured image:** Post settings has a Featured image field (thumbnail and file name, **Choose…** and **Remove**). It is saved as the post's `image` front matter. Showing it on the page is up to the site's layout.
+- **Alt text:** an image with no alt text (never written) is flagged. Every Publish and Update, including the Publish button in `vp serve`'s settings panel, warns when the post has such images and offers to go and fix them; a decorative image (alt written as empty) is fine.
+- **Missing files:** in the app, Publish and Update refuse a post that uses a `/media/` file missing from `src/media`. `vp serve` publish is a plain save and does not check.
+- Uploaded files are stored in the site's `src/media` (in `vp serve`, the repo's `media/`) and served at `/media/<file>`. The Media screen manages them; see the README.
 
 ### Search
 

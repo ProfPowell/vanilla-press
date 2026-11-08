@@ -23,6 +23,18 @@ The list of sites is kept in `~/.config/vanilla-press/sites.json` (set `VP_CONFI
 
 `vp serve --site <path>` still starts the single-site editor server. Like the app, it now listens on `127.0.0.1` only, so it is not reachable from other machines on your network. See `CLAUDE.md` for how VP works with a Cook site and `docs/EDITOR.md` for the editor and API.
 
+## Media
+
+The **Media** screen of a site lists the files in its `src/media`: filter All / Needs alt text / Unused / Missing file, filter by type, search by name or alt text. Upload with the button, or drop or paste files anywhere on the screen. Selecting a tile opens the detail panel: preview, alt text (with a "Decorative" checkbox for `alt=""`), URL, "Used in" and Delete. Images also have **Edit image**.
+
+- **Accepted types:** JPEG, PNG, WebP, AVIF, GIF, SVG, MP4 (.mp4, .m4v), WebM, MP3, M4A, AAC, Ogg (.ogg, .oga, .opus), WAV and PDF. The file's content is checked, not just its name.
+- **Limits:** a file over 25 MB is refused (Cloudflare Pages won't serve it). A file over 5 MB is accepted with a note, because everything is committed to git and the repository grows by its size.
+- **Names:** stored as `<slug>-<6-char id>.<ext>` (for example `garden-path-3f9a2c.jpg`) and never renamed. The original name is kept as the label.
+- **Edits make copies:** Edit image saves a new file named `<name>-edited-<id>.<ext>`; the original stays, so a published post never changes under its readers. An edited copy keeps the source's alt text.
+- **Delete:** a file used by a published post (as an image, embed, component attribute, link or featured image) can't be deleted until you remove it there and Update. A file used only by drafts is deleted after a confirmation that names them; they then show it as missing. "Used in" lists the posts. A file that is in the library but gone from `src/media` shows **Missing file**; it can be removed from the library, and Publish refuses a post that uses it.
+- **Featured image:** chosen in Post settings and saved as `image` in the post's front matter. Showing it (and `og:image`) is the site layout's job.
+- **In git:** `content/media.json` (names, alt text, original names) and `src/media` are committed with your draft backups. Files that appear in `src/media` without an entry (copied in by hand, or pulled from another machine) are adopted into the library; entries whose file is missing are flagged.
+
 ## Components in the app
 
 Posts can hold web components (a browser window around a screenshot, a code block, a marquee, and so on). Type `/` in the editor and pick one from the palette; select it to change its attributes in the settings panel. Each site chooses which component packages it uses on its Components screen: turning one on runs `npm install` for it in the site, so the dependency lands in the site's `package.json`, and Cook (2.5+) then loads that package's script on the pages that use it. Vanilla Breeze's own elements need no package. A draft can hold any component, but Publish and Update refuse a post that uses a package the site has not turned on.

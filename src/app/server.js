@@ -11,7 +11,8 @@
 
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { realpathSync, statSync } from 'node:fs';
+import { join, dirname, extname, relative, isAbsolute, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listSites, getSite, addSite, removeSite, listFolders } from './registry.js';
 import { createPreviews } from './preview.js';
@@ -19,6 +20,9 @@ import * as defaultGit from '../git/git.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import * as defaultSiteProcess from './site-process.js';
 import { createBackup, BACKUP_PATHS, pageNotLive } from './site-git.js';
+import { migrateVpTheme } from './site-theme.js';
+import { mountThemeRoutes } from './theme-routes.js';
+import { findSiteVb } from '../themes/site-vb.js';
 import { createLiveMedia } from './live-media.js';
 import {
   setPublished, BuildError, PublishRejectedError, checkLive, readSiteUrl, publicUrl, builtPage,
@@ -44,6 +48,12 @@ const SITE_PATH = /^\/api\/sites\/([^/]+)(?:\/|$)/;
 const SITE_MEDIA_PATH = /^\/sites\/([^/]+)\/media\//;
 /** `/sites/<id>/components/<pkg>/<path>`: a catalog package's files, for the editor to load. */
 const SITE_COMPONENTS_PATH = /^\/sites\/([^/]+)\/components\//;
+/** `/sites/<id>/site/<path>`: the site's VB copy and custom themes (its `src/`), for theme previews. */
+const SITE_FILES_PATH = /^\/sites\/([^/]+)\/site\//;
+/** What `/sites/<id>/site/` serves: stylesheets, scripts, fonts and images, never pages. */
+const SITE_FILE_TYPES = new Set(['.css', '.js', '.mjs', '.json', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.woff', '.woff2']);
+/** Custom themes (and vp-site.css), relative to the site's `src/`. */
+const CUSTOM_THEMES_DIR = 'assets/themes';
 
 const STATIC_MOUNTS = [
   { prefix: '/app/', dir: join(ROOT, 'app') },
@@ -55,20 +65,25 @@ const STATIC_MOUNTS = [
   { prefix: '/assets/image-editor/', dir: join(ROOT, 'node_modules', '@profpowell', 'image-editor', 'dist') },
 ];
 
+/** Theme library writes (R2): save, import, rename, delete of a custom theme. */
+const THEME_LIBRARY_PATH = /^\/theme\/(import|custom(\/[^/]+)?)$/;
+
 /** Actions with their own queue (they take the write lock inside the backup queue). */
 const ACTION_PATH = /\/documents\/[^/]+\/(publish|update|unpublish)$/;
 
 /**
  * A write that changes a site's files (document create, save, reload, delete, sync;
- * media upload, alt edit, delete): it waits for a running publish/update/unpublish (Ruling O).
+ * media upload, alt edit, delete; custom theme save, import, rename, delete): it waits
+ * for a running publish/update/unpublish (Ruling O).
  * @param {string} method
  * @param {string} pathname
  * @returns {boolean}
  */
 export function isQueuedWrite(method, pathname) {
-  if (!['POST', 'PUT', 'DELETE'].includes(method)) return false;
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
   const rest = pathname.replace(/^\/api\/sites\/[^/]+/, '');
   if (rest === '/sync') return true;
+  if (THEME_LIBRARY_PATH.test(rest)) return true;
   if (rest === '/media' || rest.startsWith('/media/')) return true;
   return (rest === '/documents' || rest.startsWith('/documents/')) && !ACTION_PATH.test(rest);
 }
@@ -182,12 +197,18 @@ export async function startApp({
         site, ws, git, ...backupTimers,
         onRebased: syncSite,
       });
+      // A legacy vp.json theme moves to config/theme.json (R1); a failure only logs.
+      try {
+        migrateVpTheme(ws);
+      } catch (err) {
+        console.warn(`${site.name || site.id}: theme migration skipped: ${err.message}`);
+      }
       syncSite();
       const prefix = `/api/sites/${site.id}`;
       const router = createRouter();
       const roots = { siteDir: ws.siteDir, vpRoot, catalog };
       mountApi(router, db, {
-        rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix,
+        rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix, siteId: site.id,
         statusByActions: true, // Ruling P: only Publish/Update/Unpublish change status
         onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
         onMediaChanged: ({ filename }) => backup.noteSaved({ title: filename, status: 'draft' }),
@@ -200,6 +221,13 @@ export async function startApp({
       });
       const writes = createLock();
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
+      mountThemeRoutes(router, prefix, {
+        site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,
+        deps: {
+          ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
+          commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,
+        },
+      });
       const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);
       return entry;
@@ -450,6 +478,46 @@ export async function startApp({
     return serveStatic(req, res, [{ prefix: `${match[0]}${entry.package}/`, dir: found.dir }]);
   }
 
+  /**
+   * Serve `/sites/<id>/site/<path>` (GET/HEAD) from the site's `src/`, only
+   * inside its VB copy's folder (just vanilla-breeze.css and themes/ when that
+   * is src/ itself) and assets/themes/, only asset types, never a dotfile, and
+   * only when the real path (symlinks resolved) is still there; false when not served.
+   */
+  function serveSiteFiles(req, res, pathname) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+    const match = pathname.match(SITE_FILES_PATH);
+    let id;
+    let rel;
+    try {
+      id = decodeURIComponent(match[1]);
+      rel = decodeURIComponent(pathname.slice(match[0].length));
+    } catch { return false; }
+    const parts = rel.split('/');
+    if (parts.some((p) => !p || p.startsWith('.') || /[\\:\u0000-\u001f\u007f]/.test(p))) return false;
+    if (!SITE_FILE_TYPES.has(extname(rel).toLowerCase())) return false;
+    const site = getSite(id, { env });
+    if (!site) return false;
+    const roots = [CUSTOM_THEMES_DIR];
+    const vb = findSiteVb(site.path);
+    if (vb) {
+      const dir = posix.dirname(vb.url).slice(1);
+      roots.push(...(dir ? [dir] : [posix.basename(vb.url), 'themes']));
+    }
+    const allowed = (p) => roots.some((r) => p === r || p.startsWith(`${r}/`));
+    if (!allowed(rel)) return false;
+    let real;
+    try {
+      const srcReal = realpathSync.native(join(site.path, 'src'));
+      const fileReal = realpathSync.native(join(srcReal, ...parts));
+      const inside = relative(srcReal, fileReal);
+      if (!inside || isAbsolute(inside) || inside.split(sep).some((p) => p === '..' || p.startsWith('.'))) return false;
+      if (!allowed(inside.split(sep).join('/')) || !statSync(fileReal).isFile()) return false;
+      real = fileReal;
+    } catch { return false; }
+    return serveFile(res, real, { req, headers: MEDIA_HEADERS });
+  }
+
   const server = createServer(async (req, res) => {
     try {
       if (refuseForeign(req, res, server.address().port)) return;
@@ -467,6 +535,8 @@ export async function startApp({
         if (serveSiteMedia(req, res, pathname)) return;
       } else if (SITE_COMPONENTS_PATH.test(pathname)) {
         if (serveSiteComponent(req, res, pathname)) return;
+      } else if (SITE_FILES_PATH.test(pathname)) {
+        if (serveSiteFiles(req, res, pathname)) return;
       } else if (serveStatic(req, res, STATIC_MOUNTS)) {
         return;
       }

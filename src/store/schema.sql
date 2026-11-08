@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS documents (
   published   TEXT,
   tags        TEXT, -- JSON array
   image       TEXT, -- featured image URL (/media/<file>)
+  theme       TEXT, -- page theme id (meta.theme)
+  theme_scope TEXT, -- 'page' | 'article' (meta.themeScope)
   blocks      TEXT NOT NULL, -- JSON array of block AST
   plaintext   TEXT NOT NULL DEFAULT '',
   UNIQUE(collection, slug)

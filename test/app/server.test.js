@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest } from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync, cpSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync, cpSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -797,5 +797,168 @@ describe('app server media serving and backup', () => {
       await a.close();
       rmSync(fx.root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('app server themes', () => {
+  const VB = 'src/assets/vendor/vanilla-breeze';
+  let root, app, id, site, outside;
+  const T = { light: { '--color-primary': 'oklch(0.5 0.2 30)', '--A': 'red' }, dark: { '--color-primary': 'oklch(0.7 0.2 30)' } };
+
+  /** A request with the path sent as is (fetch would normalize dot segments). */
+  const raw = (path, method = 'GET') => new Promise((resolve, reject) => {
+    const req = httpRequest({ host: '127.0.0.1', port: app.port, path, method }, (res) => {
+      let body = '';
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+  async function api(path, { method = 'GET', body } = {}) {
+    const opts = { method };
+    if (body !== undefined) {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(`${app.url}/api/sites/${id}${path}`, opts);
+    return { status: res.status, data: await res.json(), type: res.headers.get('content-type') };
+  }
+
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), 'vp-app-theme-'));
+    site = makeSite(root, 'site-t');
+    outside = join(root, 'outside');
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(outside, 'secret.css'), 'secret');
+    writeIn(site, `${VB}/vanilla-breeze.css`, '[data-theme~="modern"]{--x:1}\n');
+    writeIn(site, `${VB}/themes/swiss.css`, '[data-theme~="swiss"]{--x:1}\n');
+    writeIn(site, `${VB}/themes/.hidden.css`, 'hidden');
+    writeIn(site, `${VB}/page.html`, '<script>alert(1)</script>');
+    writeIn(site, 'src/posts/hello.html', '<p>hi</p>');
+    writeIn(site, 'src/assets/site.css', 'body{}');
+    writeIn(site, 'config/vp.json', '{ "theme": "swiss" }\n');
+    // Links that point out of src/ (a file and a folder) are never followed.
+    symlinkSync(join(outside, 'secret.css'), join(site, VB, 'themes', 'link.css'));
+    symlinkSync(outside, join(site, VB, 'out'));
+    app = await startApp({ port: 0, env: { VP_CONFIG_DIR: join(root, 'config') }, git: fakeGit });
+    id = (await (await fetch(`${app.url}/api/sites`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: site }),
+    })).json()).id;
+  });
+  after(async () => {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('opening a site migrates its vp.json theme', async () => {
+    const { status, data } = await api('/theme');
+    assert.equal(status, 200);
+    assert.equal(data.setting.name, 'swiss');
+    assert.deepEqual(JSON.parse(readFileSync(join(site, 'config/vp.json'), 'utf8')), {});
+    assert.deepEqual(data.vb, { source: 'site', url: `/sites/${id}/site/assets/vendor/vanilla-breeze/vanilla-breeze.css` });
+    assert.ok(data.themes.some((t) => t.id === 'swiss' && t.href === `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/swiss.css`));
+  });
+
+  it("GET /api/themes lists the site's VB", async () => {
+    const { data } = await api('/themes');
+    assert.ok(data.some((t) => t.id === 'swiss' && t.href.startsWith(`/sites/${id}/site/`)));
+    assert.ok(data.some((t) => t.id === 'modern'));
+  });
+
+  it('serves the site VB and custom themes under /sites/<id>/site/, nothing else', async () => {
+    const ok = await raw(`/sites/${id}/site/assets/vendor/vanilla-breeze/themes/swiss.css`);
+    assert.equal(ok.status, 200);
+    assert.equal(ok.headers['content-type'], 'text/css; charset=utf-8');
+    assert.equal(ok.headers['x-content-type-options'], 'nosniff');
+    assert.equal(ok.body, '[data-theme~="swiss"]{--x:1}\n');
+    assert.equal((await raw(`/sites/${id}/site/assets/vendor/vanilla-breeze/vanilla-breeze.css`)).status, 200);
+    const head = await raw(`/sites/${id}/site/assets/vendor/vanilla-breeze/vanilla-breeze.css`, 'HEAD');
+    assert.equal(head.status, 200);
+    assert.equal(head.body, '');
+    for (const path of [
+      `/sites/${id}/site/posts/hello.html`, // outside the VB folder and assets/themes
+      `/sites/${id}/site/assets/site.css`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/page.html`, // not an asset type
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/.hidden.css`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/link.css`, // symlink out of src/
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/out/secret.css`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/themes`, // a folder
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/../../site.css`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/%2e%2e/%2e%2e/site.css`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/..%2f..%2fsite.css`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/..%5c..%5csite.css`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/%2fetc%2fpasswd`,
+      `/sites/${id}/site/assets/themes/..%2f..%2f..%2fconfig%2fvp.json`,
+      `/sites/${id}/site//etc/passwd`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/swiss.css%00`,
+      `/sites/${id}/site/%E0%A4%A`,
+      `/sites/nope/site/assets/vendor/vanilla-breeze/themes/swiss.css`,
+      `/sites/${encodeURIComponent('../' + id)}/site/assets/vendor/vanilla-breeze/themes/swiss.css`,
+    ]) {
+      const res = await raw(path);
+      assert.equal(res.status, 404, path);
+      assert.doesNotMatch(res.body, /secret|alert|hidden|passwd|body\{\}/, path);
+    }
+    const post = await fetch(`${app.url}/sites/${id}/site/assets/vendor/vanilla-breeze/themes/swiss.css`, { method: 'POST' });
+    assert.equal(post.status, 404);
+  });
+
+  it('custom theme routes: save (with skipped tokens), import, rename, delete', async () => {
+    const saved = await api('/theme/custom', { method: 'POST', body: { name: 'Retro Mine', base: 'swiss', tokens: T } });
+    assert.equal(saved.status, 201);
+    assert.equal(saved.data.theme.id, 'retro-mine');
+    assert.deepEqual(saved.data.skipped, ['--A']);
+    const css = await raw(`/sites/${id}/site/assets/themes/retro-mine.css`);
+    assert.equal(css.status, 200);
+    assert.match(css.body, /@layer bundle-theme/);
+
+    const bad = await api('/theme/custom', { method: 'POST', body: { name: 'X', base: 'swiss', tokens: { light: { '--A': 'red' } } } });
+    assert.equal(bad.status, 422);
+    assert.deepEqual(bad.data.dropped, ['--A']);
+    assert.match(bad.type, /application\/json/);
+    assert.equal((await api('/theme/custom', { method: 'POST', body: { name: '', base: 'swiss', tokens: T } })).status, 400);
+
+    const imp = await api('/theme/import', { method: 'POST', body: { name: 'Night <b>', css: ':root{--color-background: oklch(0.2 0 0)} <img src=x onerror=alert(1)>{}' } });
+    assert.equal(imp.status, 201);
+    assert.equal(imp.data.theme.only, 'dark');
+    assert.equal(imp.data.theme.name, 'Night <b>');
+    assert.ok(imp.data.dropped.length >= 1);
+    assert.match(imp.type, /application\/json/);
+    const big = await api('/theme/import', { method: 'POST', body: { name: 'Big', css: ':root{--a:1}' + ' '.repeat(300 * 1024) } });
+    assert.equal(big.status, 413);
+
+    const renamed = await api('/theme/custom/retro-mine', { method: 'PATCH', body: { name: 'Arcade' } });
+    assert.equal(renamed.status, 200);
+    assert.deepEqual([renamed.data.theme.id, renamed.data.theme.name], ['retro-mine', 'Arcade']);
+    assert.equal((await api('/theme/custom/nope', { method: 'PATCH', body: { name: 'X' } })).status, 404);
+
+    const state = await api('/theme');
+    assert.ok(state.data.themes.some((t) => t.id === 'retro-mine' && t.custom && t.name === 'Arcade'));
+
+    const del = await api('/theme/custom/retro-mine', { method: 'DELETE' });
+    assert.equal(del.status, 200);
+    assert.equal(existsSync(join(site, 'src/assets/themes/retro-mine.css')), false);
+    assert.equal((await api('/theme/custom/retro-mine', { method: 'DELETE' })).status, 404);
+  });
+
+  it('delete of a theme in use is 409 naming the users', async () => {
+    const saved = await api('/theme/custom', { method: 'POST', body: { name: 'Used', base: 'swiss', tokens: T } });
+    const doc = { ...post('doc_used0001', 'used-post', 'Uses it'), meta: { ...post('x', 'used-post', 'Uses it').meta, theme: saved.data.theme.id } };
+    assert.equal((await api('/documents', { method: 'POST', body: doc })).status, 201);
+    const res = await api(`/theme/custom/${saved.data.theme.id}`, { method: 'DELETE' });
+    assert.equal(res.status, 409);
+    assert.deepEqual(res.data.usedBy, ['Uses it']);
+    const state = await api('/theme');
+    assert.deepEqual(state.data.pages.map((p) => [p.title, p.theme, p.themeScope]), [['Uses it', 'used', 'page']]);
+  });
+
+  it('isQueuedWrite covers theme library writes', () => {
+    assert.equal(isQueuedWrite('POST', '/api/sites/a/theme/custom'), true);
+    assert.equal(isQueuedWrite('PATCH', '/api/sites/a/theme/custom/x'), true);
+    assert.equal(isQueuedWrite('DELETE', '/api/sites/a/theme/custom/x'), true);
+    assert.equal(isQueuedWrite('POST', '/api/sites/a/theme/import'), true);
+    assert.equal(isQueuedWrite('POST', '/api/sites/a/theme/apply'), false);
+    assert.equal(isQueuedWrite('GET', '/api/sites/a/theme'), false);
   });
 });

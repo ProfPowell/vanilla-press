@@ -19,6 +19,8 @@ export const MAX_WAIT_MS = 120_000;
 const SKIP = ' [CI Skip]';
 /** What a backup stages: the JSON, uploads and settings, never a page. */
 export const BACKUP_PATHS = Object.freeze(['content', 'src/media', 'config/vp.json']);
+/** The theme setting and custom themes: committed by Apply and Publish/Update, never by a backup (R3). */
+export const THEME_PATHS = Object.freeze(['config/theme.json', 'src/assets/themes']);
 const MAX_TITLES = 3;
 
 const trimSlashes = (p) => p.replace(/^\/+|\/+$/g, '');

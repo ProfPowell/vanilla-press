@@ -472,7 +472,7 @@ describe('vp with --site', () => {
     assert.ok(!existsSync(jsonFile));
   });
 
-  it('sync writes every document plus media.json and vp.json', (t) => {
+  it('sync writes every document plus media.json, not vp.json', (t) => {
     const site = siteWithContent();
     t.after(() => rmSync(site, { recursive: true, force: true }));
     vp(['sync', '--from-site', '--site', site]);
@@ -481,7 +481,7 @@ describe('vp with --site', () => {
     assert.equal(res.status, 0, res.stderr);
     assert.ok(res.stderr.includes('synced 1'), res.stderr);
     assert.ok(existsSync(join(site, 'content', 'media.json')));
-    assert.ok(existsSync(join(site, 'config', 'vp.json')));
+    assert.ok(!existsSync(join(site, 'config', 'vp.json')));
   });
 
   it('new onto an unowned JSON file fails without saving', (t) => {

@@ -5,11 +5,10 @@
  */
 import { api, h } from './app-api.js';
 import {
-  FILTERS, TYPES, DROP_TEXT, ALT_PLACEHOLDER, ALT_HINT, filterMedia, headerCounts, tileModel, emptyText,
-  detailModel, needsAlt, altForCheckbox, createAltSaver, deleteDecision,
+  FILTERS, TYPES, DROP_TEXT, filterMedia, headerCounts, tileModel, emptyText, needsAlt,
 } from '../../../src/media/library-view.js';
+import { createMediaDetail } from './media-detail.js';
 import { ACCEPT_ATTR } from '../../../src/media/limits.js';
-import { exportFormat } from '../../../src/media/types.js';
 import { uploadMedia, createUploadQueue } from '../../../editor/assets/js/media-upload.js';
 
 const ICONS = {
@@ -97,278 +96,55 @@ export function initMediaSection({ siteId, root }) {
     } catch (err) {
       if (mine === latest) showError(err.message);
     }
-    if (selectedId && !items.some((i) => i.id === selectedId)) { selectedId = null; renderDetail(null); }
+    if (selectedId && !items.some((i) => i.id === selectedId)) { selectedId = null; detail.show(null); }
     render();
   }
 
   // --- Detail panel ---
-  const displayUrl = (item) => `/sites/${encodeURIComponent(siteId)}/media/${encodeURIComponent(item.filename)}`;
-  const detailBody = $('media-detail-body');
-  const setStatus = (text) => { $('media-detail-status').textContent = text || ''; };
-  let shownId = null; // the item the panel is built for
-  let paintToken = 0;
-
-  const saver = createAltSaver({
-    save: async (id, alt) => {
-      try {
-        const fresh = await api(`${base}/media/${encodeURIComponent(id)}`, { method: 'PUT', body: { alt } });
-        const at = items.findIndex((i) => i.id === id);
+  const detail = createMediaDetail({
+    siteId,
+    base,
+    root,
+    host: {
+      getItem: (id) => items.find((i) => i.id === id),
+      replaceItem(fresh) {
+        const at = items.findIndex((i) => i.id === fresh.id);
         if (at >= 0) items[at] = fresh;
         render();
-        if (shownId === id) { syncAltUi(fresh); setStatus('Saved'); }
-      } catch (err) {
-        const name = items.find((i) => i.id === id)?.filename || 'a file';
-        showError(`Couldn't save the alt text for ${name}. ${err.message} Select the file and try again.`);
-        if (shownId === id) setStatus('');
-        throw err;
-      }
-    },
-  });
-  const flushAlt = () => saver.flush().catch(() => {}); // save() has already shown its error
-
-  // The page is going away: a normal save may not finish, a keepalive request does.
-  function saveAltBeforeLeaving() {
-    const pending = saver.take();
-    if (!pending) return;
-    fetch(`${base}/media/${encodeURIComponent(pending.id)}`, {
-      method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: pending.alt }),
-    }).catch(() => {});
-  }
-  window.addEventListener('pagehide', saveAltBeforeLeaving);
-  // Links that leave the page (Used in, All sites) save first; the request outlives the navigation.
-  document.addEventListener('click', (e) => {
-    if (root.hidden) return;
-    const link = e.target.closest?.('a[href]');
-    if (link && (link.closest('#media-detail') || link.classList.contains('rail-back'))) saveAltBeforeLeaving();
-  }, true);
-
-  /** The alt field's look and the hint follow the stored state. */
-  function syncAltUi(item) {
-    const alt = detailBody.querySelector('#media-alt');
-    if (!alt) return;
-    const state = item.kind === 'image' ? (item.alt == null ? 'missing' : item.alt === '' ? 'decorative' : 'written') : 'written';
-    alt.dataset.state = state;
-    detailBody.querySelector('#media-alt-hint').hidden = state !== 'missing';
-  }
-
-  function previewEl(item, token) {
-    const box = h('div', { class: 'detail-preview' });
-    const src = displayUrl(item);
-    if (item.missing) {
-      box.append(h('p', { class: 'detail-missing' }, 'This file is missing from src/media.'));
-    } else if (item.kind === 'image') {
-      box.append(h('img', { src, alt: item.alt || '' }));
-    } else if (item.kind === 'audio') {
-      box.append(h('audio-player', {}, h('audio', { controls: true, src })));
-    } else if (item.kind === 'video') {
-      box.append(h('video-player', {}, h('video', { controls: true, src })));
-    } else if (item.kind === 'pdf') {
-      box.dataset.kind = 'pdf';
-      import('/assets/pdf-viewer/pdf-viewer.js').then(() => {
-        if (token === paintToken) box.append(h('pdf-viewer', { src, 'no-print': true }));
-      }).catch(() => {
-        if (token === paintToken) box.append(h('p', { class: 'detail-missing' }, "Couldn't load the PDF viewer. Reload the page to try again."));
-      });
-    }
-    return box;
-  }
-
-  function altField(item) {
-    const alt = h('textarea', { id: 'media-alt', rows: '3', placeholder: ALT_PLACEHOLDER, 'aria-describedby': 'media-alt-hint' });
-    alt.value = item.alt || '';
-    alt.disabled = item.alt === '';
-    const hint = h('p', { id: 'media-alt-hint', class: 'detail-hint' }, ALT_HINT);
-    const deco = h('input', { type: 'checkbox', id: 'media-decorative' });
-    deco.checked = item.alt === '';
-    alt.addEventListener('input', () => {
-      setStatus('');
-      saver.change(item.id, alt.value === '' ? null : alt.value);
-    });
-    deco.addEventListener('change', () => {
-      setStatus('');
-      alt.value = '';
-      alt.disabled = deco.checked;
-      saver.change(item.id, altForCheckbox(deco.checked));
-      flushAlt();
-      if (!deco.checked) alt.focus();
-    });
-    return h('div', { class: 'detail-group' },
-      h('label', { for: 'media-alt', class: 'detail-label' }, 'Alt text'),
-      alt, hint,
-      h('label', { class: 'detail-check' }, deco, 'Decorative (alt="")'));
-  }
-
-  function urlField(model) {
-    const code = h('code', { class: 'detail-url', id: 'media-url' }, model.url);
-    const copy = h('button', { type: 'button' }, 'Copy');
-    let timer = null;
-    copy.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(model.url);
-        setStatus('');
-        copy.textContent = 'Copied';
-        clearTimeout(timer);
-        timer = setTimeout(() => { copy.textContent = 'Copy'; }, 2000);
-      } catch {
-        const range = document.createRange();
-        range.selectNodeContents(code);
-        const sel = getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-        setStatus("Couldn't copy. The URL is selected; press Ctrl+C or ⌘C.");
-      }
-    });
-    return h('div', { class: 'detail-group' },
-      h('p', { class: 'detail-label' }, 'URL'),
-      h('div', { class: 'detail-url-row' }, code, copy));
-  }
-
-  function usedInList(model) {
-    const group = h('div', { class: 'detail-group' }, h('p', { class: 'detail-label' }, 'Used in'));
-    if (!model.usedIn.length) {
-      group.append(h('p', { class: 'detail-muted' }, 'Not used in any post.'));
-      return group;
-    }
-    group.append(h('ul', { class: 'detail-used' }, ...model.usedIn.map((u) =>
-      h('li', {}, u.href ? h('a', { href: u.href }, u.title) : h('code', {}, u.title), ` (${u.statusText})`))));
-    return group;
-  }
-
-  async function deleteItem(id, message) {
-    await flushAlt();
-    const item = items.find((i) => i.id === id); // the current row, not the one the panel was built from
-    if (!item) return;
-    const decision = deleteDecision(item);
-    if (!decision.allowed) {
-      message.textContent = decision.message;
-      message.hidden = false;
-      return;
-    }
-    message.hidden = true;
-    const yes = await document.querySelector('confirm-panel').ask({ heading: decision.heading, body: decision.body, confirm: decision.confirm });
-    if (!yes) return;
-    // The next tile in view order, else the one before.
-    const order = filterMedia(items, view).map((i) => i.id);
-    const at = order.indexOf(item.id);
-    const nextId = order[at + 1] ?? order[at - 1] ?? null;
-    try {
-      await api(`${base}/media/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
-    } catch (err) {
-      message.textContent = err.message;
-      message.hidden = false;
-      return;
-    }
-    items = items.filter((i) => i.id !== item.id);
-    selectedId = null;
-    render();
-    select(nextId);
-    ($('media-grid').querySelector('.media-tile[aria-pressed="true"]') || $('media-upload')).focus();
-    refresh();
-  }
-
-  /** Edit image: the preview becomes an editor; Save copy uploads the result as a new file. */
-  async function openEditor(item, { preview, editorSlot, edit }) {
-    const mime = item.mime_type;
-    const format = exportFormat(mime);
-    const error = h('p', { class: 'error', role: 'alert', hidden: true });
-    const save = h('button', { type: 'button', class: 'primary', 'data-action': 'save-copy' }, 'Save copy');
-    const cancel = h('button', { type: 'button', 'data-action': 'cancel-edit' }, 'Cancel');
-    const close = () => {
-      editorSlot.hidden = true;
-      editorSlot.replaceChildren();
-      preview.hidden = false;
-      edit.hidden = false;
-    };
-    preview.hidden = true;
-    edit.hidden = true;
-    editorSlot.hidden = false;
-    editorSlot.replaceChildren(h('p', { class: 'detail-muted' }, 'Loading the editor…'));
-    try {
-      await import('/assets/image-editor/image-editor.js');
-    } catch {
-      close();
-      showError("Couldn't load the image editor. Reload the page to try again.");
-      edit.focus();
-      return;
-    }
-    if (editorSlot.hidden) return; // the panel was rebuilt meanwhile
-    const editor = h('image-editor', { src: displayUrl(item), format });
-    editorSlot.replaceChildren(editor, error, h('div', { class: 'detail-actions' }, save, cancel));
-    cancel.addEventListener('click', () => { close(); edit.focus(); });
-    save.addEventListener('click', async () => {
-      error.hidden = true;
-      save.disabled = cancel.disabled = true;
-      setStatus('Saving a copy…');
-      try {
-        const blob = await editor.getBlob(format, 0.92);
-        const copy = await uploadMedia(base, new File([blob], item.filename, { type: mime }), { editedFrom: item.filename });
+      },
+      showError,
+      deleted(item) {
+        // The next tile in view order, else the one before.
+        const order = filterMedia(items, view).map((i) => i.id);
+        const at = order.indexOf(item.id);
+        const nextId = order[at + 1] ?? order[at - 1] ?? null;
+        items = items.filter((i) => i.id !== item.id);
+        selectedId = null;
+        render();
+        select(nextId);
+        ($('media-grid').querySelector('.media-tile[aria-pressed="true"]') || $('media-upload')).focus();
+        refresh();
+      },
+      async copySaved(copy) {
         await refresh();
         select(copy.id);
-        setStatus(`Saved a copy as ${copy.filename}. The original is unchanged.`);
-        ($('media-grid').querySelector(`[data-id="${CSS.escape(copy.id)}"]`))?.scrollIntoView({ block: 'nearest' });
-      } catch (err) {
-        setStatus('');
-        error.textContent = `${err.message || "Couldn't save the copy."} Your edits are still here; try Save copy again.`;
-        error.hidden = false;
-        save.disabled = cancel.disabled = false;
-      }
-    });
-  }
-
-  /** Build the panel for one item (or the empty panel for null). */
-  function renderDetail(item) {
-    const token = ++paintToken;
-    shownId = item ? item.id : null;
-    setStatus('');
-    const aside = $('media-detail');
-    if (!item) {
-      aside.removeAttribute('aria-labelledby');
-      aside.setAttribute('aria-label', 'File details');
-      detailBody.replaceChildren(h('p', { class: 'detail-muted' }, 'Select a file to see its details.'));
-      return;
-    }
-    const model = detailModel(item, { siteId, locale: navigator.language });
-    aside.removeAttribute('aria-label');
-    aside.setAttribute('aria-labelledby', 'detail-title');
-    const message = h('p', { class: 'error', role: 'alert', hidden: true });
-    const del = h('button', { type: 'button', class: 'danger-text' }, 'Delete…');
-    del.addEventListener('click', () => deleteItem(item.id, message));
-    const actions = h('div', { class: 'detail-actions' });
-    const preview = previewEl(item, token);
-    const editorSlot = h('div', { class: 'detail-editor', hidden: true });
-    if (model.canEdit) {
-      const edit = h('button', { type: 'button', 'data-action': 'edit-image' }, 'Edit image');
-      edit.addEventListener('click', () => openEditor(item, { preview, editorSlot, edit }));
-      actions.append(edit);
-    }
-    actions.append(del);
-    detailBody.replaceChildren(
-      preview,
-      editorSlot,
-      h('div', {},
-        h('h2', { id: 'detail-title' }, model.title),
-        model.original ? h('p', { class: 'detail-muted' }, `Uploaded as ${model.original}`) : null,
-        h('p', { class: 'detail-muted' }, model.meta),
-        model.dims ? h('p', { class: 'detail-muted' }, model.dims) : null),
-      model.showAlt ? altField(item) : null,
-      urlField(model),
-      usedInList(model),
-      message,
-      actions);
-    if (model.showAlt) syncAltUi(item);
-  }
+        $('media-grid').querySelector(`[data-id="${CSS.escape(copy.id)}"]`)?.scrollIntoView({ block: 'nearest' });
+      },
+    },
+  });
+  const { flushAlt } = detail;
 
   /** @param {string|null} id @param {{ focusAlt?: boolean }} [opts] */
   function select(id, { focusAlt = false } = {}) {
-    if (id !== shownId) flushAlt(); // the pending alt is saved to the item it was typed for
+    if (id !== detail.shownId()) flushAlt(); // the pending alt is saved to the item it was typed for
     selectedId = id;
     for (const btn of $('media-grid').querySelectorAll('.media-tile')) {
       btn.setAttribute('aria-pressed', String(btn.dataset.id === id));
     }
     const item = items.find((i) => i.id === id) || null;
     if (!item) selectedId = null;
-    renderDetail(item);
-    if (focusAlt && item && needsAlt(item)) detailBody.querySelector('#media-alt')?.focus();
+    detail.show(item);
+    if (focusAlt && item && needsAlt(item)) detail.focusAlt();
     root.dispatchEvent(new CustomEvent('media-select', { detail: { item } }));
   }
 
@@ -376,7 +152,7 @@ export function initMediaSection({ siteId, root }) {
   function selectByFilename(name) {
     const hit = name && items.find((i) => i.filename === name);
     if (!hit) return false;
-    if (hit.id !== shownId) select(hit.id); // already shown: don't rebuild the panel over a pending alt
+    if (hit.id !== detail.shownId()) select(hit.id); // already shown: don't rebuild the panel over a pending alt
     $('media-grid').querySelector(`[data-id="${CSS.escape(hit.id)}"]`)?.scrollIntoView({ block: 'nearest' });
     return true;
   }
@@ -513,7 +289,7 @@ export function initMediaSection({ siteId, root }) {
     selectByFilename(new URLSearchParams(location.search).get('file'));
   }
   const hide = () => flushAlt();
-  renderDetail(null);
+  detail.show(null);
 
   return { refresh, select, selectByFilename, show, hide };
 }

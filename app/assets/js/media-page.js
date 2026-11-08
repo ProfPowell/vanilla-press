@@ -246,6 +246,7 @@ export function initMediaSection({ siteId, root }) {
   // Drops anywhere on the section.
   const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
   let dragDepth = 0;
+  const clearDrag = () => { dragDepth = 0; delete $('media-drop').dataset.dragging; };
   root.addEventListener('dragenter', (e) => {
     if (!hasFiles(e)) return;
     e.preventDefault();
@@ -255,15 +256,23 @@ export function initMediaSection({ siteId, root }) {
   root.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
   root.addEventListener('dragleave', (e) => {
     if (!hasFiles(e)) return;
-    if (--dragDepth <= 0) { dragDepth = 0; delete $('media-drop').dataset.dragging; }
+    if (--dragDepth <= 0) clearDrag();
   });
   root.addEventListener('drop', (e) => {
     if (!hasFiles(e)) return;
     e.preventDefault();
-    dragDepth = 0;
-    delete $('media-drop').dataset.dragging;
+    clearDrag();
     queue.add([...e.dataTransfer.files]);
   });
+  // The highlight must not stick when the drag ends some other way: the pointer leaves the window,
+  // the drop lands outside the section, the drag is cancelled, or the window loses focus.
+  document.addEventListener('dragleave', (e) => {
+    const outside = e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight;
+    if (!e.relatedTarget && outside) clearDrag();
+  });
+  window.addEventListener('drop', clearDrag);
+  window.addEventListener('dragend', clearDrag);
+  window.addEventListener('blur', clearDrag);
 
   // Paste uploads clipboard files while this section is showing and focus isn't in a text field.
   document.addEventListener('paste', (e) => {

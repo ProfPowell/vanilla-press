@@ -256,6 +256,11 @@ export function mediaDropPlugin({ upload, plan, onInserted = () => {} }) {
           place(view, id, entry.item, entry.note).catch(() => {
             if (view.isDestroyed || findPlaceholder(view.state, id) == null) return;
             view.dispatch(view.state.tr.setMeta(placeholderKey, { fail: { id, error: PLACE_FAILED } }).setMeta('addToHistory', false));
+          }).finally(() => {
+            // The file is in (or its placeholder shows why not): the queue no longer needs its record.
+            ids.delete(entry.key);
+            seen.delete(entry.key);
+            queue.dismiss(entry.key);
           });
         }
       }
@@ -326,6 +331,9 @@ export function mediaDropPlugin({ upload, plan, onInserted = () => {} }) {
       },
     },
   });
+
+  /** How many uploads the view's queue still holds (waiting, uploading or failed); for tests. */
+  handler.pendingUploads = (view) => views.get(view)?.queue.entries().length ?? 0;
 
   return [placeholderPlugin(), handler];
 }

@@ -185,6 +185,18 @@ describe('mediaDropPlugin', () => {
     assert.deepEqual(blocks[1].attrs, { url: '/media/song.mp3', type: 'audio' });
   });
 
+  it('finished uploads leave the queue; a failed one stays until dismissed', async () => {
+    const { state, handler } = setup([para('One')], async (f) => {
+      if (f.name === 'bad.png') throw new Error('Upload failed (500). Try again.');
+      return { kind: 'image', filename: f.name, alt: 'x' };
+    });
+    const view = fakeView(state, bodyStart(state.doc) + 2);
+    handler.props.handleDrop(view, dropEvent([file('good.png'), file('bad.png')]));
+    assert.equal(handler.pendingUploads(view), 2);
+    for (let i = 0; i < 10; i++) await tick();
+    assert.equal(handler.pendingUploads(view), 1, 'only the failed one is kept');
+  });
+
   it('a drop on an empty paragraph replaces it; a web paste is left alone', async () => {
     const { state, handler } = setup([para('One'), para('')], async (f) => ({ kind: 'image', filename: f.name, alt: 'A' }));
     const emptyAt = bodyStart(state.doc) + state.doc.child(1).nodeSize + 1;

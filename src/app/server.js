@@ -196,7 +196,7 @@ export async function startApp({
         components: () => catalogComponents(roots),
         componentsState: () => componentsState(roots),
         // The pages committed in HEAD are the live site: a file they show can't be deleted.
-        liveMedia: createLiveMedia(ws.siteDir, { headCommit: git.headCommit, headTree: git.headTree, readBlob: git.readBlob }),
+        liveMedia: createLiveMedia(ws.siteDir, { headCommit: git.headCommit, headTree: git.headTree, readBlobs: git.readBlobs }),
       });
       const writes = createLock();
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });

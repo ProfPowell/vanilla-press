@@ -4,7 +4,7 @@ import { createLiveMedia } from '../../src/app/live-media.js';
 
 /** A fake git whose HEAD is whatever `state` says; counts blob reads. */
 function fakeGit(state) {
-  const calls = { tree: 0, blobs: [] };
+  const calls = { tree: 0, batches: 0, blobs: [] };
   return {
     calls,
     git: {
@@ -14,9 +14,10 @@ function fakeGit(state) {
         assert.equal(path, 'src');
         return Object.entries(state.files).map(([p, { oid }]) => ({ path: p, oid }));
       },
-      readBlob: async (dir, oid) => {
-        calls.blobs.push(oid);
-        return Object.values(state.files).find((f) => f.oid === oid).text;
+      readBlobs: async (dir, oids) => {
+        calls.batches++;
+        calls.blobs.push(...oids);
+        return new Map(oids.map((oid) => [oid, Object.values(state.files).find((f) => f.oid === oid).text]));
       },
     },
   };
@@ -41,6 +42,7 @@ test('maps each media file to the committed pages that show it, with their vp_id
     'b.png': [{ path: 'src/about.html', vpId: null }],
   });
   assert.deepEqual(calls.blobs, ['b1', 'b2'], 'only html pages are read');
+  assert.equal(calls.batches, 1, 'all pages come from one git process');
 });
 
 test('recomputes only when HEAD changes, and rereads only changed pages', async () => {
@@ -69,8 +71,14 @@ test('a failed read is thrown, and the next call tries again', async () => {
   const state = { sha: 'c1', files: { 'src/a.html': { oid: 'b1', text: '<img src="/media/a.jpg">' } } };
   const { git } = fakeGit(state);
   let fail = true;
-  const live = createLiveMedia('/site', { ...git, readBlob: async (d, oid) => { if (fail) throw new Error('boom'); return git.readBlob(d, oid); } });
+  const live = createLiveMedia('/site', { ...git, readBlobs: async (d, oids) => { if (fail) throw new Error('boom'); return git.readBlobs(d, oids); } });
   await assert.rejects(live(), /boom/);
   fail = false;
   assert.deepEqual([...(await live()).keys()], ['a.jpg']);
+});
+
+test('a failure finding HEAD is thrown, not treated as no HEAD', async () => {
+  const { git } = fakeGit({ sha: 'c1', files: {} });
+  const live = createLiveMedia('/site', { ...git, headCommit: async () => { throw new Error('rev-parse broke'); } });
+  await assert.rejects(live(), /rev-parse broke/);
 });

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import {
-  gitStatus, aheadBehind, lastVpCommitAt, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead, hasHead, headCommit, headTree, readBlob,
+  gitStatus, aheadBehind, lastVpCommitAt, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead, hasHead, headCommit, headTree, readBlob, readBlobs,
   GitConflictError, GitNotConnectedError, GitError, GitStashConflictError,
 } from '../../src/git/git.js';
 
@@ -360,6 +360,33 @@ test('headCommit, headTree and readBlob read the committed tree', async () => {
   const entries = await headTree(a, 'src/tree');
   assert.deepEqual(entries.map((e) => e.path), ['src/tree/p q.html']);
   assert.equal(await readBlob(a, entries[0].oid), '<img src="/media/x.jpg">\n');
+});
+
+test('headCommit: no repo is null; a damaged repo or an unreadable directory throws', async () => {
+  const plain = join(root, 'plain');
+  mkdirSync(plain);
+  assert.equal(await headCommit(plain), null);
+  const broken = join(root, 'broken');
+  execFileSync('git', ['init', '-b', 'main', broken], { stdio: 'ignore' });
+  writeFileSync(join(broken, '.git', 'HEAD'), 'not a ref\n');
+  await assert.rejects(headCommit(broken), GitError);
+  await assert.rejects(headCommit(join(root, 'does-not-exist')), Error);
+});
+
+test('readBlobs reads many blobs with one call, leaves out unknown ids, and has no 16 MB limit', async () => {
+  write(a, 'src/p/one.html', 'one \u00e9\n');
+  write(a, 'src/p/two.html', 'two\n');
+  write(a, 'src/p/big.html', 'x'.repeat(17 * 1024 * 1024));
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'blobs');
+  const entries = await headTree(a, 'src/p');
+  const oid = (name) => entries.find((e) => e.path.endsWith(name)).oid;
+  const got = await readBlobs(a, [oid('one.html'), '1'.repeat(40), oid('big.html'), oid('two.html')]);
+  assert.equal(got.get(oid('one.html')), 'one \u00e9\n');
+  assert.equal(got.get(oid('two.html')), 'two\n');
+  assert.equal(got.get(oid('big.html')).length, 17 * 1024 * 1024);
+  assert.equal(got.has('1'.repeat(40)), false);
+  assert.equal((await readBlobs(a, [])).size, 0);
 });
 
 test('aheadBehind counts local and upstream-only commits, null without an upstream', async () => {

@@ -2,7 +2,7 @@
  * Git operations for Vanilla Press. This is the only module that runs git.
  * Every call goes through runGit, which never lets git prompt for credentials.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -48,10 +48,11 @@ export class GitNotConnectedError extends Error {
 
 /** Any other git failure; stderr holds git's own message. */
 export class GitError extends Error {
-  constructor(message, stderr = '') {
+  constructor(message, stderr = '', code = null) {
     super(message);
     this.name = 'GitError';
     this.stderr = stderr;
+    this.code = code;
   }
 }
 
@@ -84,7 +85,7 @@ async function runGit(dir, args, { raw = false } = {}) {
       throw new GitError(`git ${args[0]} timed out after ${Math.round(timeout / 1000)}s`, String(err.stderr ?? ''));
     }
     const stderr = String(err.stderr ?? err.message ?? '').trim();
-    throw new GitError(`git ${args[0]} failed: ${stderr}`, stderr);
+    throw new GitError(`git ${args[0]} failed: ${stderr}`, stderr, typeof err.code === 'number' ? err.code : null);
   }
 }
 
@@ -274,12 +275,21 @@ export async function hasHead(dir) {
 }
 
 /**
- * The HEAD commit's id, or null when there is no repo or no commit yet.
+ * The HEAD commit's id, or null when there is no repo or no commit yet. Any
+ * other failure (a damaged repo, a timeout) is thrown, so callers can fail closed.
  * @param {string} dir
  * @returns {Promise<string|null>}
  */
 export async function headCommit(dir) {
-  return (await tryGit(dir, ['rev-parse', '--verify', '--quiet', 'HEAD'])) || null;
+  try {
+    return (await runGit(dir, ['rev-parse', '--verify', '--quiet', 'HEAD'])) || null;
+  } catch (err) {
+    // `--verify --quiet` exits 1 with no message when HEAD names no commit yet.
+    if (err instanceof GitError && err.code === 1 && !err.stderr) return null;
+    // No repo at all is "nothing committed"; a damaged .git is not.
+    if (err instanceof GitError && /not a git repository/i.test(err.stderr) && !existsSync(join(dir, '.git'))) return null;
+    throw err;
+  }
 }
 
 /**
@@ -308,6 +318,52 @@ export async function headTree(dir, path) {
  */
 export async function readBlob(dir, oid) {
   return runGit(dir, ['cat-file', 'blob', oid], { raw: true });
+}
+
+/**
+ * Several blobs' text by id with one `git cat-file --batch` process (no size
+ * limit beyond memory). An id git doesn't have is left out of the result.
+ * @param {string} dir
+ * @param {string[]} oids
+ * @returns {Promise<Map<string, string>>}
+ */
+export async function readBlobs(dir, oids) {
+  const texts = new Map();
+  if (oids.length === 0) return texts;
+  const timeout = Number(process.env.VP_GIT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
+  const out = await new Promise((resolve, reject) => {
+    const child = spawn('git', ['cat-file', '--batch'], {
+      cwd: dir,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_LITERAL_PATHSPECS: '1' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const chunks = [];
+    let stderr = '';
+    const timer = setTimeout(() => { child.kill(); reject(new GitError(`git cat-file timed out after ${Math.round(timeout / 1000)}s`)); }, timeout);
+    child.stdout.on('data', (c) => chunks.push(c));
+    child.stderr.on('data', (c) => { stderr += c; });
+    child.on('error', (err) => { clearTimeout(timer); reject(new GitError(`git cat-file failed: ${err.message}`, err.message)); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(Buffer.concat(chunks));
+      else reject(new GitError(`git cat-file failed: ${stderr.trim()}`, stderr.trim(), code));
+    });
+    child.stdin.on('error', () => {});
+    child.stdin.end(oids.join('\n') + '\n');
+  });
+  let at = 0;
+  for (const oid of oids) {
+    const nl = out.indexOf(0x0a, at);
+    if (nl < 0) throw new GitError('git cat-file gave a short answer');
+    const header = out.toString('utf8', at, nl).split(' ');
+    at = nl + 1;
+    if (header[1] === 'missing') continue;
+    const size = Number(header[2]);
+    if (!Number.isFinite(size) || at + size > out.length) throw new GitError('git cat-file gave a short answer');
+    texts.set(oid, out.toString('utf8', at, at + size));
+    at += size + 1;
+  }
+  return texts;
 }
 
 /**

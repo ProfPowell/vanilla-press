@@ -13,7 +13,7 @@ import { readVpId } from '../sync/front-matter.js';
 /**
  * @typedef {{ headCommit: (dir: string) => Promise<string|null>,
  *   headTree: (dir: string, path: string) => Promise<Array<{ path: string, oid: string }>>,
- *   readBlob: (dir: string, oid: string) => Promise<string> }} LiveMediaGit
+ *   readBlobs: (dir: string, oids: string[]) => Promise<Map<string, string>> }} LiveMediaGit
  */
 
 /**
@@ -33,10 +33,14 @@ export function createLiveMedia(siteDir, git) {
     const pages = (await git.headTree(siteDir, 'src')).filter((e) => e.path.endsWith('.html'));
     const seen = new Map();
     const usage = new Map();
+    // One git process reads every page not seen at an earlier HEAD.
+    const fresh = [...new Set(pages.map((p) => p.oid).filter((oid) => !blobs.has(oid)))];
+    const texts = await git.readBlobs(siteDir, fresh);
     for (const { path, oid } of pages) {
       let info = seen.get(oid) || blobs.get(oid);
       if (!info) {
-        const text = await git.readBlob(siteDir, oid);
+        if (!texts.has(oid)) throw new Error(`git has no page ${path}`);
+        const text = texts.get(oid);
         info = { refs: [...liveMediaRefs(text)], vpId: readVpId(text) };
       }
       seen.set(oid, info);

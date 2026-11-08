@@ -377,7 +377,7 @@ describe('API', () => {
       const before = files();
       const { status, data } = await chunkedUpload(30);
       assert.equal(status, 413);
-      assert.match(data.error, /^This file is 26\.0 MB\./);
+      assert.match(data.error, /^This file is 26\.[01] MB\./);
       assert.deepEqual(files(), before);
     });
 

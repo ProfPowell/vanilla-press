@@ -228,12 +228,13 @@ export function initEditor() {
           // Asked per PDF: a package turned on after the editor loaded counts
           pdfViewer: item.kind === 'pdf' ? pdfViewerEnabled(await api.listComponents().catch(() => null)) : false,
         }),
-        onInserted: (view, pos, plan) => {
+        onInserted: (view, pos, plan, { note }) => {
           // The alt field takes focus unless the writer has moved to another field
           const active = document.activeElement;
           const free = !active || active === document.body || view.dom.contains(active);
           if (plan.focusAlt && free) focusFigureAlt(view, pos);
           if (plan.note) addSaveNote(plan.note);
+          if (note) addSaveNote(note); // the large-file note
         },
       }),
       titlePastePlugin(),

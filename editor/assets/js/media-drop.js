@@ -120,7 +120,9 @@ function placeholderDOM(view, spec) {
 
 /**
  * The placeholders: a DecorationSet of widgets keyed by id. Meta actions:
- * `{ add: { id, pos, name, replace? } }`, `{ progress: { id, value } }`,
+ * `{ add: { id, pos, name, replace?, onDismiss? } }` (`replace`: the
+ * `{ from, to }` of an empty paragraph just before `pos` that the block
+ * replaces if it is still there and still empty), `{ progress: { id, value } }`,
  * `{ fail: { id, error } }`, `{ remove: { id } }`. Every placeholder maps
  * through every transaction and stays at a top-level block boundary (a
  * deletion around it moves it rather than dropping it).
@@ -134,13 +136,19 @@ export function placeholderPlugin() {
       apply(tr, set) {
         let next = set;
         if (tr.docChanged && set !== DecorationSet.empty) {
-          next = DecorationSet.create(tr.doc, set.find().map((d) =>
-            widgetFor(blockBoundary(tr.doc, tr.mapping.map(d.from, 1)), d.spec)));
+          next = DecorationSet.create(tr.doc, set.find().map((d) => {
+            const { replace } = d.spec;
+            // The empty paragraph it may replace maps too (checked again on insert)
+            const spec = replace
+              ? { ...d.spec, replace: { from: tr.mapping.map(replace.from, 1), to: tr.mapping.map(replace.to, -1) } }
+              : d.spec;
+            return widgetFor(blockBoundary(tr.doc, tr.mapping.map(d.from, 1)), spec);
+          }));
         }
         const meta = tr.getMeta(placeholderKey);
         if (!meta) return next;
         if (meta.add) {
-          const { id, pos, name, replace = false, onDismiss } = meta.add;
+          const { id, pos, name, replace = null, onDismiss } = meta.add;
           const spec = { id, name, progress: 0, error: null, replace, side: ++order, onDismiss };
           return next.add(tr.doc, [widgetFor(blockBoundary(tr.doc, pos), spec)]);
         }
@@ -173,6 +181,21 @@ export function findPlaceholder(state, id) {
   return set?.find(undefined, undefined, (spec) => spec.id === id)[0]?.from ?? null;
 }
 
+/**
+ * What an insert at placeholder `pos` replaces: the empty paragraph it was
+ * dropped on, only if that paragraph is still there, still empty and still
+ * right before the placeholder; otherwise nothing (insert at `pos`).
+ */
+function replaceRange(doc, replace, pos) {
+  if (replace && replace.to === pos && replace.from < replace.to) {
+    const node = doc.nodeAt(replace.from);
+    if (node?.type.name === 'paragraph' && node.content.size === 0 && replace.from + node.nodeSize === replace.to) {
+      return { from: replace.from, to: replace.to };
+    }
+  }
+  return { from: pos, to: pos };
+}
+
 const specOf = (state, id) =>
   placeholderKey.getState(state)?.find(undefined, undefined, (spec) => spec.id === id)[0]?.spec ?? null;
 
@@ -185,11 +208,12 @@ const PLACE_FAILED = "it uploaded, but couldn't be inserted here. Insert it from
  * @param {{
  *   upload: (file: File, opts: { onProgress: (f: number) => void }) => Promise<object>,
  *   plan: (item: object) => object|Promise<object>,
- *   onInserted?: (view: import('prosemirror-view').EditorView, pos: number, plan: object) => void,
+ *   onInserted?: (view: import('prosemirror-view').EditorView, pos: number, plan: object, extra: { note: string|null }) => void,
  * }} opts
  *   `upload` sends one file and resolves its MediaItem; `plan` turns the
  *   item into an insert plan (media-insert.js `insertPlan`); `onInserted`
- *   runs after the block is in (focus the alt field, add a save note).
+ *   runs after the block is in (focus the alt field, add the plan's
+ *   note and the upload's large-file note to the next save).
  * @returns {Plugin[]}
  */
 export function mediaDropPlugin({ upload, plan, onInserted = () => {} }) {
@@ -229,7 +253,7 @@ export function mediaDropPlugin({ upload, plan, onInserted = () => {} }) {
           if (findPlaceholder(view.state, id) == null) continue;
           view.dispatch(view.state.tr.setMeta(placeholderKey, { fail: { id, error: entry.error } }).setMeta('addToHistory', false));
         } else {
-          place(view, id, entry.item).catch(() => {
+          place(view, id, entry.item, entry.note).catch(() => {
             if (view.isDestroyed || findPlaceholder(view.state, id) == null) return;
             view.dispatch(view.state.tr.setMeta(placeholderKey, { fail: { id, error: PLACE_FAILED } }).setMeta('addToHistory', false));
           });
@@ -239,20 +263,20 @@ export function mediaDropPlugin({ upload, plan, onInserted = () => {} }) {
   }
 
   /** Replace placeholder `id` with the uploaded item's block. */
-  async function place(view, id, item) {
+  async function place(view, id, item, note) {
     const p = await plan(item);
     if (view.isDestroyed) return;
     const { state } = view;
     const pos = findPlaceholder(state, id);
     if (pos == null) return; // another post was opened: the file stays in the library
-    const spec = specOf(state, id);
-    const node = state.doc.nodeAt(pos);
-    const to = spec?.replace && node?.type.name === 'paragraph' && node.content.size === 0 ? pos + node.nodeSize : pos;
+    const range = replaceRange(state.doc, specOf(state, id)?.replace, pos);
     const tr = closeHistory(state.tr)
-      .replaceWith(pos, to, Fragment.fromArray(nodesFor(p, state.schema)))
+      .replaceWith(range.from, range.to, Fragment.fromArray(nodesFor(p, state.schema)))
       .setMeta(placeholderKey, { remove: { id } });
     view.dispatch(tr);
-    onInserted(view, pos, p);
+    // An alt edit or typing right after is its own undo step, not part of the insert
+    view.dispatch(closeHistory(view.state.tr).setMeta('addToHistory', false));
+    onInserted(view, range.from, p, { note });
   }
 
   /** Placeholders at the place for `pos`, then the uploads. */
@@ -261,14 +285,15 @@ export function mediaDropPlugin({ upload, plan, onInserted = () => {} }) {
     const range = insertRangeFor(view.state.doc, pos);
     const list = Array.from(files);
     const keyOf = new Map(); // placeholder id → queue entry key
+    // Every placeholder goes after the empty paragraph (if any), in drop
+    // order; only the first file may replace that paragraph
     const added = list.map((file, i) => {
       const id = `drop${++seq}`;
       return {
         id,
-        pos: range.from,
+        pos: range.to,
         name: file.name,
-        // Only the first file replaces an empty paragraph; the rest follow it
-        replace: i === 0 && range.to > range.from,
+        replace: i === 0 && range.to > range.from ? { ...range } : null,
         // Dismiss also drops the queue's record of the failed file
         onDismiss: () => { const key = keyOf.get(id); if (key) queue.dismiss(key); },
       };

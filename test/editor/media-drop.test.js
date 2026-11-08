@@ -2,10 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { EditorState } from 'prosemirror-state';
 import { history, undo } from 'prosemirror-history';
-import { toBlockAst } from '../../editor/assets/js/ast.js';
 import { insertPlan } from '../../editor/assets/js/media-insert.js';
 import { schema } from '../../editor/assets/js/schema.js';
-import { fromBlockAst } from '../../editor/assets/js/ast.js';
+import { fromBlockAst, toBlockAst } from '../../editor/assets/js/ast.js';
 import {
   shouldUpload, insertRangeFor, placeholderPlugin, placeholderKey, findPlaceholder, mediaDropPlugin,
 } from '../../editor/assets/js/media-drop.js';
@@ -142,10 +141,11 @@ describe('mediaDropPlugin', () => {
   const dropEvent = (files) => ({ clientX: 0, clientY: 0, dataTransfer: { files: Object.assign([...files], { length: files.length }), types: ['Files'] } });
   const tick = () => new Promise((r) => setTimeout(r, 0));
 
-  function setup(blocks, uploadImpl) {
+  function setup(blocks, uploadImpl, onInserted) {
     const plugins = mediaDropPlugin({
       upload: uploadImpl,
       plan: (item) => insertPlan(item, { pdfViewer: false }),
+      onInserted,
     });
     const state = EditorState.create({ doc: docOf(blocks), plugins: [history(), ...plugins] });
     return { plugins, state, handler: plugins[1] };
@@ -195,4 +195,85 @@ describe('mediaDropPlugin', () => {
     const paste = { clipboardData: { files: { length: 1 }, types: ['Files', 'text/html'] } };
     assert.equal(handler.props.handlePaste(view, paste), false);
   });
+
+  const names = (doc) => toBlockAst(doc).map((b) => (b.type === 'figure' ? b.attrs.src.replace('/media/', '') : b.type));
+  const settle = async () => { for (let i = 0; i < 20; i++) await tick(); };
+
+  it('several files dropped on an empty paragraph land in drop order', async () => {
+    const { state, handler } = setup([para('One'), para('')], async (f) => ({ kind: 'image', filename: f.name, alt: 'x' }));
+    const view = fakeView(state, bodyStart(state.doc) + state.doc.child(1).nodeSize + 1);
+    handler.props.handleDrop(view, dropEvent([file('a.png'), file('b.png'), file('c.png')]));
+    await settle();
+    assert.deepEqual(names(view.state.doc), ['paragraph', 'a.png', 'b.png', 'c.png']);
+  });
+
+  it('several files dropped mid-paragraph land after it in drop order', async () => {
+    const { state, handler } = setup([para('One'), para('Two')], async (f) => ({ kind: 'image', filename: f.name, alt: 'x' }));
+    const view = fakeView(state, bodyStart(state.doc) + 2);
+    handler.props.handleDrop(view, dropEvent([file('a.png'), file('b.png'), file('c.png')]));
+    await settle();
+    assert.deepEqual(names(view.state.doc), ['paragraph', 'a.png', 'b.png', 'c.png', 'paragraph']);
+  });
+
+  /** An upload that waits until released. */
+  function heldUpload() {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    return { release, upload: async (f) => { await gate; return { kind: 'image', filename: f.name, alt: 'x' }; } };
+  }
+
+  it('text typed into the target empty paragraph meanwhile keeps it: the figure goes after it', async () => {
+    const held = heldUpload();
+    const { state, handler } = setup([para('One'), para('')], held.upload);
+    const emptyAt = bodyStart(state.doc) + state.doc.child(1).nodeSize;
+    const view = fakeView(state, emptyAt + 1);
+    handler.props.handleDrop(view, dropEvent([file('a.png')]));
+    view.dispatch(view.state.tr.insertText('typed', emptyAt + 1));
+    held.release();
+    await settle();
+    const blocks = toBlockAst(view.state.doc);
+    assert.deepEqual(names(view.state.doc), ['paragraph', 'paragraph', 'a.png']);
+    assert.equal(blocks[1].children[0].value, 'typed');
+  });
+
+  it('a moved placeholder never replaces another empty paragraph', async () => {
+    const held = heldUpload();
+    const { state, handler } = setup([para('One'), para(''), para('')], held.upload);
+    const target = bodyStart(state.doc) + state.doc.child(1).nodeSize;
+    const view = fakeView(state, target + 1);
+    handler.props.handleDrop(view, dropEvent([file('a.png')]));
+    // The target paragraph is deleted; the other empty paragraph now sits where it was
+    view.dispatch(view.state.tr.delete(target, target + 2));
+    held.release();
+    await settle();
+    assert.deepEqual(names(view.state.doc), ['paragraph', 'a.png', 'paragraph']);
+  });
+
+  it('the large-file note reaches onInserted', async () => {
+    const seen = [];
+    const { state, handler } = setup([para('One')], async (f) => ({ kind: 'image', filename: f.name, alt: 'x', large: true }),
+      (view, pos, plan, extra) => seen.push(extra?.note));
+    const view = fakeView(state, bodyStart(state.doc) + 2);
+    handler.props.handleDrop(view, dropEvent([file('a.png')]));
+    await settle();
+    assert.equal(seen.length, 1);
+    assert.match(seen[0], /^Large file: /);
+  });
+
+  it('an alt edit right after the insert is its own undo step', async () => {
+    const { state, handler } = setup([para('One')], async (f) => ({ kind: 'image', filename: f.name, alt: null }));
+    const view = fakeView(state, bodyStart(state.doc) + 2);
+    handler.props.handleDrop(view, dropEvent([file('a.png')]));
+    await settle();
+    const figPos = bodyStart(view.state.doc) + view.state.doc.child(1).nodeSize;
+    const fig = view.state.doc.nodeAt(figPos);
+    assert.equal(fig.type.name, 'figure');
+    view.dispatch(view.state.tr.setNodeMarkup(figPos, null, { ...fig.attrs, alt: 'Typed' }));
+    let next = null;
+    undo(view.state, (tr) => { next = view.state.apply(tr); });
+    const after = toBlockAst(next.doc);
+    assert.deepEqual(after.map((b) => b.type), ['paragraph', 'figure'], 'the figure stays');
+    assert.equal(after[1].attrs.alt, '', 'only the alt edit is undone');
+  });
 });
+

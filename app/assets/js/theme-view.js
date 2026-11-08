@@ -156,3 +156,47 @@ export function hueOf(color) {
   const h = parseFloat(m[3]);
   return Number.isFinite(h) ? h : null;
 }
+
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+/** Text or an attribute value as HTML. */
+export function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ESCAPES[c]);
+}
+
+/**
+ * The preview's page, for a sandboxed iframe's srcdoc: the site's Vanilla
+ * Breeze, the theme's stylesheet (`#vp-theme-css`, no href when the theme is
+ * built in), the preview layout and the adjustments (`#vp-site-preview`),
+ * with the theme ids and scheme on `<html>` as Cook writes them. The post
+ * HTML is the body as the site renders it; the sandbox (no scripts) keeps it
+ * out of the app.
+ * @param {{ vbHref: string, themeHref: string|null, layoutHref: string, dataTheme: string,
+ *   mode: 'light'|'dark', adjustCss: string, siteName: string,
+ *   post: { title?: string, dateText?: string, html: string }|null,
+ *   sample?: { title: string, paragraphs: string[] } }} p
+ * @returns {string}
+ */
+export function previewSrcdoc({
+  vbHref, themeHref, layoutHref, dataTheme, mode, adjustCss, siteName, post, sample = { title: '', paragraphs: [] },
+}) {
+  const attr = (name, value) => (value ? ` ${name}="${escapeHtml(value)}"` : '');
+  const body = post
+    ? `${post.dateText ? `<p class="preview-meta">${escapeHtml(post.dateText)}</p>` : ''}<h1>${escapeHtml(post.title || 'Untitled')}</h1>\n${post.html || ''}`
+    : `<h1>${escapeHtml(sample.title)}</h1>${sample.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('')}`;
+  return [
+    '<!doctype html>',
+    `<html lang="en"${attr('data-theme', dataTheme)}${attr('data-mode', mode)}>`,
+    '<head><meta charset="utf-8"><title>Preview</title>',
+    `<link rel="stylesheet"${attr('href', vbHref)}>`,
+    `<link id="vp-theme-css" rel="stylesheet"${attr('href', themeHref)}>`,
+    `<link rel="stylesheet"${attr('href', layoutHref)}>`,
+    `<style id="vp-site-preview">${String(adjustCss || '').replace(/<\//g, '<\\/')}</style>`,
+    '</head>',
+    '<body>',
+    `<header class="preview-site-head"><span class="preview-brand">${escapeHtml(siteName)}</span>`
+      + '<nav class="preview-nav" aria-label="Site"><a href="#">Posts</a><a href="#">Feed</a></nav></header>',
+    `<main class="preview-article">${body}\n<p><span class="button">More posts</span></p></main>`,
+    '</body></html>',
+  ].join('\n');
+}

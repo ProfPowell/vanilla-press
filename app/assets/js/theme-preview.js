@@ -1,7 +1,7 @@
 /**
- * DOM helpers for the Theme section's cards and preview: theme stylesheets,
- * the colors a hue change gives (read from the real theme CSS) and the
- * preview's adjustments stylesheet.
+ * DOM helpers for the Theme section's cards and preview: theme stylesheets
+ * in the app (cards, color probe), the colors a hue change gives (read from
+ * the real theme CSS), and the preview iframe's adjustments stylesheet.
  *
  * @module app/theme-preview
  */
@@ -12,21 +12,25 @@ import { hueOf } from './theme-view.js';
 export const HUE_TOKENS = ['--color-primary', '--color-interactive'];
 
 const loaded = new Map();
+const ready = new Set();
 
 /**
- * Load a theme's stylesheet once: one `<link rel="stylesheet" data-vp-theme-css="<id>">`
- * per id. Themes with no stylesheet (built into Vanilla Breeze) need none.
- * @param {{ id: string, href?: string|null }} theme
+ * Load a theme's stylesheet into the app once: one `<link rel="stylesheet" data-vp-theme-css="<id>">`
+ * per id (for the cards and the color probe). Themes with no stylesheet (built into Vanilla Breeze) need none.
+ * @param {{ id: string, href?: string|null }|null} theme
  */
 export function ensureThemeCss(theme) {
-  if (!theme?.href || loaded.has(theme.id)) return;
+  if (!theme) return;
+  if (!theme.href) { ready.add(theme.id); return; }
+  if (loaded.has(theme.id)) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = theme.href;
   link.dataset.vpThemeCss = theme.id;
   loaded.set(theme.id, new Promise((resolve) => {
-    link.addEventListener('load', resolve, { once: true });
-    link.addEventListener('error', resolve, { once: true });
+    const done = () => { ready.add(theme.id); resolve(); };
+    link.addEventListener('load', done, { once: true });
+    link.addEventListener('error', done, { once: true });
   }));
   document.head.append(link);
 }
@@ -38,6 +42,15 @@ export function ensureThemeCss(theme) {
  */
 export function themeCssReady(id) {
   return Promise.resolve(loaded.get(id));
+}
+
+/**
+ * Whether a theme's stylesheet is in the app already (true for themes with none),
+ * so values read from it now are the theme's.
+ * @param {string} id
+ */
+export function themeCssLoaded(id) {
+  return ready.has(id);
 }
 
 /** A hidden themed element with a probe inside, for reading computed values. */
@@ -97,38 +110,34 @@ export function themeHue(probeHost, base, scheme = 'light') {
 }
 
 /**
- * Put the preview's adjustments CSS (scoped to vp-site) in `<style id="vp-site-preview">`.
+ * Put the preview's adjustments CSS (scoped to vp-site) in `<style id="vp-site-preview">`
+ * of a document: the preview iframe's.
  * @param {string} cssText
+ * @param {Document} [doc]
  */
-export function setPreviewCss(cssText) {
-  let style = document.getElementById('vp-site-preview');
-  if (!style) {
-    style = document.createElement('style');
+export function setPreviewCss(cssText, doc = document) {
+  let style = doc.getElementById('vp-site-preview');
+  if (!style || style.localName !== 'style') {
+    style = doc.createElement('style');
+    doc.head.append(style);
     style.id = 'vp-site-preview';
-    document.head.append(style);
   }
   style.textContent = cssText;
 }
 
-const DROP_ELEMENTS = 'script, iframe, object, embed, frame, frameset, style, link, meta, base, form, input, button, select, textarea';
+const FOCUSABLE = 'a[href], area[href], button, input, select, textarea, summary, iframe, object, embed, '
+  + 'audio[controls], video[controls], [tabindex], [contenteditable]:not([contenteditable="false"])';
 
 /**
- * A post's rendered HTML as an inert fragment for the preview: no scripts,
- * frames, forms, event handler attributes or javascript: links.
- * @param {string} html
- * @returns {DocumentFragment}
+ * Take the preview page out of the tab order and out of reach of the pointer:
+ * it stays readable (a screen reader can browse it) but nothing in it acts.
+ * The iframe's sandbox already stops scripts, forms, popups and top navigation.
+ * @param {Document} doc
  */
-export function previewFragment(html) {
-  const tpl = document.createElement('template');
-  tpl.innerHTML = String(html || '');
-  for (const el of tpl.content.querySelectorAll(DROP_ELEMENTS)) el.remove();
-  for (const el of tpl.content.querySelectorAll('*')) {
-    for (const attr of [...el.attributes]) {
-      const name = attr.name.toLowerCase();
-      if (name.startsWith('on') || (/^(href|src|xlink:href|action|formaction)$/.test(name) && /^\s*javascript:/i.test(attr.value))) {
-        el.removeAttribute(attr.name);
-      }
-    }
+export function quietPreview(doc) {
+  for (const el of doc.querySelectorAll(FOCUSABLE)) el.setAttribute('tabindex', '-1');
+  for (const el of doc.querySelectorAll('audio, video')) {
+    el.removeAttribute('autoplay');
+    el.pause?.();
   }
-  return tpl.content;
 }

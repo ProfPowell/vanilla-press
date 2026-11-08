@@ -1,0 +1,24 @@
+/*
+ * Layout of the Theme section's preview page (inside its sandboxed iframe).
+ * Colors and fonts are the theme's own Vanilla Breeze tokens: data-theme and
+ * data-mode sit on this page's <html>, as on the live site.
+ */
+html { background: var(--color-background); }
+body { margin: 0; background: var(--color-background); color: var(--color-text); font-family: var(--font-body); line-height: 1.6; overflow-wrap: anywhere; }
+
+/* A preview: nothing in it acts (the parent also takes it out of the tab order). */
+a, button, summary, input, select, textarea, video, audio { pointer-events: none; }
+
+.preview-site-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.875rem 2rem; border-block-end: 1px solid var(--color-border); }
+.preview-brand { font-family: var(--font-heading); font-weight: 700; }
+.preview-nav { display: flex; gap: 1rem; font-size: 0.875rem; }
+.preview-nav a { color: var(--color-interactive); }
+.preview-article { display: block; padding: 2.75rem 3.5rem 3rem; }
+.preview-article :is(img, video, svg, iframe) { max-inline-size: 100%; block-size: auto; }
+.preview-article pre { overflow: auto; }
+.preview-meta { margin: 0 0 0.5rem; font-size: 0.8em; color: var(--color-text-muted); }
+
+@media (max-width: 34rem) {
+  .preview-site-head { padding-inline: 1.125rem; }
+  .preview-article { padding: 1.75rem 1.125rem 2rem; }
+}

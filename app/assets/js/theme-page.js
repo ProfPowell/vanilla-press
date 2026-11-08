@@ -4,17 +4,25 @@
  * leaving the section and coming back keeps it. Rules live in theme-view.js,
  * DOM helpers in theme-preview.js. Apply is wired by the caller (Task 11):
  * see the returned `draft()` and `state()`.
+ *
+ * The preview is a sandboxed iframe (no scripts) whose page links the site's
+ * Vanilla Breeze, the theme and the adjustments, as the live site would: the
+ * post's HTML never enters the app's document. Changes update that page's
+ * <html> attributes and stylesheets in place.
  * @module theme-page
  */
 import { api, h, formatDate } from './app-api.js';
 import {
-  draftFrom, isDirty, cardModels, schemeControl, schemeOf, pagesModel, vbNote,
+  draftFrom, isDirty, cardModels, schemeControl, schemeOf, pagesModel, vbNote, previewSrcdoc,
 } from './theme-view.js';
 import {
-  ensureThemeCss, themeCssReady, computeColors, themeHue, setPreviewCss, previewFragment,
+  ensureThemeCss, themeCssReady, themeCssLoaded, computeColors, themeHue, setPreviewCss, quietPreview,
 } from './theme-preview.js';
 import { adjustmentsCss, skippedTokens } from '../../../src/themes/theme-css.js';
 import { ADJUST_ID } from '../../../src/themes/theme-setting.js';
+
+const LAYOUT_HREF = '/app/assets/theme-preview-frame.css';
+const VP_VB_HREF = '/assets/vb/vanilla-breeze.css';
 
 const SAMPLE = {
   title: 'A sample post',
@@ -70,6 +78,8 @@ export function initThemeSection({ siteId, root }) {
   function renderCards() {
     const m = cardModels(state.themes, { current: draft.name, query: view.query, expanded: view.expanded });
     $('theme-cards').replaceChildren(...m.cards.map(card));
+    // More than a screenful scrolls in its own region, so Adjust stays near.
+    $('theme-cards').toggleAttribute('data-scroll', m.cards.length > 8);
     const more = $('theme-more');
     more.hidden = !m.toggleText;
     more.textContent = m.toggleText || '';
@@ -80,12 +90,17 @@ export function initThemeSection({ siteId, root }) {
   }
 
   // --- Adjust ---
+  // A fixed group stays focusable (aria-disabled) so its reason, linked with aria-describedby, is found.
   const pressGroup = (group, attr, value, disabled = false) => {
     for (const btn of $(group).querySelectorAll(`button[${attr}]`)) {
       btn.setAttribute('aria-pressed', String(btn.getAttribute(attr) === value));
-      btn.disabled = disabled;
+      if (disabled) btn.setAttribute('aria-disabled', 'true');
+      else btn.removeAttribute('aria-disabled');
     }
   };
+
+  /** The theme's own hue, rounded as the slider shows it. */
+  const ownHue = (theme) => Math.round(themeHue(root, theme.id, schemeOf(theme, draft.mode, prefersDark.matches)));
 
   function renderAdjust() {
     const theme = currentTheme();
@@ -94,37 +109,87 @@ export function initThemeSection({ siteId, root }) {
     pressGroup('theme-scheme', 'data-scheme', scheme.disabled ? theme.only : draft.mode, scheme.disabled);
     $('theme-scheme-note').textContent = scheme.note || '';
     $('theme-scheme-note').hidden = !scheme.note;
+    if (scheme.note) $('theme-scheme').setAttribute('aria-describedby', 'theme-scheme-note');
+    else $('theme-scheme').removeAttribute('aria-describedby');
     pressGroup('theme-corners', 'data-corners', draft.adjustments.corners);
     $('theme-heading-font').value = draft.adjustments.headingFont || '';
     $('theme-body-font').value = draft.adjustments.bodyFont || '';
-    const hue = draft.adjustments.hue ?? themeHue(root, theme.id, schemeOf(theme, draft.mode, prefersDark.matches));
+    const hue = draft.adjustments.hue ?? ownHue(theme);
     $('theme-hue').value = String(Math.round(hue));
     $('theme-hue-value').textContent = `${Math.round(hue)}°`;
     $('theme-hue').setAttribute('aria-valuetext', `${Math.round(hue)} degrees${draft.adjustments.hue == null ? ", the theme's own" : ''}`);
   }
 
   // --- Preview ---
-  function renderPreviewContent() {
-    $('theme-preview-site').textContent = siteName;
+  const frame = $('theme-preview-frame');
+  /** The preview iframe's document once it has loaded, else null. */
+  let frameDoc = null;
+
+  const previewScheme = () => schemeOf(currentTheme(), draft.mode, prefersDark.matches);
+
+  /** Build the preview page (on load: the site name and preview post may have changed). */
+  function buildPreview() {
     const post = state?.preview;
     $('theme-preview-post').textContent = post?.title ? ` · ${post.title}` : '';
-    const article = $('theme-preview-article');
-    const date = post?.date ? formatDate(post.date) : '';
-    const body = post ? previewFragment(post.html) : SAMPLE.paragraphs.map((p) => h('p', {}, p));
-    article.replaceChildren(
-      ...(date ? [h('p', { class: 'preview-meta' }, date)] : []),
-      h('h1', {}, post?.title || SAMPLE.title),
-      ...(post ? [body] : body),
-      h('p', {}, h('a', { class: 'button', href: '#' }, 'More posts')));
+    frameDoc = null;
+    frame.srcdoc = previewSrcdoc({
+      vbHref: state?.vb?.url || VP_VB_HREF,
+      themeHref: currentTheme().href || null,
+      layoutHref: LAYOUT_HREF,
+      dataTheme: `${draft.name} ${ADJUST_ID}`,
+      mode: previewScheme(),
+      adjustCss: '',
+      siteName,
+      post: post ? { title: post.title, dateText: post.date ? formatDate(post.date) : '', html: post.html } : null,
+      sample: SAMPLE,
+    });
   }
 
-  /** The adjustments with literal colors for the draft's hue (recomputed when the hue or base changes). */
+  /** Fit the iframe to its page (no inner scrollbar). */
+  function fitPreview() {
+    if (!frameDoc?.documentElement) return;
+    frame.style.blockSize = `${Math.ceil(frameDoc.documentElement.scrollHeight)}px`;
+  }
+
+  frame.addEventListener('load', () => {
+    const doc = frame.contentDocument;
+    if (!doc?.documentElement || frame.srcdoc === '') return;
+    frameDoc = doc;
+    quietPreview(doc);
+    // Theme stylesheets, fonts and images change the page's height after it loads.
+    doc.addEventListener('load', fitPreview, true);
+    doc.fonts?.ready.then(fitPreview);
+    syncPreview();
+  });
+
+  /** Put the draft on the preview page: ids and scheme on <html>, the theme's stylesheet, the adjustments. */
+  function syncPreview(css = adjustmentsCss(adjustmentsWithColors())) {
+    if (!frameDoc) return;
+    const html = frameDoc.documentElement;
+    html.setAttribute('data-theme', `${draft.name} ${ADJUST_ID}`);
+    html.setAttribute('data-mode', previewScheme());
+    const link = frameDoc.getElementById('vp-theme-css');
+    const href = currentTheme().href;
+    if (link && link.getAttribute('href') !== (href ?? null)) {
+      if (href) link.setAttribute('href', href);
+      else link.removeAttribute('href');
+    }
+    setPreviewCss(css, frameDoc);
+    requestAnimationFrame(fitPreview);
+  }
+
+  /**
+   * The adjustments with literal colors for the draft's hue, recomputed when the
+   * hue or base changes. Colors are read only once the base theme's CSS is in
+   * the app; before that none are returned (and none cached).
+   */
   function adjustmentsWithColors() {
     const { hue } = draft.adjustments;
     if (hue == null) {
       colors = null;
       colorsFor = '';
     } else if (colorsFor !== `${draft.name}:${hue}`) {
+      if (!themeCssLoaded(draft.name)) return { ...draft.adjustments, colors: null };
       colors = computeColors(root, draft.name, hue);
       colorsFor = `${draft.name}:${hue}`;
     }
@@ -132,14 +197,9 @@ export function initThemeSection({ siteId, root }) {
   }
 
   function renderPreview() {
-    const theme = currentTheme();
-    const frame = $('theme-preview-frame');
-    frame.dataset.theme = `${draft.name} ${ADJUST_ID}`;
-    frame.dataset.mode = schemeOf(theme, draft.mode, prefersDark.matches);
     frame.dataset.width = view.width;
     pressGroup('theme-width', 'data-width', view.width);
-    const adj = adjustmentsWithColors();
-    setPreviewCss(adjustmentsCss(adj));
+    syncPreview();
     const skipped = skippedTokens(colors);
     $('theme-skipped').textContent = skipped.length
       ? `These colors can't be used, so they are left out: ${skipped.join(', ')}.`
@@ -163,7 +223,9 @@ export function initThemeSection({ siteId, root }) {
     if (!state) return;
     ensureThemeCss(themeById(draft.name));
     if (cards) renderCards();
-    await themeCssReady(draft.name);
+    const name = draft.name;
+    await themeCssReady(name);
+    if (name !== draft.name) return; // a newer update renders the newer base
     renderAdjust();
     renderPreview();
     renderDirty();
@@ -192,13 +254,16 @@ export function initThemeSection({ siteId, root }) {
   });
 
   $('theme-hue').addEventListener('input', (e) => {
-    draft = { ...draft, adjustments: { ...draft.adjustments, hue: Number(e.target.value) } };
+    // Back on the theme's own hue is no hue change: no literal colors, nothing unapplied.
+    const value = Number(e.target.value);
+    const hue = themeCssLoaded(draft.name) && value === ownHue(currentTheme()) ? null : value;
+    draft = { ...draft, adjustments: { ...draft.adjustments, hue } };
     update();
   });
 
   $('theme-scheme').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-scheme]');
-    if (!btn || btn.disabled) return;
+    if (!btn || btn.getAttribute('aria-disabled') === 'true') return;
     draft = { ...draft, mode: btn.dataset.scheme };
     update();
   });
@@ -228,6 +293,7 @@ export function initThemeSection({ siteId, root }) {
     if (!btn) return;
     view.width = btn.dataset.width;
     renderPreview();
+    requestAnimationFrame(fitPreview);
   });
 
   prefersDark.addEventListener('change', () => update());
@@ -245,7 +311,7 @@ export function initThemeSection({ siteId, root }) {
       $('theme-vb-note').textContent = note || '';
       $('theme-vb-note').hidden = !note;
       renderPages();
-      renderPreviewContent();
+      buildPreview();
       showError('');
       await update({ cards: true });
     } catch (err) {
@@ -256,8 +322,16 @@ export function initThemeSection({ siteId, root }) {
   return {
     /** Load (first view) or refresh the server state; the draft is kept. */
     show: load,
-    /** The draft and its literal colors, for Apply. */
-    draft: () => ({ ...draft, adjustments: adjustmentsWithColors() }),
+    /** The draft and its literal colors, for Apply: read once the base theme's CSS has loaded. */
+    draft: async () => {
+      let name;
+      do {
+        name = draft.name;
+        ensureThemeCss(themeById(name));
+        await themeCssReady(name);
+      } while (name !== draft.name);
+      return { ...draft, adjustments: adjustmentsWithColors() };
+    },
     /** The last GET /theme response. */
     state: () => state,
     /** After a successful Apply: the draft is what is applied now. */

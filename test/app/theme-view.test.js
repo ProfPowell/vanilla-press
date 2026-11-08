@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  draftFrom, isDirty, cardModels, schemeControl, pagesModel, vbNote, hueOf, schemeOf,
+  draftFrom, isDirty, cardModels, schemeControl, pagesModel, vbNote, hueOf, schemeOf, previewSrcdoc, escapeHtml,
 } from '../../app/assets/js/theme-view.js';
 
 const theme = (id, tier, extra = {}) => ({
@@ -147,5 +147,47 @@ describe('theme-view', () => {
     assert.equal(hueOf('oklch(0.5 0 none)'), 0);
     assert.equal(hueOf('rgb(0, 0, 0)'), null);
     assert.equal(hueOf(''), null);
+  });
+
+  it('escapeHtml escapes markup and quotes', () => {
+    assert.equal(escapeHtml(`<a href="x">'&'</a>`), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
+    assert.equal(escapeHtml(null), '');
+  });
+
+  it('previewSrcdoc: a whole page with the theme on <html>, its stylesheets and the adjustments', () => {
+    const doc = previewSrcdoc({
+      vbHref: '/sites/mc/site/assets/vendor/vanilla-breeze/vanilla-breeze.css',
+      themeHref: '/sites/mc/site/assets/vendor/vanilla-breeze/themes/8bit.css',
+      layoutHref: '/app/assets/theme-preview-frame.css',
+      dataTheme: '8bit vp-site', mode: 'dark',
+      adjustCss: '[data-theme~="vp-site"] { --hue-primary: 120; }',
+      siteName: 'My <site>', post: { title: 'A "post"', dateText: 'Nov 3, 2026', html: '<p>Hello <b>there</b></p>' },
+    });
+    assert.match(doc, /^<!doctype html>/);
+    assert.match(doc, /<html lang="en" data-theme="8bit vp-site" data-mode="dark">/);
+    assert.match(doc, /<link rel="stylesheet" href="\/sites\/mc\/site\/assets\/vendor\/vanilla-breeze\/vanilla-breeze.css">/);
+    assert.match(doc, /<link id="vp-theme-css" rel="stylesheet" href="\/sites\/mc\/site\/assets\/vendor\/vanilla-breeze\/themes\/8bit.css">/);
+    assert.match(doc, /<link rel="stylesheet" href="\/app\/assets\/theme-preview-frame.css">/);
+    assert.match(doc, /<style id="vp-site-preview">\[data-theme~="vp-site"\] \{ --hue-primary: 120; \}<\/style>/);
+    assert.ok(doc.includes('My &lt;site&gt;'));
+    assert.ok(doc.includes('<h1>A &quot;post&quot;</h1>'));
+    assert.ok(doc.includes('Nov 3, 2026'));
+    assert.ok(doc.includes('<p>Hello <b>there</b></p>'), 'the post HTML is the page body, as the site renders it');
+    assert.ok(doc.includes('class="button"'));
+    assert.ok(doc.indexOf('vp-site-preview') > doc.indexOf('vp-theme-css'), 'adjustments after the theme');
+  });
+
+  it('previewSrcdoc: no theme stylesheet, sample text, and no way out of the <style> or attributes', () => {
+    const doc = previewSrcdoc({
+      vbHref: '/assets/vb/vanilla-breeze.css', themeHref: null, layoutHref: '/x.css',
+      dataTheme: 'default vp-site" onload="x', mode: 'light',
+      adjustCss: 'a{}</style><script>x()</script>', siteName: '', post: null,
+      sample: { title: 'Sample', paragraphs: ['One <i>', 'Two'] },
+    });
+    assert.match(doc, /<link id="vp-theme-css" rel="stylesheet">/);
+    assert.ok(doc.includes('data-theme="default vp-site&quot; onload=&quot;x"'));
+    assert.ok(!doc.includes('</style><script>'));
+    assert.ok(doc.includes('<\\/style>'));
+    assert.ok(doc.includes('<h1>Sample</h1>') && doc.includes('<p>One &lt;i&gt;</p>') && doc.includes('<p>Two</p>'));
   });
 });

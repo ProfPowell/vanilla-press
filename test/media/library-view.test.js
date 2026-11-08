@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   altState, needsAlt, FILTERS, TYPES, filterMedia, headerCounts, tileModel, emptyText, DROP_TEXT,
+  detailModel, ALT_PLACEHOLDER, ALT_HINT, altForCheckbox, createAltSaver, deleteDecision,
 } from '../../src/media/library-view.js';
 
 const item = (o) => ({
@@ -114,4 +115,111 @@ test('emptyText', () => {
 
 test('DROP_TEXT', () => {
   assert.equal(DROP_TEXT, 'Drop files here, or paste from the clipboard. Files go to src/media and back up with your next save.');
+});
+
+// --- Detail panel ---
+const detail = (o) => detailModel(item({ size: 1_258_291, width: 1200, height: 800, created: '2026-11-03T12:00:00Z', ...o }), { siteId: 'my site', locale: 'en-US' });
+
+test('detailModel: an image with dimensions', () => {
+  const m = detail({ filename: 'a.jpg', original_name: 'IMG_1.jpg', alt: null, usedIn: [{ id: 'd 1', title: '', status: 'draft' }, { id: 'p', title: 'Hello', status: 'published' }] });
+  assert.equal(m.title, 'a.jpg');
+  assert.equal(m.original, 'IMG_1.jpg');
+  assert.equal(m.meta, 'JPEG image \u00b7 1.2 MB \u00b7 added Nov 3, 2026');
+  assert.equal(m.dims, '1200 \u00d7 800 px');
+  assert.equal(m.url, '/media/a.jpg');
+  assert.equal(m.showAlt, true);
+  assert.equal(m.altState, 'missing');
+  assert.equal(m.canEdit, true);
+  assert.deepEqual(m.usedIn, [
+    { title: 'Untitled', href: '/editor/?site=my%20site#doc-d%201', statusText: 'Draft' },
+    { title: 'Hello', href: '/editor/?site=my%20site#doc-p', statusText: 'Published' },
+  ]);
+});
+
+test('detailModel: original is null when it equals the filename', () => {
+  assert.equal(detail({ filename: 'a.jpg', original_name: 'a.jpg' }).original, null);
+});
+
+test('detailModel: a PDF has no dimensions, no alt, and cannot be edited', () => {
+  const m = detail({ filename: 'r.pdf', mime_type: 'application/pdf', kind: 'pdf', alt: null, width: null, height: null });
+  assert.equal(m.dims, null);
+  assert.equal(m.showAlt, false);
+  assert.equal(m.canEdit, false);
+  assert.match(m.meta, /^PDF document \u00b7 1\.2 MB/);
+});
+
+test('detailModel: a GIF cannot be edited; a missing JPEG cannot be edited', () => {
+  assert.equal(detail({ mime_type: 'image/gif' }).canEdit, false);
+  assert.equal(detail({ missing: true }).canEdit, false);
+});
+
+test('alt copy', () => {
+  assert.equal(ALT_PLACEHOLDER, "Describe what the image shows, for people who can't see it");
+  assert.equal(ALT_HINT, 'Screen readers will announce only the file name. Leave empty only for decorative images, and mark it so:');
+});
+
+test('altForCheckbox: ticking stores "", unticking stores null', () => {
+  assert.equal(altForCheckbox(true), '');
+  assert.equal(altForCheckbox(false), null);
+});
+
+function fakeTimers() {
+  let n = 0;
+  const pending = new Map();
+  return {
+    setTimer: (fn) => { pending.set(++n, fn); return n; },
+    clearTimer: (id) => { pending.delete(id); },
+    fire: () => { const fns = [...pending.values()]; pending.clear(); fns.forEach((f) => f()); },
+    size: () => pending.size,
+  };
+}
+
+test('typing debounces to one save', async () => {
+  const t = fakeTimers();
+  const calls = [];
+  const saver = createAltSaver({ save: async (id, alt) => { calls.push([id, alt]); }, setTimer: t.setTimer, clearTimer: t.clearTimer });
+  saver.change('a', 'H');
+  saver.change('a', 'He');
+  saver.change('a', 'Hey');
+  assert.equal(calls.length, 0);
+  t.fire();
+  await saver.flush();
+  assert.deepEqual(calls, [['a', 'Hey']]);
+});
+
+test('switching items saves the pending alt to the first item', async () => {
+  const t = fakeTimers();
+  const calls = [];
+  const saver = createAltSaver({ save: async (id, alt) => { calls.push([id, alt]); }, setTimer: t.setTimer, clearTimer: t.clearTimer });
+  saver.change('a', 'for a');
+  saver.change('b', 'for b');
+  await Promise.resolve();
+  assert.deepEqual(calls, [['a', 'for a']]);
+  await saver.flush();
+  assert.deepEqual(calls, [['a', 'for a'], ['b', 'for b']]);
+  await saver.flush();
+  assert.equal(calls.length, 2);
+});
+
+test('flush with nothing pending saves nothing; a null alt is saved as null', async () => {
+  const calls = [];
+  const saver = createAltSaver({ save: async (id, alt) => { calls.push([id, alt]); } });
+  await saver.flush();
+  saver.change('a', null);
+  await saver.flush();
+  assert.deepEqual(calls, [['a', null]]);
+});
+
+test('deleteDecision', () => {
+  const used = (status, title) => ({ id: title, title, status });
+  assert.deepEqual(deleteDecision(item({ filename: 'a.jpg', usedIn: [used('published', 'A'), used('draft', 'D'), used('published', 'B')] })),
+    { allowed: false, message: 'Used by published posts: A, B. Remove it from them and Update first.' });
+  assert.deepEqual(deleteDecision(item({ filename: 'a.jpg', usedIn: [used('draft', 'A'), used('draft', 'B')] })), {
+    allowed: true, heading: 'Delete "a.jpg"?', confirm: 'Delete file',
+    body: 'Used in drafts: A, B. They will show it as missing. The file is removed from src/media; git history keeps a copy.',
+  });
+  assert.deepEqual(deleteDecision(item({ filename: 'a.jpg', usedIn: [] })), {
+    allowed: true, heading: 'Delete "a.jpg"?', confirm: 'Delete file',
+    body: 'The file is removed from src/media; git history keeps a copy.',
+  });
 });

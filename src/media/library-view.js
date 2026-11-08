@@ -2,7 +2,8 @@
  * Pure helpers for the Media screen's library (no DOM). Browser-safe.
  * @module media/library-view
  */
-import { typeLabel } from './types.js';
+import { typeLabel, canEditImage } from './types.js';
+import { formatBytes } from './limits.js';
 
 /** Alt text has three states: `null` never written, `""` decorative, text. */
 export function altState(alt) {
@@ -67,4 +68,102 @@ export function emptyText({ filter = 'all', type = 'all', query = '' } = {}) {
   if (filter === 'unused') return 'Every file is used in a post.';
   if (filter === 'missing') return 'No missing files.';
   return EMPTY_BY_TYPE[type] || 'No media yet. Upload files or drop them here.';
+}
+
+// --- Detail panel ---
+
+export const ALT_PLACEHOLDER = "Describe what the image shows, for people who can't see it";
+export const ALT_HINT = 'Screen readers will announce only the file name. Leave empty only for decorative images, and mark it so:';
+
+/** The Decorative checkbox's stored alt: ticked is `""`, unticked is `null` (never written). */
+export const altForCheckbox = (checked) => (checked ? '' : null);
+
+/**
+ * What the detail panel shows for one item.
+ * @param {object} item MediaItem
+ * @param {{ siteId: string, locale?: string }} opts
+ */
+export function detailModel(item, { siteId, locale } = {}) {
+  const added = item.created
+    ? new Date(item.created).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  const meta = [typeLabel(item.mime_type), Number.isFinite(item.size) ? formatBytes(item.size) : null, added ? `added ${added}` : null]
+    .filter(Boolean).join(' \u00b7 ');
+  return {
+    title: item.filename,
+    original: item.original_name && item.original_name !== item.filename ? item.original_name : null,
+    meta,
+    dims: item.width > 0 && item.height > 0 ? `${item.width} \u00d7 ${item.height} px` : null,
+    url: `/media/${item.filename}`,
+    showAlt: item.kind === 'image',
+    altState: altState(item.alt),
+    canEdit: canEditImage(item.mime_type) && !item.missing,
+    usedIn: (item.usedIn || []).map((u) => ({
+      title: u.title || 'Untitled',
+      href: `/editor/?site=${encodeURIComponent(siteId)}#doc-${encodeURIComponent(u.id)}`,
+      statusText: u.status === 'published' ? 'Published' : 'Draft',
+    })),
+  };
+}
+
+/**
+ * Saves alt text after typing pauses. One item is pending at a time: changing another item
+ * saves the first right away, and `flush()` saves whatever is pending.
+ * @param {{ save: (id: string, alt: string|null) => Promise<any>, delay?: number, setTimer?: Function, clearTimer?: Function }} opts
+ */
+export function createAltSaver({ save, delay = 600, setTimer = setTimeout, clearTimer = clearTimeout }) {
+  let pending = null;
+  let timer = null;
+  let inflight = Promise.resolve();
+  let active = 0; // saves started and not yet finished
+
+  function start() {
+    if (timer != null) { clearTimer(timer); timer = null; }
+    if (!pending) return;
+    const { id, alt } = pending;
+    pending = null;
+    // Start now when idle; otherwise queue behind the save in flight. A failed save doesn't block the next.
+    const run = () => save(id, alt);
+    inflight = active ? inflight.catch(() => {}).then(run) : run();
+    active++;
+    const mine = inflight;
+    const done = () => { active--; };
+    mine.then(done, done);
+  }
+
+  return {
+    change(id, alt) {
+      if (pending && pending.id !== id) start();
+      pending = { id, alt };
+      if (timer != null) clearTimer(timer);
+      timer = setTimer(start, delay);
+    },
+    async flush() {
+      start();
+      const run = inflight;
+      await run;
+    },
+  };
+}
+
+const titles = (list) => list.map((u) => u.title || 'Untitled').join(', ');
+
+/**
+ * Whether a file can be deleted, and the words for the confirmation or the refusal.
+ * Published posts block it; drafts are named in the confirmation.
+ */
+export function deleteDecision(item) {
+  const users = item.usedIn || [];
+  const published = users.filter((u) => u.status === 'published');
+  if (published.length) {
+    return { allowed: false, message: `Used by published posts: ${titles(published)}. Remove it from them and Update first.` };
+  }
+  const drafts = users.filter((u) => u.status !== 'published');
+  const tail = 'The file is removed from src/media; git history keeps a copy.';
+  return {
+    allowed: true,
+    heading: `Delete "${item.filename}"?`,
+    body: drafts.length ? `Used in drafts: ${titles(drafts)}. They will show it as missing. ${tail}` : tail,
+    confirm: 'Delete file',
+  };
 }

@@ -13,5 +13,6 @@
 @import "./_theme-picker.css" layer(editor);
 @import "./_component-settings.css" layer(editor);
 @import "./_site-mode.css" layer(editor);
+@import "./_confirm-panel.css" layer(editor);
 @import "./_format-toolbar.css" layer(editor);
 @import "./_block-handles.css" layer(editor);

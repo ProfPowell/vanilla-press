@@ -9,6 +9,7 @@
 <!-- The editor's theme picker first: VB also ships a <theme-picker>, and its registry skips a tag already defined. -->
 <script type="module" src="/editor/assets/js/components/theme-picker.js"></script>
 <script type="module" src="/assets/vb/vanilla-breeze.js"></script>
+<script type="module" src="/editor/assets/js/components/confirm-panel.js"></script>
 <script type="module" src="/app/assets/js/site-page.js"></script>
 </head>
 <body>
@@ -69,6 +70,8 @@
           </div>
         </div>
         <p id="media-error" class="error" role="alert" hidden></p>
+        <div class="media-layout">
+        <div class="media-main">
         <div class="posts-bar">
           <div id="media-filters" role="group" aria-label="Filter media" class="filter-group"></div>
           <div class="media-tools">
@@ -78,8 +81,14 @@
         </div>
         <ul id="media-grid" class="media-grid" aria-labelledby="media-title"></ul>
         <p id="media-empty" class="empty" hidden></p>
-        <ul id="media-uploads" class="upload-list" role="status" aria-label="Uploads" hidden></ul>
+        <div role="status" aria-label="Uploads"><ul id="media-uploads" class="upload-list" hidden></ul></div>
         <p id="media-drop" class="media-drop"></p>
+        </div>
+        <aside id="media-detail" class="media-detail" aria-label="File details">
+          <div id="media-detail-body"></div>
+          <p id="media-detail-status" class="detail-status" role="status"></p>
+        </aside>
+        </div>
       </section>
 
       <section id="components-section" aria-labelledby="components-title" hidden>
@@ -97,5 +106,6 @@
     </div>
   </main>
 </div>
+<confirm-panel></confirm-panel>
 </body>
 </html>

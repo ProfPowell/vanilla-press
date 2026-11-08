@@ -275,15 +275,16 @@ function showSection(section) {
   }
   if (section === 'components' && !componentState) loadComponents();
   if (section === 'media') startMedia();
+  else mediaPage?.then((media) => media?.hide());
 }
 
-// Media loads on first view, and only once.
+// Media is set up on first view, only once; every view refreshes it and applies a ?file= deep link.
 let mediaPage = null;
 function startMedia() {
-  if (mediaPage) return;
-  mediaPage = import('./media-page.js')
+  mediaPage ||= import('./media-page.js')
     .then((m) => m.initMediaSection({ siteId, root: $('media-section') }))
     .catch((err) => showError(err.message));
+  mediaPage.then((media) => media?.show());
 }
 
 $('rail-sections').addEventListener('click', (e) => {

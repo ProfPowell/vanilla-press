@@ -50,7 +50,7 @@ import './components/more-menu.js';
 import './components/confirm-panel.js';
 import { initPatterns } from './patterns.js';
 import { enabledDescriptors, unrepresentable, withoutDropped } from './component-model.js';
-import { isSiteMode, initSiteMode } from './site-mode.js';
+import { initSiteMode } from './site-mode.js';
 import { saveErrorMessage } from './site-context.js';
 
 // Re-export meta-state functions for convenience
@@ -414,8 +414,8 @@ export async function loadDocument(id) {
     notifyConflict();
   } catch (err) {
     console.error('Error loading document:', err);
-    if (isSiteMode) setSaveStatus('error', `Couldn't open the post: ${err.message}`);
-    else alert(`Error loading document: ${err.message}`);
+    // The header's save pill (a status region) shows it in the app and in vp serve alike
+    setSaveStatus('error', `Couldn't open the post: ${err.message}`);
   }
 }
 

@@ -8,6 +8,9 @@ test('limits and formatBytes', () => {
   assert.equal(formatBytes(512), '512 bytes');
   assert.equal(formatBytes(812 * 1024), '812 KB');
   assert.equal(formatBytes(Math.round(4.2 * 1048576)), '4.2 MB');
+  assert.equal(formatBytes(1048576 - 1), '1.0 MB', 'rolls over instead of 1024 KB');
+  assert.equal(formatBytes(1048576 - 512), '1.0 MB');
+  assert.equal(formatBytes(1048576 - 513), '1023 KB');
 });
 
 test('ACCEPT_ATTR lists every extension', () => {
@@ -25,7 +28,8 @@ test('checkBeforeUpload', () => {
   const big = checkBeforeUpload({ name: 'a.mp4', size: MAX_BYTES + 1 });
   assert.equal(big.ok, false);
   assert.equal(big.error, tooLargeMessage('a.mp4', MAX_BYTES + 1));
-  assert.ok(big.error.includes('25.0 MB') && big.error.includes('Files over 25 MB'));
+  assert.match(big.error, /too large \(25\.000 MB\); the limit is 25 MB/);
+  assert.match(tooLargeMessage('b.mp4', 40 * 1048576), /b\.mp4 is too large \(40\.0 MB\); the limit is 25 MB/);
   assert.deepEqual(checkBeforeUpload({ name: 'a.mp4', size: MAX_BYTES }), { ok: true, large: true });
   assert.deepEqual(checkBeforeUpload({ name: 'a.jpg', size: LARGE_BYTES + 1 }), { ok: true, large: true });
   assert.deepEqual(checkBeforeUpload({ name: 'a.JPG', size: LARGE_BYTES }), { ok: true, large: false });

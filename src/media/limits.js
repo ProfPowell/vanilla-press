@@ -6,14 +6,16 @@ export const LARGE_BYTES = 5_242_880; // 5 MiB
 
 export function formatBytes(n) {
   if (n < 1024) return `${n} bytes`;
-  if (n < 1048576) return `${Math.round(n / 1024)} KB`;
+  if (Math.round(n / 1024) < 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1048576).toFixed(1)} MB`;
 }
 
 export const ACCEPT_ATTR = ACCEPTED.flatMap((t) => t.exts.map((e) => `.${e}`)).join(',');
 
 export function tooLargeMessage(name, size) {
-  return `${name} is ${formatBytes(size)}. Files over 25 MB can't be published (Cloudflare Pages won't serve them). Make it smaller and try again.`;
+  // Just over the limit "25.0 MB" would read as under it: show more digits.
+  const shown = size > MAX_BYTES && formatBytes(size) === '25.0 MB' ? `${(size / 1048576).toFixed(3)} MB` : formatBytes(size);
+  return `${name} is too large (${shown}); the limit is 25 MB. Cloudflare Pages won't serve larger files. Make it smaller and try again.`;
 }
 
 export function unsupportedMessage(name) {

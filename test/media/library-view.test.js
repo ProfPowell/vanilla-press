@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   altState, needsAlt, FILTERS, TYPES, filterMedia, headerCounts, tileModel, emptyText, DROP_TEXT,
-  detailModel, ALT_PLACEHOLDER, ALT_HINT, altForCheckbox, createAltSaver, deleteDecision,
+  detailModel, ALT_PLACEHOLDER, ALT_HINT, altForCheckbox, createAltSaver, deleteDecision, refusedDeleteMessage,
 } from '../../src/media/library-view.js';
 
 const item = (o) => ({
@@ -256,4 +256,9 @@ test('take() hands over the pending alt synchronously and cancels its timer', as
   assert.equal(saver.take(), null);
   await saver.flush();
   assert.equal(calls.length, 0, 'taken means the caller saves it, not the saver');
+});
+
+test('refusedDeleteMessage names the posts and pages that still use the file', () => {
+  assert.equal(refusedDeleteMessage([{ title: 'Hello' }, { title: 'src/about.html' }, { title: '' }]),
+    'Used by published posts: Hello, src/about.html, Untitled. Remove it from them and Update first.');
 });

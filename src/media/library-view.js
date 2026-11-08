@@ -158,6 +158,14 @@ export function createAltSaver({ save, delay = 600, setTimer = setTimeout, clear
 const titles = (list) => list.map((u) => u.title || 'Untitled').join(', ');
 
 /**
+ * The words for a delete the server refused (409): who still uses the file.
+ * @param {Array<{ title?: string }>} posts - the refusal's `posts` list
+ */
+export function refusedDeleteMessage(posts) {
+  return `Used by published posts: ${titles(posts)}. Remove it from them and Update first.`;
+}
+
+/**
  * Whether a file can be deleted, and the words for the confirmation or the refusal.
  * Published posts block it; drafts are named in the confirmation.
  */
@@ -165,7 +173,7 @@ export function deleteDecision(item) {
   const users = item.usedIn || [];
   const published = users.filter((u) => u.status === 'published');
   if (published.length) {
-    return { allowed: false, message: `Used by published posts: ${titles(published)}. Remove it from them and Update first.` };
+    return { allowed: false, message: refusedDeleteMessage(published) };
   }
   const drafts = users.filter((u) => u.status !== 'published');
   const tail = 'The file is removed from src/media; git history keeps a copy.';

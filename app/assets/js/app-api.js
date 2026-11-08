@@ -1,6 +1,6 @@
 /**
  * Small fetch wrapper for the app API. Throws Error(message) using the server's
- * `{ error }` text when there is one.
+ * `{ error }` text when there is one; the error also carries `status` and `data`.
  * @module app-api
  */
 
@@ -23,7 +23,12 @@ export async function api(path, { method = 'GET', body } = {}) {
   }
   let data = null;
   try { data = await res.json(); } catch { /* no body */ }
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const err = new Error(data?.error || `Request failed (${res.status})`);
+    err.status = res.status;
+    err.data = data; // the whole refusal body, for callers that need more than the message
+    throw err;
+  }
   return data;
 }
 

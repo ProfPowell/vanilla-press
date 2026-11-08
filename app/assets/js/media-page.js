@@ -113,6 +113,7 @@ export function initMediaSection({ siteId, root }) {
         render();
       },
       showError,
+      refresh,
       deleted(item) {
         // The next tile in view order, else the one before.
         const order = filterMedia(items, view).map((i) => i.id);

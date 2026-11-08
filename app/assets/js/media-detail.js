@@ -5,7 +5,7 @@
  */
 import { api, h } from './app-api.js';
 import {
-  ALT_PLACEHOLDER, ALT_HINT, detailModel, altForCheckbox, createAltSaver, deleteDecision,
+  ALT_PLACEHOLDER, ALT_HINT, detailModel, altForCheckbox, createAltSaver, deleteDecision, refusedDeleteMessage,
 } from '../../../src/media/library-view.js';
 import { exportFormat } from '../../../src/media/types.js';
 import { uploadMedia } from '../../../editor/assets/js/media-upload.js';
@@ -14,7 +14,7 @@ import { uploadMedia } from '../../../editor/assets/js/media-upload.js';
  * @param {{ siteId: string, base: string, root: HTMLElement,
  *   host: { getItem: (id: string) => Object|undefined, replaceItem: (item: Object) => void,
  *     showError: (message: string) => void, deleted: (item: Object) => void,
- *     copySaved: (copy: Object) => Promise<void> } }} opts
+ *     copySaved: (copy: Object) => Promise<void>, refresh: () => Promise<void> } }} opts
  * @returns {{ show: (item: Object|null) => void, flushAlt: () => Promise<void>, shownId: () => string|null, focusAlt: () => void }}
  */
 export function createMediaDetail({ siteId, base, root, host }) {
@@ -165,6 +165,14 @@ export function createMediaDetail({ siteId, base, root, host }) {
     try {
       await api(`${base}/media/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
     } catch (err) {
+      if (err.status === 409 && Array.isArray(err.data?.posts)) {
+        // Something now uses the file that the panel didn't know about: name it, and bring the tile and panel up to date.
+        const notice = refusedDeleteMessage(err.data.posts);
+        await host.refresh();
+        const fresh = host.getItem(id);
+        if (fresh && shownId === id) show(fresh, { notice });
+        return;
+      }
       message.textContent = err.message;
       message.hidden = false;
       return;
@@ -220,7 +228,7 @@ export function createMediaDetail({ siteId, base, root, host }) {
   }
 
   /** Build the panel for one item (or the empty panel for null). */
-  function show(item) {
+  function show(item, { notice = '' } = {}) {
     const token = ++paintToken;
     shownId = item ? item.id : null;
     setStatus('');
@@ -234,7 +242,7 @@ export function createMediaDetail({ siteId, base, root, host }) {
     const model = detailModel(item, { siteId, locale: navigator.language });
     aside.removeAttribute('aria-label');
     aside.setAttribute('aria-labelledby', 'detail-title');
-    const message = h('p', { class: 'error', role: 'alert', hidden: true });
+    const message = h('p', { class: 'error', role: 'alert', hidden: !notice }, notice);
     const del = h('button', { type: 'button', class: 'danger-text' }, 'Delete…');
     del.addEventListener('click', () => deleteItem(item.id, message));
     const actions = h('div', { class: 'detail-actions' });

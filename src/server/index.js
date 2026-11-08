@@ -20,7 +20,7 @@ import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { createRouter } from './router.js';
 import { mountApi } from './api.js';
 import { syncFromSite } from '../sync/from-site.js';
-import { serveStatic } from './static.js';
+import { serveStatic, MEDIA_HEADERS } from './static.js';
 import { refuseForeign } from './guard.js';
 import { componentsState, catalogComponents } from '../app/components.js';
 import { CATALOG } from '../components/catalog.js';
@@ -96,7 +96,6 @@ export function startServer(options = {}) {
   const staticMounts = [
     { prefix: '/editor/', dir: join(ROOT, 'editor') },
     { prefix: '/src/', dir: join(ROOT, 'src') },
-    { prefix: '/media/', dir: mediaDir },
     { prefix: '/test/', dir: join(ROOT, 'test') },
     { prefix: '/kitchen-sink/', dir: join(ROOT, 'kitchen-sink') },
     { prefix: '/assets/vb/', dir: join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') },
@@ -128,6 +127,7 @@ export function startServer(options = {}) {
 
       // Try static file serving
       if (serveComponent(req, res)) return;
+      if (req.url.startsWith('/media/') && serveStatic(req, res, [{ prefix: '/media/', dir: mediaDir }], { headers: MEDIA_HEADERS })) return;
       if (serveStatic(req, res, staticMounts)) return;
 
       // 404

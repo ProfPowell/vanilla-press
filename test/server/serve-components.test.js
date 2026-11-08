@@ -42,3 +42,27 @@ describe('vp serve: document saves check components against the catalog (R12)', 
     assert.match((await bad.json()).errors.join('\n'), /x-not-catalogued" is not on for this site/);
   });
 });
+
+describe('vp serve: media is served sandboxed', () => {
+  let server, base, dir;
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'vp-serve-media-'));
+    const port = await freePort();
+    server = startServer({ port, dbPath: join(dir, 'content.db') });
+    await new Promise((r) => (server.listening ? r() : server.once('listening', r)));
+    base = `http://127.0.0.1:${port}`;
+  });
+  after(async () => {
+    await new Promise((r) => server.close(r));
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('/media/x.svg carries the sandbox headers', async () => {
+    const res = await fetch(`${base}/media/logo.svg`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-security-policy'), 'sandbox');
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res.headers.get('content-type'), 'image/svg+xml');
+    await res.arrayBuffer();
+  });
+});

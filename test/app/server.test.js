@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdi
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startApp } from '../../src/app/server.js';
+import { startApp, isQueuedWrite } from '../../src/app/server.js';
 import { createRouter, sendJson } from '../../src/server/router.js';
 import { mountApi } from '../../src/server/api.js';
 import { makeGitSite, git as gitCmd, write as writeIn } from './git-site-fixture.js';
@@ -641,6 +641,105 @@ describe('app server media library', () => {
     } finally {
       await app.close();
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('app server media serving and backup', () => {
+  const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000003000000020806000000730100', 'hex');
+  let root, app, id, site;
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), 'vp-app-mserve-'));
+    site = makeSite(root, 'site-s');
+    mkdirSync(join(site, 'src', 'media'), { recursive: true });
+    writeFileSync(join(site, 'src', 'media', 'x.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    writeFileSync(join(site, 'src', 'media', 'clip.mp4'), Buffer.from('0123456789abcdef'));
+    writeFileSync(join(site, 'src', 'media', 'doc.pdf'), '%PDF-1.4');
+    app = await startApp({ port: 0, env: { VP_CONFIG_DIR: join(root, 'config') }, git: fakeGit });
+    id = (await (await fetch(`${app.url}/api/sites`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: site }),
+    })).json()).id;
+  });
+  after(async () => {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('media responses are sandboxed', async () => {
+    const res = await fetch(`${app.url}/sites/${id}/media/x.svg`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-security-policy'), 'sandbox');
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res.headers.get('content-type'), 'image/svg+xml');
+  });
+
+  it('media supports byte ranges', async () => {
+    const res = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { headers: { Range: 'bytes=0-3' } });
+    assert.equal(res.status, 206);
+    assert.equal(res.headers.get('content-range'), 'bytes 0-3/16');
+    assert.equal(res.headers.get('accept-ranges'), 'bytes');
+    assert.equal(await res.text(), '0123');
+    const tail = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { headers: { Range: 'bytes=-4' } });
+    assert.equal(tail.headers.get('content-range'), 'bytes 12-15/16');
+    assert.equal(await tail.text(), 'cdef');
+    const open = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { headers: { Range: 'bytes=10-' } });
+    assert.equal(open.headers.get('content-range'), 'bytes 10-15/16');
+    const bad = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { headers: { Range: 'bytes=999999-' } });
+    assert.equal(bad.status, 416);
+    assert.equal(bad.headers.get('content-range'), 'bytes */16');
+    await bad.arrayBuffer();
+  });
+
+  it('a multi-range request is served whole (M4)', async () => {
+    const res = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { headers: { Range: 'bytes=0-1,4-5' } });
+    assert.equal(res.status, 200);
+    assert.equal((await res.text()).length, 16);
+  });
+
+  it('pdf and mp4 get their types', async () => {
+    const pdf = await fetch(`${app.url}/sites/${id}/media/doc.pdf`);
+    assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+    const mp4 = await fetch(`${app.url}/sites/${id}/media/clip.mp4`);
+    assert.equal(mp4.headers.get('content-type'), 'video/mp4');
+    await pdf.arrayBuffer(); await mp4.arrayBuffer();
+  });
+
+  it('isQueuedWrite covers media writes', () => {
+    assert.equal(isQueuedWrite('POST', '/api/sites/a/media'), true);
+    assert.equal(isQueuedWrite('PUT', '/api/sites/a/media/m1'), true);
+    assert.equal(isQueuedWrite('DELETE', '/api/sites/a/media/m1'), true);
+    assert.equal(isQueuedWrite('GET', '/api/sites/a/media'), false);
+    assert.equal(isQueuedWrite('POST', '/api/sites/a/documents/x/publish'), false);
+    assert.equal(isQueuedWrite('POST', '/api/sites/a/documents'), true);
+  });
+
+  it('the app serves its own pdf-viewer and image-editor', async () => {
+    for (const p of ['pdf-viewer/pdf-viewer.js', 'image-editor/image-editor.js']) {
+      const res = await fetch(`${app.url}/assets/${p}`);
+      assert.equal(res.status, 200, p);
+      await res.arrayBuffer();
+    }
+  });
+
+  it('an upload schedules a draft backup', async () => {
+    const fx = makeGitSite();
+    const env = { VP_CONFIG_DIR: join(fx.root, 'config') };
+    const timers = { setTimer: () => 0, clearTimer: () => {} };
+    const a = await startApp({ port: 0, env, git: undefined, backup: timers });
+    try {
+      const sid = (await (await fetch(`${a.url}/api/sites`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: fx.site }),
+      })).json()).id;
+      const form = new FormData();
+      form.append('file', new Blob([PNG], { type: 'image/png' }), 'pic.png');
+      const up = await fetch(`${a.url}/api/sites/${sid}/media`, { method: 'POST', body: form });
+      assert.equal(up.status, 201, await up.clone().text());
+      const { filename } = await up.json();
+      await fetch(`${a.url}/api/sites/${sid}/backup`, { method: 'POST' });
+      assert.equal(gitCmd(fx.site, 'log', '-1', '--format=%s'), `Draft: ${filename} [CI Skip]`);
+    } finally {
+      await a.close();
+      rmSync(fx.root, { recursive: true, force: true });
     }
   });
 });

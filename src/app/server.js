@@ -29,7 +29,7 @@ import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { syncFromSite } from '../sync/from-site.js';
 import { createRouter, sendJson } from '../server/router.js';
 import { mountApi } from '../server/api.js';
-import { serveStatic, serveFile } from '../server/static.js';
+import { serveStatic, serveFile, MEDIA_HEADERS } from '../server/static.js';
 import { refuseForeign } from '../server/guard.js';
 import { CATALOG } from '../components/catalog.js';
 import { packageDir } from '../components/describe.js';
@@ -50,19 +50,25 @@ const STATIC_MOUNTS = [
   { prefix: '/src/', dir: join(ROOT, 'src') },
   { prefix: '/assets/vb/', dir: join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') },
   { prefix: '/assets/code-block/', dir: join(ROOT, 'node_modules', '@profpowell', 'code-block', 'dist') },
+  { prefix: '/assets/pdf-viewer/', dir: join(ROOT, 'node_modules', '@profpowell', 'pdf-viewer', 'dist') },
+  { prefix: '/assets/image-editor/', dir: join(ROOT, 'node_modules', '@profpowell', 'image-editor', 'dist') },
 ];
 
 /** Actions with their own queue (they take the write lock inside the backup queue). */
 const ACTION_PATH = /\/documents\/[^/]+\/(publish|update|unpublish)$/;
 
 /**
- * A write that changes a document's files (create, save, reload, delete, sync
- * all): it waits for a running publish/update/unpublish (Ruling O).
+ * A write that changes a site's files (document create, save, reload, delete, sync;
+ * media upload, alt edit, delete): it waits for a running publish/update/unpublish (Ruling O).
+ * @param {string} method
+ * @param {string} pathname
+ * @returns {boolean}
  */
-function isDocumentWrite(req, pathname) {
-  if (!['POST', 'PUT', 'DELETE'].includes(req.method)) return false;
+export function isQueuedWrite(method, pathname) {
+  if (!['POST', 'PUT', 'DELETE'].includes(method)) return false;
   const rest = pathname.replace(/^\/api\/sites\/[^/]+/, '');
   if (rest === '/sync') return true;
+  if (rest === '/media' || rest.startsWith('/media/')) return true;
   return (rest === '/documents' || rest.startsWith('/documents/')) && !ACTION_PATH.test(rest);
 }
 
@@ -183,6 +189,7 @@ export async function startApp({
         rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix,
         statusByActions: true, // Ruling P: only Publish/Update/Unpublish change status
         onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
+        onMediaChanged: ({ filename }) => backup.noteSaved({ title: filename, status: 'draft' }),
         // Saves check the whole catalog (R12): a post keeps a component turned off since;
         // Publish/Update refuse it (setPublished, against the enabled ones).
         components: () => catalogComponents(roots),
@@ -404,7 +411,7 @@ export async function startApp({
       return sendJson(res, 422, { error: `Cannot open site: ${err.message}` });
     }
     const handle = () => entry.router.handle(req, res);
-    const handled = isDocumentWrite(req, pathname) ? await entry.writes(handle) : await handle();
+    const handled = isQueuedWrite(req.method, pathname) ? await entry.writes(handle) : await handle();
     if (!handled) sendJson(res, 404, { error: 'Not found' });
   }
 
@@ -415,7 +422,8 @@ export async function startApp({
     try { id = decodeURIComponent(match[1]); } catch { return false; }
     const site = getSite(id, { env });
     if (!site) return false;
-    return serveStatic(req, res, [{ prefix: `/sites/${id}/media/`, dir: join(site.path, 'src', 'media') }]);
+    return serveStatic(req, res, [{ prefix: `/sites/${id}/media/`, dir: join(site.path, 'src', 'media') }],
+      { headers: MEDIA_HEADERS });
   }
 
   /**

@@ -17,6 +17,8 @@ import { outputPaths, postUrlPath } from '../sync/paths.js';
 import { GitNotConnectedError } from '../git/git.js';
 import { BACKUP_PATHS, postPages } from './site-git.js';
 import { componentTags } from './components.js';
+import { mediaRefs } from '../media/usage.js';
+import { isMissing } from '../sync/media-library.js';
 
 /** The site's build failed; `log` is the tail of its output. */
 export class BuildError extends Error {
@@ -133,7 +135,8 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  *   update: refuse (422) unless the post is already published;
  *   deps.components: the components on for the site; publish/update refuse (422), before
  *   saving or building, a post that uses a component not in it, or one whose descriptor
- *   has `loadsOnLiveSite: false` (R14)
+ *   has `loadsOnLiveSite: false` (R14); publish/update also refuse (422), before building,
+ *   a post that refers to a `/media/` file missing from `ws.mediaDir` (M13)
  * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean,
  *   kind: 'publish'|'update'|'unpublish', expectedText: string|null }>}
  *   rebased: the push rebased onto commits from elsewhere (the caller re-syncs the store);
@@ -163,6 +166,16 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
     if (dead) {
       throw new PublishRejectedError(422, {
         error: `This post uses <${dead.tag}>, which won't load on the live site: ${dead.liveSiteNote}. Remove it from the post to publish now.`,
+      });
+    }
+  }
+
+  // A published page showing a broken file (M13): refuse before saving or building.
+  if (publish) {
+    const missing = [...mediaRefs(previous)].filter((file) => isMissing(ws.mediaDir, file));
+    if (missing.length) {
+      throw new PublishRejectedError(422, {
+        error: `This post uses files missing from src/media: ${missing.join(', ')}. Remove them or add the files, then publish.`,
       });
     }
   }

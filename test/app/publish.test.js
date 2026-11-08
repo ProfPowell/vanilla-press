@@ -1,6 +1,6 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { setPublished, readSiteUrl, checkLive, BuildError, PublishRejectedError, normalizeText } from '../../src/app/publish.js';
 import * as realGit from '../../src/git/git.js';
@@ -172,6 +172,39 @@ describe('setPublished', () => {
       (err) => err instanceof PublishRejectedError && err.status === 422 && err.message === expected,
     );
     assert.equal(built, 0);
+  });
+
+  test('publish refuses a post with a missing media file', async () => {
+    const ws = setup();
+    const cur = getDocument(db, ID);
+    saveDocument(db, { ...cur, meta: { ...cur.meta, image: '/media/b.jpg' }, blocks: [...cur.blocks,
+      { type: 'figure', attrs: { src: '/media/a.jpg', alt: 'A' } }] });
+    mkdirSync(ws.mediaDir, { recursive: true });
+    const localBefore = git(fx.site, 'rev-parse', 'HEAD');
+    let built = 0;
+    const d = { ...deps(), runBuild: async (dir) => { built++; return runBuild(dir); } };
+    const refused = (err) => err instanceof PublishRejectedError && err.status === 422 &&
+      err.body.error === 'This post uses files missing from src/media: b.jpg, a.jpg. Remove them or add the files, then publish.';
+    await assert.rejects(setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d }), refused);
+    assert.equal(built, 0);
+    assert.equal(getDocument(db, ID).meta.status, 'draft');
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
+    // One file back: only the other is named.
+    writeFileSync(join(ws.mediaDir, 'b.jpg'), 'x');
+    await assert.rejects(setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d }),
+      (err) => err.status === 422 && err.body.error === 'This post uses files missing from src/media: a.jpg. Remove them or add the files, then publish.');
+    // Both files there: it publishes as before.
+    writeFileSync(join(ws.mediaDir, 'a.jpg'), 'x');
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d });
+    assert.equal(res.kind, 'publish');
+    assert.equal(built, 1);
+    // Update is refused the same way once a file goes; unpublish never is.
+    rmSync(join(ws.mediaDir, 'a.jpg'));
+    await assert.rejects(setPublished({ site: {}, ws, db, docId: ID, publish: true, update: true, deps: d }),
+      (err) => err.status === 422 && /missing from src\/media: a\.jpg\./.test(err.body.error));
+    assert.equal(built, 1);
+    const off = await setPublished({ site: {}, ws, db, docId: ID, publish: false, deps: d });
+    assert.equal(off.kind, 'unpublish');
   });
 
   test('build failure keeps an edit saved during the build', async () => {

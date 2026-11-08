@@ -1,5 +1,5 @@
 /* <meta-panel>: the post's fields in the Post settings panel
- * (status box, URL, Description, Tags, Collection, Appearance). */
+ * (status box, URL, Description, Featured image, Tags, Collection, Appearance). */
 .meta-panel {
   display: flex;
   flex-direction: column;
@@ -13,7 +13,7 @@
   gap: 6px;
 }
 
-.meta-panel label {
+.meta-panel :is(label, .field-label) {
   display: block;
   margin: 0;
   padding: 0;
@@ -137,6 +137,45 @@
 
 .meta-panel .url-field input:focus-visible {
   outline: none;
+}
+
+/* Featured image: thumbnail and file name, then Choose… / Remove */
+.meta-panel .featured {
+  display: flex;
+  align-items: center;
+  gap: var(--size-s);
+  min-width: 0;
+}
+
+.meta-panel .featured-thumb {
+  flex: none;
+  width: 4rem;
+  height: 4rem;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface-alt);
+}
+
+.meta-panel .featured-name {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.meta-panel .featured :is(img, span, p)[hidden] {
+  display: none;
+}
+
+.meta-panel .featured-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xs);
+}
+
+.meta-panel .featured-actions .btn[hidden] {
+  display: none;
 }
 
 /* Tags */

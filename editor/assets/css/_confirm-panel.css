@@ -14,6 +14,7 @@ confirm-panel {
   padding: var(--size-m);
   background: var(--color-backdrop);
   font-family: var(--font-sans);
+  overflow-y: auto; /* a long list of items scrolls the whole panel, buttons included */
 }
 
 confirm-panel[hidden] {
@@ -70,4 +71,24 @@ confirm-panel button.danger {
   background: var(--color-error-text);
   color: var(--color-text-on-primary);
   font-weight: 600;
+}
+
+confirm-panel button.primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-weight: 600;
+}
+
+/* Items under the body (e.g. the images with no alt text): file names */
+confirm-panel .confirm-items {
+  margin: calc(-1 * var(--size-xs)) 0 var(--size-m);
+  padding-inline-start: var(--size-l);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+confirm-panel .confirm-items[hidden] {
+  display: none;
 }

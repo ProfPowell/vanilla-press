@@ -1,11 +1,12 @@
 /**
  * What the Post settings panel shows: the publishing status box, the
- * Collection choices and the URL prefix. Pure (no DOM), for meta-panel.js.
+ * Collection choices, the URL prefix and the Featured image. Pure (no DOM), for meta-panel.js.
  *
  * @module editor/settings-view
  */
 
 import { collectionOutput } from '../../../src/sync/paths.js';
+import { mediaFileOf } from '../../../src/media/usage.js';
 
 const NOT_LIVE_NOTE = "Your saved edits aren't on the live site yet. Update builds the site and pushes them.";
 const DRAFT_NOTE = 'Publish builds the site and puts this post live.';
@@ -64,4 +65,16 @@ export function collectionOptions(collectionsConfig, current) {
 export function urlPrefix(collection, collectionsConfig) {
   const dir = collectionOutput(collection, collectionsConfig || {}).path.replace(/^\/+|\/+$/g, '');
   return `/${dir ? dir + '/' : ''}`;
+}
+
+/**
+ * The Featured image field: whether the post has one, its URL and the name to show
+ * (the file name for `/media/<file>`, else the URL).
+ * @param {{ image?: string|null }} meta
+ * @returns {{ set: boolean, src: string|null, name: string|null }}
+ */
+export function featuredModel(meta) {
+  const src = meta?.image;
+  if (typeof src !== 'string' || !src) return { set: false, src: null, name: null };
+  return { set: true, src, name: mediaFileOf(src) || src };
 }

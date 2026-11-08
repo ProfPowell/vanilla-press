@@ -16,8 +16,9 @@
  *   backup has pushed (GET /status). A backup never changes the live site:
  *   after a save of a published post the pill says `Saved · not live yet`
  *   (warning tone), and any `Live` link is cleared, until Update.
- * - Publish / Update save, then POST publish / update (build, commit, push)
- *   and poll the live check until the page is up.
+ * - Publish / Update first list any image with no alt text in a
+ *   `<confirm-panel>` (both modes); then they save, POST publish / update
+ *   (build, commit, push) and poll the live check until the page is up.
  * - In `vp serve` (no `?site=`) the panel ends with the doc browser and theme
  *   picker; the primary button runs the meta panel's publish toggle, and
  *   Unpublish stays in the meta panel.
@@ -32,7 +33,9 @@ import {
 import { api } from './api-client.js';
 import { postUrlPath } from '../../../src/sync/paths.js';
 import { getCurrentMeta, getCurrentDocId } from './meta-state.js';
-import { saveDocument, loadDocument, deleteDoc, exportDocument } from './editor.js';
+import { saveDocument, loadDocument, deleteDoc, exportDocument, getEditorDoc } from './editor.js';
+import { toBlockAst } from './ast.js';
+import { altWarnings, altWarningText } from './alt-check.js';
 
 const SETTINGS_KEY = 'vp.settingsHidden';
 const BACKUP_POLL_MS = 5000;
@@ -473,9 +476,38 @@ function watchLive(docId, url, pendingText) {
 
 // --- Primary button and the "⋯" menu ---
 
+/**
+ * Before Publish or Update: when an image in the post has no alt text (and
+ * its file is not marked decorative), ask. Without the media list, go ahead.
+ * @param {'publish'|'update'} action
+ * @returns {Promise<boolean>} whether to go on
+ */
+async function altCheckPasses(action) {
+  const doc = getEditorDoc();
+  if (!doc) return true;
+  let library;
+  try {
+    library = await api.listMedia();
+  } catch {
+    return true;
+  }
+  const warnings = altWarnings(toBlockAst(doc), Array.isArray(library) ? library : []);
+  if (!warnings.length) return true;
+  const go = await els.confirm.ask(altWarningText(warnings, action));
+  if (!go) els.primary.focus();
+  return go;
+}
+
+let checking = false;
+
 /** The header's primary button: Publish or Update in the app; in vp serve the meta panel's publish toggle (or a plain save for a published post). */
-function onPrimary() {
+async function onPrimary() {
+  if (busy || checking) return;
   const { action } = primaryAction(getCurrentMeta());
+  checking = true;
+  let go;
+  try { go = await altCheckPasses(action); } finally { checking = false; }
+  if (!go) return;
   if (SITE) return runAction(action);
   if (action === 'publish') return document.querySelector('meta-panel [data-publish]')?.click();
   return saveDocument(); // a published post's edits already sync when saved

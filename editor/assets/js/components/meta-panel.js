@@ -4,7 +4,7 @@
  * Top to bottom: the "changed on disk" notice (when in conflict), the
  * publishing status box (site mode; `vp serve` keeps its Status select),
  * URL (the collection's prefix plus the slug), Description with its hint,
- * Tags, Collection (a select from the site's `collections` config) and
+ * Featured image (a thumbnail and file name, Choose… and Remove), Tags, Collection (a select from the site's `collections` config) and
  * Appearance. The title is the document's first line (title.js); the slug
  * follows it until edited here or the post is published (editor.js, slug.js).
  * In `vp serve` the Publish/Unpublish and Preview actions stay here too.
@@ -21,7 +21,9 @@ import {
   saveDocument, loadDocument, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine, metaEdited,
 } from '../editor.js';
 import { onMetaUpdate as onSiteMetaUpdate, isSiteMode } from '../site-mode.js';
-import { statusBox, collectionOptions, urlPrefix } from '../settings-view.js';
+import { statusBox, collectionOptions, urlPrefix, featuredModel } from '../settings-view.js';
+import { SITE, displayMediaUrl } from '../site-context.js';
+import { openMediaPicker } from './media-picker.js';
 
 export class MetaPanel extends HTMLElement {
   connectedCallback() {
@@ -108,6 +110,19 @@ export class MetaPanel extends HTMLElement {
         <p class="hint" id="meta-description-hint">Used in feeds, search results and link previews.</p>
       </div>
 
+      <div class="field" role="group" aria-labelledby="meta-featured-label">
+        <p class="field-label" id="meta-featured-label">Featured image</p>
+        <div class="featured" data-featured>
+          <img class="featured-thumb" data-featured-thumb alt="" hidden/>
+          <span class="featured-name" data-featured-name hidden></span>
+          <p class="hint" data-featured-none>No featured image.</p>
+        </div>
+        <div class="featured-actions">
+          <button type="button" class="btn" data-featured-choose>Choose…</button>
+          <button type="button" class="btn" data-featured-remove hidden>Remove</button>
+        </div>
+      </div>
+
       <div class="field">
         <label for="meta-tags">Tags</label>
         <ul class="tag-chips" id="meta-tag-chips" aria-label="Tags"></ul>
@@ -186,6 +201,20 @@ export class MetaPanel extends HTMLElement {
         }
         tagInput.value = '';
       }
+    });
+
+    // Featured image: chosen from the library (upload there too); saved at once
+    const chooseBtn = this.querySelector('[data-featured-choose]');
+    chooseBtn.addEventListener('click', async () => {
+      const docId = getCurrentDocId();
+      const item = await openMediaPicker({ kind: 'image', heading: 'Choose a featured image' });
+      if (!item || getCurrentDocId() !== docId) return; // another post opened meanwhile
+      this.setFeatured(item.src);
+      chooseBtn.focus();
+    });
+    this.querySelector('[data-featured-remove]').addEventListener('click', () => {
+      this.setFeatured(null);
+      chooseBtn.focus();
     });
 
     // Publish / Unpublish
@@ -338,6 +367,35 @@ export class MetaPanel extends HTMLElement {
     this.renderCollections(meta);
     this.renderUrlPrefix(meta);
     this.renderTags(meta.tags || []);
+    this.renderFeatured(meta);
+  }
+
+  /**
+   * Set (a `/media/` URL) or clear (null) the featured image, and save.
+   * @param {string|null} src
+   */
+  setFeatured(src) {
+    setCurrentMeta({ image: src });
+    this.renderFeatured(getCurrentMeta());
+    saveDocument();
+  }
+
+  /** The Featured image field: thumbnail and file name with Remove, or "No featured image." */
+  renderFeatured(meta) {
+    const { set, src, name } = featuredModel(meta);
+    const thumb = this.querySelector('[data-featured-thumb]');
+    if (!thumb) return;
+    const shown = set ? displayMediaUrl(src, SITE) : '';
+    if (thumb.getAttribute('src') !== shown) {
+      if (shown) thumb.setAttribute('src', shown);
+      else thumb.removeAttribute('src');
+    }
+    thumb.hidden = !set;
+    const nameEl = this.querySelector('[data-featured-name]');
+    nameEl.textContent = name || '';
+    nameEl.hidden = !set;
+    this.querySelector('[data-featured-none]').hidden = set;
+    this.querySelector('[data-featured-remove]').hidden = !set;
   }
 
   /** The status box (site mode): "Published <date>" with the not-live note, or "Draft". */

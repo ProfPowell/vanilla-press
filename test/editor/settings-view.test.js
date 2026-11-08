@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { statusBox, collectionOptions, urlPrefix, publishedDay } from '../../editor/assets/js/settings-view.js';
+import { statusBox, collectionOptions, urlPrefix, publishedDay, featuredModel } from '../../editor/assets/js/settings-view.js';
 
 const NOT_LIVE = "Your saved edits aren't on the live site yet. Update builds the site and pushes them.";
 
@@ -95,5 +95,23 @@ describe('publishedDay', () => {
   it('no date, or not a date: empty', () => {
     assert.equal(publishedDay({}, 'en-US'), '');
     assert.equal(publishedDay({ published: 'soon' }, 'en-US'), '');
+  });
+});
+
+describe('featuredModel', () => {
+  it('set: the src and its file name', () => {
+    assert.deepEqual(featuredModel({ image: '/media/garden-3f9a2c.jpg' }), { set: true, src: '/media/garden-3f9a2c.jpg', name: 'garden-3f9a2c.jpg' });
+  });
+
+  it('set to a URL outside /media/: named by the URL', () => {
+    assert.deepEqual(featuredModel({ image: 'https://x.test/a.png' }), { set: true, src: 'https://x.test/a.png', name: 'https://x.test/a.png' });
+  });
+
+  it('unset (absent, null or empty)', () => {
+    const none = { set: false, src: null, name: null };
+    assert.deepEqual(featuredModel({}), none);
+    assert.deepEqual(featuredModel({ image: null }), none);
+    assert.deepEqual(featuredModel({ image: '' }), none);
+    assert.deepEqual(featuredModel(null), none);
   });
 });

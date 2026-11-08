@@ -5,7 +5,7 @@
  * @module sync/media-library
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { inspectFile } from '../media/inspect.js';
@@ -89,6 +89,20 @@ export function loadMediaJson(ws, db) {
   return { loaded: rows.length };
 }
 
+// Sniffing a type needs only a file's first bytes.
+const SNIFF_BYTES = 65_536;
+
+function readHead(path, size) {
+  const fd = openSync(path, 'r');
+  try {
+    const buf = Buffer.alloc(Math.min(size, SNIFF_BYTES));
+    const n = readSync(fd, buf, 0, buf.length, 0);
+    return buf.subarray(0, n);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /**
  * Give every supported file in `mediaDir` that has no row an entry.
  * @param {import('better-sqlite3').Database} db
@@ -113,15 +127,17 @@ export function adoptStrayFiles(db, mediaDir) {
   for (const name of names) {
     if (known.has(name)) continue;
     const path = join(mediaDir, name);
-    const bytes = readFileSync(path);
-    const info = inspectFile(bytes, name);
+    const size = statSync(path).size;
+    let info = inspectFile(readHead(path, size), name);
     if (!info) { skipped.push(name); continue; }
+    // Dimensions can sit past the first bytes (a JPEG with a large profile): read the rest only then.
+    if (info.kind === 'image' && info.width === null && size > SNIFF_BYTES) info = inspectFile(readFileSync(path), name) ?? info;
     insert.run({
       id: randomBytes(4).toString('hex'),
       filename: name,
       original_name: name,
       mime_type: info.mime,
-      size: bytes.length,
+      size,
       width: info.width ?? null,
       height: info.height ?? null,
       alt: null,

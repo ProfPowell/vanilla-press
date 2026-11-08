@@ -159,6 +159,23 @@ describe('stray files', () => {
     assert.deepEqual(Object.keys(json[0]), MEDIA_FIELDS);
   });
 
+  it('adopts a large file from its header, and still finds dimensions that sit past 64 KB', () => {
+    mkdirSync(ws.mediaDir, { recursive: true });
+    writeFileSync(join(ws.mediaDir, 'big.png'), Buffer.concat([PNG_3X2, Buffer.alloc(300_000)]));
+    // JPEG: a maximal comment segment (64 KB) comes before the frame header.
+    const comment = Buffer.concat([Buffer.from([0xff, 0xfe, 0xff, 0xff]), Buffer.alloc(0xffff - 2)]);
+    const sof = Buffer.from([0xff, 0xc0, 0, 11, 8, 0, 9, 0, 7, 1, 1, 0x11, 0]);
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8]), comment, sof]);
+    writeFileSync(join(ws.mediaDir, 'late.jpg'), jpeg);
+    assert.deepEqual(adoptStrayFiles(db, ws.mediaDir), ['big.png', 'late.jpg']);
+    const big = rows().find((r) => r.filename === 'big.png');
+    assert.equal(big.size, PNG_3X2.length + 300_000);
+    assert.equal(big.width, 3);
+    const late = rows().find((r) => r.filename === 'late.jpg');
+    assert.equal(late.size, jpeg.length);
+    assert.deepEqual([late.width, late.height], [7, 9]);
+  });
+
   it('adopts nothing and writes nothing when there are no strays', () => {
     assert.deepEqual(syncMediaFromSite(ws, db), { adopted: [] });
     assert.throws(() => readFileSync(join(ws.contentDir, 'media.json')), /ENOENT/);

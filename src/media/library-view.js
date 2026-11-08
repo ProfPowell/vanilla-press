@@ -138,6 +138,13 @@ export function createAltSaver({ save, delay = 600, setTimer = setTimeout, clear
       if (timer != null) clearTimer(timer);
       timer = setTimer(start, delay);
     },
+    /** Hand the pending alt to the caller (the page is closing and must save it itself). Null when none. */
+    take() {
+      if (timer != null) { clearTimer(timer); timer = null; }
+      const taken = pending;
+      pending = null;
+      return taken;
+    },
     async flush() {
       start();
       const run = inflight;

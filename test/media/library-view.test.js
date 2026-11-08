@@ -223,3 +223,16 @@ test('deleteDecision', () => {
     body: 'The file is removed from src/media; git history keeps a copy.',
   });
 });
+
+test('take() hands over the pending alt synchronously and cancels its timer', async () => {
+  const t = fakeTimers();
+  const calls = [];
+  const saver = createAltSaver({ save: async (id, alt) => { calls.push([id, alt]); }, setTimer: t.setTimer, clearTimer: t.clearTimer });
+  assert.equal(saver.take(), null);
+  saver.change('a', 'half typed');
+  assert.deepEqual(saver.take(), { id: 'a', alt: 'half typed' });
+  assert.equal(t.size(), 0);
+  assert.equal(saver.take(), null);
+  await saver.flush();
+  assert.equal(calls.length, 0, 'taken means the caller saves it, not the saver');
+});

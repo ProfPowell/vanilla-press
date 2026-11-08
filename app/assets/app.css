@@ -177,6 +177,9 @@ input[type="text"] { min-height: 2.5rem; padding: 0 0.75rem; border: 1px solid v
 .detail-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-block-start: 0.875rem; border-block-start: 1px solid var(--color-border-subtle); }
 button.danger-text { border-color: transparent; background: none; color: var(--color-error-text); }
 button.danger-text:hover { background: var(--color-error-subtle); }
+.detail-editor { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.detail-editor[hidden], .detail-preview[hidden] { display: none; }
+.detail-editor image-editor { display: block; inline-size: 100%; max-inline-size: 100%; min-width: 0; }
 .detail-status { margin-block-start: 0.5rem; min-height: 1.25rem; color: var(--color-text-muted); }
 
 .notice { padding: 0.6rem 0.9rem; border: 1px solid var(--color-border); border-radius: 0.25rem; }

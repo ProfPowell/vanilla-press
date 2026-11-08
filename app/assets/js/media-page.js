@@ -9,6 +9,7 @@ import {
   detailModel, needsAlt, altForCheckbox, createAltSaver, deleteDecision,
 } from '../../../src/media/library-view.js';
 import { ACCEPT_ATTR } from '../../../src/media/limits.js';
+import { exportFormat } from '../../../src/media/types.js';
 import { uploadMedia, createUploadQueue } from '../../../editor/assets/js/media-upload.js';
 
 const ICONS = {
@@ -125,6 +126,22 @@ export function initMediaSection({ siteId, root }) {
   });
   const flushAlt = () => saver.flush().catch(() => {}); // save() has already shown its error
 
+  // The page is going away: a normal save may not finish, a keepalive request does.
+  function saveAltBeforeLeaving() {
+    const pending = saver.take();
+    if (!pending) return;
+    fetch(`${base}/media/${encodeURIComponent(pending.id)}`, {
+      method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: pending.alt }),
+    }).catch(() => {});
+  }
+  window.addEventListener('pagehide', saveAltBeforeLeaving);
+  // Links that leave the page (Used in, All sites) save first; the request outlives the navigation.
+  document.addEventListener('click', (e) => {
+    if (root.hidden) return;
+    const link = e.target.closest?.('a[href]');
+    if (link && (link.closest('#media-detail') || link.classList.contains('rail-back'))) saveAltBeforeLeaving();
+  }, true);
+
   /** The alt field's look and the hint follow the stored state. */
   function syncAltUi(item) {
     const alt = detailBody.querySelector('#media-alt');
@@ -217,8 +234,10 @@ export function initMediaSection({ siteId, root }) {
     return group;
   }
 
-  async function deleteItem(item, message) {
+  async function deleteItem(id, message) {
     await flushAlt();
+    const item = items.find((i) => i.id === id); // the current row, not the one the panel was built from
+    if (!item) return;
     const decision = deleteDecision(item);
     if (!decision.allowed) {
       message.textContent = decision.message;
@@ -247,6 +266,55 @@ export function initMediaSection({ siteId, root }) {
     refresh();
   }
 
+  /** Edit image: the preview becomes an editor; Save copy uploads the result as a new file. */
+  async function openEditor(item, { preview, editorSlot, edit }) {
+    const mime = item.mime_type;
+    const format = exportFormat(mime);
+    const error = h('p', { class: 'error', role: 'alert', hidden: true });
+    const save = h('button', { type: 'button', class: 'primary', 'data-action': 'save-copy' }, 'Save copy');
+    const cancel = h('button', { type: 'button', 'data-action': 'cancel-edit' }, 'Cancel');
+    const close = () => {
+      editorSlot.hidden = true;
+      editorSlot.replaceChildren();
+      preview.hidden = false;
+      edit.hidden = false;
+    };
+    preview.hidden = true;
+    edit.hidden = true;
+    editorSlot.hidden = false;
+    editorSlot.replaceChildren(h('p', { class: 'detail-muted' }, 'Loading the editor…'));
+    try {
+      await import('/assets/image-editor/image-editor.js');
+    } catch {
+      close();
+      showError("Couldn't load the image editor. Reload the page to try again.");
+      edit.focus();
+      return;
+    }
+    if (editorSlot.hidden) return; // the panel was rebuilt meanwhile
+    const editor = h('image-editor', { src: displayUrl(item), format });
+    editorSlot.replaceChildren(editor, error, h('div', { class: 'detail-actions' }, save, cancel));
+    cancel.addEventListener('click', () => { close(); edit.focus(); });
+    save.addEventListener('click', async () => {
+      error.hidden = true;
+      save.disabled = cancel.disabled = true;
+      setStatus('Saving a copy…');
+      try {
+        const blob = await editor.getBlob(format, 0.92);
+        const copy = await uploadMedia(base, new File([blob], item.filename, { type: mime }), { editedFrom: item.filename });
+        await refresh();
+        select(copy.id);
+        setStatus(`Saved a copy as ${copy.filename}. The original is unchanged.`);
+        ($('media-grid').querySelector(`[data-id="${CSS.escape(copy.id)}"]`))?.scrollIntoView({ block: 'nearest' });
+      } catch (err) {
+        setStatus('');
+        error.textContent = `${err.message || "Couldn't save the copy."} Your edits are still here; try Save copy again.`;
+        error.hidden = false;
+        save.disabled = cancel.disabled = false;
+      }
+    });
+  }
+
   /** Build the panel for one item (or the empty panel for null). */
   function renderDetail(item) {
     const token = ++paintToken;
@@ -264,17 +332,19 @@ export function initMediaSection({ siteId, root }) {
     aside.setAttribute('aria-labelledby', 'detail-title');
     const message = h('p', { class: 'error', role: 'alert', hidden: true });
     const del = h('button', { type: 'button', class: 'danger-text' }, 'Delete…');
-    del.addEventListener('click', () => deleteItem(item, message));
+    del.addEventListener('click', () => deleteItem(item.id, message));
     const actions = h('div', { class: 'detail-actions' });
+    const preview = previewEl(item, token);
+    const editorSlot = h('div', { class: 'detail-editor', hidden: true });
     if (model.canEdit) {
       const edit = h('button', { type: 'button', 'data-action': 'edit-image' }, 'Edit image');
-      // Task 8 listens for this and opens the image editor.
-      edit.addEventListener('click', () => root.dispatchEvent(new CustomEvent('media-edit', { detail: { item } })));
+      edit.addEventListener('click', () => openEditor(item, { preview, editorSlot, edit }));
       actions.append(edit);
     }
     actions.append(del);
     detailBody.replaceChildren(
-      previewEl(item, token),
+      preview,
+      editorSlot,
       h('div', {},
         h('h2', { id: 'detail-title' }, model.title),
         model.original ? h('p', { class: 'detail-muted' }, `Uploaded as ${model.original}`) : null,
@@ -306,7 +376,7 @@ export function initMediaSection({ siteId, root }) {
   function selectByFilename(name) {
     const hit = name && items.find((i) => i.filename === name);
     if (!hit) return false;
-    select(hit.id);
+    if (hit.id !== shownId) select(hit.id); // already shown: don't rebuild the panel over a pending alt
     $('media-grid').querySelector(`[data-id="${CSS.escape(hit.id)}"]`)?.scrollIntoView({ block: 'nearest' });
     return true;
   }
@@ -429,7 +499,11 @@ export function initMediaSection({ siteId, root }) {
 
   // A file dropped on the rail or header would navigate the app away: refuse it while Media shows.
   for (const type of ['dragover', 'drop']) {
-    window.addEventListener(type, (e) => { if (!root.hidden && hasFiles(e)) e.preventDefault(); });
+    window.addEventListener(type, (e) => {
+      if (root.hidden || !hasFiles(e)) return;
+      e.preventDefault();
+      if (type === 'dragover' && !root.contains(e.target)) e.dataTransfer.dropEffect = 'none';
+    });
   }
 
   // --- Show and hide ---

@@ -68,6 +68,8 @@ export const isSiteMode = Boolean(SITE);
 
 /** The site's name and public address (GET /api/sites); null in `vp serve` or before they load. */
 let siteInfo = null;
+/** Settles once siteInfo and collections have loaded (or failed to); liveUrl() is final after it. */
+let siteInfoLoaded = Promise.resolve();
 /** The site's collections config, for a post's public path. */
 let collections = {};
 
@@ -99,7 +101,7 @@ export function initSiteMode() {
   if (SITE) {
     shell.classList.add('site-mode');
     els.back.href = `/app/site.html?site=${encodeURIComponent(SITE)}`;
-    loadSiteInfo();
+    siteInfoLoaded = loadSiteInfo();
   } else {
     // vp serve: no site to go back to or name
     els.back.hidden = true;
@@ -497,11 +499,14 @@ async function onMore(id) {
       }
       return shell.toggleInspector();
     case 'live': {
+      await siteInfoLoaded;
       const url = liveUrl(meta);
       if (url) window.open(url, '_blank', 'noopener');
       return;
     }
     case 'unpublish':
+      // The confirmation names the live URL, which needs the site's address
+      await siteInfoLoaded;
       if (await els.confirm.ask(confirmText('unpublish', { title: meta.title || 'Untitled', liveUrl: liveUrl(meta) }))) runAction('unpublish');
       return;
     case 'delete':

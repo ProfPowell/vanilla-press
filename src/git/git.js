@@ -287,9 +287,18 @@ export async function push(dir, { yieldUntracked: yieldPaths = [], resolveConfli
   try {
     await runGit(dir, ['pull', '--rebase', '--autostash']);
   } catch (err) {
-    if (resolveConflicts && (await rebaseInProgress()) && (await unmerged()).length > 0 && (await settle())) {
-      return finishPush();
+    // A throw while resolving (the resolver, git add) falls through to the abort and
+    // restore below, surfacing that error: the repo is never left mid-rebase.
+    let thrown = null;
+    let settled = false;
+    if (resolveConflicts && (await rebaseInProgress()) && (await unmerged()).length > 0) {
+      try {
+        settled = await settle();
+      } catch (e) {
+        thrown = e;
+      }
     }
+    if (settled) return finishPush();
     const files = await unmerged();
     let failure = err;
     if (await rebaseInProgress()) {
@@ -300,7 +309,7 @@ export async function push(dir, { yieldUntracked: yieldPaths = [], resolveConfli
       failure = new GitStashConflictError(files, { stashed: true });
     }
     restoreYielded(dir, yielded); // after the abort: HEAD is the local one again
-    throw failure;
+    throw thrown || failure;
   }
   return finishPush();
 

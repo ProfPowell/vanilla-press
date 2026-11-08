@@ -185,7 +185,8 @@ export function mergeSettings(base, upstream, local) {
   const applied = same(pick(upstream), pick(b)) ? local : upstream;
   const byId = (list) => Object.fromEntries((Array.isArray(list) ? list : []).filter((c) => isPlain(c) && c.id).map((c) => [c.id, c]));
   const customMap = mergeMap(byId(b.custom), byId(upstream.custom), byId(local.custom));
-  const order = [...(upstream.custom || []), ...(local.custom || [])].map((c) => c?.id);
+  const list = (v) => (Array.isArray(v) ? v : []);
+  const order = [...list(upstream.custom), ...list(local.custom)].map((c) => c?.id);
   const custom = [...new Set(order)].filter((id) => customMap[id]).map((id) => customMap[id]);
   const files = mergeMap(b.files, upstream.files, local.files);
   const modes = mergeMap(b.modes, upstream.modes, local.modes);

@@ -183,6 +183,16 @@ describe('applyTheme', () => {
     assert.equal(JSON.parse(read('config/vp.json')).theme, 'x');
   });
 
+  it('a failed commit puts vp.json back (M2)', async () => {
+    const legacy = JSON.stringify({ theme: 'swiss', other: 1 }, null, 2) + '\n';
+    write(fx.site, 'config/vp.json', legacy);
+    git(fx.site, 'add', 'config/vp.json');
+    git(fx.site, 'commit', '-m', 'legacy vp.json');
+    const failing = async () => { throw new realGit.GitError('git commit failed: disk full', 'disk full'); };
+    await assert.rejects(apply({ name: '8bit', mode: 'auto', adjustments: null }, { commitPaths: failing }), /disk full/);
+    assert.equal(read('config/vp.json'), legacy);
+  });
+
   it('no remote: saved, not pushed', async () => {
     db.close();
     rmSync(fx.root, { recursive: true, force: true });
@@ -362,6 +372,34 @@ describe('theme routes: apply and live', () => {
     assert.deepEqual(r.data, { error: 'The theme was changed on another computer. Review it and apply again.' });
     assert.equal(JSON.parse(readFileSync(join(fx.site, 'config/theme.json'), 'utf8')).name, '8bit');
     assert.equal(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
+  });
+
+  it('live reads the applied ids from theme.json each time (M3)', async () => {
+    assert.equal((await api('/theme/apply', { method: 'POST', body: { name: 'swiss', mode: 'auto', adjustments: null } })).status, 200);
+    pages.set('https://example.com/', '<html data-theme="8bit">');
+    assert.equal((await api('/theme/live')).data.live, false);
+    const file = join(fx.site, 'config/theme.json');
+    writeFileSync(file, readFileSync(file, 'utf8').replace('"name": "swiss"', '"name": "8bit"')); // e.g. a pull brought another Apply
+    assert.equal((await api('/theme/live')).data.live, true);
+  });
+
+  it('live expects the home page\'s own page theme when its committed front matter has one (M4)', async () => {
+    assert.equal((await api('/theme/apply', { method: 'POST', body: { name: 'swiss', mode: 'auto', adjustments: ADJ } })).status, 200);
+    write(fx.site, 'src/index.html', '---\ntitle: Home\ntheme: "8bit"\n---\n<h1>Home</h1>\n');
+    git(fx.site, 'commit', '-am', 'home theme');
+    pages.set('https://example.com/', '<html data-theme="swiss vp-site">');
+    assert.equal((await api('/theme/live')).data.live, false);
+    pages.set('https://example.com/', '<html data-theme="8bit">');
+    assert.equal((await api('/theme/live')).data.live, true);
+    // Article scope keeps the site ids on <html>.
+    write(fx.site, 'src/index.html', "---\ntheme: 8bit\nthemeScope: 'article'\n---\n<h1>Home</h1>\n");
+    git(fx.site, 'commit', '-am', 'home article theme');
+    assert.equal((await api('/theme/live')).data.live, false);
+    pages.set('https://example.com/', '<html data-theme="swiss vp-site">');
+    assert.equal((await api('/theme/live')).data.live, true);
+    // Only the committed page counts (what is deployed).
+    write(fx.site, 'src/index.html', '---\ntheme: classic\n---\n<h1>Home</h1>\n');
+    assert.equal((await api('/theme/live')).data.live, true);
   });
 
   it('live is false without a site URL or an applied theme', async () => {

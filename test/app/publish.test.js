@@ -443,6 +443,18 @@ writeFileSync('${VB}/themes/swiss.css', '[data-theme~="swiss"]{--x:1}\\n');
     assert.deepEqual(JSON.parse(remoteShow('config/vp.json')), { keep: true });
   });
 
+  test('a failed commit puts vp.json back (M2)', async () => {
+    const ws = setup();
+    const legacy = JSON.stringify({ theme: 'swiss', keep: true }, null, 2) + '\n';
+    write(fx.site, 'config/vp.json', legacy);
+    git(fx.site, 'add', 'config/vp.json');
+    git(fx.site, 'commit', '-m', 'legacy');
+    assert.equal(migrateVpTheme(ws), true);
+    const failing = async () => { throw new realGit.GitError('git commit failed: disk full', 'disk full'); };
+    await assert.rejects(setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: { ...deps(), commitPaths: failing } }), /disk full/);
+    assert.equal(readFileSync(join(fx.site, 'config/vp.json'), 'utf8'), legacy);
+  });
+
   test('unpublish commits no theme files', async () => {
     const ws = setup();
     addVb(fx.site);

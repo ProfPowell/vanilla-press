@@ -11,17 +11,16 @@
 import { join } from 'node:path';
 import { sendJson } from '../server/router.js';
 import { skippedTokens } from '../themes/theme-css.js';
-import { settingIds } from '../themes/theme-setting.js';
-import { GitConflictError, GitStashConflictError } from '../git/git.js';
+import { GitConflictError, GitStashConflictError, readHead as gitReadHead } from '../git/git.js';
 import {
-  themeState, saveCustomTheme, importCustomTheme, renameCustomTheme, deleteCustomTheme, readSetting, ThemeError,
+  themeState, saveCustomTheme, importCustomTheme, renameCustomTheme, deleteCustomTheme, readSetting, commitWithTheme,
+  ThemeError,
 } from './site-theme.js';
-import { applyTheme, htmlThemeAttr, THEME_CHANGED } from './theme-apply.js';
-import { dropVpThemeOnFirstCommit } from './site-theme.js';
+import { applyTheme, liveThemeIds, htmlThemeAttr, THEME_CHANGED } from './theme-apply.js';
 import { libraryMessage } from './site-git.js';
+import { BuildError, readSiteUrl } from './publish.js';
 
 const NOT_COMMITTED = (why) => `Saved on this computer, but not committed (${why}). It goes to GitHub with the next Apply or Publish.`;
-import { BuildError, readSiteUrl } from './publish.js';
 
 /**
  * @param {{ add: Function }} router
@@ -38,8 +37,6 @@ export function mountThemeRoutes(router, prefix, {
   site, ws, db, vpRoot, deps = {}, backup, writes, fetch: fetchImpl = globalThis.fetch, onBuilt = () => {},
 }) {
   const options = { siteId: site.id, vpCdnDir: join(vpRoot, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') };
-  /** The ids the last Apply this run pushed; else theme.json's (the applied state, R2). */
-  let lastApplied = null;
 
   /** Run a handler, sending a ThemeError as its status and body. */
   const handle = (fn) => async (req, res) => {
@@ -65,8 +62,9 @@ export function mountThemeRoutes(router, prefix, {
       const status = await deps.gitStatus(ws.siteDir);
       if (!status.isRepo) return { committed: false, note: NOT_COMMITTED('this site folder is not a git repository') };
       const paths = ['config/theme.json', ...(id ? [`src/assets/themes/${id}.css`] : [])];
-      if (await dropVpThemeOnFirstCommit(ws, deps.readHead)) paths.push('config/vp.json');
-      return { committed: true, sha: await deps.commitPaths(ws.siteDir, paths, libraryMessage(what)) };
+      const sha = await commitWithTheme(ws, deps.readHead || gitReadHead,
+        (dropped) => deps.commitPaths(ws.siteDir, dropped ? [...paths, 'config/vp.json'] : paths, libraryMessage(what)));
+      return { committed: true, sha };
     } catch (err) {
       return { committed: false, note: NOT_COMMITTED(err.message) };
     }
@@ -110,7 +108,6 @@ export function mountThemeRoutes(router, prefix, {
       const result = await backup.exclusive(() => writes(() => applyTheme({
         ws, db, body: { name, mode, adjustments }, deps, options,
       })));
-      lastApplied = result.ids;
       onBuilt();
       // GitHub's theme won (another computer applied meanwhile): it is the setting now.
       if (result.themeChanged) return sendJson(res, 409, { error: THEME_CHANGED });
@@ -131,11 +128,14 @@ export function mountThemeRoutes(router, prefix, {
     }
   });
 
-  // R15: live when the home page answers 200 and its <html data-theme> is the applied ids.
+  // R15: live when the home page answers 200 and its <html data-theme> is what Cook writes
+  // there: the applied setting read from disk each time (R2), or the committed home
+  // page's own page theme (M4).
   router.add('GET', `${prefix}/theme/live`, handle(async (req, res) => {
     const siteUrl = await readSiteUrl(ws.siteDir);
     const url = siteUrl ? `${siteUrl.replace(/\/+$/, '')}/` : null;
-    const ids = lastApplied ?? settingIds(readSetting(ws));
+    const home = await (deps.readHead || gitReadHead)(ws.siteDir, 'src/index.html').catch(() => null);
+    const ids = liveThemeIds(readSetting(ws), home);
     let live = false;
     if (url && ids) {
       try {

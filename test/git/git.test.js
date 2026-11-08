@@ -367,6 +367,27 @@ test('push resolveConflicts: settles theme conflicts; anything else is still a G
   assert.equal(git(a, 'rev-parse', 'HEAD'), before);
 });
 
+test('push: a resolver that throws leaves no rebase in progress, puts set-aside files back and surfaces the error', async () => {
+  write(b, 'config/theme.json', 'from b\n');
+  write(b, 'src/assets/themes/y.css', 'b\n');
+  git(b, 'add', '-A');
+  git(b, 'commit', '-m', 'theme b');
+  git(b, 'push');
+  write(a, 'config/theme.json', 'from a\n');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'theme a');
+  write(a, 'src/assets/themes/y.css', 'mine\n'); // untracked, set aside for the rebase
+  const before = git(a, 'rev-parse', 'HEAD');
+  await assert.rejects(push(a, {
+    yieldUntracked: ['src/assets/themes'],
+    resolveConflicts: async () => { throw new Error('resolver broke'); },
+  }), /resolver broke/);
+  assert.equal(existsSync(join(a, '.git', 'rebase-merge')) || existsSync(join(a, '.git', 'rebase-apply')), false);
+  assert.equal(git(a, 'rev-parse', 'HEAD'), before);
+  assert.equal(readFileSync(join(a, 'src/assets/themes/y.css'), 'utf8'), 'mine\n');
+  assert.equal(readFileSync(join(a, 'config/theme.json'), 'utf8'), 'from a\n');
+});
+
 test('changedSinceHead lists tracked files modified or deleted since HEAD, under the paths', async () => {
   write(a, 'src/posts/a.html', 'a\n');
   write(a, 'src/posts/b.html', 'b\n');

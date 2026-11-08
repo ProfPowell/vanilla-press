@@ -97,5 +97,7 @@ describe('theme-setting', () => {
     // A delete here of an entry GitHub left alone goes through; no base (both added): GitHub's applied state.
     assert.deepEqual(mergeSettings(base, base, { ...base, custom: [] }).custom, undefined);
     assert.equal(mergeSettings(null, upApply, localApply).name, '8bit');
+    // A hand-edited non-array custom never throws.
+    assert.deepEqual(mergeSettings({ ...base, custom: {} }, { ...upApply, custom: 'x' }, { ...localApply, custom: { a: 1 } }).custom, undefined);
   });
 });

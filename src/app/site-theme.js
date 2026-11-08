@@ -160,6 +160,27 @@ export async function dropVpThemeOnFirstCommit(ws, readHead) {
 }
 
 /**
+ * Run a commit that carries config/theme.json: `dropVpThemeOnFirstCommit` first,
+ * then `commit(dropped)`; if the commit throws, vp.json is put back as it was
+ * (its key must not go to GitHub without theme.json), and the error rethrown.
+ * @template T
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @param {(dir: string, path: string) => Promise<string|null>} readHead
+ * @param {(dropped: boolean) => Promise<T>} commit - dropped: vp.json was rewritten
+ * @returns {Promise<T>}
+ */
+export async function commitWithTheme(ws, readHead, commit) {
+  const vpBefore = snapshotFile(vpJsonPath(ws));
+  const dropped = await dropVpThemeOnFirstCommit(ws, readHead);
+  try {
+    return await commit(dropped);
+  } catch (err) {
+    if (dropped) restoreFile(vpJsonPath(ws), vpBefore);
+    throw err;
+  }
+}
+
+/**
  * Publish/Update (R3, R4): recompute theme.json's `files`, `modes` and `vb`
  * from the site as it is now. With `create`, a site with no theme.json gets
  * the default setting. An unreadable theme.json is left as it is.
@@ -323,7 +344,7 @@ export function renameCustomTheme(ws, id, name, { siteId } = {}) {
 }
 
 /** A front matter value (JSON-quoted, single-quoted or bare), or null. */
-function frontMatterValue(text, key) {
+export function frontMatterValue(text, key) {
   const fm = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(text);
   const line = fm && new RegExp(`^${key}:[ \\t]*(.*?)[ \\t]*$`, 'm').exec(fm[1]);
   if (!line) return null;

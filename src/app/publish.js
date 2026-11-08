@@ -17,7 +17,7 @@ import { outputPaths, postUrlPath } from '../sync/paths.js';
 import { GitNotConnectedError, readHead as gitReadHead } from '../git/git.js';
 import { BACKUP_PATHS, THEME_PATHS, postPages } from './site-git.js';
 import {
-  refreshThemeSetting, snapshotFile, restoreFile, themeSettingFile, dropVpThemeOnFirstCommit, themeConflictResolver,
+  refreshThemeSetting, snapshotFile, restoreFile, themeSettingFile, commitWithTheme, themeConflictResolver,
 } from './site-theme.js';
 import { componentTags } from './components.js';
 import { mediaRefs } from '../media/usage.js';
@@ -275,8 +275,8 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
     const label = { publish: 'Publish', update: 'Update', unpublish: 'Unpublish' }[kind];
     // Publish/Update carry the theme setting and custom themes (R3); Unpublish does not.
     const themePaths = publish ? [...THEME_PATHS] : [];
-    if (publish) await dropVpThemeOnFirstCommit(ws, deps.readHead || gitReadHead);
-    sha = await deps.commitPaths(ws.siteDir, [...BACKUP_PATHS, ...themePaths, ...pages], `${label}: ${saved.meta.title}`);
+    const commit = () => deps.commitPaths(ws.siteDir, [...BACKUP_PATHS, ...themePaths, ...pages], `${label}: ${saved.meta.title}`);
+    sha = publish ? await commitWithTheme(ws, deps.readHead || gitReadHead, commit) : await commit();
   }
 
   const siteUrl = publish ? await (deps.readSiteUrl || readSiteUrl)(ws.siteDir) : null;

@@ -15,7 +15,7 @@ import { readHead as gitReadHead, GitNotConnectedError } from '../git/git.js';
 import { BuildError, readSiteUrl } from './publish.js';
 import { BACKUP_PATHS, THEME_PATHS } from './site-git.js';
 import {
-  readSetting, writeSetting, snapshotFile, restoreFile, themeSettingFile, dropVpThemeOnFirstCommit, themeConflictResolver,
+  readSetting, writeSetting, snapshotFile, restoreFile, themeSettingFile, commitWithTheme, themeConflictResolver, frontMatterValue,
   ThemeError,
 } from './site-theme.js';
 import { themeCatalog } from '../themes/site-vb.js';
@@ -177,8 +177,8 @@ export async function applyTheme({ ws, body, deps, options = {} }) {
   const status = await deps.gitStatus(siteDir);
   let sha = null;
   if (status.isRepo) {
-    await dropVpThemeOnFirstCommit(ws, deps.readHead || gitReadHead);
-    sha = await deps.commitPaths(siteDir, [...BACKUP_PATHS, ...THEME_PATHS], `Theme: ${name}`);
+    sha = await commitWithTheme(ws, deps.readHead || gitReadHead,
+      () => deps.commitPaths(siteDir, [...BACKUP_PATHS, ...THEME_PATHS], `Theme: ${name}`));
   }
   const siteUrl = await (deps.readSiteUrl || readSiteUrl)(siteDir);
   const url = siteUrl ? `${siteUrl.replace(/\/+$/, '')}/` : null;
@@ -210,4 +210,20 @@ export function htmlThemeAttr(html) {
   const attr = /(?:^|[\s/])data-theme\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(tag[1]);
   if (!attr) return null;
   return (attr[1] ?? attr[2] ?? attr[3]).trim().split(/\s+/).filter(Boolean).join(' ');
+}
+
+/**
+ * The ids Cook writes on a page's `<html>` (its pageThemePlan): the page's own
+ * theme when its front matter has a safe `theme` and page scope (`themeScope`
+ * missing, `page` or anything but `article`), else the site ids
+ * (settingIds). "" when there is no setting.
+ * @param {object|null} setting - normalized theme setting
+ * @param {string|null} pageText - the page source with its front matter, or null
+ * @returns {string}
+ */
+export function liveThemeIds(setting, pageText) {
+  if (!setting) return '';
+  const own = pageText ? frontMatterValue(pageText, 'theme') : null;
+  if (own && SAFE_ID.test(own) && frontMatterValue(pageText, 'themeScope') !== 'article') return own;
+  return settingIds(setting);
 }

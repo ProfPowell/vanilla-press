@@ -19,6 +19,9 @@
  * - Publish / Update first list any image with no alt text in a
  *   `<confirm-panel>` (both modes); then they save, POST publish / update
  *   (build, commit, push) and poll the live check until the page is up.
+ * - The writing area (site mode) shows the site theme, or the open post's own
+ *   page theme with the site header strip and the "Page theme: <name>" chip
+ *   (GET /theme, loaded once; see pane-theme.js).
  * - In `vp serve` (no `?site=`) the panel ends with the doc browser and theme
  *   picker; the primary button runs the meta panel's publish toggle, and
  *   Unpublish stays in the meta panel.
@@ -36,6 +39,7 @@ import { getCurrentMeta, getCurrentDocId } from './meta-state.js';
 import { saveDocument, loadDocument, deleteDoc, exportDocument, getEditorDoc } from './editor.js';
 import { toBlockAst } from './ast.js';
 import { altWarnings, altWarningText } from './alt-check.js';
+import { paneTheme, applyPaneTheme, siteThemes } from './pane-theme.js';
 
 const SETTINGS_KEY = 'vp.settingsHidden';
 const BACKUP_POLL_MS = 5000;
@@ -75,6 +79,10 @@ let siteInfo = null;
 let siteInfoLoaded = Promise.resolve();
 /** The site's collections config, for a post's public path. */
 let collections = {};
+/** GET /theme's setting and themes (with the adjustments file), once loaded; null outside site mode. */
+let themeData = null;
+/** The one GET /theme request. */
+let themeLoad = null;
 
 /**
  * Wire the header and layout. Call once, after the editor view exists.
@@ -105,6 +113,7 @@ export function initSiteMode() {
     shell.classList.add('site-mode');
     els.back.href = `/app/site.html?site=${encodeURIComponent(SITE)}`;
     siteInfoLoaded = loadSiteInfo();
+    loadThemeData();
   } else {
     // vp serve: no site to go back to or name
     els.back.hidden = true;
@@ -133,11 +142,44 @@ async function loadSiteInfo() {
     siteInfo = (Array.isArray(sites) ? sites : sites.sites || []).find((s) => s.id === SITE) || null;
   } catch { /* the bar just has no name */ }
   els.siteName.textContent = siteInfo?.name || '';
+  const stripName = shell.querySelector('[data-site-strip-name]');
+  if (stripName) stripName.textContent = siteInfo?.name || '';
   try {
     const { value } = await api.getConfig('collections');
     collections = value ? JSON.parse(value) : {};
   } catch { /* defaults */ }
   refreshMenu(getCurrentMeta());
+}
+
+/**
+ * Load the site's theme setting and theme list (site mode, once) and show the
+ * open post in it. Resolves to `{ setting, themes }`, or null outside site
+ * mode or when it could not load (the pane is then left unthemed).
+ * @returns {Promise<{ setting: object|null, themes: object[] }|null>}
+ */
+export function loadThemeData() {
+  if (!SITE) return Promise.resolve(null);
+  themeLoad ||= api.getTheme().then(
+    (res) => {
+      const setting = res?.setting || null;
+      themeData = { setting, themes: siteThemes(setting, res?.themes, SITE) };
+      showPaneTheme(getCurrentMeta());
+      return themeData;
+    },
+    () => null,
+  );
+  return themeLoad;
+}
+
+/** The loaded `{ setting, themes }`; null outside site mode or before it loads. */
+export function getThemeData() {
+  return themeData;
+}
+
+/** Theme the writing area for `meta` (once the theme data is in). */
+function showPaneTheme(meta) {
+  if (!themeData || !meta) return;
+  applyPaneTheme(paneTheme(themeData.setting, meta, themeData.themes));
 }
 
 /** The public URL of the open post when it is published and the site has an address, else null. */
@@ -344,6 +386,7 @@ export function onMetaUpdate(meta) {
   }
   els.primary.textContent = primaryAction(meta).text;
   refreshMenu(meta);
+  showPaneTheme(meta);
 }
 
 /** Ask the server whether the opened post has saved edits that are not live yet (survives a reload). */

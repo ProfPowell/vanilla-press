@@ -11,10 +11,14 @@
  * (toolbar, sidebar, inspector) stays consistent. VB theme selectors
  * match any [data-theme~=id] element, so scoping to the pane works.
  *
+ * `vp serve` only: in the app (site mode) it does nothing; the pane shows
+ * the site theme set on the Theme screen (pane-theme.js).
+ *
  * @module editor/components/theme-picker
  */
 
 import { api } from '../api-client.js';
+import { SITE } from '../site-context.js';
 
 const TIER_LABELS = {
   core: '',
@@ -25,6 +29,7 @@ const TIER_LABELS = {
 
 export class ThemePicker extends HTMLElement {
   async connectedCallback() {
+    if (SITE) return;
     this.innerHTML = `
       <div class="theme-picker-field">
         <label for="theme-select">Theme</label>

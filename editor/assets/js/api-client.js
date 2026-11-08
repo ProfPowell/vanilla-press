@@ -152,6 +152,11 @@ export const api = {
     return request('/themes');
   },
 
+  /** The site's theme (site mode): { setting, vb, themes, pages, preview } (GET /theme). */
+  getTheme() {
+    return request('/theme');
+  },
+
   /** Get a config value. Returns { key, value }. */
   getConfig(key) {
     return request(`/config/${encodeURIComponent(key)}`);

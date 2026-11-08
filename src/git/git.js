@@ -3,7 +3,7 @@
  * Every call goes through runGit, which never lets git prompt for credentials.
  */
 import { execFile, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -275,6 +275,22 @@ export async function hasHead(dir) {
 }
 
 /**
+ * Whether the branch HEAD names exists as a ref (loose or packed), resolvable or not.
+ * @param {string} dir
+ * @returns {Promise<boolean>}
+ */
+async function branchRefExists(dir) {
+  // Read HEAD itself: `git symbolic-ref` refuses a ref that doesn't resolve.
+  const gitDir = await runGit(dir, ['rev-parse', '--absolute-git-dir']);
+  const m = /^ref: (\S+)/.exec(readFileSync(join(gitDir, 'HEAD'), 'utf8'));
+  if (!m) return false; // detached HEAD naming nothing: treated like no commits
+  const ref = m[1];
+  if (existsSync(join(gitDir, ref))) return true;
+  const packed = join(gitDir, 'packed-refs');
+  return existsSync(packed) && readFileSync(packed, 'utf8').split('\n').some((l) => l.endsWith(` ${ref}`));
+}
+
+/**
  * The HEAD commit's id, or null when there is no repo or no commit yet. Any
  * other failure (a damaged repo, a timeout) is thrown, so callers can fail closed.
  * @param {string} dir
@@ -285,7 +301,11 @@ export async function headCommit(dir) {
     return (await runGit(dir, ['rev-parse', '--verify', '--quiet', 'HEAD'])) || null;
   } catch (err) {
     // `--verify --quiet` exits 1 with no message when HEAD names no commit yet.
-    if (err instanceof GitError && err.code === 1 && !err.stderr) return null;
+    // But a branch ref that exists and doesn't resolve is damage: fail closed.
+    if (err instanceof GitError && err.code === 1 && !err.stderr) {
+      if (await branchRefExists(dir)) throw err;
+      return null;
+    }
     // No repo at all is "nothing committed"; a damaged .git is not.
     if (err instanceof GitError && /not a git repository/i.test(err.stderr) && !existsSync(join(dir, '.git'))) return null;
     throw err;

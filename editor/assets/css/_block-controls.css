@@ -141,7 +141,7 @@
   min-width: 6ch;
   padding: var(--size-s) var(--size-l);
   border: none;
-  border-block-end: 2px solid var(--color-accent);
+  border-block-end: var(--border-width-medium) solid var(--color-accent);
   border-radius: 0;
   background: var(--color-background);
   font: inherit;

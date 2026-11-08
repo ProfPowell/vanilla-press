@@ -60,12 +60,14 @@ function parseRange(value, size) {
   let end;
   if (m[1] === '') {
     const n = Number(m[2]);
-    if (n === 0 || size === 0) return 'unsatisfiable';
+    if (n === 0) return 'unsatisfiable';
+    // RFC 9110 14.1.1: a non-zero suffix is satisfiable even on an empty file; serve it whole.
+    if (size === 0) return null;
     start = Math.max(0, size - n);
     end = size - 1;
   } else {
     start = Number(m[1]);
-    // RFC 9110 14.1.2: last before first is not a valid range spec, so it is ignored.
+    // RFC 9110 14.1.1: last before first is not a valid range spec, so it is ignored.
     if (m[2] !== '' && Number(m[2]) < start) return null;
     end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
     if (start >= size) return 'unsatisfiable';
@@ -89,25 +91,27 @@ export function serveFile(res, filePath, { req, headers } = {}) {
       const indexPath = join(filePath, 'index.html');
       return existsSync(indexPath) ? serveFile(res, indexPath, { req, headers }) : false;
     }
-    const content = readFileSync(filePath);
+    // HEAD needs only the size: don't read the file for it
+    const isHead = req?.method === 'HEAD';
+    const size = stat.size;
+    const content = isHead ? null : readFileSync(filePath);
     const base = {
       'Content-Type': MIME_TYPES[extname(filePath).toLowerCase()] || 'application/octet-stream',
       'Cache-Control': 'no-cache',
       ...(headers ? { ...headers, 'Accept-Ranges': 'bytes' } : {}),
     };
-    const range = headers ? parseRange(req?.headers?.range, content.length) : null;
+    const range = headers ? parseRange(req?.headers?.range, size) : null;
     if (range === 'unsatisfiable') {
-      res.writeHead(416, { ...base, 'Content-Range': `bytes */${content.length}`, 'Content-Length': 0 });
+      res.writeHead(416, { ...base, 'Content-Range': `bytes */${size}`, 'Content-Length': 0 });
       res.end();
     } else if (range) {
-      const part = content.subarray(range.start, range.end + 1);
       res.writeHead(206, {
-        ...base, 'Content-Range': `bytes ${range.start}-${range.end}/${content.length}`, 'Content-Length': part.length,
+        ...base, 'Content-Range': `bytes ${range.start}-${range.end}/${size}`, 'Content-Length': range.end - range.start + 1,
       });
-      res.end(part);
+      res.end(isHead ? undefined : content.subarray(range.start, range.end + 1));
     } else {
-      res.writeHead(200, { ...base, 'Content-Length': content.length });
-      res.end(content);
+      res.writeHead(200, { ...base, 'Content-Length': size });
+      res.end(isHead ? undefined : content);
     }
     return true;
   } catch {

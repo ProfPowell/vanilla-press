@@ -139,7 +139,8 @@ export class TabsView {
     input.setAttribute('aria-label', `Tab ${index + 1} label`);
     this.renaming = input;
     let finished = false;
-    const finish = (save) => {
+    // refocus: true for Enter/Escape; a blur leaves focus where the user moved it
+    const finish = (save, refocus) => {
       if (finished) return;
       finished = true;
       this.renaming = null;
@@ -147,14 +148,14 @@ export class TabsView {
       const tr = save && pos != null ? renameTabTr(this.view.state, pos, index, input.value) : null;
       if (tr) this.view.dispatch(tr); // update() redraws the bar
       else this.buildTabBar(this.node);
-      this.view.focus();
+      if (refocus) this.view.focus();
     };
     input.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
-      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+      if (e.key === 'Enter') { e.preventDefault(); finish(true, true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false, true); }
     });
-    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('blur', () => finish(true, false));
     btn.replaceWith(input);
     input.focus();
     input.select();

@@ -171,6 +171,7 @@ export function createMediaDetail({ siteId, base, root, host }) {
         await host.refresh();
         const fresh = host.getItem(id);
         if (fresh && shownId === id) show(fresh, { notice });
+        else if (message.isConnected) { message.textContent = notice; message.hidden = false; }
         return;
       }
       message.textContent = err.message;

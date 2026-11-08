@@ -727,8 +727,24 @@ describe('app server media serving and backup', () => {
     assert.equal((await res.text()).length, 16);
   });
 
-  it('any range on a zero-byte file is unsatisfiable (416)', async () => {
-    for (const range of ['bytes=-5', 'bytes=0-', 'bytes=0-0']) {
+  it('a suffix range on a zero-byte file is served whole (200, RFC 9110 14.1.1)', async () => {
+    const res = await fetch(`${app.url}/sites/${id}/media/empty.mp4`, { headers: { Range: 'bytes=-5' } });
+    assert.equal(res.status, 200);
+    assert.equal((await res.text()).length, 0);
+  });
+
+  it('a HEAD request gets the size and range headers without a body', async () => {
+    const whole = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { method: 'HEAD' });
+    assert.equal(whole.status, 200);
+    assert.equal(whole.headers.get('content-length'), '16');
+    const part = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { method: 'HEAD', headers: { Range: 'bytes=2-5' } });
+    assert.equal(part.status, 206);
+    assert.equal(part.headers.get('content-length'), '4');
+    assert.equal(part.headers.get('content-range'), 'bytes 2-5/16');
+  });
+
+  it('a first-byte range on a zero-byte file is unsatisfiable (416)', async () => {
+    for (const range of ['bytes=0-', 'bytes=0-0']) {
       const res = await fetch(`${app.url}/sites/${id}/media/empty.mp4`, { headers: { Range: range } });
       assert.equal(res.status, 416, range);
       assert.equal(res.headers.get('content-range'), 'bytes */0');

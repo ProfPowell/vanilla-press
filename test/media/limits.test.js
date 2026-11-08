@@ -28,7 +28,7 @@ test('checkBeforeUpload', () => {
   const big = checkBeforeUpload({ name: 'a.mp4', size: MAX_BYTES + 1 });
   assert.equal(big.ok, false);
   assert.equal(big.error, tooLargeMessage('a.mp4', MAX_BYTES + 1));
-  assert.match(big.error, /too large \(25\.000 MB\); the limit is 25 MB/);
+  assert.match(big.error, /too large \(26,214,401 bytes\); the limit is 25 MB/);
   assert.match(tooLargeMessage('b.mp4', 40 * 1048576), /b\.mp4 is too large \(40\.0 MB\); the limit is 25 MB/);
   assert.deepEqual(checkBeforeUpload({ name: 'a.mp4', size: MAX_BYTES }), { ok: true, large: true });
   assert.deepEqual(checkBeforeUpload({ name: 'a.jpg', size: LARGE_BYTES + 1 }), { ok: true, large: true });

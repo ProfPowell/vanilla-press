@@ -14,7 +14,7 @@ export const ACCEPT_ATTR = ACCEPTED.flatMap((t) => t.exts.map((e) => `.${e}`)).j
 
 export function tooLargeMessage(name, size) {
   // Just over the limit "25.0 MB" would read as under it: show more digits.
-  const shown = size > MAX_BYTES && formatBytes(size) === '25.0 MB' ? `${(size / 1048576).toFixed(3)} MB` : formatBytes(size);
+  const shown = size > MAX_BYTES && formatBytes(size) === '25.0 MB' ? `${size.toLocaleString('en-US')} bytes` : formatBytes(size);
   return `${name} is too large (${shown}); the limit is 25 MB. Cloudflare Pages won't serve larger files. Make it smaller and try again.`;
 }
 

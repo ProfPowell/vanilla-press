@@ -371,6 +371,12 @@ test('headCommit: no repo is null; a damaged repo or an unreadable directory thr
   writeFileSync(join(broken, '.git', 'HEAD'), 'not a ref\n');
   await assert.rejects(headCommit(broken), GitError);
   await assert.rejects(headCommit(join(root, 'does-not-exist')), Error);
+  // A branch ref holding garbage is damage, not "no commits yet"
+  const garbage = join(root, 'garbage-ref');
+  execFileSync('git', ['init', '-b', 'main', garbage], { stdio: 'ignore' });
+  mkdirSync(join(garbage, '.git', 'refs', 'heads'), { recursive: true });
+  writeFileSync(join(garbage, '.git', 'refs', 'heads', 'main'), 'garbage\n');
+  await assert.rejects(headCommit(garbage), GitError);
 });
 
 test('readBlobs reads many blobs with one call, leaves out unknown ids, and has no 16 MB limit', async () => {

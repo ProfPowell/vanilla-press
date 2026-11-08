@@ -230,7 +230,7 @@
 }
 
 /* A leaf that can't run has nothing editable to show: the note stands for it */
-.ProseMirror .pm-component-live-leaf:is([data-state="failed"], [data-state="off"]) > :not(.pm-component-note) {
+.ProseMirror .pm-component-live-leaf:is([data-state="failed"], [data-state="off"]) > :not(.pm-component-note, .pm-component-missing) {
   display: none;
 }
 

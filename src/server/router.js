@@ -108,13 +108,29 @@ function readJsonBody(req) {
 /**
  * Read raw request body as Buffer.
  * @param {import('node:http').IncomingMessage} req
+ * @param {{ limit?: number }} [options] - Reject with an error whose `status` is 413 once more than
+ *   `limit` bytes have arrived; reading stops (nothing more is buffered).
  * @returns {Promise<Buffer>}
  */
-export function readRawBody(req) {
+export function readRawBody(req, { limit } = {}) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
+    let received = 0;
+    const onData = (chunk) => {
+      received += chunk.length;
+      if (limit !== undefined && received > limit) {
+        req.off('data', onData);
+        req.off('end', onEnd);
+        req.pause();
+        chunks.length = 0;
+        reject(Object.assign(new Error('Request body too large'), { status: 413, received }));
+        return;
+      }
+      chunks.push(chunk);
+    };
+    const onEnd = () => resolve(Buffer.concat(chunks));
+    req.on('data', onData);
+    req.on('end', onEnd);
     req.on('error', reject);
   });
 }

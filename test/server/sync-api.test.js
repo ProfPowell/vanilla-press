@@ -183,18 +183,30 @@ describe('API with a site workspace', () => {
     assert.ok(!existsSync(at(HTML_REL)));
   });
 
-  it('media upload lands in src/media and is listed in content/media.json', async () => {
+  it('media.json follows upload, alt edit and delete', async () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 20, 0, 10, 1, 1, 0x11, 0]);
     const form = new FormData();
-    form.append('file', new Blob([Buffer.from('PNGDATA')], { type: 'image/png' }), 'pic.png');
+    form.append('file', new Blob([jpeg], { type: 'image/jpeg' }), 'pic.jpg');
     form.append('alt', 'A picture');
     const { status, data } = await api('/api/media', { method: 'POST', form });
     assert.equal(status, 201);
     assert.ok(existsSync(join(site, 'src', 'media', data.filename)));
-    const media = JSON.parse(readFileSync(at('content/media.json'), 'utf8'));
-    assert.ok(Array.isArray(media));
-    assert.equal(media.length, 1);
-    assert.equal(media[0].filename, data.filename);
-    assert.equal(media[0].alt, 'A picture');
+    const read = () => JSON.parse(readFileSync(at('content/media.json'), 'utf8'));
+    assert.equal(read().length, 1);
+    assert.equal(read()[0].filename, data.filename);
+    assert.equal(read()[0].alt, 'A picture');
+    assert.equal(read()[0].original_name, 'pic.jpg');
+    assert.equal(read()[0].width, 10);
+
+    await api(`/api/media/${data.id}`, { method: 'PUT', body: { alt: '' } });
+    assert.equal(read()[0].alt, '');
+    await api(`/api/media/${data.id}`, { method: 'PUT', body: { alt: null } });
+    assert.equal(read()[0].alt, null);
+
+    const del = await api(`/api/media/${data.id}`, { method: 'DELETE' });
+    assert.equal(del.status, 200);
+    assert.deepEqual(read(), []);
+    assert.ok(!existsSync(join(site, 'src', 'media', data.filename)));
   });
 
   it('PUT /api/config/theme writes config/vp.json', async () => {

@@ -9,7 +9,7 @@
 
 import crypto from 'node:crypto';
 import { join } from 'node:path';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { rmSync, existsSync } from 'node:fs';
 import {
   getDocument,
   listCollection,
@@ -26,6 +26,13 @@ import { reloadFromSite } from '../sync/from-site.js';
 import {
   getCollectionsConfig, preflightSave, writeMediaJson, writeVpConfig, syncAll,
 } from '../sync/site-files.js';
+import { writeFileAtomic } from '../sync/atomic-write.js';
+import { isMissing } from '../sync/media-library.js';
+import { inspectFile } from '../media/inspect.js';
+import { mediaFilename, editedFilename, uniqueFilename } from '../media/names.js';
+import { MAX_BYTES, LARGE_BYTES, tooLargeMessage, unsupportedMessage } from '../media/limits.js';
+import { mediaUsage } from '../media/usage.js';
+import { kindOf } from '../media/types.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
 import { sendJson, readRawBody } from './router.js';
@@ -53,6 +60,8 @@ function generateId() {
  * @param {(e: { docId: string|null, title: string, status: string }) => void} [options.onSynced] - Called after
  *   every successful sync (create, update, delete, reload), and once for POST /api/sync with
  *   `{ docId: null, title: 'all posts' }`. Never called in fixture mode.
+ * @param {(e: { filename: string, action: 'upload'|'alt'|'delete' }) => void} [options.onMediaChanged] - Called after
+ *   every media write (upload, alt edit, delete); a throwing listener never breaks the response.
  * @param {boolean} [options.statusByActions=false] - The app (Ruling P): a document save never
  *   changes `status` or `published` (PUT keeps the stored values; POST create stores a draft, or
  *   keeps an existing document's values); only Publish/Update/Unpublish change them. `vp serve`
@@ -335,12 +344,52 @@ export function mountApi(router, db, options) {
 
   // --- Media ---
 
-  route.add('GET', '/api/media', (req, res) => {
-    const rows = db.prepare('SELECT * FROM media ORDER BY created DESC').all();
-    sendJson(res, 200, rows);
-  });
+  /** Slack over MAX_BYTES for the multipart envelope and the other fields. */
+  const UPLOAD_LIMIT = MAX_BYTES + 1_048_576;
 
-  route.add('POST', '/api/media', async (req, res) => {
+  /** Every document with its usage of media files: Map<filename, [{ id, title, status }]>. */
+  function usageMap() {
+    const docs = db.prepare('SELECT id FROM documents').all().map((r) => getDocument(db, r.id));
+    return mediaUsage(docs);
+  }
+
+  /** A media row as the API returns it. */
+  function mediaItem(row, usage) {
+    return {
+      id: row.id,
+      filename: row.filename,
+      original_name: row.original_name,
+      mime_type: row.mime_type,
+      kind: kindOf(row.mime_type),
+      size: row.size,
+      width: row.width,
+      height: row.height,
+      alt: row.alt,
+      edited_from: row.edited_from,
+      created: row.created,
+      src: `/media/${row.filename}`,
+      missing: isMissing(mediaDir, row.filename),
+      usedIn: usage.get(row.filename) || [],
+    };
+  }
+
+  /** Rewrite media.json (with a site) and tell the listener; neither failure breaks the response. */
+  function mediaChanged(filename, action) {
+    if (ws) writeMediaJson(ws, db);
+    try {
+      options.onMediaChanged?.({ filename, action });
+    } catch (err) {
+      console.error('onMediaChanged error:', err);
+    }
+  }
+
+  route.add('GET', '/api/media', jsonErrors((req, res) => {
+    const usage = usageMap();
+    const rows = db.prepare('SELECT * FROM media ORDER BY created DESC, filename').all();
+    sendJson(res, 200, rows.map((row) => mediaItem(row, usage)));
+  }));
+
+  route.add('POST', '/api/media', jsonErrors(async (req, res) => {
     const contentType = req.headers['content-type'] || '';
 
     if (!contentType.includes('multipart/form-data')) {
@@ -348,44 +397,108 @@ export function mountApi(router, db, options) {
       return;
     }
 
+    const declared = Number(req.headers['content-length']);
+    if (declared > UPLOAD_LIMIT) {
+      sendJson(res, 413, { error: tooLargeMessage('This file', declared) });
+      return;
+    }
+
+    let parsed;
     try {
-      const { file, fields } = await parseMultipart(req, contentType);
-      if (!file) {
-        sendJson(res, 400, { error: 'No file uploaded' });
+      parsed = await parseMultipart(req, contentType);
+    } catch (err) {
+      if (err.status === 413) {
+        sendJson(res, 413, { error: tooLargeMessage('This file', err.received) });
         return;
       }
-
-      // Generate unique filename
-      const ext = file.filename.includes('.')
-        ? file.filename.slice(file.filename.lastIndexOf('.'))
-        : '';
-      const id = crypto.randomUUID().slice(0, 8);
-      const filename = `${id}${ext}`;
-
-      // Save to disk
-      mkdirSync(mediaDir, { recursive: true });
-      writeFileSync(join(mediaDir, filename), file.data);
-
-      // Insert into DB
-      const alt = fields.alt || '';
-      db.prepare(`
-        INSERT INTO media (id, filename, mime_type, size, alt, created)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, filename, file.mimeType, file.data.length, alt, new Date().toISOString());
-      if (ws) writeMediaJson(ws, db);
-
-      sendJson(res, 201, {
-        id,
-        filename,
-        mime_type: file.mimeType,
-        size: file.data.length,
-        alt,
-        src: `/media/${filename}`,
-      });
-    } catch (err) {
-      sendJson(res, 500, { error: `Upload failed: ${err.message}` });
+      throw err;
     }
-  });
+    const { file, fields } = parsed;
+    if (!file) {
+      sendJson(res, 400, { error: 'No file uploaded' });
+      return;
+    }
+    if (file.data.length > MAX_BYTES) {
+      sendJson(res, 413, { error: tooLargeMessage(file.filename, file.data.length) });
+      return;
+    }
+    const info = inspectFile(file.data, file.filename);
+    if (!info) {
+      sendJson(res, 415, { error: unsupportedMessage(file.filename) });
+      return;
+    }
+
+    let source = null;
+    if (fields.edited_from) {
+      source = db.prepare('SELECT * FROM media WHERE filename = ?').get(fields.edited_from);
+      if (!source) {
+        sendJson(res, 400, { error: 'The image being edited is no longer in the library.' });
+        return;
+      }
+    }
+
+    const taken = (name) => existsSync(join(mediaDir, name))
+      || Boolean(db.prepare('SELECT 1 FROM media WHERE filename = ?').get(name));
+    const filename = uniqueFilename(
+      (id) => (source ? editedFilename(source.filename, info.ext, id) : mediaFilename(file.filename, info.ext, id)),
+      taken,
+    );
+
+    writeFileAtomic(join(mediaDir, filename), file.data);
+    const row = {
+      id: crypto.randomUUID().slice(0, 8),
+      filename,
+      original_name: source ? source.original_name : file.filename,
+      mime_type: info.mime,
+      size: file.data.length,
+      width: info.width,
+      height: info.height,
+      alt: source ? source.alt : ('alt' in fields ? fields.alt : null),
+      edited_from: source ? source.filename : null,
+      created: new Date().toISOString(),
+    };
+    db.prepare(`
+      INSERT INTO media (id, filename, original_name, mime_type, size, width, height, alt, edited_from, created)
+      VALUES (@id, @filename, @original_name, @mime_type, @size, @width, @height, @alt, @edited_from, @created)
+    `).run(row);
+    mediaChanged(filename, 'upload');
+
+    sendJson(res, 201, { ...mediaItem(row, usageMap()), large: file.data.length > LARGE_BYTES });
+  }));
+
+  route.add('PUT', '/api/media/:id', jsonErrors((req, res) => {
+    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
+    if (!row) {
+      sendJson(res, 404, { error: 'Media not found' });
+      return;
+    }
+    const alt = req.body?.alt;
+    if (alt !== null && typeof alt !== 'string') {
+      sendJson(res, 400, { error: 'alt must be text or null' });
+      return;
+    }
+    db.prepare('UPDATE media SET alt = ? WHERE id = ?').run(alt, row.id);
+    mediaChanged(row.filename, 'alt');
+    sendJson(res, 200, mediaItem({ ...row, alt }, usageMap()));
+  }));
+
+  route.add('DELETE', '/api/media/:id', jsonErrors((req, res) => {
+    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
+    if (!row) {
+      sendJson(res, 404, { error: 'Media not found' });
+      return;
+    }
+    const users = usageMap().get(row.filename) || [];
+    const published = users.filter((u) => u.status === 'published').map(({ id, title }) => ({ id, title }));
+    if (published.length) {
+      sendJson(res, 409, { error: 'Used by published posts. Remove it from them and Update first.', posts: published });
+      return;
+    }
+    rmSync(join(mediaDir, row.filename), { force: true });
+    db.prepare('DELETE FROM media WHERE id = ?').run(row.id);
+    mediaChanged(row.filename, 'delete');
+    sendJson(res, 200, { ok: true, drafts: users.map(({ id, title }) => ({ id, title })) });
+  }));
 
   // --- Themes ---
 
@@ -451,7 +564,7 @@ async function parseMultipart(req, contentType) {
   if (!boundaryMatch) throw new Error('No boundary in content-type');
 
   const boundary = boundaryMatch[1];
-  const raw = await readRawBody(req);
+  const raw = await readRawBody(req, { limit: MAX_BYTES + 1_048_576 });
   const boundaryBuf = Buffer.from(`--${boundary}`);
   const fields = {};
   let file = null;

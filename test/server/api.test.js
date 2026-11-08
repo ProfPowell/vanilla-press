@@ -13,7 +13,8 @@ import { createRouter, sendJson } from '../../src/server/router.js';
 import { mountApi } from '../../src/server/api.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TMP_DIR = join(__dirname, '..', '..', '_test_tmp');
@@ -25,7 +26,7 @@ let db, server, port;
  * Make an API request to the test server.
  */
 async function api(path, options = {}) {
-  const { method = 'GET', body, query } = options;
+  const { method = 'GET', body, query, form } = options;
 
   let url = `http://localhost:${port}${path}`;
   if (query) {
@@ -34,7 +35,9 @@ async function api(path, options = {}) {
   }
 
   const fetchOptions = { method };
-  if (body !== undefined) {
+  if (form) {
+    fetchOptions.body = form;
+  } else if (body !== undefined) {
     fetchOptions.headers = { 'Content-Type': 'application/json' };
     fetchOptions.body = JSON.stringify(body);
   }
@@ -263,11 +266,197 @@ describe('API', () => {
   });
 
   describe('media', () => {
+    const jpeg = (w, h, pad = 0) => Buffer.concat([
+      Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, h >> 8, h & 255, w >> 8, w & 255, 1, 1, 0x11, 0]),
+      Buffer.alloc(pad),
+    ]);
+    const png = (w, h, pad = 0) => {
+      const head = Buffer.alloc(8 + 4 + 4 + 13);
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(head);
+      head.writeUInt32BE(13, 8);
+      head.write('IHDR', 12);
+      head.writeUInt32BE(w, 16);
+      head.writeUInt32BE(h, 20);
+      return Buffer.concat([head, Buffer.alloc(pad)]);
+    };
+    const upload = (bytes, name, fields = {}) => {
+      const form = new FormData();
+      form.append('file', new Blob([bytes]), name);
+      for (const [k, v] of Object.entries(fields)) form.append(k, v);
+      return api('/api/media', { method: 'POST', form });
+    };
+    const sha = (f) => createHash('sha1').update(readFileSync(join(MEDIA_DIR, f))).digest('hex');
+    const files = () => readdirSync(MEDIA_DIR).sort();
+
     it('lists media (initially empty)', async () => {
       const { status, data } = await api('/api/media');
 
       assert.equal(status, 200);
       assert.ok(Array.isArray(data));
+    });
+
+    it('upload names the file from its original name', async () => {
+      const { status, data } = await upload(jpeg(40, 30), 'Garden Path.JPG');
+      assert.equal(status, 201);
+      assert.match(data.filename, /^garden-path-[0-9a-f]{6}\.jpg$/);
+      assert.equal(data.original_name, 'Garden Path.JPG');
+      assert.equal(data.mime_type, 'image/jpeg');
+      assert.equal(data.kind, 'image');
+      assert.equal(data.width, 40);
+      assert.equal(data.height, 30);
+      assert.equal(data.alt, null);
+      assert.equal(data.missing, false);
+      assert.deepEqual(data.usedIn, []);
+      assert.equal(data.src, `/media/${data.filename}`);
+      assert.equal(data.large, false);
+      assert.ok(existsSync(join(MEDIA_DIR, data.filename)));
+    });
+
+    it('upload with alt "" stores decorative', async () => {
+      const { data } = await upload(jpeg(2, 2), 'deco.jpg', { alt: '' });
+      assert.equal(data.alt, '');
+    });
+
+    it('a PNG named .jpg is stored as png', async () => {
+      const { data } = await upload(png(3, 4), 'sneaky.jpg');
+      assert.match(data.filename, /^sneaky-[0-9a-f]{6}\.png$/);
+      assert.equal(data.mime_type, 'image/png');
+    });
+
+    it('unsupported content is refused', async () => {
+      const before = files();
+      const { status, data } = await upload(Buffer.from('just some text'), 'a.jpg');
+      assert.equal(status, 415);
+      assert.ok(data.error.includes('a.jpg'));
+      assert.deepEqual(files(), before);
+    });
+
+    it('files over 25 MB are refused', async () => {
+      const before = files();
+      const { status, data } = await upload(jpeg(1, 1, 26_214_400 - 21 + 1), 'huge.jpg');
+      assert.equal(status, 413);
+      assert.ok(data.error.includes('25 MB'));
+      assert.deepEqual(files(), before);
+    });
+
+    it('a body far past the limit is refused with 413', async () => {
+      const { status, data } = await upload(Buffer.alloc(28_000_000), 'enormous.jpg');
+      assert.equal(status, 413);
+      assert.ok(data.error.includes('25 MB'));
+    });
+
+    it('large files carry a note', async () => {
+      const { status, data } = await upload(png(1, 1, 5_242_881 - 29), 'big.png');
+      assert.equal(status, 201);
+      assert.equal(data.size, 5_242_881);
+      assert.equal(data.large, true);
+    });
+
+    it('two uploads with the same name get different files', async () => {
+      const a = await upload(jpeg(1, 1), 'same.jpg');
+      const b = await upload(jpeg(1, 1), 'same.jpg');
+      assert.notEqual(a.data.filename, b.data.filename);
+      assert.ok(existsSync(join(MEDIA_DIR, a.data.filename)) && existsSync(join(MEDIA_DIR, b.data.filename)));
+    });
+
+    it('alt edit keeps three states', async () => {
+      const { data: item } = await upload(jpeg(1, 1), 'alt.jpg');
+      const put = (alt) => api(`/api/media/${item.id}`, { method: 'PUT', body: { alt } });
+      assert.equal((await put('A cat')).data.alt, 'A cat');
+      assert.equal((await put('')).data.alt, '');
+      const cleared = await put(null);
+      assert.equal(cleared.status, 200);
+      assert.equal(cleared.data.alt, null);
+      const bad = await put(3);
+      assert.equal(bad.status, 400);
+      assert.equal(bad.data.error, 'alt must be text or null');
+      assert.equal((await api('/api/media/nope', { method: 'PUT', body: { alt: 'x' } })).status, 404);
+    });
+
+    it('edited copy', async () => {
+      const { data: src } = await upload(jpeg(8, 6, 50), 'Garden Path.JPG', { alt: 'A path' });
+      const before = sha(src.filename);
+      const { status, data } = await upload(jpeg(4, 3), 'whatever.jpg', { edited_from: src.filename, alt: 'ignored' });
+      assert.equal(status, 201);
+      assert.match(data.filename, /^garden-path-edited-[0-9a-f]{6}\.jpg$/);
+      assert.equal(data.alt, 'A path');
+      assert.equal(data.original_name, 'Garden Path.JPG');
+      assert.equal(data.edited_from, src.filename);
+      const list = (await api('/api/media')).data;
+      assert.equal(list.find((m) => m.id === src.id).edited_from, null);
+      assert.equal(sha(src.filename), before);
+      const again = await upload(jpeg(4, 3), 'x.jpg', { edited_from: data.filename });
+      assert.match(again.data.filename, /^garden-path-edited-[0-9a-f]{6}\.jpg$/);
+
+      const gone = await upload(jpeg(1, 1), 'x.jpg', { edited_from: 'nothing-here.jpg' });
+      assert.equal(gone.status, 400);
+      assert.equal(gone.data.error, 'The image being edited is no longer in the library.');
+    });
+
+    /** A document using `src` in a figure, with the given status. */
+    const docUsing = async (title, status, block) => {
+      const { data } = await api('/api/documents', {
+        method: 'POST',
+        body: { meta: { title, slug: title.toLowerCase().replace(/\W+/g, '-'), collection: 'posts', status }, blocks: [block] },
+      });
+      return data;
+    };
+    const figure = (src) => ({ type: 'figure', attrs: { src, alt: 'x' } });
+
+    it('list marks missing files and usage', async () => {
+      const { data: item } = await upload(jpeg(1, 1), 'listed.jpg');
+      const doc = await docUsing('Lists media', 'published', figure(item.src));
+      let found = (await api('/api/media')).data.find((m) => m.id === item.id);
+      assert.deepEqual(found.usedIn, [{ id: doc.id, title: 'Lists media', status: 'published' }]);
+      assert.equal(found.missing, false);
+      rmSync(join(MEDIA_DIR, item.filename));
+      found = (await api('/api/media')).data.find((m) => m.id === item.id);
+      assert.equal(found.missing, true);
+      const all = (await api('/api/media')).data;
+      const created = all.map((m) => m.created);
+      assert.deepEqual(created, [...created].sort().reverse());
+      await api(`/api/documents/${doc.id}`, { method: 'DELETE' });
+    });
+
+    it('delete is refused while a published post uses the file', async () => {
+      const { data: item } = await upload(jpeg(1, 1), 'guarded.jpg');
+      const doc = await docUsing('Guard figure', 'published', figure(item.src));
+      const { status, data } = await api(`/api/media/${item.id}`, { method: 'DELETE' });
+      assert.equal(status, 409);
+      assert.equal(data.error, 'Used by published posts. Remove it from them and Update first.');
+      assert.deepEqual(data.posts, [{ id: doc.id, title: 'Guard figure' }]);
+      assert.ok(existsSync(join(MEDIA_DIR, item.filename)));
+      assert.equal((await api('/api/media')).data.some((m) => m.id === item.id), true);
+    });
+
+    it('delete is refused while a published post links the file', async () => {
+      const { data: item } = await upload(jpeg(1, 1), 'linked.jpg');
+      const link = { type: 'paragraph', children: [{ type: 'link', attrs: { href: item.src }, children: [{ type: 'text', value: 'file' }] }] };
+      const doc = await docUsing('Guard link', 'published', link);
+      const { status, data } = await api(`/api/media/${item.id}`, { method: 'DELETE' });
+      assert.equal(status, 409);
+      assert.deepEqual(data.posts, [{ id: doc.id, title: 'Guard link' }]);
+      assert.ok(existsSync(join(MEDIA_DIR, item.filename)));
+    });
+
+    it('delete of a draft-only file removes it', async () => {
+      const { data: item } = await upload(jpeg(1, 1), 'drafty.jpg');
+      const doc = await docUsing('Draft user', 'draft', figure(item.src));
+      const { status, data } = await api(`/api/media/${item.id}`, { method: 'DELETE' });
+      assert.equal(status, 200);
+      assert.deepEqual(data, { ok: true, drafts: [{ id: doc.id, title: 'Draft user' }] });
+      assert.ok(!existsSync(join(MEDIA_DIR, item.filename)));
+      assert.equal((await api('/api/media')).data.some((m) => m.id === item.id), false);
+      assert.equal((await api(`/api/media/${item.id}`, { method: 'DELETE' })).status, 404);
+    });
+
+    it('delete of a missing file removes the entry', async () => {
+      const { data: item } = await upload(jpeg(1, 1), 'vanished.jpg');
+      rmSync(join(MEDIA_DIR, item.filename));
+      const { status, data } = await api(`/api/media/${item.id}`, { method: 'DELETE' });
+      assert.equal(status, 200);
+      assert.deepEqual(data, { ok: true, drafts: [] });
+      assert.equal((await api('/api/media')).data.some((m) => m.id === item.id), false);
     });
   });
 

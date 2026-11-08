@@ -31,6 +31,7 @@ import { CardView } from './blocks/card-view.js';
 import { TabsView } from './blocks/tabs-view.js';
 import { StepsView, StepView } from './blocks/steps-view.js';
 import { FigureView, focusFigureAlt } from './blocks/figure-view.js';
+import { EmbedView } from './blocks/embed-view.js';
 import {
   ComponentView, InlineComponentView, componentSettingsPlugin, setComponentDescriptors,
 } from './blocks/component-view.js';
@@ -262,6 +263,7 @@ export function initEditor() {
       steps: (node) => new StepsView(node),
       step: (node, view, getPos) => new StepView(node, view, getPos),
       figure: (node, view, getPos) => new FigureView(node, view, getPos),
+      embed: (node) => new EmbedView(node),
       component_leaf: (node, view, getPos) => new ComponentView(node, view, getPos),
       component_blocks: (node, view, getPos) => new ComponentView(node, view, getPos),
       component_inline: (node, view, getPos) => new InlineComponentView(node, view, getPos),

@@ -23,6 +23,7 @@ import { enabledDescriptors } from '../component-model.js';
 import {
   loadComponent, createComponentElement, syncAttributes, setComponentValue,
 } from '../component-loader.js';
+import { isMissingMedia, missingText } from '../media-check.js';
 
 const COMPONENT_TYPES = new Set(['component_leaf', 'component_blocks', 'component_inline']);
 
@@ -104,10 +105,30 @@ class BaseComponentView {
     } else {
       this.contentDOM = this.el;
     }
-    this.dom.append(this.note, this.el);
+    // A PDF viewer whose file is gone from src/media says so, as a figure does
+    this.missingNote = document.createElement('span');
+    this.missingNote.className = 'pm-component-missing';
+    this.missingNote.contentEditable = 'false';
+    this.missingNote.hidden = true;
+    this.fileCheck = 0;
+    this.dom.append(this.note, this.missingNote, this.el);
 
     views.add(this);
     this.refresh();
+    this.checkFile();
+  }
+
+  /** For a pdf-viewer: ask whether its src is a library file that no longer exists. */
+  checkFile() {
+    if (this.node.attrs.tag !== 'pdf-viewer') return;
+    const src = this.node.attrs.attrs?.src;
+    const mine = ++this.fileCheck;
+    this.missingNote.hidden = true;
+    isMissingMedia(src).then((missing) => {
+      if (mine !== this.fileCheck || !views.has(this)) return;
+      this.missingNote.textContent = missing ? missingText(src) : '';
+      this.missingNote.hidden = !missing;
+    });
   }
 
   /** Recompute on/off and (when on) load the package's script. */
@@ -132,11 +153,13 @@ class BaseComponentView {
 
   update(node) {
     if (node.type !== this.node.type || node.attrs.tag !== this.node.attrs.tag) return false;
+    const srcChanged = this.node.attrs.attrs?.src !== node.attrs.attrs?.src;
     syncAttributes(this.el, this.node.attrs.attrs, node.attrs.attrs);
     if (this.kind === 'leaf' && (node.attrs.value !== this.node.attrs.value || node.attrs.wrap !== this.node.attrs.wrap)) {
       setComponentValue(this.el, node.attrs.value, node.attrs.wrap);
     }
     this.node = node;
+    if (srcChanged) this.checkFile();
     if (this.contentDOM) this.keepOwnNodes();
     return true;
   }
@@ -166,7 +189,7 @@ class BaseComponentView {
   ignoreMutation(mutation) {
     if (this.kind === 'leaf') return true;
     if (mutation.type === 'selection') return false;
-    if (this.note.contains(mutation.target) || mutation.target === this.dom) return true;
+    if (this.note.contains(mutation.target) || this.missingNote.contains(mutation.target) || mutation.target === this.dom) return true;
     if (mutation.target === this.el) {
       // The element sets its own attributes (state, roles)
       if (mutation.type === 'attributes') return true;

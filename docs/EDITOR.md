@@ -56,7 +56,7 @@ The title is the first line of the document, in the serif heading style. It cann
 - **Choose…:** a component attribute that holds a media URL (an image or video `src`, a poster and so on) has a **Choose…** button that opens the picker and fills in `/media/<file>`.
 - **Featured image:** Post settings has a Featured image field (thumbnail and file name, **Choose…** and **Remove**). It is saved as the post's `image` front matter. Showing it on the page is up to the site's layout.
 - **Alt text:** an image with no alt text (never written) is flagged. Every Publish and Update, including the Publish button in `vp serve`'s settings panel, warns when the post has such images and offers to go and fix them; a decorative image (alt written as empty) is fine.
-- **Missing files:** in the app, Publish and Update refuse a post that uses a `/media/` file missing from `src/media`. `vp serve` publish is a plain save and does not check.
+- **Missing files:** a figure, an audio or video block, or a PDF viewer whose file is gone from `src/media` says "Missing file: <name>" in the editor. In the app, Publish and Update refuse a post that uses a `/media/` file missing from `src/media`. `vp serve` publish is a plain save and does not check.
 - Uploaded files are stored in the site's `src/media` (in `vp serve`, the repo's `media/`) and served at `/media/<file>`. The Media screen manages them; see the README.
 
 ### Search

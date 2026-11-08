@@ -679,6 +679,7 @@ describe('app server media serving and backup', () => {
     writeFileSync(join(site, 'src', 'media', 'x.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
     writeFileSync(join(site, 'src', 'media', 'clip.mp4'), Buffer.from('0123456789abcdef'));
     writeFileSync(join(site, 'src', 'media', 'doc.pdf'), '%PDF-1.4');
+    writeFileSync(join(site, 'src', 'media', 'empty.mp4'), '');
     app = await startApp({ port: 0, env: { VP_CONFIG_DIR: join(root, 'config') }, git: fakeGit });
     id = (await (await fetch(`${app.url}/api/sites`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: site }),
@@ -718,6 +719,21 @@ describe('app server media serving and backup', () => {
     const res = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { headers: { Range: 'bytes=0-1,4-5' } });
     assert.equal(res.status, 200);
     assert.equal((await res.text()).length, 16);
+  });
+
+  it('a range whose end is before its start is ignored (200, whole file)', async () => {
+    const res = await fetch(`${app.url}/sites/${id}/media/clip.mp4`, { headers: { Range: 'bytes=5-2' } });
+    assert.equal(res.status, 200);
+    assert.equal((await res.text()).length, 16);
+  });
+
+  it('any range on a zero-byte file is unsatisfiable (416)', async () => {
+    for (const range of ['bytes=-5', 'bytes=0-', 'bytes=0-0']) {
+      const res = await fetch(`${app.url}/sites/${id}/media/empty.mp4`, { headers: { Range: range } });
+      assert.equal(res.status, 416, range);
+      assert.equal(res.headers.get('content-range'), 'bytes */0');
+      await res.arrayBuffer();
+    }
   });
 
   it('pdf and mp4 get their types', async () => {

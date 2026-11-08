@@ -51,7 +51,7 @@ export const MEDIA_HEADERS = {
 /**
  * Parse a single `Range: bytes=...` value against a file size.
  * @returns {{ start: number, end: number } | 'unsatisfiable' | null} null: no range, or a
- *   form we ignore (multi-range, malformed), which is served whole.
+ *   form we ignore (multi-range, malformed or last-before-first), which is served whole.
  */
 function parseRange(value, size) {
   const m = /^bytes=(\d*)-(\d*)$/.exec(String(value || '').trim());
@@ -60,13 +60,15 @@ function parseRange(value, size) {
   let end;
   if (m[1] === '') {
     const n = Number(m[2]);
-    if (n === 0) return 'unsatisfiable';
+    if (n === 0 || size === 0) return 'unsatisfiable';
     start = Math.max(0, size - n);
     end = size - 1;
   } else {
     start = Number(m[1]);
+    // RFC 9110 14.1.2: last before first is not a valid range spec, so it is ignored.
+    if (m[2] !== '' && Number(m[2]) < start) return null;
     end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
-    if (start >= size || start > end) return 'unsatisfiable';
+    if (start >= size) return 'unsatisfiable';
   }
   return { start, end };
 }

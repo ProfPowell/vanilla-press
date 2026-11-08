@@ -274,6 +274,16 @@ function showSection(section) {
     else a.removeAttribute('aria-current');
   }
   if (section === 'components' && !componentState) loadComponents();
+  if (section === 'media') startMedia();
+}
+
+// Media loads on first view, and only once.
+let mediaPage = null;
+function startMedia() {
+  if (mediaPage) return;
+  mediaPage = import('./media-page.js')
+    .then((m) => m.initMediaSection({ siteId, root: $('media-section') }))
+    .catch((err) => showError(err.message));
 }
 
 $('rail-sections').addEventListener('click', (e) => {

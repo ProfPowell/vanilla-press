@@ -265,6 +265,17 @@ describe('ownership from the files (final fix)', () => {
     assert.equal(readFileSync(p('content/.vp-manifest.json'), 'utf8'), '{not json');
   });
 
+  it('clearing the theme rewrites the page without theme keys', () => {
+    const doc = mk(simple(), { theme: '8bit', themeScope: 'article' });
+    syncDocument(ws, doc, {});
+    const html = readFileSync(p('src/posts/hello.html'), 'utf8');
+    assert.match(html, /\ntheme: "8bit"\nthemeScope: "article"\n/);
+    const { theme, themeScope, ...meta } = doc.meta;
+    syncDocument(ws, { ...doc, meta }, {});
+    const after = readFileSync(p('src/posts/hello.html'), 'utf8');
+    assert.doesNotMatch(after.split("\n---\n")[0], /theme/);
+  });
+
   it('synced HTML carries vp_id in its front matter', () => {
     syncDocument(ws, simple(), {});
     assert.match(readFileSync(p('src/posts/hello.html'), 'utf8'), /\nslug: "hello"\nvp_id: "doc_simple01"\n---\n/);

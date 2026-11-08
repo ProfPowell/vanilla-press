@@ -7,6 +7,7 @@
  * @module schema/validate
  */
 
+import { SAFE_ID } from '../themes/theme-setting.js';
 import { isSafeComponentTag, isSafeAttrName } from './component-names.js';
 import { blockTypes, inlineTypes, validMarks, requiredMeta, validStatuses } from './content-schema.js';
 
@@ -57,6 +58,15 @@ export function validate(doc, { components } = {}) {
     }
     if (doc.meta.image !== undefined && doc.meta.image !== null && typeof doc.meta.image !== 'string') {
       errors.push('meta.image must be a string');
+    }
+    const { theme, themeScope } = doc.meta;
+    const hasTheme = theme !== undefined && theme !== null && theme !== '';
+    if (hasTheme && !(typeof theme === 'string' && SAFE_ID.test(theme))) {
+      errors.push('meta.theme must be a theme id (a-z, 0-9, -)');
+    }
+    if (themeScope !== undefined && themeScope !== null) {
+      if (themeScope !== 'page' && themeScope !== 'article') errors.push('meta.themeScope must be "page" or "article"');
+      else if (!hasTheme) errors.push('meta.themeScope needs meta.theme');
     }
     if (doc.meta.status && !validStatuses.includes(doc.meta.status)) {
       errors.push(`meta.status "${doc.meta.status}" is not valid (expected: ${validStatuses.join(', ')})`);

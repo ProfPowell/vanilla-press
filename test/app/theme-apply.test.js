@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { applyTheme, htmlThemeAttr } from '../../src/app/theme-apply.js';
+import { applyTheme, htmlThemeAttr, liveThemeIds } from '../../src/app/theme-apply.js';
 import { BuildError } from '../../src/app/publish.js';
 import { createBackup } from '../../src/app/site-git.js';
 import { readSetting, saveCustomTheme, ensureThemeSetting, migrateVpTheme } from '../../src/app/site-theme.js';
@@ -304,6 +304,20 @@ describe('a local unapplied theme.json yields to the remote one on pull', () => 
   });
 });
 
+describe('liveThemeIds', () => {
+  const setting = { name: 'swiss', adjust: 'vp-site' };
+  const article = '---\ntheme: 8bit\nthemeScope: article\n---\n<h1>Home</h1>\n';
+  it('article scope: the site ids when the live page has an <article> or <main>, else the page theme (Cook\'s fallback)', () => {
+    assert.equal(liveThemeIds(setting, article, '<html><body><main class="x">'), 'swiss vp-site');
+    assert.equal(liveThemeIds(setting, article, '<html><body><ARTICLE>'), 'swiss vp-site');
+    assert.equal(liveThemeIds(setting, article, '<html><body><h1>Home</h1><mainly>'), '8bit');
+    assert.equal(liveThemeIds(setting, article, '<html><body><!-- <article> --><script>"<main>"</script>'), '8bit');
+    assert.equal(liveThemeIds(setting, article), 'swiss vp-site'); // no live page to look at
+    assert.equal(liveThemeIds(setting, '---\ntheme: 8bit\n---\n', '<main>'), '8bit');
+    assert.equal(liveThemeIds(null, article, ''), '');
+  });
+});
+
 describe('theme routes: apply and live', () => {
   let fx, app, id, pages;
   async function api(path, { method = 'GET', body } = {}) {
@@ -394,8 +408,14 @@ describe('theme routes: apply and live', () => {
     // Article scope keeps the site ids on <html>.
     write(fx.site, 'src/index.html', "---\ntheme: 8bit\nthemeScope: 'article'\n---\n<h1>Home</h1>\n");
     git(fx.site, 'commit', '-am', 'home article theme');
+    pages.set('https://example.com/', '<html data-theme="8bit"><body><main>');
     assert.equal((await api('/theme/live')).data.live, false);
-    pages.set('https://example.com/', '<html data-theme="swiss vp-site">');
+    pages.set('https://example.com/', '<html data-theme="swiss vp-site"><body><main><article data-theme="8bit">');
+    assert.equal((await api('/theme/live')).data.live, true);
+    // No <article> or <main> on the page: Cook falls back to page scope (the page's own theme on <html>).
+    pages.set('https://example.com/', '<html data-theme="swiss vp-site"><body><!-- <main> --><h1>Home</h1>');
+    assert.equal((await api('/theme/live')).data.live, false);
+    pages.set('https://example.com/', '<html data-theme="8bit"><body><h1>Home</h1>');
     assert.equal((await api('/theme/live')).data.live, true);
     // Only the committed page counts (what is deployed).
     write(fx.site, 'src/index.html', '---\ntheme: classic\n---\n<h1>Home</h1>\n');

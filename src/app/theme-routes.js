@@ -130,17 +130,19 @@ export function mountThemeRoutes(router, prefix, {
 
   // R15: live when the home page answers 200 and its <html data-theme> is what Cook writes
   // there: the applied setting read from disk each time (R2), or the committed home
-  // page's own page theme (M4).
+  // page's own page theme (M4), on <html> unless article scope found an <article> or <main>.
   router.add('GET', `${prefix}/theme/live`, handle(async (req, res) => {
     const siteUrl = await readSiteUrl(ws.siteDir);
     const url = siteUrl ? `${siteUrl.replace(/\/+$/, '')}/` : null;
     const home = await (deps.readHead || gitReadHead)(ws.siteDir, 'src/index.html').catch(() => null);
-    const ids = liveThemeIds(readSetting(ws), home);
+    const setting = readSetting(ws);
     let live = false;
-    if (url && ids) {
+    if (url && setting) {
       try {
         const page = await fetchImpl(url, { cache: 'no-store', redirect: 'follow' });
-        live = page.status === 200 && htmlThemeAttr(await page.text()) === ids;
+        const html = page.status === 200 ? await page.text() : null;
+        const ids = html === null ? '' : liveThemeIds(setting, home, html);
+        live = Boolean(ids) && htmlThemeAttr(html) === ids;
       } catch {
         live = false;
       }

@@ -212,18 +212,31 @@ export function htmlThemeAttr(html) {
   return (attr[1] ?? attr[2] ?? attr[3]).trim().split(/\s+/).filter(Boolean).join(' ');
 }
 
+/** Whether built HTML has an <article> or <main> element (comments, scripts, styles and templates aside). */
+function hasArticleOrMain(html) {
+  const text = String(html).replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(script|style|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
+  return /<(?:article|main)(?=[\s>/])/i.test(text);
+}
+
 /**
  * The ids Cook writes on a page's `<html>` (its pageThemePlan): the page's own
  * theme when its front matter has a safe `theme` and page scope (`themeScope`
  * missing, `page` or anything but `article`), else the site ids
- * (settingIds). "" when there is no setting.
+ * (settingIds). With article scope, Cook falls back to page scope when the
+ * built page has no `<article>` or `<main>`: given the live page's HTML, the
+ * same rule applies here. "" when there is no setting.
  * @param {object|null} setting - normalized theme setting
  * @param {string|null} pageText - the page source with its front matter, or null
+ * @param {string|null} [liveHtml] - the built page as served, or null
  * @returns {string}
  */
-export function liveThemeIds(setting, pageText) {
+export function liveThemeIds(setting, pageText, liveHtml = null) {
   if (!setting) return '';
   const own = pageText ? frontMatterValue(pageText, 'theme') : null;
-  if (own && SAFE_ID.test(own) && frontMatterValue(pageText, 'themeScope') !== 'article') return own;
+  if (own && SAFE_ID.test(own)) {
+    if (frontMatterValue(pageText, 'themeScope') !== 'article') return own;
+    if (liveHtml != null && !hasArticleOrMain(liveHtml)) return own;
+  }
   return settingIds(setting);
 }

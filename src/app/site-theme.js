@@ -108,6 +108,59 @@ export function migrateVpTheme(ws) {
   return true;
 }
 
+/** A file's bytes, or null when it does not exist (for `restoreFile`). */
+export function snapshotFile(file) {
+  try {
+    return readFileSync(file);
+  } catch {
+    return null;
+  }
+}
+
+/** Put a file back as `snapshotFile` saw it (removed when it did not exist). */
+export function restoreFile(file, bytes) {
+  if (bytes === null) rmSync(file, { force: true });
+  else writeFileAtomic(file, bytes);
+}
+
+/** config/theme.json's path in a workspace. */
+export const themeSettingFile = settingPath;
+
+/**
+ * Before a commit that carries THEME_PATHS: when config/theme.json exists and
+ * is not committed yet (this commit is the first to add it), drop the legacy
+ * `theme` key from config/vp.json, so the two never disagree on GitHub. After
+ * that commit vp.json is never touched again.
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @param {(dir: string, path: string) => Promise<string|null>} readHead
+ * @returns {Promise<boolean>} true when vp.json was rewritten
+ */
+export async function dropVpThemeOnFirstCommit(ws, readHead) {
+  if (!existsSync(settingPath(ws))) return false;
+  if ((await readHead(ws.siteDir, 'config/theme.json')) !== null) return false;
+  const vp = readJson(vpJsonPath(ws));
+  if (!isRecord(vp) || !Object.hasOwn(vp, 'theme')) return false;
+  const { theme, ...rest } = vp;
+  writeJson(vpJsonPath(ws), rest);
+  return true;
+}
+
+/**
+ * Publish/Update (R3, R4): recompute theme.json's `files`, `modes` and `vb`
+ * from the site as it is now. With `create`, a site with no theme.json gets
+ * the default setting. An unreadable theme.json is left as it is.
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @param {{ create?: boolean }} [options]
+ */
+export function refreshThemeSetting(ws, { create = false } = {}) {
+  if (!existsSync(settingPath(ws))) {
+    if (create) writeSetting(ws, DEFAULT_SETTING);
+    return;
+  }
+  const current = readSetting(ws);
+  if (current) writeSetting(ws, current);
+}
+
 const DEFAULT_SETTING = Object.freeze({ name: 'default', mode: 'auto' });
 
 /**

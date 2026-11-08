@@ -19,7 +19,7 @@ import { createPreviews } from './preview.js';
 import * as defaultGit from '../git/git.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import * as defaultSiteProcess from './site-process.js';
-import { createBackup, BACKUP_PATHS, pageNotLive } from './site-git.js';
+import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git.js';
 import { migrateVpTheme } from './site-theme.js';
 import { mountThemeRoutes } from './theme-routes.js';
 import { findSiteVb } from '../themes/site-vb.js';
@@ -179,7 +179,10 @@ export async function startApp({
         console.warn(`${site.name || site.id}: not pulling, uncommitted changes in ${dirty.slice(0, 3).join(', ')}`);
         return;
       }
-      await git.pullFastForward(ws.siteDir);
+      // An unapplied local theme.json or custom theme gives way to the one GitHub has;
+      // openSite migrates vp.json afterwards only if theme.json is still missing.
+      const { yielded = [] } = (await git.pullFastForward(ws.siteDir, { yieldUntracked: [...THEME_PATHS] })) || {};
+      if (yielded.length) console.warn(`${site.name || site.id}: kept GitHub's ${yielded.join(', ')} (the local copy was not applied)`);
     } catch (err) {
       console.warn(`${site.name || site.id}: pull skipped: ${err.message}`);
     }
@@ -196,16 +199,19 @@ export async function startApp({
         const { adopted } = syncFromSite(ws, db);
         if (adopted.length > 0) backup.noteSaved({ title: 'media library', status: 'draft' });
       };
+      // A legacy vp.json theme moves to config/theme.json (R1) when there is none; a failure only logs.
+      const migrate = () => {
+        try {
+          migrateVpTheme(ws);
+        } catch (err) {
+          console.warn(`${site.name || site.id}: theme migration skipped: ${err.message}`);
+        }
+      };
       backup = createBackup({
         site, ws, git, ...backupTimers,
-        onRebased: syncSite,
+        onRebased: () => { migrate(); syncSite(); },
       });
-      // A legacy vp.json theme moves to config/theme.json (R1); a failure only logs.
-      try {
-        migrateVpTheme(ws);
-      } catch (err) {
-        console.warn(`${site.name || site.id}: theme migration skipped: ${err.message}`);
-      }
+      migrate();
       syncSite();
       const prefix = `/api/sites/${site.id}`;
       const router = createRouter();
@@ -226,10 +232,11 @@ export async function startApp({
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
       mountThemeRoutes(router, prefix, {
         site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,
+        onBuilt: () => vbCache.delete(site.id), // Apply's build may have vendored the site's VB copy
         deps: {
           git, // the delete check reads committed HEAD (headCommit, headTree, readBlobs)
           ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
-          commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,
+          commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus, readHead: git.readHead,
         },
       });
       const entry = { ws, db, router, backup, writes };

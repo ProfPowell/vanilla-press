@@ -271,6 +271,9 @@ export function createBackup({
 
   /** A push rebased onto commits from elsewhere: let the store pick them up. */
   function afterPush(result) {
+    if (result?.yielded?.length) {
+      console.warn(`${ws.siteDir}: kept GitHub's ${result.yielded.join(', ')} (the local copy was not applied)`);
+    }
     if (!result?.rebased) return;
     try { onRebased(); } catch (err) { console.warn(`Re-sync after rebase failed: ${err.message}`); }
   }
@@ -319,7 +322,8 @@ export function createBackup({
       await git.commitPaths(ws.siteDir, [...BACKUP_PATHS], backupMessage(snapshot.titles, snapshot.allDraft));
       unpushed += snapshot.count; // committed (or nothing to commit): only the push is left
       snapshot = null;
-      const result = await git.push(ws.siteDir);
+      // An unapplied local theme.json or custom theme gives way to the one GitHub has (R3).
+      const result = await git.push(ws.siteDir, { yieldUntracked: [...THEME_PATHS] });
       pushed('backup');
       afterPush(result);
     } catch (err) {

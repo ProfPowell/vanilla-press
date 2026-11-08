@@ -9,7 +9,8 @@ import { startApp } from '../../src/app/server.js';
 import { resolveWorkspace, openWorkspaceDb } from '../../src/workspace/workspace.js';
 import { getDocument, saveDocument } from '../../src/store/content.js';
 import { syncDocument } from '../../src/sync/to-site.js';
-import { makeGitSite, fakeClock, git, write, BUILD_FAIL } from './git-site-fixture.js';
+import { makeGitSite, fakeClock, git, write, BUILD_OK, BUILD_FAIL } from './git-site-fixture.js';
+import { saveCustomTheme, ensureThemeSetting, readSetting, migrateVpTheme } from '../../src/app/site-theme.js';
 
 const repoRoot = join(import.meta.dirname, '..', '..');
 const ID = 'doc_hello001';
@@ -359,6 +360,98 @@ describe('setPublished', () => {
     const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
     assert.equal(res.status, 'saved');
     assert.equal(git(fx.site, 'log', '-1', '--format=%s'), 'Publish: Hello');
+  });
+});
+
+describe('setPublished carries the theme (R3, R4)', () => {
+  const VB = 'src/assets/vendor/vanilla-breeze';
+  const addVb = (dir) => {
+    write(dir, `${VB}/vanilla-breeze.css`, '[data-theme~=classic]{}\n');
+    write(dir, `${VB}/themes/swiss.css`, '[data-theme~="swiss"]{--x:1}\n');
+  };
+  const T = { light: { '--color-primary': 'oklch(0.5 0.2 30)' } };
+  const remoteHas = (path) => remoteFiles().includes(path);
+
+  test('publish commits theme.json and custom theme files with the post (R3)', async () => {
+    const ws = setup();
+    addVb(fx.site);
+    const theme = saveCustomTheme(ws, { name: 'Retro Mine', base: 'default', tokens: T });
+    assert.equal(theme.id, 'retro-mine');
+    edit(ws, ID, 'Hi there.', { theme: 'retro-mine' });
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(lastRemote(), 'Publish: Hello');
+    const changed = git(fx.remote, 'show', '--name-only', '--format=', 'main').split('\n');
+    assert.ok(changed.includes('config/theme.json') && changed.includes('src/assets/themes/retro-mine.css'), changed.join(' '));
+    assert.equal(JSON.parse(remoteShow('config/theme.json')).files['retro-mine'], '/assets/themes/retro-mine.css');
+    assert.ok(!remoteFiles().some((f) => f.startsWith(VB)), 'the VB copy is not VP\'s to commit');
+  });
+
+  test('a post with its own theme and no setting creates the default one (R4)', async () => {
+    const ws = setup();
+    addVb(fx.site);
+    edit(ws, ID, 'Hi there.', { theme: 'swiss' });
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    const s = JSON.parse(remoteShow('config/theme.json'));
+    assert.equal(s.name, 'default');
+    assert.equal(s.mode, 'auto');
+    assert.equal(s.files.swiss, '/assets/vendor/vanilla-breeze/themes/swiss.css');
+  });
+
+  test('a site that never opted in gets no theme.json', async () => {
+    const ws = setup();
+    addVb(fx.site);
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(existsSync(join(fx.site, 'config/theme.json')), false);
+    assert.equal(remoteHas('config/theme.json'), false);
+  });
+
+  test('the setting is refreshed when the build vendors VB (R5)', async () => {
+    const ws = setup();
+    ensureThemeSetting(ws); // written before the site had a VB copy: no swiss file
+    assert.equal(readSetting(ws).files.swiss, undefined);
+    write(fx.site, 'build.js', `${BUILD_OK}
+mkdirSync('${VB}/themes', { recursive: true });
+writeFileSync('${VB}/vanilla-breeze.css', '[data-theme~=classic]{}\\n');
+writeFileSync('${VB}/themes/swiss.css', '[data-theme~="swiss"]{--x:1}\\n');
+`);
+    let builds = 0;
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true,
+      deps: { ...deps(), runBuild: async (dir) => { builds++; return runBuild(dir); } } });
+    assert.equal(builds, 2); // the second build sees the refreshed setting
+    assert.equal(JSON.parse(remoteShow('config/theme.json')).files.swiss, '/assets/vendor/vanilla-breeze/themes/swiss.css');
+  });
+
+  test('a failed build puts theme.json back as it was', async () => {
+    const ws = setup();
+    addVb(fx.site);
+    edit(ws, ID, 'Hi there.', { theme: 'swiss' });
+    write(fx.site, 'build.js', BUILD_FAIL);
+    await assert.rejects(setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() }), BuildError);
+    assert.equal(existsSync(join(fx.site, 'config/theme.json')), false);
+  });
+
+  test('the publish that first commits theme.json drops the vp.json theme key', async () => {
+    const ws = setup();
+    addVb(fx.site);
+    write(fx.site, 'config/vp.json', JSON.stringify({ theme: 'swiss', keep: true }, null, 2) + '\n');
+    git(fx.site, 'add', 'config/vp.json');
+    git(fx.site, 'commit', '-m', 'legacy');
+    git(fx.site, 'push');
+    assert.equal(migrateVpTheme(ws), true);
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(JSON.parse(remoteShow('config/theme.json')).name, 'swiss');
+    assert.deepEqual(JSON.parse(remoteShow('config/vp.json')), { keep: true });
+  });
+
+  test('unpublish commits no theme files', async () => {
+    const ws = setup();
+    addVb(fx.site);
+    await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    saveCustomTheme(ws, { name: 'Later', base: 'default', tokens: T });
+    await setPublished({ site: {}, ws, db, docId: ID, publish: false, deps: deps() });
+    assert.equal(lastRemote(), 'Unpublish: Hello');
+    assert.equal(remoteHas('config/theme.json'), false);
+    assert.equal(remoteHas('src/assets/themes/later.css'), false);
   });
 });
 

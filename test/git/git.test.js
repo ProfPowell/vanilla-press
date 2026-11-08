@@ -315,6 +315,29 @@ test('pullFastForward fast-forwards; it refuses to merge diverged history', asyn
   assert.equal(git(a, 'rev-parse', 'HEAD'), before);
 });
 
+test('pullFastForward with yieldUntracked: the upstream copy wins; put back when the pull fails', async () => {
+  write(b, 'config/theme.json', '{"name":"swiss"}\n');
+  git(b, 'add', '-A');
+  git(b, 'commit', '-m', 'theme');
+  git(b, 'push');
+  write(a, 'config/theme.json', '{"name":"mine"}\n'); // untracked in a
+  write(a, 'config/other.json', 'keep\n'); // untracked, not incoming
+  await assert.rejects(pullFastForward(a), /untracked working tree files would be overwritten/);
+  assert.deepEqual(await pullFastForward(a, { yieldUntracked: ['config/theme.json'] }), { yielded: ['config/theme.json'] });
+  assert.equal(readFileSync(join(a, 'config/theme.json'), 'utf8'), '{"name":"swiss"}\n');
+  assert.equal(readFileSync(join(a, 'config/other.json'), 'utf8'), 'keep\n');
+  // Diverged: the pull fails and the local file is put back.
+  write(b, 'src/assets/themes/x.css', 'b\n');
+  git(b, 'add', '-A');
+  git(b, 'commit', '-m', 'x');
+  git(b, 'push');
+  write(a, 'README.md', 'a\n');
+  git(a, 'commit', '-am', 'a');
+  write(a, 'src/assets/themes/x.css', 'mine\n');
+  await assert.rejects(pullFastForward(a, { yieldUntracked: ['src/assets/themes'] }), GitError);
+  assert.equal(readFileSync(join(a, 'src/assets/themes/x.css'), 'utf8'), 'mine\n');
+});
+
 test('changedSinceHead lists tracked files modified or deleted since HEAD, under the paths', async () => {
   write(a, 'src/posts/a.html', 'a\n');
   write(a, 'src/posts/b.html', 'b\n');

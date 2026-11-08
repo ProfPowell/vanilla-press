@@ -3,8 +3,8 @@
  * Every call goes through runGit, which never lets git prompt for credentials.
  */
 import { execFile, spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -180,12 +180,56 @@ async function dirtyTrackedFiles(dir) {
 
 const REJECTED = /rejected|non-fast-forward|fetch first/i;
 
+/** Files the upstream changed since the merge base (`HEAD...@{u}`); call after a fetch. */
+async function incomingFiles(dir) {
+  return new Set(
+    (await runGit(dir, ['diff', '--name-only', '--no-renames', '-z', 'HEAD...@{u}'])).split('\0').filter(Boolean),
+  );
+}
+
+/**
+ * Remove untracked (not ignored) files under `paths` that the upstream brings
+ * in, so a rebase or fast-forward can check out the upstream's copy (git
+ * refuses to overwrite an untracked file). Returns them with their bytes, for
+ * `restoreYielded` when the pull fails.
+ * @param {string} dir
+ * @param {string[]} paths
+ * @param {Set<string>} incoming
+ * @returns {Promise<Array<{ path: string, bytes: Buffer }>>}
+ */
+async function yieldUntracked(dir, paths, incoming) {
+  if (paths.length === 0 || incoming.size === 0) return [];
+  const out = await runGit(dir, ['ls-files', '--others', '--exclude-standard', '-z', '--', ...paths], { raw: true });
+  const yielded = [];
+  for (const path of out.split('\0').filter(Boolean)) {
+    if (!incoming.has(path)) continue;
+    const file = join(dir, path);
+    yielded.push({ path, bytes: readFileSync(file) });
+    rmSync(file, { force: true });
+  }
+  return yielded;
+}
+
+/** Put yielded files back where nothing took their place (the pull failed). */
+function restoreYielded(dir, yielded) {
+  for (const { path, bytes } of yielded) {
+    const file = join(dir, path);
+    if (existsSync(file)) continue;
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, bytes);
+  }
+}
+
 /**
  * Push to the upstream, rebasing once if the remote moved.
  * @param {string} dir
- * @returns {Promise<{pushed: boolean, rebased: boolean}>}
+ * @param {{ yieldUntracked?: string[] }} [options] - untracked files under these paths
+ *   that the remote brings in are removed before the rebase: the remote's copy wins
+ *   (they are put back if the rebase fails)
+ * @returns {Promise<{pushed: boolean, rebased: boolean, yielded?: string[]}>} yielded: the
+ *   untracked files the remote's copy replaced (only when there were any)
  */
-export async function push(dir) {
+export async function push(dir, { yieldUntracked: yieldPaths = [] } = {}) {
   const status = await gitStatus(dir);
   if (!status.hasRemote) throw new GitNotConnectedError();
   if (!status.hasUpstream) throw new GitNotConnectedError('The current branch has no upstream');
@@ -208,26 +252,25 @@ export async function push(dir) {
   // Refuse up front if the remote changed a file the user has uncommitted edits to,
   // so the autostash re-apply can never conflict and nothing is modified.
   await runGit(dir, ['fetch']);
-  const incoming = new Set(
-    (await runGit(dir, ['diff', '--name-only', '--no-renames', '-z', 'HEAD...@{u}'])).split('\0').filter(Boolean),
-  );
+  const incoming = await incomingFiles(dir);
   const clash = (await dirtyTrackedFiles(dir)).filter((f) => incoming.has(f));
   if (clash.length > 0) throw new GitStashConflictError([...new Set(clash)].sort());
 
+  const yielded = await yieldUntracked(dir, yieldPaths, incoming);
   try {
     await runGit(dir, ['pull', '--rebase', '--autostash']);
   } catch (err) {
     const files = await unmerged();
+    let failure = err;
     if (await rebaseInProgress()) {
       await runGit(dir, ['rebase', '--abort']);
-      if (files.length > 0) throw new GitConflictError(files);
-      throw err;
-    }
-    if (files.length > 0) {
+      if (files.length > 0) failure = new GitConflictError(files);
+    } else if (files.length > 0) {
       await tryGit(dir, ['reset', '--merge']);
-      throw new GitStashConflictError(files, { stashed: true });
+      failure = new GitStashConflictError(files, { stashed: true });
     }
-    throw err;
+    restoreYielded(dir, yielded); // after the abort: HEAD is the local one again
+    throw failure;
   }
   // Safety net: git can exit 0 even when the autostash re-apply left conflict markers.
   const leftover = await unmerged();
@@ -236,7 +279,7 @@ export async function push(dir) {
     throw new GitStashConflictError(leftover, { stashed: true });
   }
   await runGit(dir, ['push']);
-  return { pushed: true, rebased: true };
+  return { pushed: true, rebased: true, ...(yielded.length ? { yielded: yielded.map((y) => y.path) } : {}) };
 }
 
 /**
@@ -404,10 +447,24 @@ export async function readHead(dir, path) {
  * `git pull --ff-only`: bring in the upstream's commits when that needs no merge.
  * Throws a GitError when history diverged or the pull would touch local changes.
  * @param {string} dir
- * @returns {Promise<void>}
+ * @param {{ yieldUntracked?: string[] }} [options] - as push's: untracked files under
+ *   these paths that the upstream brings in are removed first (put back on failure)
+ * @returns {Promise<{ yielded: string[] }>}
  */
-export async function pullFastForward(dir) {
-  await runGit(dir, ['pull', '--ff-only']);
+export async function pullFastForward(dir, { yieldUntracked: yieldPaths = [] } = {}) {
+  if (yieldPaths.length === 0) {
+    await runGit(dir, ['pull', '--ff-only']);
+    return { yielded: [] };
+  }
+  await runGit(dir, ['fetch']);
+  const yielded = await yieldUntracked(dir, yieldPaths, await incomingFiles(dir));
+  try {
+    await runGit(dir, ['pull', '--ff-only']);
+  } catch (err) {
+    restoreYielded(dir, yielded);
+    throw err;
+  }
+  return { yielded: yielded.map((y) => y.path) };
 }
 
 /**

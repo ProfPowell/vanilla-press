@@ -12,6 +12,7 @@ import { validate } from '../schema/validate.js';
 import { getDocument, saveDocument, deleteDocument } from '../store/content.js';
 import { changedOnDisk, recordSynced, readManifest, writeManifest } from './to-site.js';
 import { getCollectionsConfig } from './site-files.js';
+import { syncMediaFromSite } from './media-library.js';
 
 /** Content files that are not documents (`.vp-manifest.json`: obsolete, ignored). */
 const NON_DOCUMENTS = new Set(['media.json', '.vp-manifest.json']);
@@ -61,7 +62,7 @@ function readDoc(ws, rel) {
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {import('better-sqlite3').Database} db
  * @param {{ replace?: boolean }} [options]
- * @returns {{ imported: string[], skipped: string[], removed: string[] }} document ids (a file's path when it has no usable id)
+ * @returns {{ imported: string[], skipped: string[], removed: string[], adopted: string[] }} document ids (a file's path when it has no usable id); adopted: media files that got a library entry
  */
 export function syncFromSite(ws, db, { replace = false } = {}) {
   const imported = [];
@@ -109,7 +110,8 @@ export function syncFromSite(ws, db, { replace = false } = {}) {
       if (!seen.has(id) && deleteDocument(db, id)) removed.push(id);
     }
   }
-  return { imported, skipped, removed };
+  const { adopted } = syncMediaFromSite(ws, db);
+  return { imported, skipped, removed, adopted };
 }
 
 /**

@@ -55,9 +55,13 @@ END;
 CREATE TABLE IF NOT EXISTS media (
   id          TEXT PRIMARY KEY,
   filename    TEXT NOT NULL,
+  original_name TEXT,
   mime_type   TEXT NOT NULL,
   size        INTEGER NOT NULL,
-  alt         TEXT,
+  width       INTEGER,
+  height      INTEGER,
+  alt         TEXT, -- NULL: never written, '': decorative
+  edited_from TEXT,
   created     TEXT NOT NULL
 );
 

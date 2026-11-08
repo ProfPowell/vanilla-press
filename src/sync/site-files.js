@@ -14,6 +14,7 @@ import {
   syncDocument, checkSync, changedOnDisk, SyncConflictError, readManifest, writeFileAtomic,
 } from './to-site.js';
 import { outputPaths } from './paths.js';
+import { MEDIA_FIELDS } from './media-library.js';
 
 let warnedCollections = false;
 
@@ -79,7 +80,8 @@ export function preflightSave(ws, db, candidate, collectionsConfig) {
  * @param {import('better-sqlite3').Database} db
  */
 export function writeMediaJson(ws, db) {
-  const rows = db.prepare('SELECT * FROM media ORDER BY created, id').all();
+  const rows = db.prepare('SELECT * FROM media ORDER BY created, id').all()
+    .map((row) => Object.fromEntries(MEDIA_FIELDS.map((f) => [f, row[f] ?? null])));
   writeFileAtomic(join(ws.contentDir, 'media.json'), JSON.stringify(rows, null, 2) + '\n');
 }
 

@@ -40,7 +40,7 @@ describe('syncFromSite', () => {
     const doc = simple();
     syncDocument(ws, doc, {});
     const res = syncFromSite(ws, db);
-    assert.deepEqual(res, { imported: [doc.id], skipped: [], removed: [] });
+    assert.deepEqual(res, { imported: [doc.id], skipped: [], removed: [], adopted: [] });
     assert.equal(getDocument(db, doc.id).meta.title, doc.meta.title);
     assert.equal(changedOnDisk(ws, doc.id, REL), false);
   });
@@ -60,7 +60,7 @@ describe('syncFromSite', () => {
     saveDocument(db, doc);
     syncDocument(ws, doc, {});
     const res = syncFromSite(ws, db);
-    assert.deepEqual(res, { imported: [], skipped: [doc.id], removed: [] });
+    assert.deepEqual(res, { imported: [], skipped: [doc.id], removed: [], adopted: [] });
   });
 
   it('skips invalid and unparseable files without throwing', () => {

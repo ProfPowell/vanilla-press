@@ -15,6 +15,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import { migrate } from '../store/migrate.js';
+import { adoptStrayFiles } from '../sync/media-library.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { createRouter } from './router.js';
 import { mountApi } from './api.js';
@@ -71,6 +72,7 @@ export function startServer(options = {}) {
     dbPath = options.dbPath || process.env.VP_DB || ws.dbPath;
     db = new Database(dbPath);
     migrate(db);
+    adoptStrayFiles(db, mediaDir); // so the picker shows the repo's media/ files (M11)
   }
 
   // The site's committed JSON wins: bring on-disk changes into the store first.

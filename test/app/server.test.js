@@ -619,3 +619,28 @@ describe('GET /api/sites with a real git clone', () => {
     assert.equal(existsSync(join(fx.site, '.vp')), false, 'listing must not open the workspace');
   });
 });
+
+describe('app server media library', () => {
+  it('opening a site with a stray media file schedules a draft backup', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-app-media-'));
+    const env = { VP_CONFIG_DIR: join(root, 'config') };
+    const site = makeSite(root, 'site-m');
+    mkdirSync(join(site, 'src', 'media'), { recursive: true });
+    // A PNG header: 3x2.
+    writeFileSync(join(site, 'src', 'media', 'stray.png'),
+      Buffer.from('89504e470d0a1a0a0000000d4948445200000003000000020806000000730100', 'hex'));
+    const timers = { setTimer: () => 0, clearTimer: () => {} }; // the debounce never fires
+    const app = await startApp({ port: 0, env, git: fakeGit, backup: timers });
+    try {
+      const added = await fetch(`${app.url}/api/sites`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: site }),
+      });
+      const { id } = await added.json();
+      const status = await (await fetch(`${app.url}/api/sites/${id}/status`)).json();
+      assert.equal(status.pending, 1);
+    } finally {
+      await app.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

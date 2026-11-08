@@ -165,11 +165,17 @@ export async function startApp({
     const db = openWorkspaceDb(ws);
     try {
       await pullOnOpen(site, ws, db);
-      syncFromSite(ws, db);
-      const backup = createBackup({
+      // Strays adopted into the library rewrite media.json: back that up as a draft (M5, M10).
+      let backup;
+      const syncSite = () => {
+        const { adopted } = syncFromSite(ws, db);
+        if (adopted.length > 0) backup.noteSaved({ title: 'media library', status: 'draft' });
+      };
+      backup = createBackup({
         site, ws, git, ...backupTimers,
-        onRebased: () => syncFromSite(ws, db),
+        onRebased: syncSite,
       });
+      syncSite();
       const prefix = `/api/sites/${site.id}`;
       const router = createRouter();
       const roots = { siteDir: ws.siteDir, vpRoot, catalog };

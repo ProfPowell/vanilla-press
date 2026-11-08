@@ -64,7 +64,7 @@ export function validate(doc, { components } = {}) {
     if (hasTheme && !(typeof theme === 'string' && SAFE_ID.test(theme))) {
       errors.push('meta.theme must be a theme id (a-z, 0-9, -)');
     }
-    if (themeScope !== undefined && themeScope !== null) {
+    if (themeScope !== undefined && themeScope !== null && themeScope !== '') {
       if (themeScope !== 'page' && themeScope !== 'article') errors.push('meta.themeScope must be "page" or "article"');
       else if (!hasTheme) errors.push('meta.themeScope needs meta.theme');
     }

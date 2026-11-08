@@ -66,6 +66,11 @@ describe('validate', () => {
       assert.ok(validate(d({ theme: 'Retro!' })).errors.includes('meta.theme must be a theme id (a-z, 0-9, -)'));
       assert.ok(validate(d({ theme: '8bit', themeScope: 'sidebar' })).errors.includes('meta.themeScope must be "page" or "article"'));
       assert.ok(validate(d({ themeScope: 'page' })).errors.includes('meta.themeScope needs meta.theme'));
+      // unset values: empty or null theme / scope are not errors
+      for (const meta of [{ theme: '' }, { theme: null }, { theme: '', themeScope: '' }, { theme: '8bit', themeScope: null }, { theme: '8bit', themeScope: '' }]) {
+        assert.equal(validate(d(meta)).valid, true, JSON.stringify(meta));
+      }
+      assert.ok(validate(d({ theme: 5 })).errors.includes('meta.theme must be a theme id (a-z, 0-9, -)'));
     });
 
     it('meta.image must be a string', () => {

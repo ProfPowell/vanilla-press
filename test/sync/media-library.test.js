@@ -99,6 +99,46 @@ describe('media.json -> store', () => {
   });
 });
 
+describe('malformed media.json entries', () => {
+  it('skips entries that would break the store, with warnings, and never throws', () => {
+    const { size, ...noSize } = entry({ id: 'bbbb2222', filename: 'b.png' });
+    writeJson([
+      entry(),
+      noSize,
+      entry({ id: 'dddd4444', filename: 'd.png', mime_type: '' }),
+      entry({ id: 'eeee5555', filename: 'e.png', created: 7 }),
+      entry({ id: 'ffff6666', filename: 'f.png', size: -1 }),
+    ]);
+    assert.doesNotThrow(() => loadMediaJson(ws, db));
+    assert.deepEqual(rows().map((r) => r.id), ['aaaa1111']);
+    assert.ok(console.warn.mock.callCount() >= 1);
+  });
+
+  it('coerces optional fields to string or null, integers or null', () => {
+    writeJson([entry({ original_name: 5, alt: {}, edited_from: [], width: 3.5, height: '2' })]);
+    loadMediaJson(ws, db);
+    const [r] = rows();
+    assert.equal(r.original_name, 'a-aaaa11.png');
+    assert.equal(r.alt, null);
+    assert.equal(r.edited_from, null);
+    assert.equal(r.width, null);
+    assert.equal(r.height, null);
+  });
+
+  it('duplicate ids or filenames: the first is kept, one warning lists the rest', () => {
+    writeJson([
+      entry(),
+      entry({ filename: 'other.png' }),
+      entry({ id: 'bbbb2222' }),
+      entry({ id: 'cccc3333', filename: 'c.png' }),
+    ]);
+    assert.deepEqual(loadMediaJson(ws, db), { loaded: 2 });
+    assert.deepEqual(rows().map((r) => r.id), ['aaaa1111', 'cccc3333']);
+    assert.equal(console.warn.mock.callCount(), 1);
+    assert.match(console.warn.mock.calls[0].arguments[0], /aaaa1111[\s\S]*a-aaaa11\.png/);
+  });
+});
+
 describe('stray files', () => {
   it('adopts a stray file', () => {
     mkdirSync(ws.mediaDir, { recursive: true });

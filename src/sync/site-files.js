@@ -14,7 +14,11 @@ import {
   syncDocument, checkSync, changedOnDisk, SyncConflictError, readManifest, writeFileAtomic,
 } from './to-site.js';
 import { outputPaths } from './paths.js';
-import { MEDIA_FIELDS } from './media-library.js';
+
+/** The media.json / media-table columns, in the order they are written. */
+export const MEDIA_FIELDS = [
+  'id', 'filename', 'original_name', 'mime_type', 'size', 'width', 'height', 'alt', 'edited_from', 'created',
+];
 
 let warnedCollections = false;
 

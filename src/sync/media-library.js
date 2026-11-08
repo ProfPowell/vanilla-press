@@ -9,11 +9,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { inspectFile } from '../media/inspect.js';
-import { writeMediaJson } from './site-files.js';
+import { writeMediaJson, MEDIA_FIELDS } from './site-files.js';
 
-export const MEDIA_FIELDS = [
-  'id', 'filename', 'original_name', 'mime_type', 'size', 'width', 'height', 'alt', 'edited_from', 'created',
-];
+export { MEDIA_FIELDS };
 
 const nonEmpty = (v) => typeof v === 'string' && v !== '';
 
@@ -29,14 +27,26 @@ export function normalizeEntry(entry) {
     console.warn(`media.json: skipping an entry with a missing id or an invalid filename: ${JSON.stringify(entry)}`);
     return null;
   }
-  const legacy = !('original_name' in entry);
-  const row = {};
-  for (const f of MEDIA_FIELDS) row[f] = entry[f] ?? null;
-  if (legacy) {
-    row.original_name = entry.filename;
-    if (row.alt === '') row.alt = null;
+  if (!nonEmpty(entry.mime_type) || !Number.isFinite(entry.size) || entry.size < 0 || !nonEmpty(entry.created)) {
+    console.warn(`media.json: skipping ${entry.filename}: it needs a mime_type, a size and a created date`);
+    return null;
   }
-  return row;
+  const legacy = !('original_name' in entry);
+  const str = (v) => (typeof v === 'string' ? v : null);
+  const int = (v) => (Number.isInteger(v) ? v : null);
+  const alt = str(entry.alt);
+  return {
+    id: entry.id,
+    filename: entry.filename,
+    original_name: nonEmpty(entry.original_name) ? entry.original_name : entry.filename,
+    mime_type: entry.mime_type,
+    size: entry.size,
+    width: int(entry.width),
+    height: int(entry.height),
+    alt: legacy && alt === '' ? null : alt,
+    edited_from: str(entry.edited_from),
+    created: entry.created,
+  };
 }
 
 /**
@@ -56,7 +66,19 @@ export function loadMediaJson(ws, db) {
     console.warn(`media.json could not be read (${err.message}); the media library is unchanged. Fix or remove content/media.json.`);
     return null;
   }
-  const rows = entries.map(normalizeEntry).filter(Boolean);
+  const rows = [];
+  const ids = new Set();
+  const names = new Set();
+  const dropped = [];
+  for (const row of entries.map(normalizeEntry).filter(Boolean)) {
+    if (ids.has(row.id) || names.has(row.filename)) { dropped.push(`${row.id} (${row.filename})`); continue; }
+    ids.add(row.id);
+    names.add(row.filename);
+    rows.push(row);
+  }
+  if (dropped.length) {
+    console.warn(`media.json lists some ids or files twice; kept the first of each and dropped: ${dropped.join(', ')}. Remove the duplicates from content/media.json.`);
+  }
   const insert = db.prepare(
     `INSERT OR REPLACE INTO media (${MEDIA_FIELDS.join(', ')}) VALUES (${MEDIA_FIELDS.map((f) => `@${f}`).join(', ')})`,
   );

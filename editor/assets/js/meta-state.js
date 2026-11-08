@@ -45,3 +45,8 @@ export function takeSaveNotes() {
   saveNotes = [];
   return notes;
 }
+
+/** Drop pending notes (another post opened). */
+export function clearSaveNotes() {
+  saveNotes = [];
+}

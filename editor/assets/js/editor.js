@@ -23,7 +23,7 @@ import { toBlockAst, fromBlockAst } from './ast.js';
 import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
 import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
 import { getCurrentMeta, setCurrentMeta, resetCurrentMeta,
-  getCurrentDocId, setCurrentDocId, takeSaveNotes } from './meta-state.js';
+  getCurrentDocId, setCurrentDocId, takeSaveNotes, clearSaveNotes } from './meta-state.js';
 import { CodeBlockView } from './blocks/code-block-view.js';
 import { CalloutView } from './blocks/callout-view.js';
 import { CollapsibleView } from './blocks/collapsible-view.js';
@@ -35,6 +35,7 @@ import {
   ComponentView, InlineComponentView, componentSettingsPlugin, setComponentDescriptors,
 } from './blocks/component-view.js';
 import { getBlockPalette } from './components/block-palette.js';
+import { insertTargetPlugin } from './insert-target.js';
 import { api } from './api-client.js';
 import './components/editor-shell.js';
 import './components/ast-inspector.js';
@@ -226,6 +227,8 @@ export function initEditor() {
       formatToolbarPlugin(),
       tableEditing(),
       componentSettingsPlugin(),
+      // Keeps the palette's insert position right while the media picker is open
+      insertTargetPlugin(),
     ],
   });
 
@@ -362,6 +365,7 @@ export async function loadDocument(id) {
     const doc = await api.getDocument(id);
 
     setCurrentDocId(doc.id);
+    clearSaveNotes(); // notes belong to the post they were made in
     if (doc.meta) resetCurrentMeta(doc.meta);
     slugHandEdited = handEditedOnLoad(getCurrentMeta());
     const lossy = unrepresentable(doc.blocks || []);

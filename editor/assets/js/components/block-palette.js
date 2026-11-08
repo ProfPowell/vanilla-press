@@ -16,6 +16,7 @@ import { schema } from '../schema.js';
 import { openMediaPicker } from './media-picker.js';
 import { nodeTypeFor, initialAttrs, paletteEntries } from '../component-model.js';
 import { insertPlan, nodesFor, pdfViewerEnabled } from '../media-insert.js';
+import { trackTarget, untrackTarget, insertAtTarget } from '../insert-target.js';
 import { focusFigureAlt } from '../blocks/figure-view.js';
 import { addSaveNote } from '../meta-state.js';
 import { api } from '../api-client.js';
@@ -376,40 +377,34 @@ export class BlockPalette {
 
   /**
    * Media entries: open the picker, and on a choice insert its block where
-   * the palette was opened (the `/` paragraph, or after the `+` block).
+   * the palette was opened (the `/` paragraph, or after the `+` block). The
+   * place is tracked through any edits made meanwhile (insert-target.js).
    * Closing the picker inserts nothing.
    */
   async _pickAndInsert(entry) {
     const view = this.view;
-    const at = { triggerPos: this.triggerPos, insertAfter: this.insertAfter };
+    const where = this.insertAfter != null ? { after: this.insertAfter } : { replace: this.triggerPos };
     this.close();
-    const item = await openMediaPicker({ kind: entry.pick });
-    if (!item || view.isDestroyed) return;
-    let pdfViewer = false;
-    if (item.kind === 'pdf') {
-      pdfViewer = pdfViewerEnabled(await api.listComponents().catch(() => null));
-    }
-    const plan = insertPlan(item, { pdfViewer });
-    const nodes = nodesFor(plan, schema);
+    const { tr, id } = trackTarget(view.state, where);
+    view.dispatch(tr);
+    // Whether a PDF can be a <pdf-viewer>: asked now, alongside the picker
+    const components = entry.pick === 'pdf' ? api.listComponents().catch(() => null) : null;
 
-    // Back to where the palette was (the picker closed it)
-    this.view = view;
-    this.triggerPos = at.triggerPos;
-    this.insertAfter = at.insertAfter;
-    let pos = null;
-    if (at.insertAfter != null) {
-      if (this._insertAfterBlock(nodes)) pos = at.insertAfter;
-    } else {
-      const range = this._triggerRange();
-      if (range) {
-        view.dispatch(view.state.tr.replaceWith(range[0], range[1], Fragment.fromArray(nodes)).scrollIntoView());
-        pos = range[0];
-      }
+    const item = await openMediaPicker({ kind: entry.pick });
+    if (view.isDestroyed) return;
+    if (!item) {
+      view.dispatch(untrackTarget(view.state, id));
+      view.focus();
+      return;
     }
-    this.close();
+    const pdfViewer = item.kind === 'pdf' ? pdfViewerEnabled(await components) : false;
+    if (view.isDestroyed) return;
+    const plan = insertPlan(item, { pdfViewer });
+    const done = insertAtTarget(view.state, id, nodesFor(plan, schema));
     view.focus();
-    if (pos == null) return;
-    if (plan.focusAlt) focusFigureAlt(view, pos);
+    if (!done) return; // another post was opened meanwhile
+    view.dispatch(done.tr);
+    if (plan.focusAlt) focusFigureAlt(view, done.pos);
     if (plan.note) addSaveNote(plan.note);
   }
 

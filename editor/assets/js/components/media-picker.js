@@ -123,41 +123,50 @@ function createPicker({ kind, heading, resolve }) {
   const queue = createUploadQueue({
     upload: (file, { onProgress }) => api.uploadMedia(file, { onProgress }),
     concurrency: 1,
-    onChange: renderUploads,
+    // A queue change is a newer event than a refused drop: its message goes
+    onChange: () => { precheckError = ''; renderUploads(); },
   });
   /** Keys of finished uploads already handled. */
   const handled = new Set();
+  /** A dropped or chosen file of the wrong kind (never uploaded). */
   let precheckError = '';
 
   function addFiles(files) {
     const file = files[0];
     if (!file) return;
-    precheckError = wrongKind(file, kind) || '';
-    if (precheckError) { renderUploads(); return; }
+    const refused = wrongKind(file, kind);
+    if (refused) { precheckError = refused; renderUploads(); return; }
     queue.add([file]);
   }
 
+  /** The refused file's message, then the queue: uploads in progress and the last one's outcome. */
   function renderUploads() {
     if (done) return;
     const entries = queue.entries();
-    const last = entries[entries.length - 1];
-    if (precheckError) {
-      status.replaceChildren(el('p', { class: 'media-picker-error', role: 'alert' }, precheckError));
-      return;
+    const parts = [];
+    if (precheckError) parts.push(el('p', { class: 'media-picker-error', role: 'alert' }, precheckError));
+    for (const e of entries) {
+      if (e.state !== 'waiting' && e.state !== 'uploading') continue;
+      parts.push(el('p', { class: 'media-picker-progress' },
+        el('span', { class: 'media-picker-file' }, e.name), ' ',
+        el('progress', { max: 1, value: e.progress, 'aria-label': `Uploading ${e.name}` }), ' Uploading…'));
     }
-    if (!last) { status.replaceChildren(); return; }
-    if (last.state === 'waiting' || last.state === 'uploading') {
-      status.replaceChildren(el('p', { class: 'media-picker-progress' },
-        el('span', { class: 'media-picker-file' }, last.name), ' ',
-        el('progress', { max: 1, value: last.progress, 'aria-label': `Uploading ${last.name}` }), ' Uploading…'));
-    } else if (last.state === 'error') {
-      status.replaceChildren(el('p', { class: 'media-picker-error', role: 'alert' }, last.error));
-    } else if (last.state === 'done' && !handled.has(last.key)) {
-      handled.add(last.key);
-      status.replaceChildren(last.note ? el('p', { class: 'media-picker-note' }, last.note) : '');
-      items = [last.item, ...items.filter((i) => i.id !== last.item.id)];
+    const finished = entries.filter((e) => e.state === 'done' || e.state === 'error').pop();
+    if (finished?.state === 'error') parts.push(el('p', { class: 'media-picker-error', role: 'alert' }, finished.error));
+    if (finished?.state === 'done' && finished.note) parts.push(el('p', { class: 'media-picker-note' }, finished.note));
+    status.replaceChildren(...parts);
+
+    // Newly finished uploads join the grid; the newest is selected
+    let newest = null;
+    for (const e of entries) {
+      if (e.state !== 'done' || handled.has(e.key)) continue;
+      handled.add(e.key);
+      items = [e.item, ...items.filter((i) => i.id !== e.item.id)];
+      newest = e.item;
+    }
+    if (newest) {
       renderGrid();
-      showUploaded(last.item);
+      showUploaded(newest);
     }
   }
 

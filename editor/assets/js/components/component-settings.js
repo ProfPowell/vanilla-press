@@ -15,6 +15,11 @@
  */
 
 import { settingsFields, coerce } from '../component-model.js';
+import { pickerKind } from '../media-insert.js';
+import { openMediaPicker } from './media-picker.js';
+
+/** Text fields that hold a media file's URL get a Choose… button. */
+const MEDIA_FIELDS = new Set(['src', 'poster']);
 
 /** Element constructors are created in this document; build nodes, no innerHTML with user strings. */
 function el(tag, props = {}, ...children) {
@@ -109,9 +114,12 @@ export class ComponentSettings extends HTMLElement {
       if (hintId) input.setAttribute('aria-describedby', hintId);
       const labelEl = el('label', { for: id }, field.label);
       const hint = hintId ? el('small', { id: hintId, class: 'hint' }, field.description) : null;
-      return field.control === 'checkbox'
-        ? el('div', { class: 'field field-check' }, input, labelEl, hint)
-        : el('div', { class: 'field' }, labelEl, input, hint);
+      if (field.control === 'checkbox') return el('div', { class: 'field field-check' }, input, labelEl, hint);
+      const choose = input.type === 'text' && MEDIA_FIELDS.has(field.name)
+        ? this.chooseButton(input, pickerKind(tag, field.name), field.label)
+        : null;
+      return el('div', { class: 'field' }, labelEl,
+        choose ? el('div', { class: 'field-with-button' }, input, choose) : input, hint);
     };
 
     const basic = this._fields.filter(f => !f.advanced).map(control);
@@ -140,6 +148,21 @@ export class ComponentSettings extends HTMLElement {
     ].filter(Boolean));
     this.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
     this.syncValues();
+  }
+
+  /**
+   * A Choose… button for a media URL field: the picked file's `/media/<file>`
+   * goes into the input and through its usual edit path.
+   */
+  chooseButton(input, kind, label) {
+    const button = el('button', { type: 'button', class: 'choose-media', 'aria-label': `Choose a file for ${label}` }, 'Choose…');
+    button.addEventListener('click', async () => {
+      const item = await openMediaPicker({ kind });
+      if (!item || !input.isConnected) return;
+      input.value = `/media/${item.filename}`;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    return button;
   }
 
   /** Put the node's values in the controls, leaving the one being edited alone. */

@@ -1,166 +1,267 @@
 /**
- * <media-picker> — modal for browsing and uploading media.
+ * The media picker: a modal <dialog> for choosing a file from the site's
+ * library, or uploading one and choosing it.
  *
- * Shows a grid of uploaded media thumbnails, an upload zone,
- * and returns a selection via callback.
+ * `openMediaPicker({ kind })` resolves with the chosen MediaItem, or null when
+ * the dialog is closed (Escape, Close). Focus returns to whatever had it.
+ * Pure logic (filtering, tiles, alt states, upload checks) lives in
+ * src/media and media-upload.js; this module only renders and wires events.
  *
  * @module editor/components/media-picker
  */
 
 import { api } from '../api-client.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
+import { createUploadQueue } from '../media-upload.js';
+import { filterMedia, tileModel, altForCheckbox, emptyText, ALT_PLACEHOLDER } from '../../../../src/media/library-view.js';
+import { ACCEPTED } from '../../../../src/media/types.js';
+import { ACCEPT_ATTR } from '../../../../src/media/limits.js';
 
-let singleton = null;
+const HEADINGS = {
+  image: 'Choose an image',
+  video: 'Choose a video',
+  audio: 'Choose audio',
+  pdf: 'Choose a PDF',
+  all: 'Choose a file',
+};
+
+/** What one kind is called in messages. */
+const KIND_NOUN = { image: 'an image', video: 'a video', audio: 'an audio file', pdf: 'a PDF' };
+
+const extsFor = (kind) => ACCEPTED.filter((t) => t.kind === kind).flatMap((t) => t.exts);
+const acceptFor = (kind) => (HEADINGS[kind] && kind !== 'all'
+  ? extsFor(kind).map((e) => `.${e}`).join(',')
+  : ACCEPT_ATTR);
+
+/** An error when `file` isn't the kind this picker offers, else null. */
+function wrongKind(file, kind) {
+  if (kind === 'all' || !KIND_NOUN[kind]) return null;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (extsFor(kind).includes(ext)) return null;
+  const list = extsFor(kind).map((e) => e.toUpperCase()).join(', ');
+  return `${file.name} isn't ${KIND_NOUN[kind]}. Upload one of these here: ${list}.`;
+}
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') node.className = v;
+    else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else if (k in node && typeof v !== 'string') node[k] = v;
+    else node.setAttribute(k, v === true ? '' : v);
+  }
+  node.append(...children.filter((c) => c != null && c !== false));
+  return node;
+}
+
+let current = null;
 
 /**
- * Open the media picker and resolve with the selected media.
- * @returns {Promise<{ src: string, alt: string } | null>}
+ * Open the picker.
+ * @param {{ kind?: 'image'|'video'|'audio'|'pdf'|'all', heading?: string }} [opts]
+ * @returns {Promise<object|null>} the chosen MediaItem, or null
  */
-export function openMediaPicker() {
+export function openMediaPicker({ kind = 'all', heading } = {}) {
+  if (current) current.finish(null);
   return new Promise((resolve) => {
-    if (!singleton) {
-      singleton = document.createElement('media-picker');
-      document.body.appendChild(singleton);
-    }
-    singleton.open(resolve);
+    current = createPicker({ kind: HEADINGS[kind] ? kind : 'all', heading, resolve });
   });
 }
 
-export class MediaPicker extends HTMLElement {
-  connectedCallback() {
-    this.className = 'media-picker-overlay';
-    this.style.display = 'none';
-    this._resolve = null;
-    this._media = [];
+function createPicker({ kind, heading, resolve }) {
+  const opener = document.activeElement;
+  const titleId = 'media-picker-title';
+  let items = [];
+  let query = '';
+  let loaded = false;
+  let uploaded = null; // the item just uploaded, waiting for "Use this file"
+  let done = false;
 
-    this.innerHTML = `
-      <div class="media-picker-dialog">
-        <div class="media-picker-header">
-          <h3>Media Library</h3>
-          <button class="media-picker-close" title="Close">&times;</button>
-        </div>
-        <div class="media-picker-upload">
-          <label class="upload-zone">
-            <input type="file" accept="image/*" hidden />
-            <span>Drop image here or click to upload</span>
-          </label>
-          <div class="upload-alt">
-            <input type="text" class="alt-input" placeholder="Alt text (optional)" />
-          </div>
-        </div>
-        <div class="media-picker-grid"></div>
-      </div>
-    `;
+  const search = el('input', {
+    type: 'search', class: 'media-picker-search', autofocus: true, 'aria-label': 'Search files',
+    placeholder: 'Search by name or alt text',
+    oninput: () => { query = search.value; renderGrid(); },
+  });
+  const fileInput = el('input', {
+    type: 'file', accept: acceptFor(kind), hidden: true,
+    onchange: () => { addFiles(fileInput.files); fileInput.value = ''; },
+  });
+  const uploadBtn = el('button', { type: 'button', class: 'media-picker-upload-btn', onclick: () => fileInput.click() }, 'Upload…');
+  const status = el('div', { class: 'media-picker-status', role: 'status' });
+  const selected = el('div', { class: 'media-picker-selected', hidden: true });
+  const grid = el('ul', { class: 'media-picker-grid', 'aria-label': 'Files' });
+  const empty = el('p', { class: 'media-picker-empty', hidden: true });
 
-    this.wireEvents();
+  const dialog = el('dialog', { class: 'media-picker', 'aria-labelledby': titleId },
+    el('header', { class: 'media-picker-header' },
+      el('h2', { id: titleId }, heading || HEADINGS[kind]),
+      el('button', { type: 'button', class: 'media-picker-close', onclick: () => finish(null) }, 'Close')),
+    el('div', { class: 'media-picker-tools' }, search, uploadBtn, fileInput),
+    el('p', { class: 'media-picker-drop-hint' }, 'Or drop a file anywhere in this window.'),
+    status,
+    selected,
+    grid,
+    empty);
+
+  // Escape: the dialog's cancel event. Close it ourselves so the promise settles.
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); });
+  // A search box with text eats the first Escape (it clears itself): close on any Escape.
+  dialog.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    e.preventDefault();
+    finish(null);
+  });
+  dialog.addEventListener('dragover', (e) => { e.preventDefault(); dialog.dataset.dragging = ''; });
+  dialog.addEventListener('dragleave', (e) => { if (e.target === dialog) delete dialog.dataset.dragging; });
+  dialog.addEventListener('drop', (e) => {
+    e.preventDefault();
+    delete dialog.dataset.dragging;
+    if (e.dataTransfer?.files?.length) addFiles([e.dataTransfer.files[0]]);
+  });
+
+  const queue = createUploadQueue({
+    upload: (file, { onProgress }) => api.uploadMedia(file, { onProgress }),
+    concurrency: 1,
+    onChange: renderUploads,
+  });
+  /** Keys of finished uploads already handled. */
+  const handled = new Set();
+  let precheckError = '';
+
+  function addFiles(files) {
+    const file = files[0];
+    if (!file) return;
+    precheckError = wrongKind(file, kind) || '';
+    if (precheckError) { renderUploads(); return; }
+    queue.add([file]);
   }
 
-  wireEvents() {
-    // Close
-    this.querySelector('.media-picker-close').addEventListener('click', () => this.close());
-    this.addEventListener('click', (e) => {
-      if (e.target === this) this.close();
-    });
-
-    // File upload
-    const fileInput = this.querySelector('input[type="file"]');
-    fileInput.addEventListener('change', async () => {
-      if (fileInput.files.length === 0) return;
-      const file = fileInput.files[0];
-      const alt = this.querySelector('.alt-input').value.trim();
-
-      try {
-        const result = await api.uploadMedia(file, alt);
-        this.select(result.src, result.alt);
-      } catch (err) {
-        alert(`Upload failed: ${err.message}`);
-      }
-      fileInput.value = '';
-    });
-
-    // Drag and drop
-    const zone = this.querySelector('.upload-zone');
-    zone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      zone.classList.add('drag-over');
-    });
-    zone.addEventListener('dragleave', () => {
-      zone.classList.remove('drag-over');
-    });
-    zone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      zone.classList.remove('drag-over');
-
-      const file = e.dataTransfer.files[0];
-      if (!file || !file.type.startsWith('image/')) return;
-
-      const alt = this.querySelector('.alt-input').value.trim();
-      try {
-        const result = await api.uploadMedia(file, alt);
-        this.select(result.src, result.alt);
-      } catch (err) {
-        alert(`Upload failed: ${err.message}`);
-      }
-    });
-  }
-
-  async open(resolve) {
-    this._resolve = resolve;
-    this.style.display = '';
-
-    try {
-      this._media = await api.listMedia();
-      this.renderGrid();
-    } catch (err) {
-      console.error('Error loading media:', err);
-    }
-  }
-
-  close() {
-    this.style.display = 'none';
-    if (this._resolve) {
-      this._resolve(null);
-      this._resolve = null;
-    }
-  }
-
-  select(src, alt) {
-    this.style.display = 'none';
-    if (this._resolve) {
-      this._resolve({ src, alt });
-      this._resolve = null;
-    }
-  }
-
-  renderGrid() {
-    const grid = this.querySelector('.media-picker-grid');
-
-    if (this._media.length === 0) {
-      grid.innerHTML = '<div class="media-picker-empty">No media uploaded yet</div>';
+  function renderUploads() {
+    if (done) return;
+    const entries = queue.entries();
+    const last = entries[entries.length - 1];
+    if (precheckError) {
+      status.replaceChildren(el('p', { class: 'media-picker-error', role: 'alert' }, precheckError));
       return;
     }
-
-    grid.innerHTML = this._media.map(m => `
-      <div class="media-item" data-src="/media/${escapeAttr(m.filename)}" data-alt="${escapeAttr(m.alt || '')}">
-        <img src="${escapeAttr(displayMediaUrl(`/media/${m.filename}`, SITE))}" alt="${escapeAttr(m.alt || '')}" loading="lazy" />
-        <div class="media-item-name">${escapeHtml(m.filename)}</div>
-      </div>
-    `).join('');
-
-    grid.querySelectorAll('.media-item').forEach(item => {
-      item.addEventListener('click', () => {
-        this.select(item.dataset.src, item.dataset.alt);
-      });
-    });
+    if (!last) { status.replaceChildren(); return; }
+    if (last.state === 'waiting' || last.state === 'uploading') {
+      status.replaceChildren(el('p', { class: 'media-picker-progress' },
+        el('span', { class: 'media-picker-file' }, last.name), ' ',
+        el('progress', { max: 1, value: last.progress, 'aria-label': `Uploading ${last.name}` }), ' Uploading…'));
+    } else if (last.state === 'error') {
+      status.replaceChildren(el('p', { class: 'media-picker-error', role: 'alert' }, last.error));
+    } else if (last.state === 'done' && !handled.has(last.key)) {
+      handled.add(last.key);
+      status.replaceChildren(last.note ? el('p', { class: 'media-picker-note' }, last.note) : '');
+      items = [last.item, ...items.filter((i) => i.id !== last.item.id)];
+      renderGrid();
+      showUploaded(last.item);
+    }
   }
-}
 
-function escapeHtml(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+  /** The new upload, selected: an image gets its alt fields; then "Use this file". */
+  function showUploaded(item) {
+    uploaded = item;
+    const isImage = item.kind === 'image';
+    const error = el('p', { class: 'media-picker-error', role: 'alert', hidden: true });
+    const altId = 'media-picker-alt';
+    const altArea = isImage ? el('textarea', { id: altId, rows: 2, placeholder: ALT_PLACEHOLDER }) : null;
+    const decorative = isImage ? el('input', { type: 'checkbox', id: 'media-picker-decorative' }) : null;
+    if (isImage) {
+      altArea.value = item.alt ?? '';
+      decorative.checked = item.alt === '';
+      altArea.disabled = decorative.checked;
+      decorative.addEventListener('change', () => {
+        altArea.disabled = decorative.checked;
+        if (decorative.checked) altArea.value = '';
+        else altArea.focus();
+      });
+    }
+    const use = el('button', { type: 'button', class: 'primary', onclick: async () => {
+      let chosen = item;
+      if (isImage) {
+        const text = altArea.value.trim();
+        const alt = decorative.checked ? altForCheckbox(true) : (text || altForCheckbox(false));
+        if (alt !== (item.alt ?? null)) {
+          use.disabled = true;
+          try {
+            chosen = await api.setMediaAlt(item.id, alt);
+          } catch (err) {
+            use.disabled = false;
+            error.textContent = `Couldn't save the alt text: ${err.message}. Try again, or close and set it on the Media screen.`;
+            error.hidden = false;
+            return;
+          }
+        }
+      }
+      finish(chosen);
+    } }, 'Use this file');
 
-function escapeAttr(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
+    selected.replaceChildren(
+      el('p', { class: 'media-picker-selected-name' }, 'Uploaded ', el('span', { class: 'media-picker-file' }, item.filename)),
+      isImage ? el('div', { class: 'media-picker-preview' }, el('img', { src: displayMediaUrl(item.src, SITE), alt: '' })) : null,
+      isImage ? el('div', { class: 'field' }, el('label', { for: altId }, 'Alt text'), altArea) : null,
+      isImage ? el('div', { class: 'field field-check' }, decorative, el('label', { for: 'media-picker-decorative' }, 'Decorative (no alt text needed)')) : null,
+      error,
+      use);
+    selected.hidden = false;
+    (isImage && !decorative.checked ? altArea : use).focus();
+  }
 
-customElements.define('media-picker', MediaPicker);
+  function renderGrid() {
+    if (done) return;
+    const shown = filterMedia(items, { type: kind, query });
+    grid.replaceChildren(...shown.map((item) => {
+      const tile = tileModel(item);
+      const thumb = tile.thumb
+        ? el('img', { src: displayMediaUrl(item.src, SITE), alt: '', loading: 'lazy' })
+        : el('span', {}, tile.typeLabel);
+      return el('li', {}, el('button', {
+        type: 'button', class: 'media-picker-tile', disabled: Boolean(item.missing),
+        onclick: () => finish(item),
+      },
+      el('span', { class: 'media-picker-thumb' }, thumb),
+      el('span', { class: 'media-picker-name' }, tile.name),
+      tile.badges.length
+        ? el('span', { class: 'media-picker-badges' }, ...tile.badges.map((b) =>
+          el('span', { class: 'media-picker-badge', 'data-badge': b === 'Missing file' ? 'missing-file' : 'no-alt' }, b)))
+        : null));
+    }));
+    empty.hidden = !loaded || shown.length > 0;
+    empty.textContent = emptyText({ type: kind, query });
+  }
+
+  function finish(result) {
+    if (done) return;
+    done = true;
+    if (current === picker) current = null;
+    dialog.close();
+    dialog.remove();
+    if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
+    resolve(result);
+  }
+
+  const picker = { finish };
+
+  document.body.appendChild(dialog);
+  dialog.showModal();
+  const loading = el('p', { class: 'media-picker-loading' }, 'Loading the media library…');
+  status.replaceChildren(loading);
+  api.listMedia().then((list) => {
+    if (done) return;
+    // An upload that finished first stays in the list
+    const fresh = Array.isArray(list) ? list : [];
+    items = uploaded ? [uploaded, ...fresh.filter((i) => i.id !== uploaded.id)] : fresh;
+    loaded = true;
+    if (loading.isConnected) status.replaceChildren();
+    renderGrid();
+  }, (err) => {
+    if (done) return;
+    status.replaceChildren(el('p', { class: 'media-picker-error', role: 'alert' },
+      `Couldn't load the media library: ${err.message}. You can still upload a file, or close and try again.`));
+  });
+
+  return picker;
+}

@@ -23,7 +23,7 @@ import { toBlockAst, fromBlockAst } from './ast.js';
 import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
 import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
 import { getCurrentMeta, setCurrentMeta, resetCurrentMeta,
-  getCurrentDocId, setCurrentDocId } from './meta-state.js';
+  getCurrentDocId, setCurrentDocId, takeSaveNotes } from './meta-state.js';
 import { CodeBlockView } from './blocks/code-block-view.js';
 import { CalloutView } from './blocks/callout-view.js';
 import { CollapsibleView } from './blocks/collapsible-view.js';
@@ -420,8 +420,14 @@ function applyDropped(dropped) {
   editorView.dispatch(tr);
 }
 
-/** The save status message for a save's `notices` (escaped by the indicator: it sets textContent). */
-const noticesMessage = (saved) => (saved?.notices?.length ? saved.notices.join(' ') : undefined);
+/**
+ * The save status message for a save's `notices` and any notes an edit left
+ * for it (escaped by the indicator: it sets textContent).
+ */
+function noticesMessage(saved) {
+  const notes = [...(saved?.notices || []), ...takeSaveNotes()];
+  return notes.length ? notes.join(' ') : undefined;
+}
 
 /**
  * Save the current document to the API.

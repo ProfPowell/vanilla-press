@@ -15,6 +15,10 @@ import { Fragment } from 'prosemirror-model';
 import { schema } from '../schema.js';
 import { openMediaPicker } from './media-picker.js';
 import { nodeTypeFor, initialAttrs, paletteEntries } from '../component-model.js';
+import { insertPlan, nodesFor, pdfViewerEnabled } from '../media-insert.js';
+import { focusFigureAlt } from '../blocks/figure-view.js';
+import { addSaveNote } from '../meta-state.js';
+import { api } from '../api-client.js';
 
 /**
  * Palette entries: each has an id, label, description, icon, category,
@@ -139,15 +143,26 @@ const PALETTE_ENTRIES = [
   },
 
   // --- Media ---
+  // `pick`: open the media picker for that kind first; insert only on a choice.
   {
-    id: 'figure', label: 'Image', description: 'Figure with caption (opens media picker)',
-    icon: '\ud83d\uddbc\ufe0f', category: 'media',
-    create: () => schema.nodes.figure.create({ src: '', alt: '' }),
-    afterInsert: 'media-picker',
+    id: 'figure', label: 'Image', description: 'Choose or upload an image',
+    icon: '\ud83d\uddbc\ufe0f', category: 'media', pick: 'image',
   },
   {
-    id: 'embed', label: 'Embed', description: 'Video or external embed',
-    icon: '\u25b6', category: 'media',
+    id: 'audio', label: 'Audio', description: 'Choose or upload an audio file',
+    icon: '\u266b', category: 'media', pick: 'audio',
+  },
+  {
+    id: 'video', label: 'Video', description: 'Choose or upload a video file',
+    icon: '\u25b6', category: 'media', pick: 'video',
+  },
+  {
+    id: 'pdf', label: 'PDF', description: 'Choose or upload a PDF',
+    icon: '\u2399', category: 'media', pick: 'pdf',
+  },
+  {
+    id: 'embed', label: 'Embed', description: 'CodePen, Observable or other external embed',
+    icon: '\u29c9', category: 'media',
     create: () => schema.nodes.embed.create({ url: '', type: 'video' }),
   },
 
@@ -338,12 +353,12 @@ export class BlockPalette {
 
   insertBlock(entry) {
     if (!this.view || this.triggerPos == null) return;
+    if (entry.pick) { this._pickAndInsert(entry); return; }
 
     if (this.insertAfter != null) {
-      const done = this._insertAfterBlock([entry.create()]);
+      this._insertAfterBlock([entry.create()]);
       this.view.focus();
       this.close();
-      if (done && entry.afterInsert === 'media-picker') this._openMediaPickerForFigure();
       return;
     }
 
@@ -357,11 +372,45 @@ export class BlockPalette {
     dispatch(tr.scrollIntoView());
     this.view.focus();
     this.close();
+  }
 
-    // Post-insert behavior
-    if (entry.afterInsert === 'media-picker') {
-      this._openMediaPickerForFigure();
+  /**
+   * Media entries: open the picker, and on a choice insert its block where
+   * the palette was opened (the `/` paragraph, or after the `+` block).
+   * Closing the picker inserts nothing.
+   */
+  async _pickAndInsert(entry) {
+    const view = this.view;
+    const at = { triggerPos: this.triggerPos, insertAfter: this.insertAfter };
+    this.close();
+    const item = await openMediaPicker({ kind: entry.pick });
+    if (!item || view.isDestroyed) return;
+    let pdfViewer = false;
+    if (item.kind === 'pdf') {
+      pdfViewer = pdfViewerEnabled(await api.listComponents().catch(() => null));
     }
+    const plan = insertPlan(item, { pdfViewer });
+    const nodes = nodesFor(plan, schema);
+
+    // Back to where the palette was (the picker closed it)
+    this.view = view;
+    this.triggerPos = at.triggerPos;
+    this.insertAfter = at.insertAfter;
+    let pos = null;
+    if (at.insertAfter != null) {
+      if (this._insertAfterBlock(nodes)) pos = at.insertAfter;
+    } else {
+      const range = this._triggerRange();
+      if (range) {
+        view.dispatch(view.state.tr.replaceWith(range[0], range[1], Fragment.fromArray(nodes)).scrollIntoView());
+        pos = range[0];
+      }
+    }
+    this.close();
+    view.focus();
+    if (pos == null) return;
+    if (plan.focusAlt) focusFigureAlt(view, pos);
+    if (plan.note) addSaveNote(plan.note);
   }
 
   insertPattern(entry) {
@@ -399,25 +448,6 @@ export class BlockPalette {
     dispatch(tr.scrollIntoView());
     this.view.focus();
     this.close();
-  }
-
-  async _openMediaPickerForFigure() {
-    const result = await openMediaPicker();
-    if (!result || !this.view) return;
-
-    // Find the figure node we just inserted and update its src/alt
-    const { state, dispatch } = this.view;
-    state.doc.descendants((node, pos) => {
-      if (node.type.name === 'figure' && node.attrs.src === '' && node.attrs.alt === '') {
-        const tr = this.view.state.tr.setNodeMarkup(pos, null, {
-          ...node.attrs,
-          src: result.src,
-          alt: result.alt || '',
-        });
-        dispatch(tr);
-        return false;
-      }
-    });
   }
 
   get _allEntries() {

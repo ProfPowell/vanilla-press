@@ -8,6 +8,7 @@
  */
 
 import { SITE, apiBase } from './site-context.js';
+import { uploadMedia as uploadFile } from './media-upload.js';
 
 /** `/api/sites/<site>` in the app's editor (`?site=`), else `/api` (`vp serve`). */
 const BASE = apiBase(SITE);
@@ -122,21 +123,28 @@ export const api = {
     return request('/sync', { method: 'POST' });
   },
 
-  /** Upload a media file. */
-  async uploadMedia(file, alt = '') {
-    const form = new FormData();
-    form.append('file', file);
-    if (alt) form.append('alt', alt);
-
-    const res = await fetch(`${BASE}/media`, { method: 'POST', body: form });
-    const data = await parseBody(res);
-    if (!res.ok) throw new Error(data.error || `Upload failed: ${res.status}`);
-    return data;
+  /**
+   * Upload one media file: the new MediaItem (plus `large`). Errors say what went wrong.
+   * @param {File} file
+   * @param {{ alt?: string|null, onProgress?: (fraction: number) => void }} [opts]
+   */
+  uploadMedia(file, opts = {}) {
+    return uploadFile(BASE, file, opts);
   },
 
-  /** List uploaded media. */
+  /** List the media library: MediaItem[]. */
   listMedia() {
     return request('/media');
+  },
+
+  /** Set a file's alt text (`null` never written, `""` decorative): the updated MediaItem. */
+  setMediaAlt(id, alt) {
+    return request(`/media/${encodeURIComponent(id)}`, { method: 'PUT', body: { alt } });
+  },
+
+  /** Delete a media file (409 when a published post uses it). */
+  deleteMedia(id) {
+    return request(`/media/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
 
   /** List available Vanilla Breeze themes: [{ id, name, tier, file }]. */

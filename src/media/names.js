@@ -1,10 +1,16 @@
 // Readable media file names. Browser-safe (uses globalThis.crypto).
+import { ACCEPTED } from './types.js';
 
-const EXT_RE = /\.[A-Za-z0-9]{1,5}$/;
+const KNOWN_EXTS = new Set(ACCEPTED.flatMap((t) => t.exts));
+
+// Only a real (accepted) extension is dropped: "Notes v1.2" keeps its "2".
+function withoutExt(name) {
+  const dot = name.lastIndexOf('.');
+  return dot >= 0 && KNOWN_EXTS.has(name.slice(dot + 1).toLowerCase()) ? name.slice(0, dot) : name;
+}
 
 export function slugBase(name) {
-  const base = String(name)
-    .replace(EXT_RE, '')
+  const base = withoutExt(String(name))
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
@@ -33,8 +39,7 @@ export function mediaFilename(originalName, ext, id) {
 }
 
 export function editedFilename(sourceFilename, ext, id) {
-  const base = sourceFilename
-    .replace(EXT_RE, '')
+  const base = withoutExt(sourceFilename)
     .replace(/-[0-9a-f]{6}$/, '')
     .replace(/-edited$/, '');
   return `${base}-edited-${id}.${ext}`;

@@ -52,6 +52,12 @@ test('sniffType: MP3 frame sync, ADTS, and generic isom by extension', () => {
   assert.equal(sniffType(ftyp('mp42', ['avis']), 'a.avif').mime, 'image/avif');
 });
 
+test('sniffType: MP3 frame sync rejects the reserved version bits', () => {
+  assert.equal(sniffType(u8([0xff, 0xfb, 0x90, 0x00]), 'a.mp3').mime, 'audio/mpeg'); // MPEG-1 layer III
+  assert.equal(sniffType(u8([0xff, 0xf3, 0x90, 0x00]), 'a.mp3').mime, 'audio/mpeg'); // MPEG-2 layer III
+  assert.equal(sniffType(u8([0xff, 0xeb, 0x90, 0x00]), 'a.mp3'), null); // version 01 is reserved
+});
+
 test('sniffType: SVG after BOM, declaration, comments and doctype', () => {
   const svg = '﻿<?xml version="1.0"?>\n<!-- hi -->\n<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "x.dtd">\n<svg width="1"/>';
   assert.equal(sniffType(new TextEncoder().encode(svg), 'a.svg').mime, 'image/svg+xml');
@@ -84,6 +90,17 @@ test('imageSize reads WebP VP8 and VP8L', () => {
   const bits = [w & 255, ((w >> 8) & 0x3f) | ((h & 3) << 6), (h >> 2) & 255, (h >> 10) & 15];
   const vp8l = riff('WEBP', u8(ascii('VP8L'), le32(5), [0x2f], bits));
   assert.deepEqual(imageSize(vp8l, 'image/webp'), { width: 40, height: 30 });
+});
+
+test('imageSize: AVIF reads the real ispe boxes and ignores look-alikes in other data', () => {
+  const box = (type, ...payload) => { const body = u8(payload); return u8(be32(8 + body.length), ascii(type), body); };
+  const ispe = (w, h) => box('ispe', be32(0), be32(w), be32(h));
+  const real = u8(ftyp('avif', ['mif1']), box('meta', be32(0), box('iprp', box('ipco', ispe(1200, 800), ispe(120, 80)))));
+  const decoy = u8(box('mdat', ascii('ispe'), be32(0), be32(9000), be32(9000)));
+  assert.deepEqual(imageSize(u8(real, decoy), 'image/avif'), { width: 1200, height: 800 });
+  assert.equal(imageSize(u8(ftyp('avif'), decoy), 'image/avif'), null);
+  // a box claiming a huge size ends the walk instead of looping
+  assert.equal(imageSize(u8(ftyp('avif'), be32(0xffffffff), ascii('free')), 'image/avif'), null);
 });
 
 test('imageSize returns null for truncated, unknown or mismatched input', () => {

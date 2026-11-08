@@ -50,7 +50,7 @@ export function sniffType(bytes, filename = '') {
   if (startsWith(b, [0x1a, 0x45, 0xdf, 0xa3])) return found('video/webm');
   if (b.length >= 3 && ascii(b, 0, 3) === 'ID3') return found('audio/mpeg');
   if (b.length >= 2 && b[0] === 0xff && (b[1] & 0xf6) === 0xf0) return found('audio/aac');
-  if (b.length >= 2 && b[0] === 0xff && (b[1] & 0xe0) === 0xe0 && ((b[1] >> 1) & 3) !== 0) return found('audio/mpeg');
+  if (b.length >= 2 && b[0] === 0xff && (b[1] & 0xe0) === 0xe0 && ((b[1] >> 3) & 3) !== 1 && ((b[1] >> 1) & 3) !== 0) return found('audio/mpeg');
   if (b.length >= 12 && ascii(b, 4, 4) === 'ftyp') {
     const brands = ftypBrands(b);
     if (brands.some((x) => x === 'avif' || x === 'avis')) return found('image/avif');
@@ -115,15 +115,38 @@ function webpSize(b) {
   return null;
 }
 
+// Walks the ISO boxes (meta > iprp > ipco > ispe) rather than scanning the
+// bytes. Bounded: at most MAX_BOXES boxes, and mdat and the rest are skipped.
+const AVIF_CONTAINERS = new Map([['meta', 4], ['iprp', 0], ['ipco', 0]]);
+const MAX_BOXES = 2000;
+
 function avifSize(b) {
   let best = null;
-  for (let at = 0; at + 16 <= b.length; at++) {
-    if (b[at] === 0x69 && ascii(b, at, 4) === 'ispe') {
-      const width = be32(b, at + 8);
-      const height = be32(b, at + 12);
-      if (width > 0 && height > 0 && (!best || width * height > best.width * best.height)) best = { width, height };
+  let seen = 0;
+  const walk = (from, to, depth) => {
+    let at = from;
+    while (at + 8 <= to && seen++ < MAX_BOXES) {
+      let size = be32(b, at);
+      const type = ascii(b, at + 4, 4);
+      let header = 8;
+      if (size === 1) {
+        if (at + 16 > to || be32(b, at + 8) !== 0) return;
+        size = be32(b, at + 12);
+        header = 16;
+      } else if (size === 0) size = to - at;
+      if (size < header) return;
+      const end = Math.min(at + size, to);
+      if (type === 'ispe' && end - at >= header + 12) {
+        const width = be32(b, at + header + 4);
+        const height = be32(b, at + header + 8);
+        if (width > 0 && height > 0 && (!best || width * height > best.width * best.height)) best = { width, height };
+      } else if (AVIF_CONTAINERS.has(type) && depth < 4) {
+        walk(at + header + AVIF_CONTAINERS.get(type), end, depth + 1);
+      }
+      at += size;
     }
-  }
+  };
+  walk(0, b.length, 0);
   return best;
 }
 

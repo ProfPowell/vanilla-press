@@ -12,6 +12,13 @@ test('slugBase handles odd names', () => {
   assert.ok(long.length <= 60 && !long.endsWith('-'), long);
 });
 
+test('slugBase drops only a real extension', () => {
+  assert.equal(slugBase('Notes v1.2'), 'notes-v1-2');
+  assert.equal(slugBase('Notes v1.2.png'), 'notes-v1-2');
+  assert.equal(slugBase('report.final'), 'report-final');
+  assert.equal(slugBase('clip.MP4'), 'clip');
+});
+
 test('shortId is 6 lowercase hex characters', () => {
   for (let i = 0; i < 20; i++) assert.match(shortId(), /^[0-9a-f]{6}$/);
 });

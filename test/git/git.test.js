@@ -338,6 +338,35 @@ test('pullFastForward with yieldUntracked: the upstream copy wins; put back when
   assert.equal(readFileSync(join(a, 'src/assets/themes/x.css'), 'utf8'), 'mine\n');
 });
 
+test('push resolveConflicts: settles theme conflicts; anything else is still a GitConflictError', async () => {
+  for (const [dir, text] of [[b, 'from b\n'], [a, 'from a\n']]) {
+    write(dir, 'config/theme.json', text);
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-m', 'theme');
+  }
+  git(b, 'push');
+  const calls = [];
+  const res = await push(a, {
+    resolveConflicts: async ({ files, readStage }) => {
+      calls.push(files);
+      writeFileSync(join(a, 'config/theme.json'), await readStage(2, 'config/theme.json'));
+      return true;
+    },
+  });
+  assert.deepEqual(calls, [['config/theme.json']]);
+  assert.deepEqual(res.resolved, ['config/theme.json']);
+  assert.equal(git(a, 'rev-parse', 'HEAD'), git(remote, 'rev-parse', 'main')); // the emptied commit was skipped
+  assert.equal(readFileSync(join(a, 'config/theme.json'), 'utf8'), 'from b\n');
+  for (const [dir, text] of [[b, 'b\n'], [a, 'a\n']]) {
+    write(dir, 'README.md', text);
+    git(dir, 'commit', '-am', 'readme');
+  }
+  git(b, 'push');
+  const before = git(a, 'rev-parse', 'HEAD');
+  await assert.rejects(push(a, { resolveConflicts: async () => false }), GitConflictError);
+  assert.equal(git(a, 'rev-parse', 'HEAD'), before);
+});
+
 test('changedSinceHead lists tracked files modified or deleted since HEAD, under the paths', async () => {
   write(a, 'src/posts/a.html', 'a\n');
   write(a, 'src/posts/b.html', 'b\n');

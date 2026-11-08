@@ -68,16 +68,13 @@ const STATIC_MOUNTS = [
   { prefix: '/assets/image-editor/', dir: join(ROOT, 'node_modules', '@profpowell', 'image-editor', 'dist') },
 ];
 
-/** Theme library writes (R2): save, import, rename, delete of a custom theme. */
-const THEME_LIBRARY_PATH = /^\/theme\/(import|custom(\/[^/]+)?)$/;
-
 /** Actions with their own queue (they take the write lock inside the backup queue). */
 const ACTION_PATH = /\/documents\/[^/]+\/(publish|update|unpublish)$/;
 
 /**
  * A write that changes a site's files (document create, save, reload, delete, sync;
- * media upload, alt edit, delete; custom theme save, import, rename, delete): it waits
- * for a running publish/update/unpublish (Ruling O).
+ * media upload, alt edit, delete): it waits for a running publish/update/unpublish
+ * (Ruling O). Theme library writes take the locks themselves (theme-routes.js).
  * @param {string} method
  * @param {string} pathname
  * @returns {boolean}
@@ -86,7 +83,6 @@ export function isQueuedWrite(method, pathname) {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
   const rest = pathname.replace(/^\/api\/sites\/[^/]+/, '');
   if (rest === '/sync') return true;
-  if (THEME_LIBRARY_PATH.test(rest)) return true;
   if (rest === '/media' || rest.startsWith('/media/')) return true;
   return (rest === '/documents' || rest.startsWith('/documents/')) && !ACTION_PATH.test(rest);
 }
@@ -301,7 +297,10 @@ export async function startApp({
         vbCache.delete(site.id); // the build may have vendored or moved the site's VB copy
         if (result.expectedText != null) expected.set(docId, { url: result.url, text: result.expectedText });
         else expected.delete(docId);
-        sendJson(res, 200, { status: result.status, url: result.url });
+        sendJson(res, 200, {
+          status: result.status, url: result.url,
+          ...(result.themeFromElsewhere ? { theme: 'The theme was changed on another computer: the version on GitHub was kept.' } : {}),
+        });
       } catch (err) {
         if (err instanceof PublishRejectedError) return sendJson(res, err.status, err.body);
         if (err instanceof BuildError) return sendJson(res, 422, { error: 'Build failed', log: err.log });

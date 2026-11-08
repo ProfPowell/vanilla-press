@@ -2,8 +2,10 @@
  * A site's theme setting on disk (config/theme.json) and its custom theme
  * library (src/assets/themes/<id>.css): migration from vp.json, the state
  * the Theme screen shows, and the library operations (save, import, rename,
- * delete). Library operations write at once (R2); they go live with the next
- * Apply or Publish/Update (R3).
+ * delete). Library operations write at once and are committed at once (the
+ * routes commit them in the backup queue), without changing the applied
+ * state (R2): the look changes only with Apply. Publish/Update commit the
+ * theme paths too (R3).
  *
  * @module app/site-theme
  */
@@ -15,7 +17,7 @@ import { writeFileAtomic } from '../sync/atomic-write.js';
 import { getAllDocuments } from '../store/content.js';
 import { render } from '../renderers/html.js';
 import {
-  normalizeSetting, slugId, themeFiles, modesFor, migrateVpJson, themeUsers, ADJUST_ID, SAFE_ID, CUSTOM_URL_DIR,
+  normalizeSetting, slugId, themeFiles, modesFor, migrateVpJson, themeUsers, mergeSettings, ADJUST_ID, SAFE_ID, CUSTOM_URL_DIR,
 } from '../themes/theme-setting.js';
 import { themeCatalog } from '../themes/site-vb.js';
 import { headCommit, headTree, readBlobs } from '../git/git.js';
@@ -69,8 +71,10 @@ export function readSetting(ws) {
  * recomputed from the site's VB copy and `custom`; whatever the caller passed is ignored.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {object} setting
+ * @param {{ keepApplied?: object|null }} [options] - a library change: the files and
+ *   modes entries of this (previous, normalized) setting's applied ids are kept as they were
  */
-export function writeSetting(ws, setting) {
+export function writeSetting(ws, setting, { keepApplied = null } = {}) {
   const s = normalizeSetting(setting);
   if (!s) throw new ThemeError(400, 'A theme setting needs a theme id.');
   const cat = catalogOf(ws);
@@ -84,6 +88,15 @@ export function writeSetting(ws, setting) {
     }),
   };
   const modes = modesFor(s.custom);
+  // A library change never changes the look: the applied ids keep their files and modes entries.
+  if (keepApplied) {
+    for (const id of [keepApplied.name, keepApplied.adjust].filter(Boolean)) {
+      if (keepApplied.files[id]) out.files[id] = keepApplied.files[id];
+      else delete out.files[id];
+      if (keepApplied.modes[id]) modes[id] = keepApplied.modes[id];
+      else delete modes[id];
+    }
+  }
   if (Object.keys(modes).length) out.modes = modes;
   if (vbUrl) out.vb = vbUrl;
   if (s.custom.length) out.custom = s.custom;
@@ -93,8 +106,9 @@ export function writeSetting(ws, setting) {
 
 /**
  * Copy a legacy `vp.json` theme to config/theme.json. vp.json is never
- * edited here (it is a backup path; theme.json goes live only with Apply or
- * Publish/Update, R3): the commit that first carries theme.json drops the key.
+ * edited here (it is a backup path; theme.json is committed only by Apply,
+ * Publish/Update (R3) or a library change): the commit that first carries
+ * theme.json drops the key.
  * Nothing happens when theme.json already exists, vp.json is missing or
  * unreadable, or its theme is "default" (R1) or not a safe id.
  * @param {import('../workspace/workspace.js').Workspace} ws
@@ -247,7 +261,7 @@ function addCustom(ws, name, makeCss, entry, options) {
   const file = customFile(ws, id);
   writeFileAtomic(file, result.css);
   try {
-    writeSetting(ws, { ...(setting || DEFAULT_SETTING), custom: [...custom, added] }); // R4, one write
+    writeSetting(ws, { ...(setting || DEFAULT_SETTING), custom: [...custom, added] }, { keepApplied: setting }); // R4, one write
   } catch (err) {
     rmSync(file, { force: true }); // no file without an entry
     throw err;
@@ -304,7 +318,7 @@ export function renameCustomTheme(ws, id, name, { siteId } = {}) {
   const n = checkName(name);
   const { setting, entry } = findCustom(ws, id);
   const renamed = { ...entry, name: n };
-  writeSetting(ws, { ...setting, custom: setting.custom.map((c) => (c.id === id ? renamed : c)) });
+  writeSetting(ws, { ...setting, custom: setting.custom.map((c) => (c.id === id ? renamed : c)) }, { keepApplied: setting });
   return customInfo(renamed, siteId);
 }
 
@@ -373,6 +387,50 @@ export async function deleteCustomTheme(ws, db, id, { git = defaultGit } = {}) {
   const { setting } = findCustom(ws, id); // read again after the wait
   const usedBy = [...new Set([...themeUsers(setting, getAllDocuments(db), id), ...live])];
   if (usedBy.length) throw new ThemeError(409, 'This theme is in use.', { usedBy });
-  writeSetting(ws, { ...setting, custom: setting.custom.filter((c) => c.id !== id) });
+  writeSetting(ws, { ...setting, custom: setting.custom.filter((c) => c.id !== id) }, { keepApplied: setting });
   rmSync(customFile(ws, id), { force: true });
+}
+
+const SETTING_REL = 'config/theme.json';
+const THEMES_REL = 'src/assets/themes/';
+const parseJson = (text) => {
+  try {
+    const v = JSON.parse(text);
+    return isRecord(v) ? v : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * A conflict resolver for git's push (rebase): when every conflicted file is
+ * a theme path, GitHub's version wins. config/theme.json is merged
+ * (`mergeSettings`: GitHub's applied state when both computers changed it,
+ * library entries from both); a custom theme file is GitHub's (removed when
+ * GitHub removed it). Any other conflicted file: not resolved (false).
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @returns {(p: { files: string[], readStage: (n: 1|2|3, path: string) => Promise<string|null> }) => Promise<boolean>}
+ */
+export function themeConflictResolver(ws) {
+  return async ({ files, readStage }) => {
+    if (!files.every((f) => f === SETTING_REL || f.startsWith(THEMES_REL))) return false;
+    for (const f of files) {
+      const file = join(ws.siteDir, f);
+      const upstream = await readStage(2, f); // in a rebase, stage 2 is the branch being rebased onto: GitHub's
+      if (upstream === null) {
+        rmSync(file, { force: true });
+        continue;
+      }
+      if (f === SETTING_REL) {
+        const up = parseJson(upstream);
+        const local = parseJson(await readStage(3, f));
+        if (up && local) {
+          writeJson(file, mergeSettings(parseJson(await readStage(1, f)), up, local));
+          continue;
+        }
+      }
+      writeFileAtomic(file, upstream);
+    }
+    return true;
+  };
 }

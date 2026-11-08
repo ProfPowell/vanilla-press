@@ -15,7 +15,8 @@ import { readHead as gitReadHead, GitNotConnectedError } from '../git/git.js';
 import { BuildError, readSiteUrl } from './publish.js';
 import { BACKUP_PATHS, THEME_PATHS } from './site-git.js';
 import {
-  readSetting, writeSetting, snapshotFile, restoreFile, themeSettingFile, dropVpThemeOnFirstCommit, ThemeError,
+  readSetting, writeSetting, snapshotFile, restoreFile, themeSettingFile, dropVpThemeOnFirstCommit, themeConflictResolver,
+  ThemeError,
 } from './site-theme.js';
 import { themeCatalog } from '../themes/site-vb.js';
 import { MODES, SAFE_ID, ADJUST_ID, settingIds } from '../themes/theme-setting.js';
@@ -26,6 +27,8 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const VP_CDN_DIR = join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn');
 const MAX_COLORS = 200;
+/** Apply's 409: another computer applied a theme meanwhile; GitHub's was kept. */
+export const THEME_CHANGED = 'The theme was changed on another computer. Review it and apply again.';
 const NO_VB = 'This site has no copy of Vanilla Breeze under src/, so only themes built into Vanilla Breeze can be applied.';
 
 const isRecord = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -94,7 +97,8 @@ async function build(deps, siteDir) {
  * there when the theme needs one of its files (R5: one build to vendor it),
  * write theme.json and vp-site.css (removed when nothing is adjusted), check
  * the build (on failure both files go back as they were), commit the backup
- * paths and THEME_PATHS (`Theme: <name>`), push.
+ * paths and THEME_PATHS (`Theme: <name>`), push. A theme conflict in the push
+ * keeps GitHub's applied state (themeConflictResolver).
  * @param {{
  *   ws: import('../workspace/workspace.js').Workspace,
  *   db?: object,
@@ -103,7 +107,9 @@ async function build(deps, siteDir) {
  *     gitStatus: Function, readHead?: Function, readSiteUrl?: Function },
  *   options?: { vpCdnDir?: string },
  * }} p
- * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean, ids: string }>}
+ * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean, ids: string,
+ *   themeChanged: boolean }>} themeChanged: another computer applied a theme meanwhile, the push
+ *   kept GitHub's (the setting on disk is GitHub's now; the route answers 409)
  * @throws {ThemeError|BuildError|Error} 400 bad request or unknown theme; 422 R5, or a custom
  *   theme whose file is missing; git errors propagate
  */
@@ -166,7 +172,8 @@ export async function applyTheme({ ws, body, deps, options = {} }) {
     throw new BuildError(checked?.log ?? '');
   }
 
-  const ids = settingIds(readSetting(ws));
+  const appliedOf = (st) => JSON.stringify([st?.name, st?.mode, st?.adjust ?? null, st?.adjustments ?? null]);
+  const intended = appliedOf(readSetting(ws));
   const status = await deps.gitStatus(siteDir);
   let sha = null;
   if (status.isRepo) {
@@ -175,12 +182,16 @@ export async function applyTheme({ ws, body, deps, options = {} }) {
   }
   const siteUrl = await (deps.readSiteUrl || readSiteUrl)(siteDir);
   const url = siteUrl ? `${siteUrl.replace(/\/+$/, '')}/` : null;
-  const done = (pushStatus, rebased = false) => ({ status: pushStatus, url, sha, rebased, ids });
+  // ids and themeChanged are read after the push: a theme conflict keeps GitHub's setting.
+  const done = (pushStatus, rebased = false) => {
+    const now = readSetting(ws);
+    return { status: pushStatus, url, sha, rebased, ids: settingIds(now), themeChanged: appliedOf(now) !== intended };
+  };
 
   if (!status.isRepo || !status.hasRemote || !status.hasUpstream) return done('saved');
   let pushed;
   try {
-    pushed = await deps.push(siteDir, { yieldUntracked: [...THEME_PATHS] });
+    pushed = await deps.push(siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });
   } catch (err) {
     if (err instanceof GitNotConnectedError) return done('saved');
     throw err;

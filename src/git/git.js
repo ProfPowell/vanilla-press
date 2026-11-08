@@ -74,6 +74,7 @@ async function runGit(dir, args, { raw = false } = {}) {
         // Paths are file names, never globs: a slug with `*` or `[` stages only that file.
         GIT_LITERAL_PATHSPECS: '1',
         GIT_ASKPASS: '',
+        GIT_EDITOR: 'true', // rebase --continue keeps the message, never opens an editor
         GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes',
       },
       maxBuffer: 16 * 1024 * 1024,
@@ -125,7 +126,7 @@ export async function aheadBehind(dir) {
 }
 
 /** Subjects of the commits Vanilla Press makes (see site-git.js and publish). */
-const VP_COMMIT_SUBJECT = '^(Draft|Edit|Publish|Update|Unpublish|Components): ';
+const VP_COMMIT_SUBJECT = '^(Draft|Edit|Publish|Update|Unpublish|Components|Theme|Theme library): ';
 
 /**
  * Commit time of the newest Vanilla Press commit on the upstream (the last backup).
@@ -223,13 +224,17 @@ function restoreYielded(dir, yielded) {
 /**
  * Push to the upstream, rebasing once if the remote moved.
  * @param {string} dir
- * @param {{ yieldUntracked?: string[] }} [options] - untracked files under these paths
- *   that the remote brings in are removed before the rebase: the remote's copy wins
- *   (they are put back if the rebase fails)
- * @returns {Promise<{pushed: boolean, rebased: boolean, yielded?: string[]}>} yielded: the
- *   untracked files the remote's copy replaced (only when there were any)
+ * @param {{ yieldUntracked?: string[], resolveConflicts?: Function }} [options] -
+ *   yieldUntracked: untracked files under these paths that the remote brings in are
+ *   removed before the rebase: the remote's copy wins (they are put back if the rebase fails);
+ *   resolveConflicts({ files, readStage(n, path) }): called when the rebase stops on
+ *   conflicts; it writes the resolved files and returns true, or false to give up
+ *   (the rebase is aborted and GitConflictError thrown)
+ * @returns {Promise<{pushed: boolean, rebased: boolean, yielded?: string[], resolved?: string[]}>}
+ *   yielded: the untracked files the remote's copy replaced; resolved: the files
+ *   resolveConflicts settled (each only when there were any)
  */
-export async function push(dir, { yieldUntracked: yieldPaths = [] } = {}) {
+export async function push(dir, { yieldUntracked: yieldPaths = [], resolveConflicts = null } = {}) {
   const status = await gitStatus(dir);
   if (!status.hasRemote) throw new GitNotConnectedError();
   if (!status.hasUpstream) throw new GitNotConnectedError('The current branch has no upstream');
@@ -257,9 +262,34 @@ export async function push(dir, { yieldUntracked: yieldPaths = [] } = {}) {
   if (clash.length > 0) throw new GitStashConflictError([...new Set(clash)].sort());
 
   const yielded = await yieldUntracked(dir, yieldPaths, incoming);
+  const resolved = new Set();
+  const readStage = async (n, path) => {
+    try {
+      return await runGit(dir, ['show', `:${n}:${path}`], { raw: true });
+    } catch {
+      return null;
+    }
+  };
+  /** Resolve each stop of the rebase; true when it finished. */
+  const settle = async () => {
+    for (let step = 0; step < 1000 && (await rebaseInProgress()); step++) {
+      const files = await unmerged();
+      if (files.length === 0 || !(await resolveConflicts({ files, readStage }))) return false;
+      await runGit(dir, ['add', '-A', '--', ...files]);
+      for (const f of files) resolved.add(f);
+      const nothingStaged = (await tryGit(dir, ['diff', '--cached', '--quiet'])) !== null;
+      try {
+        await runGit(dir, ['rebase', nothingStaged ? '--skip' : '--continue']);
+      } catch { /* stopped again: the loop looks at the next conflict */ }
+    }
+    return !(await rebaseInProgress());
+  };
   try {
     await runGit(dir, ['pull', '--rebase', '--autostash']);
   } catch (err) {
+    if (resolveConflicts && (await rebaseInProgress()) && (await unmerged()).length > 0 && (await settle())) {
+      return finishPush();
+    }
     const files = await unmerged();
     let failure = err;
     if (await rebaseInProgress()) {
@@ -272,14 +302,22 @@ export async function push(dir, { yieldUntracked: yieldPaths = [] } = {}) {
     restoreYielded(dir, yielded); // after the abort: HEAD is the local one again
     throw failure;
   }
-  // Safety net: git can exit 0 even when the autostash re-apply left conflict markers.
-  const leftover = await unmerged();
-  if (leftover.length > 0) {
-    await tryGit(dir, ['reset', '--merge']);
-    throw new GitStashConflictError(leftover, { stashed: true });
+  return finishPush();
+
+  async function finishPush() {
+    // Safety net: git can exit 0 even when the autostash re-apply left conflict markers.
+    const leftover = await unmerged();
+    if (leftover.length > 0) {
+      await tryGit(dir, ['reset', '--merge']);
+      throw new GitStashConflictError(leftover, { stashed: true });
+    }
+    await runGit(dir, ['push']);
+    return {
+      pushed: true, rebased: true,
+      ...(yielded.length ? { yielded: yielded.map((y) => y.path) } : {}),
+      ...(resolved.size ? { resolved: [...resolved].sort() } : {}),
+    };
   }
-  await runGit(dir, ['push']);
-  return { pushed: true, rebased: true, ...(yielded.length ? { yielded: yielded.map((y) => y.path) } : {}) };
 }
 
 /**

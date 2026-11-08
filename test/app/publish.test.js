@@ -970,3 +970,27 @@ describe('app routes', () => {
     assert.ok(existsSync(join(fx.site, 'src', 'media', item.filename)));
   });
 });
+
+describe('setPublished when another computer changed the theme', () => {
+  test('the post publishes, GitHub\'s theme is kept and the result says so', async () => {
+    const ws = setup();
+    write(fx.site, 'config/theme.json', JSON.stringify({ name: 'default', mode: 'auto', files: {} }, null, 2) + '\n');
+    git(fx.site, 'add', 'config/theme.json');
+    git(fx.site, 'commit', '-m', 'theme');
+    git(fx.site, 'push');
+    const other = fx.clone('other');
+    write(other, 'config/theme.json', JSON.stringify({ name: 'classic', mode: 'auto', files: {} }, null, 2) + '\n');
+    git(other, 'commit', '-am', 'Theme: classic');
+    git(other, 'push');
+    // This computer's theme.json changed too (adjacent line: a textual conflict).
+    write(fx.site, 'config/theme.json', JSON.stringify({ name: 'default', mode: 'dark', files: {} }, null, 2) + '\n');
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(res.status, 'pushed');
+    assert.equal(res.themeFromElsewhere, true);
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
+    assert.equal(JSON.parse(remoteShow('config/theme.json')).name, 'classic');
+    assert.equal(JSON.parse(readFileSync(join(fx.site, 'config/theme.json'), 'utf8')).name, 'classic');
+    assert.ok(remoteFiles().includes('src/posts/hello.html'));
+    assert.equal(git(fx.site, 'status', '--porcelain', '--', 'config/theme.json'), '');
+  });
+});

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeSetting, slugId, themeFiles, modesFor, settingIds, migrateVpJson, themeUsers, MODES, ADJUST_ID, CUSTOM_URL_DIR, SAFE_ID } from '../../src/themes/theme-setting.js';
+import { normalizeSetting, slugId, themeFiles, modesFor, settingIds, migrateVpJson, themeUsers, mergeSettings, MODES, ADJUST_ID, CUSTOM_URL_DIR, SAFE_ID } from '../../src/themes/theme-setting.js';
 
 describe('theme-setting', () => {
   it('constants', () => {
@@ -67,5 +67,35 @@ describe('theme-setting', () => {
     assert.deepEqual(themeUsers({ name: 'retro-mine' }, [{ id: 'a', meta: { title: 'A', theme: 'retro-mine' } }, { id: 'b', meta: { title: 'B' } }], 'retro-mine'),
       ['the site theme', 'A']);
     assert.deepEqual(themeUsers(null, [{ id: 'a', meta: { title: 'A', theme: 'x' } }], 'x'), ['A']);
+  });
+
+  it('mergeSettings: 3-way; the applied state is one unit and GitHub wins when both changed it', () => {
+    const base = { name: 'default', mode: 'auto', files: {}, custom: [{ id: 'a', name: 'A', base: 'default' }] };
+    // Only this computer applied: its applied state; GitHub's library change is kept.
+    const upLib = { ...base, files: { b: '/assets/themes/b.css' }, custom: [...base.custom, { id: 'b', name: 'B', base: 'default' }] };
+    const localApply = { ...base, name: 'swiss', mode: 'dark', adjust: 'vp-site', adjustments: { hue: 1 },
+      files: { swiss: '/x/swiss.css', 'vp-site': '/assets/themes/vp-site.css' } };
+    assert.deepEqual(mergeSettings(base, upLib, localApply), {
+      name: 'swiss', mode: 'dark', adjust: 'vp-site',
+      files: { b: '/assets/themes/b.css', swiss: '/x/swiss.css', 'vp-site': '/assets/themes/vp-site.css' },
+      custom: [{ id: 'a', name: 'A', base: 'default' }, { id: 'b', name: 'B', base: 'default' }],
+      adjustments: { hue: 1 },
+    });
+    // Both applied: GitHub's applied state; this computer's library changes (rename a, add c) kept.
+    const upApply = { ...base, name: '8bit', files: { '8bit': '/x/8bit.css' } };
+    const local = { ...localApply, custom: [{ id: 'a', name: 'A2', base: 'default' }, { id: 'c', name: 'C', base: 'default', only: 'dark' }],
+      modes: { c: 'dark' }, files: { ...localApply.files, c: '/assets/themes/c.css' } };
+    const m = mergeSettings(base, upApply, local);
+    assert.equal(m.name, '8bit');
+    assert.equal(m.mode, 'auto');
+    assert.equal('adjust' in m, false);
+    assert.equal('adjustments' in m, false);
+    assert.deepEqual(m.custom, [{ id: 'a', name: 'A2', base: 'default' }, { id: 'c', name: 'C', base: 'default', only: 'dark' }]);
+    assert.deepEqual(m.modes, { c: 'dark' });
+    assert.equal(m.files['8bit'], '/x/8bit.css');
+    assert.equal(m.files.c, '/assets/themes/c.css');
+    // A delete here of an entry GitHub left alone goes through; no base (both added): GitHub's applied state.
+    assert.deepEqual(mergeSettings(base, base, { ...base, custom: [] }).custom, undefined);
+    assert.equal(mergeSettings(null, upApply, localApply).name, '8bit');
   });
 });

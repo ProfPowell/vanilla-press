@@ -17,7 +17,7 @@ import { outputPaths, postUrlPath } from '../sync/paths.js';
 import { GitNotConnectedError, readHead as gitReadHead } from '../git/git.js';
 import { BACKUP_PATHS, THEME_PATHS, postPages } from './site-git.js';
 import {
-  refreshThemeSetting, snapshotFile, restoreFile, themeSettingFile, dropVpThemeOnFirstCommit,
+  refreshThemeSetting, snapshotFile, restoreFile, themeSettingFile, dropVpThemeOnFirstCommit, themeConflictResolver,
 } from './site-theme.js';
 import { componentTags } from './components.js';
 import { mediaRefs } from '../media/usage.js';
@@ -146,6 +146,7 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean,
  *   kind: 'publish'|'update'|'unpublish', expectedText: string|null }>}
  *   rebased: the push rebased onto commits from elsewhere (the caller re-syncs the store);
+ *   themeFromElsewhere (only when true): another computer changed the theme files, GitHub's were kept;
  *   expectedText: the page this build made (publish/update), for the live check
  * @throws {BuildError|PublishRejectedError|Error} git errors propagate (GitConflictError, ...)
  */
@@ -286,10 +287,12 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   if (!status.isRepo || !status.hasRemote || !status.hasUpstream) return done('saved');
   let pushResult;
   try {
-    pushResult = await deps.push(ws.siteDir, { yieldUntracked: [...THEME_PATHS] });
+    pushResult = await deps.push(ws.siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });
   } catch (err) {
     if (err instanceof GitNotConnectedError) return done('saved');
     throw err;
   }
-  return done('pushed', Boolean(pushResult?.rebased));
+  // Another computer changed the theme meanwhile: the post went out, GitHub's theme was kept.
+  const themeFromElsewhere = (pushResult?.resolved || []).some((f) => THEME_PATHS.some((p) => f === p || f.startsWith(`${p}/`)));
+  return { ...done('pushed', Boolean(pushResult?.rebased)), ...(themeFromElsewhere ? { themeFromElsewhere } : {}) };
 }

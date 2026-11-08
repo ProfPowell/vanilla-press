@@ -152,3 +152,51 @@ export function themeUsers(setting, docs, id) {
   }
   return users;
 }
+
+/** The keys that make up the applied state: they change together, by Apply only (R2). */
+const APPLIED_KEYS = ['name', 'mode', 'adjust', 'adjustments'];
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** 3-way merge of a plain map: a key GitHub changed keeps GitHub's value, else this computer's. */
+function mergeMap(base = {}, up = {}, local = {}) {
+  const out = {};
+  for (const key of new Set([...Object.keys(up), ...Object.keys(local)])) {
+    const value = same(up[key], base[key]) ? local[key] : up[key];
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * Merge two edits of config/theme.json made from a common `base` (null when
+ * both added it): the setting from GitHub (`upstream`) and this computer's
+ * (`local`). The applied state (name, mode, adjust, adjustments) is one unit:
+ * this computer's when GitHub left it as it was in base, else GitHub's.
+ * `files`, `modes`, `custom` (by id) and `vb` merge entry by entry, GitHub's
+ * entry winning when both changed it. Other keys are GitHub's. Pure.
+ * @param {object|null} base
+ * @param {object} upstream
+ * @param {object} local
+ * @returns {object} the theme.json to write
+ */
+export function mergeSettings(base, upstream, local) {
+  const b = isPlain(base) ? base : {};
+  const pick = (o) => APPLIED_KEYS.map((k) => o[k] ?? null);
+  const applied = same(pick(upstream), pick(b)) ? local : upstream;
+  const byId = (list) => Object.fromEntries((Array.isArray(list) ? list : []).filter((c) => isPlain(c) && c.id).map((c) => [c.id, c]));
+  const customMap = mergeMap(byId(b.custom), byId(upstream.custom), byId(local.custom));
+  const order = [...(upstream.custom || []), ...(local.custom || [])].map((c) => c?.id);
+  const custom = [...new Set(order)].filter((id) => customMap[id]).map((id) => customMap[id]);
+  const files = mergeMap(b.files, upstream.files, local.files);
+  const modes = mergeMap(b.modes, upstream.modes, local.modes);
+  const vb = same(upstream.vb, b.vb) ? local.vb : upstream.vb;
+  const out = { ...upstream, name: applied.name, mode: applied.mode };
+  for (const k of ['adjust', 'files', 'modes', 'vb', 'custom', 'adjustments']) delete out[k];
+  if (applied.adjust) out.adjust = applied.adjust;
+  out.files = files;
+  if (Object.keys(modes).length) out.modes = modes;
+  if (vb) out.vb = vb;
+  if (custom.length) out.custom = custom;
+  if (applied.adjustments) out.adjustments = applied.adjustments;
+  return out;
+}

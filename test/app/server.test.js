@@ -977,11 +977,11 @@ describe('app server themes', () => {
     assert.equal((await api(`/theme/custom/${saved.data.theme.id}`, { method: 'DELETE' })).status, 200);
   });
 
-  it('isQueuedWrite covers theme library writes', () => {
-    assert.equal(isQueuedWrite('POST', '/api/sites/a/theme/custom'), true);
-    assert.equal(isQueuedWrite('PATCH', '/api/sites/a/theme/custom/x'), true);
-    assert.equal(isQueuedWrite('DELETE', '/api/sites/a/theme/custom/x'), true);
-    assert.equal(isQueuedWrite('POST', '/api/sites/a/theme/import'), true);
+  it('theme library writes take the backup queue, then the write lock, themselves (not isQueuedWrite)', () => {
+    assert.equal(isQueuedWrite('POST', '/api/sites/a/theme/custom'), false);
+    assert.equal(isQueuedWrite('PATCH', '/api/sites/a/theme/custom/x'), false);
+    assert.equal(isQueuedWrite('DELETE', '/api/sites/a/theme/custom/x'), false);
+    assert.equal(isQueuedWrite('POST', '/api/sites/a/theme/import'), false);
     assert.equal(isQueuedWrite('POST', '/api/sites/a/theme/apply'), false);
     assert.equal(isQueuedWrite('GET', '/api/sites/a/theme'), false);
   });

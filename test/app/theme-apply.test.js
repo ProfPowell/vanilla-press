@@ -350,7 +350,7 @@ describe('theme routes: apply and live', () => {
     assert.match(failed.data.log, /boom/);
   });
 
-  it('a git conflict is a 409 with files', async () => {
+  it('another computer applied meanwhile: GitHub\'s theme is kept, 409', async () => {
     assert.equal((await api('/theme')).status, 200); // opened (and pulled) before the other machine pushes
     const other = fx.clone('other');
     write(other, 'config/theme.json', '{"name":"8bit","mode":"auto","files":{}}\n');
@@ -359,12 +359,130 @@ describe('theme routes: apply and live', () => {
     git(other, 'push');
     const r = await api('/theme/apply', { method: 'POST', body: { name: 'swiss', mode: 'auto', adjustments: null } });
     assert.equal(r.status, 409, JSON.stringify(r.data));
-    assert.deepEqual(r.data.files, ['config/theme.json']);
+    assert.deepEqual(r.data, { error: 'The theme was changed on another computer. Review it and apply again.' });
+    assert.equal(JSON.parse(readFileSync(join(fx.site, 'config/theme.json'), 'utf8')).name, '8bit');
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
   });
 
   it('live is false without a site URL or an applied theme', async () => {
     assert.deepEqual((await api('/theme/live')).data, { live: false, url: 'https://example.com/' });
     writeFileSync(join(fx.site, 'config/data.js'), 'export default {};\n');
     assert.deepEqual((await api('/theme/live')).data, { live: false, url: null });
+  });
+});
+
+describe('library commits and theme changes from another computer', () => {
+  let fx, app, clock, b;
+  const ids = {};
+  const T = { light: { '--color-primary': 'oklch(0.5 0.2 30)' } };
+  async function api(site, path, { method = 'GET', body } = {}) {
+    const opts = { method };
+    if (body !== undefined) {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(`${app.url}/api/sites/${ids[site]}${path}`, opts);
+    return { status: res.status, data: await res.json() };
+  }
+  const porcelain = (dir) => git(dir, 'status', '--porcelain', '--', 'config/theme.json', 'src/assets/themes');
+  const remoteSetting = () => JSON.parse(git(fx.remote, 'show', 'main:config/theme.json'));
+  const localSetting = (dir) => JSON.parse(readFileSync(join(dir, 'config/theme.json'), 'utf8'));
+
+  beforeEach(async () => {
+    fx = makeGitSite();
+    addVb(fx.site);
+    b = fx.clone('b');
+    addVb(b);
+    write(b, 'node_modules/.keep', '');
+    clock = fakeClock();
+    app = await startApp({
+      port: 0, env: { VP_CONFIG_DIR: join(fx.root, 'vp-config') },
+      previews: { start() {}, stop: async () => {}, stopAll: async () => {} },
+      backup: { now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer },
+    });
+    for (const [key, path] of [['a', fx.site], ['b', b]]) {
+      const added = await (await fetch(`${app.url}/api/sites`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, name: key }),
+      })).json();
+      ids[key] = added.id;
+      assert.equal((await api(key, '/theme')).status, 200); // open (and pull) now
+    }
+  });
+  afterEach(async () => {
+    await app.close();
+    rmSync(fx.root, { recursive: true, force: true });
+  });
+
+  it('every library operation commits its files at once; the applied state is untouched', async () => {
+    assert.equal((await api('a', '/theme/apply', { method: 'POST', body: { name: 'swiss', mode: 'dark', adjustments: ADJ } })).status, 200);
+    const applied = localSetting(fx.site);
+    const saved = await api('a', '/theme/custom', { method: 'POST', body: { name: 'Mine', base: 'default', tokens: T } });
+    assert.equal(saved.status, 201, JSON.stringify(saved.data));
+    assert.equal(saved.data.committed, true);
+    assert.equal(porcelain(fx.site), '');
+    assert.match(git(fx.site, 'log', '-1', '--format=%s'), /^Theme library: /);
+    const s = localSetting(fx.site);
+    for (const k of ['name', 'mode', 'adjust', 'adjustments']) assert.deepEqual(s[k], applied[k], k);
+    assert.equal(s.files.swiss, applied.files.swiss);
+    assert.equal(s.files['vp-site'], applied.files['vp-site']);
+    const imported = await api('a', '/theme/import', { method: 'POST', body: { name: 'Imp', css: ':root { --color-primary: oklch(0.5 0.1 10); }' } });
+    assert.equal(imported.status, 201, JSON.stringify(imported.data));
+    assert.equal(porcelain(fx.site), '');
+    assert.equal((await api('a', '/theme/custom/mine', { method: 'PATCH', body: { name: 'Mine 2' } })).data.committed, true);
+    assert.equal(porcelain(fx.site), '');
+    assert.equal((await api('a', '/theme/custom/mine', { method: 'DELETE' })).data.committed, true);
+    assert.equal(porcelain(fx.site), '');
+    assert.equal(git(fx.site, 'ls-files', 'src/assets/themes/mine.css'), '');
+    // Pushed like a backup: after the pause (or a flush), not at once.
+    assert.notEqual(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
+    assert.equal((await api('a', '/backup', { method: 'POST' })).data.error, null);
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
+  });
+
+  it('A saves a custom theme, B applies another theme: A\'s next backup and Apply both work', async () => {
+    assert.equal((await api('a', '/theme/custom', { method: 'POST', body: { name: 'Mine', base: 'default', tokens: T } })).status, 201);
+    const applied = await api('b', '/theme/apply', { method: 'POST', body: { name: 'swiss', mode: 'auto', adjustments: null } });
+    assert.equal(applied.status, 200, JSON.stringify(applied.data));
+    const flushed = await api('a', '/backup', { method: 'POST' });
+    assert.equal(flushed.data.error, null);
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
+    assert.equal(remoteSetting().name, 'swiss');
+    assert.deepEqual(remoteSetting().custom.map((c) => c.id), ['mine']);
+    assert.equal(porcelain(fx.site), '');
+    const again = await api('a', '/theme/apply', { method: 'POST', body: { name: '8bit', mode: 'dark', adjustments: null } });
+    assert.equal(again.status, 200, JSON.stringify(again.data));
+    assert.equal(remoteSetting().name, '8bit');
+    assert.deepEqual(remoteSetting().custom.map((c) => c.id), ['mine']);
+  });
+
+  it('two computers apply: GitHub\'s theme wins and the later Apply answers 409', async () => {
+    assert.equal((await api('b', '/theme/apply', { method: 'POST', body: { name: 'swiss', mode: 'auto', adjustments: null } })).status, 200);
+    const r = await api('a', '/theme/apply', { method: 'POST', body: { name: '8bit', mode: 'dark', adjustments: ADJ } });
+    assert.equal(r.status, 409, JSON.stringify(r.data));
+    assert.deepEqual(r.data, { error: 'The theme was changed on another computer. Review it and apply again.' });
+    assert.equal(localSetting(fx.site).name, 'swiss');
+    assert.equal(remoteSetting().name, 'swiss');
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), git(fx.remote, 'rev-parse', 'main'));
+    assert.equal((await api('a', '/theme')).data.setting.name, 'swiss');
+    // Applying again (reviewed) works.
+    assert.equal((await api('a', '/theme/apply', { method: 'POST', body: { name: '8bit', mode: 'dark', adjustments: null } })).status, 200);
+    assert.equal(remoteSetting().name, '8bit');
+  });
+
+  it('a library operation on a folder that is not a git repo keeps the files and says so', async () => {
+    const plain = join(fx.root, 'plain');
+    write(plain, 'package.json', '{"name":"p","type":"module","scripts":{"build":"node -e 0"},"devDependencies":{"cook-ssg":"^2.4.0"}}');
+    write(plain, 'config/main.js', 'export default {};\n');
+    write(plain, 'src/index.html', '<h1>x</h1>\n');
+    const added = await (await fetch(`${app.url}/api/sites`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: plain }),
+    })).json();
+    assert.ok(added.id, JSON.stringify(added));
+    ids.p = added.id;
+    const saved = await api('p', '/theme/custom', { method: 'POST', body: { name: 'Mine', base: 'default', tokens: T } });
+    assert.equal(saved.status, 201, JSON.stringify(saved.data));
+    assert.equal(saved.data.committed, false);
+    assert.match(saved.data.note, /not committed/);
+    assert.ok(existsSync(join(plain, 'src/assets/themes/mine.css')));
   });
 });

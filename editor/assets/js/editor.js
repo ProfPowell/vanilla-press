@@ -29,7 +29,7 @@ import { CalloutView } from './blocks/callout-view.js';
 import { CollapsibleView } from './blocks/collapsible-view.js';
 import { CardView } from './blocks/card-view.js';
 import { TabsView } from './blocks/tabs-view.js';
-import { StepsView } from './blocks/steps-view.js';
+import { StepsView, StepView } from './blocks/steps-view.js';
 import { FigureView } from './blocks/figure-view.js';
 import {
   ComponentView, InlineComponentView, componentSettingsPlugin, setComponentDescriptors,
@@ -237,7 +237,8 @@ export function initEditor() {
       collapsible: (node, view, getPos) => new CollapsibleView(node, view, getPos),
       card: (node, view, getPos) => new CardView(node, view, getPos),
       tabs: (node, view, getPos) => new TabsView(node, view, getPos),
-      steps: (node, view, getPos) => new StepsView(node, view, getPos),
+      steps: (node) => new StepsView(node),
+      step: (node, view, getPos) => new StepView(node, view, getPos),
       figure: (node, view, getPos) => new FigureView(node, view, getPos),
       component_leaf: (node, view, getPos) => new ComponentView(node, view, getPos),
       component_blocks: (node, view, getPos) => new ComponentView(node, view, getPos),

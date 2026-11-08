@@ -11,6 +11,8 @@
  * @module editor/blocks/code-block-view
  */
 
+import { isChromeMutation } from './node-view-mutations.js';
+
 const LANGUAGES = [
   'text', 'javascript', 'typescript', 'html', 'css', 'json',
   'bash', 'shell', 'python', 'ruby', 'go', 'rust', 'sql',
@@ -114,7 +116,8 @@ export class CodeBlockView {
   }
 
   ignoreMutation(mutation) {
-    // Ignore changes to our controls
-    return this.controls.contains(mutation.target);
+    // Our controls, and attributes on <code-block> (VB's theme sync sets
+    // `theme` on each new one; reporting that redraws the block forever)
+    return isChromeMutation(mutation, this.dom, this.controls);
   }
 }

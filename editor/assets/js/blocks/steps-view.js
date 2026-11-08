@@ -1,22 +1,37 @@
 /**
- * StepsView — NodeView for <ol data-steps> elements.
+ * StepsView and StepView — NodeViews for <ol data-steps> and its steps.
  *
  * Features:
  * - Numbered circles via CSS counters (from Vanilla Breeze)
  * - Editable step titles
  * - Rich text editing inside each step
  *
- * Note: This is a NodeView for the `steps` container.
- * Individual `step` children use a separate StepView.
+ * Each step draws its title field in a non-editable wrapper and its content
+ * in a separate element, so ProseMirror never sees the field as foreign
+ * content (injecting it into the step's content element made ProseMirror
+ * redraw the step on every update, endlessly).
  *
  * @module editor/blocks/steps-view
  */
 
+import { isChromeMutation } from './node-view-mutations.js';
+
+/**
+ * The transaction that sets the title of the step at `pos`, or null when
+ * `pos` holds no step.
+ * @param {import('prosemirror-state').EditorState} state
+ * @param {number} pos
+ * @param {string} title
+ */
+export function setStepTitle(state, pos, title) {
+  const step = state.doc.nodeAt(pos);
+  if (!step || step.type.name !== 'step') return null;
+  return state.tr.setNodeMarkup(pos, null, { ...step.attrs, title });
+}
+
 export class StepsView {
-  constructor(node, view, getPos) {
+  constructor(node) {
     this.node = node;
-    this.view = view;
-    this.getPos = getPos;
 
     // <ol data-steps> — matches HTML renderer
     this.dom = document.createElement('ol');
@@ -30,51 +45,59 @@ export class StepsView {
   update(node) {
     if (node.type.name !== 'steps') return false;
     this.node = node;
+    return true;
+  }
+}
 
-    // Update step title inputs if they exist
-    requestAnimationFrame(() => this.syncStepTitles(node));
+export class StepView {
+  constructor(node, view, getPos) {
+    this.node = node;
+    this.view = view;
+    this.getPos = getPos;
+
+    this.dom = document.createElement('li');
+    this.dom.className = 'pm-step';
+    this.dom.setAttribute('data-step-title', node.attrs.title || '');
+
+    this.chrome = document.createElement('div');
+    this.chrome.className = 'step-title';
+    this.chrome.contentEditable = 'false';
+
+    this.titleInput = document.createElement('input');
+    this.titleInput.type = 'text';
+    this.titleInput.className = 'step-title-input';
+    this.titleInput.placeholder = 'Step title...';
+    this.titleInput.setAttribute('aria-label', 'Step title');
+    this.titleInput.value = node.attrs.title || '';
+    this.titleInput.addEventListener('input', () => {
+      const pos = this.getPos();
+      if (pos == null) return;
+      const tr = setStepTitle(this.view.state, pos, this.titleInput.value);
+      if (tr) this.view.dispatch(tr);
+    });
+    this.titleInput.addEventListener('keydown', (e) => e.stopPropagation());
+    this.chrome.appendChild(this.titleInput);
+    this.dom.appendChild(this.chrome);
+
+    this.contentDOM = document.createElement('div');
+    this.contentDOM.className = 'step-content';
+    this.dom.appendChild(this.contentDOM);
+  }
+
+  update(node) {
+    if (node.type.name !== 'step') return false;
+    this.node = node;
+    const title = node.attrs.title || '';
+    if (this.titleInput.value !== title) this.titleInput.value = title;
+    if (this.dom.getAttribute('data-step-title') !== title) this.dom.setAttribute('data-step-title', title);
     return true;
   }
 
-  syncStepTitles(node) {
-    const items = this.dom.querySelectorAll(':scope > li');
-    node.forEach((child, _offset, index) => {
-      const li = items[index];
-      if (!li) return;
+  stopEvent(event) {
+    return this.chrome.contains(event.target);
+  }
 
-      // Add title input if not present
-      let titleInput = li.querySelector('.step-title-input');
-      if (!titleInput) {
-        titleInput = document.createElement('input');
-        titleInput.type = 'text';
-        titleInput.className = 'step-title-input';
-        titleInput.placeholder = 'Step title...';
-        titleInput.addEventListener('input', () => {
-          const pos = this.getPos();
-          if (pos == null) return;
-
-          let stepPos = pos + 1;
-          for (let i = 0; i < index; i++) {
-            stepPos += node.child(i).nodeSize;
-          }
-          this.view.dispatch(
-            this.view.state.tr.setNodeMarkup(stepPos, null, {
-              ...child.attrs,
-              title: titleInput.value,
-            })
-          );
-        });
-        titleInput.addEventListener('keydown', (e) => e.stopPropagation());
-        li.insertBefore(titleInput, li.firstChild);
-      }
-
-      // Sync value
-      if (titleInput.value !== (child.attrs.title || '')) {
-        titleInput.value = child.attrs.title || '';
-      }
-
-      // Also set the data attr for CSS ::after
-      li.setAttribute('data-step-title', child.attrs.title || '');
-    });
+  ignoreMutation(mutation) {
+    return isChromeMutation(mutation, this.dom, this.chrome);
   }
 }

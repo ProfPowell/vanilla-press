@@ -69,6 +69,8 @@ export function readSetting(ws) {
 /**
  * Write config/theme.json (atomic, 2-space JSON). `files` and `modes` are
  * recomputed from the site's VB copy and `custom`; whatever the caller passed is ignored.
+ * A library change (`keepApplied`) on a site with no VB copy keeps the previous
+ * entries of every non-custom id, and the previous `vb`.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {object} setting
  * @param {{ keepApplied?: object|null }} [options] - a library change: the files and
@@ -88,6 +90,14 @@ export function writeSetting(ws, setting, { keepApplied = null } = {}) {
     }),
   };
   const modes = modesFor(s.custom);
+  // A library change on a site with no VB copy yet (a fresh clone, before the first build) can't
+  // recompute the VB entries: the ones it didn't touch (every id but the old custom ones) and vb stay.
+  const carry = keepApplied && !vbUrl;
+  if (carry) {
+    const oldCustom = new Set(keepApplied.custom.map((c) => c.id));
+    for (const [id, url] of Object.entries(keepApplied.files)) if (!oldCustom.has(id) && !(id in out.files)) out.files[id] = url;
+    for (const [id, m] of Object.entries(keepApplied.modes)) if (!oldCustom.has(id) && !(id in modes)) modes[id] = m;
+  }
   // A library change never changes the look: the applied ids keep their files and modes entries.
   if (keepApplied) {
     for (const id of [keepApplied.name, keepApplied.adjust].filter(Boolean)) {
@@ -99,6 +109,7 @@ export function writeSetting(ws, setting, { keepApplied = null } = {}) {
   }
   if (Object.keys(modes).length) out.modes = modes;
   if (vbUrl) out.vb = vbUrl;
+  else if (carry && keepApplied.vb) out.vb = keepApplied.vb;
   if (s.custom.length) out.custom = s.custom;
   if (s.adjustments) out.adjustments = s.adjustments;
   writeJson(settingPath(ws), out);

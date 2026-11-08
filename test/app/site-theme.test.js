@@ -237,6 +237,34 @@ describe('site theme store', () => {
     assert.equal(readSetting(ws).custom.length, 1);
   });
 
+  it('a library change on a site with no VB copy keeps the files entries and vb it did not touch', async () => {
+    rmSync(join(site, VB), { recursive: true });
+    write(site, 'config/theme.json', JSON.stringify({ name: 'swiss', mode: 'auto',
+      files: { swiss: '/assets/vendor/vanilla-breeze/themes/swiss.css', '8bit': '/assets/vendor/vanilla-breeze/themes/8bit.css' },
+      vb: '/assets/vendor/vanilla-breeze/vanilla-breeze.css' }));
+    const before = readSetting(ws);
+    writeSetting(ws, { ...before, custom: [{ id: 'mine', name: 'Mine', base: 'default' }] }, { keepApplied: before });
+    const raw = JSON.parse(read('config/theme.json'));
+    assert.deepEqual(raw.files, {
+      swiss: '/assets/vendor/vanilla-breeze/themes/swiss.css',
+      '8bit': '/assets/vendor/vanilla-breeze/themes/8bit.css',
+      mine: '/assets/themes/mine.css',
+    });
+    assert.equal(raw.vb, '/assets/vendor/vanilla-breeze/vanilla-breeze.css');
+
+    // The library operations themselves: import (one-scheme), rename, delete.
+    importCustomTheme(ws, { name: 'Night', css: ':root{--color-primary:oklch(0.5 0.2 30)}' }, opts());
+    renameCustomTheme(ws, 'mine', 'Mine 2', opts());
+    write(site, 'src/assets/themes/mine.css', 'x');
+    await deleteCustomTheme(ws, db, 'mine');
+    const after = JSON.parse(read('config/theme.json'));
+    assert.equal(after.files['8bit'], '/assets/vendor/vanilla-breeze/themes/8bit.css');
+    assert.equal(after.files.swiss, '/assets/vendor/vanilla-breeze/themes/swiss.css');
+    assert.equal(after.files.mine, undefined);
+    assert.equal(after.files.night, '/assets/themes/night.css');
+    assert.equal(after.vb, '/assets/vendor/vanilla-breeze/vanilla-breeze.css');
+  });
+
   it('a failed setting write leaves no orphan theme file, and the R4 default is one write', () => {
     mkdirSync(join(site, 'config/theme.json'), { recursive: true }); // renaming onto a folder fails
     assert.throws(() => saveCustomTheme(ws, { name: 'Orphan', base: '8bit', tokens: T }, opts()));

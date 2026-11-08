@@ -137,6 +137,19 @@
   color: var(--color-text);
 }
 
+.pm-tabs .tab-rename-input {
+  min-width: 6ch;
+  padding: var(--size-s) var(--size-l);
+  border: none;
+  border-block-end: 2px solid var(--color-accent);
+  border-radius: 0;
+  background: var(--color-background);
+  font: inherit;
+  font-size: var(--font-size-s);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .pm-tabs .add-tab-btn {
   padding: var(--size-s);
   border: none;

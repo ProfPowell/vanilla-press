@@ -8,13 +8,31 @@
  * Features:
  * - Tab bar with clickable labels
  * - Active tab shown, others hidden via CSS
- * - Add/remove/rename tabs
+ * - Add/remove tabs; rename a tab in place (double-click or F2)
  * - Each tab has its own contentDOM for PM editing
  *
  * @module editor/blocks/tabs-view
  */
 
 let tabsCounter = 0;
+
+/**
+ * The transaction that renames tab `index` of the tabs node at `tabsPos`: one
+ * step, so one undo puts the old label back. Null when nothing would change.
+ * @param {import('prosemirror-state').EditorState} state
+ * @param {number} tabsPos - position of the tabs node
+ * @param {number} index - which tab
+ * @param {string} label
+ */
+export function renameTabTr(state, tabsPos, index, label) {
+  const tabs = state.doc.nodeAt(tabsPos);
+  if (!tabs || tabs.type.name !== 'tabs' || index >= tabs.childCount) return null;
+  const tab = tabs.child(index);
+  if ((tab.attrs.label ?? '') === label) return null;
+  let tabPos = tabsPos + 1; // inside the tabs node
+  for (let i = 0; i < index; i++) tabPos += tabs.child(i).nodeSize;
+  return state.tr.setNodeMarkup(tabPos, null, { ...tab.attrs, label });
+}
 
 export class TabsView {
   constructor(node, view, getPos) {
@@ -64,25 +82,15 @@ export class TabsView {
         this.updateTabBarActive();
       });
 
-      // Double-click to rename
+      // Double-click (or F2) to rename in place
       btn.addEventListener('dblclick', (e) => {
         e.preventDefault();
-        const newLabel = prompt('Tab label:', child.attrs.label);
-        if (newLabel === null) return;
-        const pos = this.getPos();
-        if (pos == null) return;
-
-        // Find the position of the tab node
-        let tabPos = pos + 1; // Skip past the tabs node itself
-        for (let i = 0; i < index; i++) {
-          tabPos += node.child(i).nodeSize;
-        }
-        this.view.dispatch(
-          this.view.state.tr.setNodeMarkup(tabPos, null, {
-            ...child.attrs,
-            label: newLabel,
-          })
-        );
+        this.startRename(btn, index);
+      });
+      btn.addEventListener('keydown', (e) => {
+        if (e.key !== 'F2') return;
+        e.preventDefault();
+        this.startRename(btn, index);
       });
 
       this.tabBar.appendChild(btn);
@@ -117,6 +125,41 @@ export class TabsView {
     this.updateTabVisibility();
   }
 
+  /**
+   * Swap the tab's label for an input: Enter or leaving it saves (one undo step),
+   * Escape puts the old label back.
+   */
+  startRename(btn, index) {
+    if (this.renaming) return;
+    const label = this.node.child(index).attrs.label ?? '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-rename-input';
+    input.value = label;
+    input.setAttribute('aria-label', `Tab ${index + 1} label`);
+    this.renaming = input;
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      this.renaming = null;
+      const pos = this.getPos();
+      const tr = save && pos != null ? renameTabTr(this.view.state, pos, index, input.value) : null;
+      if (tr) this.view.dispatch(tr); // update() redraws the bar
+      else this.buildTabBar(this.node);
+      this.view.focus();
+    };
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+    btn.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
   updateTabBarActive() {
     const buttons = this.tabBar.querySelectorAll('.tab-btn');
     buttons.forEach((btn, i) => {
@@ -136,7 +179,8 @@ export class TabsView {
     if (this.activeTab >= node.childCount) {
       this.activeTab = Math.max(0, node.childCount - 1);
     }
-    this.buildTabBar(node);
+    // Keep the rename input (and what was typed) through unrelated edits
+    if (!this.renaming) this.buildTabBar(node);
     return true;
   }
 

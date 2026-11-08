@@ -37,12 +37,12 @@ export class CodeBlockView {
     this.controls = document.createElement('div');
     this.controls.className = 'node-controls';
     this.controls.innerHTML = `
-      <label>Lang:</label>
+      <label>Lang:
       <select class="lang-select">
         ${LANGUAGES.map(l => `<option value="${l}"${l === node.attrs.language ? ' selected' : ''}>${l}</option>`).join('')}
-      </select>
-      <label>File:</label>
-      <input type="text" class="filename-input" value="${node.attrs.filename || ''}" placeholder="filename"/>
+      </select></label>
+      <label>File:
+      <input type="text" class="filename-input" value="${node.attrs.filename || ''}" placeholder="filename"/></label>
     `;
     this.dom.appendChild(this.controls);
 

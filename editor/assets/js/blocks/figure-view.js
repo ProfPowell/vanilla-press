@@ -27,11 +27,11 @@ export class FigureView {
     this.controls = document.createElement('div');
     this.controls.className = 'node-controls';
     this.controls.innerHTML = `
-      <label>Src:</label>
-      <input type="text" class="src-input" value="${node.attrs.src || ''}" placeholder="/images/photo.jpg"/>
+      <label>Src:
+      <input type="text" class="src-input" value="${node.attrs.src || ''}" placeholder="/images/photo.jpg"/></label>
       <button class="browse-media-btn" title="Browse media">Browse</button>
-      <label>Alt:</label>
-      <input type="text" class="alt-input" value="${node.attrs.alt || ''}" placeholder="Alt text"/>
+      <label>Alt:
+      <input type="text" class="alt-input" value="${node.attrs.alt || ''}" placeholder="Alt text"/></label>
     `;
     this.dom.appendChild(this.controls);
 

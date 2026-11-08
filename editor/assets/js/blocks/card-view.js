@@ -35,8 +35,8 @@ export class CardView {
     this.controls = document.createElement('div');
     this.controls.className = 'node-controls';
     this.controls.innerHTML = `
-      <label>Link:</label>
-      <input type="text" class="href-input" value="${node.attrs.href || ''}" placeholder="/path/to/page"/>
+      <label>Link:
+      <input type="text" class="href-input" value="${node.attrs.href || ''}" placeholder="/path/to/page"/></label>
     `;
     this.dom.appendChild(this.controls);
 

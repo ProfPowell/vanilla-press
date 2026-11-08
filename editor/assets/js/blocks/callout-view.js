@@ -29,10 +29,10 @@ export class CalloutView {
     this.controls = document.createElement('div');
     this.controls.className = 'node-controls';
     this.controls.innerHTML = `
-      <label>Variant:</label>
+      <label>Variant:
       <select class="variant-select">
         ${VARIANTS.map(v => `<option value="${v}"${v === node.attrs.variant ? ' selected' : ''}>${v}</option>`).join('')}
-      </select>
+      </select></label>
     `;
     this.dom.appendChild(this.controls);
 

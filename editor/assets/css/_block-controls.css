@@ -34,10 +34,15 @@
 
 .node-controls label {
   color: var(--color-text-muted);
+  font-family: var(--font-sans);
   font-size: var(--font-size-s);
   white-space: nowrap;
   cursor: default;
-  display: inline;
+  /* Each label wraps its control (its accessible name), side by side */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-xs);
+  margin: 0;
   padding: 0;
   font-weight: normal;
   border: none;

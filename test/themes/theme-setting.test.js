@@ -15,6 +15,13 @@ describe('theme-setting', () => {
     assert.equal(slugId('Retro Mine', ['retro-mine', 'retro-mine-2']), 'retro-mine-3');
     assert.equal(slugId('!!!', []), 'theme');
   });
+
+  it('slugId never starts an id with a11y- (VB reads those as accessibility ids, not brands)', () => {
+    assert.equal(slugId('A11y Calm', []), 'theme-a11y-calm');
+    assert.equal(slugId('a11y', []), 'a11y');
+    assert.equal(slugId('A11y Calm', ['theme-a11y-calm']), 'theme-a11y-calm-2');
+    assert.equal(slugId('A11yish', []), 'a11yish');
+  });
   it('themeFiles maps VB non-built-ins, custom and adjust', () => {
     assert.deepEqual(themeFiles({ vbUrl: '/assets/vendor/vanilla-breeze/vanilla-breeze.css', vbIds: ['default', 'classic', 'swiss', '8bit'],
       builtIns: ['default', 'classic'], custom: [{ id: 'retro-mine' }], adjust: 'vp-site' }), {

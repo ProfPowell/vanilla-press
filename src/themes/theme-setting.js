@@ -72,13 +72,16 @@ export function normalizeSetting(raw) {
 
 /**
  * Slug of a theme name, unique against taken ids (retro-mine, retro-mine-2).
+ * Never starts with `a11y-` (A11y Calm → theme-a11y-calm).
  * @param {string} name
  * @param {Iterable<string>} taken
  * @returns {string}
  */
 export function slugId(name, taken) {
   const used = new Set(taken);
-  const base = String(name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'theme';
+  const slug = String(name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'theme';
+  // VB reads an a11y-* token as an accessibility theme, never as the brand.
+  const base = slug.startsWith('a11y-') ? `theme-${slug}` : slug;
   if (!used.has(base)) return base;
   let n = 2;
   while (used.has(`${base}-${n}`)) n++;

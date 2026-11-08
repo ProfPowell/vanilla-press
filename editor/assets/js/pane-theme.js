@@ -143,8 +143,19 @@ export function applyPaneTheme(model, doc = document) {
     setAttrs(chip.querySelector('[data-page-theme-dot]'), model.chip ? (model.content || model.pane) : null);
   }
 
+  addThemeLinks(model.hrefs, doc);
+}
+
+/**
+ * Load theme stylesheets into the editor once each (`<link data-vp-theme-css>`):
+ * the pane's themes, and the Appearance cards' swatches.
+ * @param {string[]} hrefs
+ * @param {Document} [doc]
+ */
+export function addThemeLinks(hrefs, doc = document) {
   const present = new Set([...doc.querySelectorAll('link[data-vp-theme-css]')].map((l) => l.getAttribute('href')));
-  for (const href of model.hrefs) {
+  for (const href of hrefs) {
+    if (typeof href !== 'string' || !href) continue;
     if (present.has(href)) continue;
     const link = doc.createElement('link');
     link.rel = 'stylesheet';

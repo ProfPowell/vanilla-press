@@ -227,34 +227,198 @@
 
 /* Appearance (the page theme arrives in step 4) */
 /* A divider, not VB's boxed <details> */
+/* Appearance (site mode): the site theme or the post's own theme. The cards'
+ * swatches wear the real theme CSS (data-theme), so every value is a token. */
 .meta-panel .appearance {
-  margin: 0;
-  padding: var(--size-m) 0 0;
-  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-m);
+  padding-block-start: var(--size-m);
   border-block-start: 1px solid var(--color-border);
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
 }
 
-.meta-panel .appearance summary {
+.meta-panel .appearance[hidden],
+.meta-panel .appearance-own[hidden] {
+  display: none;
+}
+
+.meta-panel .appearance h3 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-md, 0.9375rem);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.meta-panel .appearance-group {
   display: flex;
-  align-items: center;
-  min-height: 2.5rem;
+  flex-direction: column;
+  gap: var(--size-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.meta-panel .appearance-group legend {
+  margin-block-end: var(--size-xs);
   padding: 0;
   font-weight: 600;
-  cursor: pointer;
-  list-style-position: inside;
 }
 
-.meta-panel .appearance summary:focus-visible {
+.meta-panel .appearance-option {
+  display: flex;
+  gap: var(--size-s);
+  align-items: flex-start;
+  padding: var(--size-s) var(--size-m);
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+  border-radius: var(--radius-m);
+  background: var(--color-background);
+  cursor: pointer;
+}
+
+.meta-panel .appearance-option:has(:checked) {
+  border: 2px solid var(--color-primary);
+  padding: calc(var(--size-s) - 1px) calc(var(--size-m) - 1px);
+}
+
+/* Radios: Vanilla Breeze's own, not the panel's text-field look */
+.meta-panel .appearance input[type="radio"] {
+  all: revert-layer;
+  flex: none;
+  margin: 0.2rem 0 0;
+}
+
+.meta-panel .appearance-option-title {
+  display: block;
+  font-weight: 500;
+}
+
+.meta-panel .appearance-option-hint {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-s);
+}
+
+.meta-panel .appearance-own {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-m);
+}
+
+.meta-panel .appearance-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--size-xs);
+  max-block-size: 24rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+
+.meta-panel .appearance-cards li {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+}
+
+.meta-panel .appearance-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0.3125rem;
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+  border-radius: var(--radius-l);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.meta-panel .appearance-card:hover {
+  background: var(--color-surface-raised);
+}
+
+.meta-panel .appearance-card:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-.meta-panel .appearance p {
-  margin: var(--size-xs) 0 0;
+.meta-panel .appearance-card[aria-pressed="true"] {
+  border: 2px solid var(--color-primary);
+  padding: calc(0.3125rem - 1px);
+}
+
+.meta-panel .appearance-swatch {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--size-xs);
+  block-size: 3rem;
+  padding: 0.375rem 0.5rem;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+  border-radius: var(--radius-m);
+  background: var(--color-surface, var(--color-background));
+  color: var(--color-text);
+  overflow: hidden;
+}
+
+.meta-panel .appearance-swatch-aa {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.meta-panel .appearance-swatch-bar {
+  flex: none;
+  inline-size: 1.375rem;
+  block-size: 0.625rem;
+  border-radius: var(--radius-s);
+  background: var(--color-primary);
+}
+
+.meta-panel .appearance-card-name {
+  display: block;
+  padding: 0.375rem 0.125rem 0;
+  font-size: var(--font-size-s);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta-panel .appearance-adjust {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
   color: var(--color-text-muted);
+  font-size: var(--font-size-s);
+}
+
+.meta-panel .appearance-scope {
+  display: flex;
+  font-weight: 400;
+  gap: var(--size-s);
+  align-items: flex-start;
+  min-height: 2rem;
+  cursor: pointer;
+}
+
+.meta-panel .appearance-note {
+  margin: 0;
+  padding: var(--size-s);
+  border-radius: var(--radius-m);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-s);
+  overflow-wrap: anywhere;
 }
 
 /* vp serve: Publish/Unpublish and Preview */

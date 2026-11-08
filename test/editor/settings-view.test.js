@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { statusBox, collectionOptions, urlPrefix, publishedDay, featuredModel } from '../../editor/assets/js/settings-view.js';
+import { statusBox, collectionOptions, urlPrefix, publishedDay, featuredModel, appearanceModel } from '../../editor/assets/js/settings-view.js';
 
 const NOT_LIVE = "Your saved edits aren't on the live site yet. Update builds the site and pushes them.";
 
@@ -113,5 +113,47 @@ describe('featuredModel', () => {
     assert.deepEqual(featuredModel({ image: null }), none);
     assert.deepEqual(featuredModel({ image: '' }), none);
     assert.deepEqual(featuredModel(null), none);
+  });
+});
+
+describe('appearanceModel', () => {
+  const T = [
+    { id: 'default', name: 'Default', href: null },
+    { id: 'swiss', name: 'Swiss', href: '/s/swiss.css' },
+    { id: '8bit', name: '8bit', href: '/s/8bit.css' },
+    { id: 'night', name: 'Night Owl', href: '/s/night.css', custom: true, only: 'dark' },
+    { id: 'vp-site', name: 'vp-site', href: '/s/vp-site.css' },
+  ];
+
+  it('site theme: radio on site, no cards', () => {
+    const m = appearanceModel({}, { setting: { name: 'swiss' }, themes: T });
+    assert.equal(m.own, false); assert.equal(m.siteName, 'Swiss'); assert.equal(m.note, null);
+    assert.deepEqual(m.cards, []);
+  });
+
+  it('own theme with article scope: the note names both keys', () => {
+    const m = appearanceModel({ theme: '8bit', themeScope: 'article' }, { setting: { name: 'swiss' }, themes: T });
+    assert.equal(m.note, 'Saved with this post as theme: "8bit", themeScope: "article". The site theme and other pages are unchanged.');
+    assert.equal(m.cards.find(c => c.id === '8bit').pressed, true);
+    assert.equal(m.scope, 'article');
+  });
+
+  it('own theme, page scope: the note names the theme only; cards are custom first, without the adjustments', () => {
+    const m = appearanceModel({ theme: '8bit', themeScope: 'page' }, { setting: { name: 'swiss', adjust: 'vp-site' }, themes: T, siteId: 's 1' });
+    assert.equal(m.own, true); assert.equal(m.scope, 'page');
+    assert.equal(m.note, 'Saved with this post as theme: "8bit". The site theme and other pages are unchanged.');
+    assert.deepEqual(m.cards.map((c) => c.id), ['night', 'default', 'swiss', '8bit']);
+    assert.deepEqual(m.cards.find((c) => c.id === 'night'), { id: 'night', name: 'Night Owl', pressed: false, only: 'dark' });
+    assert.equal(m.adjustHref, '/app/site.html?site=s%201&section=theme');
+  });
+
+  it('an empty themeScope counts as page; an unsafe theme counts as none', () => {
+    assert.equal(appearanceModel({ theme: '8bit', themeScope: '' }, { setting: null, themes: T }).scope, 'page');
+    assert.equal(appearanceModel({ theme: 'Retro!' }, { setting: null, themes: T }).own, false);
+  });
+
+  it('no theme setting: the site theme is Default', () => {
+    assert.equal(appearanceModel({}, { setting: null, themes: T }).siteName, 'Default');
+    assert.equal(appearanceModel({}, { setting: null, themes: [] }).siteName, 'Default');
   });
 });

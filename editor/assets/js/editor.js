@@ -23,7 +23,7 @@ import { toBlockAst, fromBlockAst } from './ast.js';
 import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
 import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
 import { getCurrentMeta, setCurrentMeta, resetCurrentMeta,
-  getCurrentDocId, setCurrentDocId, takeSaveNotes, clearSaveNotes, addSaveNote } from './meta-state.js';
+  getCurrentDocId, setCurrentDocId, takeSaveNotes, clearSaveNotes, addSaveNote, metaToSave } from './meta-state.js';
 import { CodeBlockView } from './blocks/code-block-view.js';
 import { CalloutView } from './blocks/callout-view.js';
 import { CollapsibleView } from './blocks/collapsible-view.js';
@@ -479,7 +479,7 @@ export async function saveDocument() {
 
   try {
     const blocks = toBlockAst(editorView.state.doc);
-    const meta = getCurrentMeta();
+    const meta = metaToSave(getCurrentMeta());
 
     const saved = await api.updateDocument(docId, { meta, blocks });
     applyDropped(saved?.dropped);

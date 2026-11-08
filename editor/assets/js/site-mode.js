@@ -182,6 +182,11 @@ function showPaneTheme(meta) {
   applyPaneTheme(paneTheme(themeData.setting, meta, themeData.themes));
 }
 
+/** Re-theme the writing area for the open post (after Post settings › Appearance changes it). */
+export function refreshPaneTheme() {
+  showPaneTheme(getCurrentMeta());
+}
+
 /** The public URL of the open post when it is published and the site has an address, else null. */
 function liveUrl(meta) {
   if (!SITE || !siteInfo?.siteUrl || meta?.status !== 'published') return null;

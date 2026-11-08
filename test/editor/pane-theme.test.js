@@ -129,8 +129,10 @@ const hasCook = existsSync(cookTheme);
 
 describe('Cook pageThemePlan gives the same answers', { skip: hasCook ? false : `no Cook checkout at ${cookTheme}` }, () => {
   for (const c of CASES) {
-    it(c.name, async () => {
+    it(c.name, async (t) => {
       const { pageThemePlan } = await import(pathToFileURL(cookTheme).href);
+      // An older Cook checkout without the theme plan: nothing to compare against.
+      if (typeof pageThemePlan !== 'function') return t.skip(`${cookTheme} has no pageThemePlan`);
       const plan = pageThemePlan(c.setting, c.fm, 'p.html');
       assert.deepEqual([plan.html.ids.join(' '), plan.html.mode], c.html);
       assert.deepEqual(plan.scoped && [plan.scoped.ids.join(' '), plan.scoped.mode], c.scoped);

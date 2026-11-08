@@ -16,3 +16,19 @@
 @import "./_confirm-panel.css" layer(editor);
 @import "./_format-toolbar.css" layer(editor);
 @import "./_block-handles.css" layer(editor);
+
+/*
+ * A theme on a nested element (the writing area, the Appearance cards'
+ * swatches, the page theme chip's dot): VB computes --color-primary and
+ * --color-interactive once on :root, so a theme that only sets the hue, lightness and chroma would not
+ * show there, and links in a page theme would keep the site's color.
+ * Recompute them on those elements in VB's tokens layer (not the
+ * editor layer), so a theme that sets the colors itself (bundle-theme) still
+ * wins. Same as the Theme screen's cards (app/assets/theme.css).
+ */
+@layer tokens {
+  :is(.editor-pane, .editor-content, .appearance-swatch, .page-theme-dot)[data-theme] {
+    --color-primary: oklch(var(--lightness-primary) var(--chroma-primary) var(--hue-primary));
+    --color-interactive: var(--color-primary);
+  }
+}

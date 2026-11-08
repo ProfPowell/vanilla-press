@@ -18,6 +18,7 @@ import {
   searchDocuments,
   getCollections,
   getAllPublished,
+  getAllDocuments,
 } from '../store/content.js';
 import { validate } from '../schema/validate.js';
 import { normalizeComponents } from '../components/normalize.js';
@@ -358,7 +359,7 @@ export function mountApi(router, db, options) {
    * (DELETE must not guess); otherwise the live part is skipped and logged.
    */
   async function usageMap({ strict = false } = {}) {
-    const docs = db.prepare('SELECT id FROM documents').all().map((r) => getDocument(db, r.id));
+    const docs = getAllDocuments(db);
     const usage = mediaUsage(docs);
     if (!options.liveMedia) return usage;
     let live;

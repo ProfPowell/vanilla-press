@@ -238,3 +238,12 @@ export function getAllPublished(db) {
   ).all();
   return rows.map(rowToDocument);
 }
+
+/**
+ * Every document (drafts included) in one query.
+ * @param {import('better-sqlite3').Database} db
+ * @returns {Object[]}
+ */
+export function getAllDocuments(db) {
+  return db.prepare('SELECT * FROM documents').all().map(rowToDocument);
+}

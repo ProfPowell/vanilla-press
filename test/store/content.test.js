@@ -18,6 +18,7 @@ import {
   getAllTags,
   getCollections,
   getAllPublished,
+  getAllDocuments,
   extractPlaintext,
 } from '../../src/store/content.js';
 
@@ -433,6 +434,21 @@ describe('getAllPublished', () => {
     assert.equal(docs[0].id, 'test_doc01'); // 2026-02-12
     assert.equal(docs[1].id, 'test_doc02'); // 2026-02-08
     assert.equal(docs[2].id, 'test_docs01'); // 2026-02-01
+  });
+});
+
+describe('getAllDocuments', () => {
+  it('returns every document, drafts included, with parsed blocks, in one query', () => {
+    const db = freshDb();
+    saveDocument(db, sampleDoc);
+    saveDocument(db, draftDoc);
+    let prepared = 0;
+    const prepare = db.prepare.bind(db);
+    db.prepare = (sql) => { prepared++; return prepare(sql); };
+    const docs = getAllDocuments(db);
+    assert.equal(prepared, 1);
+    assert.deepEqual(docs.map((d) => d.id).sort(), ['test_doc01', 'test_draft01']);
+    assert.ok(Array.isArray(docs[0].blocks));
   });
 });
 

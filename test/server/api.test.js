@@ -342,7 +342,7 @@ describe('API', () => {
     it('a declared size far past the limit is refused before reading (Content-Length)', async () => {
       const { status, data } = await upload(Buffer.alloc(28_000_000), 'enormous.jpg');
       assert.equal(status, 413);
-      assert.match(data.error, /^This file is 26\.7 MB\./);
+      assert.match(data.error, /^This file is too large \(26\.7 MB\); the limit is 25 MB/);
       assert.ok(data.error.includes('25 MB'));
     });
 
@@ -377,7 +377,7 @@ describe('API', () => {
       const before = files();
       const { status, data } = await chunkedUpload(30);
       assert.equal(status, 413);
-      assert.match(data.error, /^This file is 26\.[01] MB\./);
+      assert.match(data.error, /^This file is too large \(26\.[01] MB\); the limit is 25 MB/);
       assert.deepEqual(files(), before);
     });
 

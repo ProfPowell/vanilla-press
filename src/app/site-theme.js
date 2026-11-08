@@ -18,12 +18,14 @@ import {
   normalizeSetting, slugId, themeFiles, modesFor, migrateVpJson, themeUsers, ADJUST_ID, SAFE_ID, CUSTOM_URL_DIR,
 } from '../themes/theme-setting.js';
 import { themeCatalog } from '../themes/site-vb.js';
+import { headCommit, headTree, readBlobs } from '../git/git.js';
 import { rewriteComposerCss, customThemeCss, ThemeCssError } from '../themes/theme-css.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const VP_CDN_DIR = join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn');
 const MAX_NAME = 80;
 const PREVIEW_BLOCKS = 6;
+const defaultGit = { headCommit, headTree, readBlobs };
 
 /** A refused theme operation: `status` and the extra JSON `body` fields to send with `error`. */
 export class ThemeError extends Error {
@@ -90,22 +92,23 @@ export function writeSetting(ws, setting) {
 }
 
 /**
- * Move a legacy `vp.json` theme to config/theme.json (R1: "default" is only
- * dropped). Nothing happens when theme.json already exists, vp.json is
- * missing or unreadable, or its theme is not a safe id.
+ * Copy a legacy `vp.json` theme to config/theme.json. vp.json is never
+ * edited here (it is a backup path; theme.json goes live only with Apply or
+ * Publish/Update, R3): the commit that first carries theme.json drops the key.
+ * Nothing happens when theme.json already exists, vp.json is missing or
+ * unreadable, or its theme is "default" (R1) or not a safe id.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @returns {boolean} true when it wrote theme.json
  */
 export function migrateVpTheme(ws) {
   if (!ws?.configDir || existsSync(settingPath(ws))) return false;
-  const vp = readJson(vpJsonPath(ws));
-  if (!vp || typeof vp !== 'object' || Array.isArray(vp) || !Object.hasOwn(vp, 'theme')) return false;
-  const { setting, vp: rest } = migrateVpJson(vp);
-  if (!setting && Object.hasOwn(rest, 'theme')) return false; // unsafe id: left as it is
-  if (setting) writeSetting(ws, normalizeSetting(setting));
-  writeJson(vpJsonPath(ws), rest);
-  return Boolean(setting);
+  const { setting } = migrateVpJson(readJson(vpJsonPath(ws)));
+  if (!setting) return false;
+  writeSetting(ws, normalizeSetting(setting));
+  return true;
 }
+
+const DEFAULT_SETTING = Object.freeze({ name: 'default', mode: 'auto' });
 
 /**
  * The setting, creating `{ name: "default", mode: "auto" }` when there is none (R4).
@@ -114,7 +117,7 @@ export function migrateVpTheme(ws) {
 export function ensureThemeSetting(ws) {
   const current = readSetting(ws);
   if (current) return current;
-  writeSetting(ws, { name: 'default', mode: 'auto' });
+  writeSetting(ws, DEFAULT_SETTING);
   return readSetting(ws);
 }
 
@@ -187,9 +190,15 @@ function addCustom(ws, name, makeCss, entry, options) {
   const taken = [...catalogOf(ws, options).themes.map((t) => t.id), ...custom.map((c) => c.id), ADJUST_ID];
   const id = slugId(name, taken);
   const result = css(() => makeCss(id));
-  writeFileAtomic(customFile(ws, id), result.css);
   const added = { id, name, ...entry(result) };
-  writeSetting(ws, { ...ensureThemeSetting(ws), custom: [...custom, added] }); // R4
+  const file = customFile(ws, id);
+  writeFileAtomic(file, result.css);
+  try {
+    writeSetting(ws, { ...(setting || DEFAULT_SETTING), custom: [...custom, added] }); // R4, one write
+  } catch (err) {
+    rmSync(file, { force: true }); // no file without an entry
+    throw err;
+  }
   return { theme: customInfo(added, options.siteId), result };
 }
 
@@ -246,15 +255,70 @@ export function renameCustomTheme(ws, id, name, { siteId } = {}) {
   return customInfo(renamed, siteId);
 }
 
+/** A front matter value (JSON-quoted, single-quoted or bare), or null. */
+function frontMatterValue(text, key) {
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(text);
+  const line = fm && new RegExp(`^${key}:[ \\t]*(.*?)[ \\t]*$`, 'm').exec(fm[1]);
+  if (!line) return null;
+  const v = line[1];
+  try {
+    const parsed = JSON.parse(v);
+    return typeof parsed === 'string' ? parsed : null;
+  } catch {
+    return /^'.*'$/.test(v) ? v.slice(1, -1) : v;
+  }
+}
+
 /**
- * Delete a custom theme; 409 `{ usedBy }` while the site or a post uses it.
+ * Who uses a theme in the committed HEAD (what the next deploy builds): its
+ * config/theme.json `name`, and pages under src/ whose front matter has the
+ * theme (named by their title, else their path). Nothing committed: none.
+ * @param {string} siteDir
+ * @param {string} id
+ * @param {{ headCommit: Function, headTree: Function, readBlobs: Function }} git
+ * @returns {Promise<string[]>}
+ */
+export async function liveThemeUsers(siteDir, id, git) {
+  if (!(await git.headCommit(siteDir))) return [];
+  const users = [];
+  const [setting] = await git.headTree(siteDir, 'config/theme.json');
+  const pages = (await git.headTree(siteDir, 'src')).filter((e) => e.path.endsWith('.html'));
+  const oids = [...new Set([...(setting ? [setting.oid] : []), ...pages.map((p) => p.oid)])];
+  const texts = await git.readBlobs(siteDir, oids);
+  const text = (e) => {
+    if (!texts.has(e.oid)) throw new Error(`git has no file ${e.path}`);
+    return texts.get(e.oid);
+  };
+  if (setting) {
+    let name = null;
+    try { name = JSON.parse(text(setting))?.name; } catch (err) { if (/^git has no/.test(err.message)) throw err; }
+    if (name === id) users.push('the site theme');
+  }
+  for (const page of pages) {
+    const t = text(page);
+    if (frontMatterValue(t, 'theme') === id) users.push(frontMatterValue(t, 'title') || page.path);
+  }
+  return users;
+}
+
+/**
+ * Delete a custom theme; 409 `{ usedBy }` while the site or a post uses it,
+ * in the working copy or in committed HEAD; 503 when git can't be read (nothing deleted).
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {import('better-sqlite3').Database} db
  * @param {string} id
+ * @param {{ git?: { headCommit: Function, headTree: Function, readBlobs: Function } }} [options]
  */
-export function deleteCustomTheme(ws, db, id) {
-  const { setting } = findCustom(ws, id);
-  const usedBy = themeUsers(setting, getAllDocuments(db), id);
+export async function deleteCustomTheme(ws, db, id, { git = defaultGit } = {}) {
+  findCustom(ws, id);
+  let live;
+  try {
+    live = await liveThemeUsers(ws.siteDir, id, git);
+  } catch (err) {
+    throw new ThemeError(503, `Couldn't check whether the live site uses this theme (${err.message}). Nothing was deleted. Try again.`);
+  }
+  const { setting } = findCustom(ws, id); // read again after the wait
+  const usedBy = [...new Set([...themeUsers(setting, getAllDocuments(db), id), ...live])];
   if (usedBy.length) throw new ThemeError(409, 'This theme is in use.', { usedBy });
   writeSetting(ws, { ...setting, custom: setting.custom.filter((c) => c.id !== id) });
   rmSync(customFile(ws, id), { force: true });

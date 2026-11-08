@@ -835,6 +835,10 @@ describe('app server themes', () => {
     writeIn(site, `${VB}/themes/swiss.css`, '[data-theme~="swiss"]{--x:1}\n');
     writeIn(site, `${VB}/themes/.hidden.css`, 'hidden');
     writeIn(site, `${VB}/page.html`, '<script>alert(1)</script>');
+    writeIn(site, `${VB}/site-own.css`, 'body{}'); // beside vanilla-breeze.css, not VB's
+    writeIn(site, `${VB}/lib/body.js`, 'body{}');
+    writeIn(site, `${VB}/themes/manifest.json`, '{"body{}":1}');
+    writeIn(site, `${VB}/fonts/a.woff2`, 'font');
     writeIn(site, 'src/posts/hello.html', '<p>hi</p>');
     writeIn(site, 'src/assets/site.css', 'body{}');
     writeIn(site, 'config/vp.json', '{ "theme": "swiss" }\n');
@@ -855,7 +859,7 @@ describe('app server themes', () => {
     const { status, data } = await api('/theme');
     assert.equal(status, 200);
     assert.equal(data.setting.name, 'swiss');
-    assert.deepEqual(JSON.parse(readFileSync(join(site, 'config/vp.json'), 'utf8')), {});
+    assert.equal(readFileSync(join(site, 'config/vp.json'), 'utf8'), '{ "theme": "swiss" }\n'); // untouched
     assert.deepEqual(data.vb, { source: 'site', url: `/sites/${id}/site/assets/vendor/vanilla-breeze/vanilla-breeze.css` });
     assert.ok(data.themes.some((t) => t.id === 'swiss' && t.href === `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/swiss.css`));
   });
@@ -873,12 +877,18 @@ describe('app server themes', () => {
     assert.equal(ok.headers['x-content-type-options'], 'nosniff');
     assert.equal(ok.body, '[data-theme~="swiss"]{--x:1}\n');
     assert.equal((await raw(`/sites/${id}/site/assets/vendor/vanilla-breeze/vanilla-breeze.css`)).status, 200);
+    assert.equal((await raw(`/sites/${id}/site/assets/vendor/vanilla-breeze/fonts/a.woff2`)).status, 200);
     const head = await raw(`/sites/${id}/site/assets/vendor/vanilla-breeze/vanilla-breeze.css`, 'HEAD');
     assert.equal(head.status, 200);
     assert.equal(head.body, '');
     for (const path of [
       `/sites/${id}/site/posts/hello.html`, // outside the VB folder and assets/themes
       `/sites/${id}/site/assets/site.css`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/site-own.css`, // only VB's own files in its folder
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/lib/body.js`,
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/manifest.json`, // no .json
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/%252e%252e/%252e%252e/site.css`, // double-encoded
+      `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/%252e%252e%252f%252e%252e%252fsite.css`,
       `/sites/${id}/site/assets/vendor/vanilla-breeze/page.html`, // not an asset type
       `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/.hidden.css`,
       `/sites/${id}/site/assets/vendor/vanilla-breeze/themes/link.css`, // symlink out of src/
@@ -951,6 +961,20 @@ describe('app server themes', () => {
     assert.deepEqual(res.data.usedBy, ['Uses it']);
     const state = await api('/theme');
     assert.deepEqual(state.data.pages.map((p) => [p.title, p.theme, p.themeScope]), [['Uses it', 'used', 'page']]);
+  });
+
+  it('delete fails closed (503) when committed HEAD cannot be read', async () => {
+    const saved = await api('/theme/custom', { method: 'POST', body: { name: 'Fragile', base: 'swiss', tokens: T } });
+    fakeGit.headCommit = async () => { throw new Error('git broke'); };
+    try {
+      const res = await api(`/theme/custom/${saved.data.theme.id}`, { method: 'DELETE' });
+      assert.equal(res.status, 503);
+      assert.match(res.data.error, /Nothing was deleted/);
+      assert.ok(existsSync(join(site, `src/assets/themes/${saved.data.theme.id}.css`)));
+    } finally {
+      delete fakeGit.headCommit;
+    }
+    assert.equal((await api(`/theme/custom/${saved.data.theme.id}`, { method: 'DELETE' })).status, 200);
   });
 
   it('isQueuedWrite covers theme library writes', () => {

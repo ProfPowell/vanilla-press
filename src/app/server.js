@@ -11,7 +11,7 @@
 
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
-import { realpathSync, statSync } from 'node:fs';
+import { realpathSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, extname, relative, isAbsolute, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listSites, getSite, addSite, removeSite, listFolders } from './registry.js';
@@ -51,9 +51,12 @@ const SITE_COMPONENTS_PATH = /^\/sites\/([^/]+)\/components\//;
 /** `/sites/<id>/site/<path>`: the site's VB copy and custom themes (its `src/`), for theme previews. */
 const SITE_FILES_PATH = /^\/sites\/([^/]+)\/site\//;
 /** What `/sites/<id>/site/` serves: stylesheets, scripts, fonts and images, never pages. */
-const SITE_FILE_TYPES = new Set(['.css', '.js', '.mjs', '.json', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.woff', '.woff2']);
+const SITE_FILE_TYPES = new Set(['.css', '.js', '.mjs', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.woff', '.woff2']);
 /** Custom themes (and vp-site.css), relative to the site's `src/`. */
 const CUSTOM_THEMES_DIR = 'assets/themes';
+/** In the VB copy's folder: its own top-level files, and these subfolders. */
+const VB_OWN_FILE = /^vanilla-breeze(\.[a-z0-9]+)*\.(css|js|mjs)$/;
+const VB_SUBFOLDERS = ['themes', 'fonts'];
 
 const STATIC_MOUNTS = [
   { prefix: '/app/', dir: join(ROOT, 'app') },
@@ -224,6 +227,7 @@ export async function startApp({
       mountThemeRoutes(router, prefix, {
         site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,
         deps: {
+          git, // the delete check reads committed HEAD (headCommit, headTree, readBlobs)
           ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
           commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,
         },
@@ -287,6 +291,7 @@ export async function startApp({
             components: () => enabledComponents(roots),
           },
         })));
+        vbCache.delete(site.id); // the build may have vendored or moved the site's VB copy
         if (result.expectedText != null) expected.set(docId, { url: result.url, text: result.expectedText });
         else expected.delete(docId);
         sendJson(res, 200, { status: result.status, url: result.url });
@@ -405,6 +410,7 @@ export async function startApp({
   app.add('DELETE', '/api/sites/:siteId', async (req, res) => {
     const { siteId } = req.params;
     removeSite(siteId, { env }); // first, so no new request reopens it
+    vbCache.delete(siteId);
     previews.stop?.(siteId)?.catch?.(() => {});
     await closeSite(siteId, { flush: true });
     sendJson(res, 200, { ok: true });
@@ -415,6 +421,7 @@ export async function startApp({
     if (!site) return sendJson(res, 404, { error: 'Unknown site' });
     try {
       const { url } = await previews.start(site);
+      vbCache.delete(site.id); // a preview build may have vendored the site's VB copy
       sendJson(res, 200, { url });
     } catch (err) {
       sendJson(res, 502, { error: err.message });
@@ -480,10 +487,22 @@ export async function startApp({
 
   /**
    * Serve `/sites/<id>/site/<path>` (GET/HEAD) from the site's `src/`, only
-   * inside its VB copy's folder (just vanilla-breeze.css and themes/ when that
-   * is src/ itself) and assets/themes/, only asset types, never a dotfile, and
+   * VB's own files in its VB copy's folder (vanilla-breeze.*, themes/, fonts/)
+   * and assets/themes/, only asset types, never a dotfile, and
    * only when the real path (symlinks resolved) is still there; false when not served.
    */
+  /** Where each site's VB copy is: siteId -> { path, vb }; dropped when a build may have moved it. */
+  const vbCache = new Map();
+  /** The site's VB copy (findSiteVb), cached while its file is still there; no copy is not cached. */
+  function siteVb(site) {
+    const hit = vbCache.get(site.id);
+    if (hit && hit.path === site.path && existsSync(join(site.path, 'src', hit.vb.url))) return hit.vb;
+    const vb = findSiteVb(site.path);
+    if (vb) vbCache.set(site.id, { path: site.path, vb });
+    else vbCache.delete(site.id);
+    return vb;
+  }
+
   function serveSiteFiles(req, res, pathname) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return false;
     const match = pathname.match(SITE_FILES_PATH);
@@ -498,13 +517,15 @@ export async function startApp({
     if (!SITE_FILE_TYPES.has(extname(rel).toLowerCase())) return false;
     const site = getSite(id, { env });
     if (!site) return false;
-    const roots = [CUSTOM_THEMES_DIR];
-    const vb = findSiteVb(site.path);
-    if (vb) {
-      const dir = posix.dirname(vb.url).slice(1);
-      roots.push(...(dir ? [dir] : [posix.basename(vb.url), 'themes']));
-    }
-    const allowed = (p) => roots.some((r) => p === r || p.startsWith(`${r}/`));
+    const vb = siteVb(site);
+    const vbDir = vb ? posix.dirname(vb.url).slice(1) : null;
+    const vbPrefix = vbDir ? `${vbDir}/` : '';
+    const allowed = (p) => {
+      if (p.startsWith(`${CUSTOM_THEMES_DIR}/`)) return true;
+      if (vbDir === null || !p.startsWith(vbPrefix)) return false;
+      const inVb = p.slice(vbPrefix.length);
+      return (!inVb.includes('/') && VB_OWN_FILE.test(inVb)) || VB_SUBFOLDERS.some((d) => inVb.startsWith(`${d}/`));
+    };
     if (!allowed(rel)) return false;
     let real;
     try {

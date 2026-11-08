@@ -18,10 +18,11 @@ import {
  * @param {{ add: Function }} router
  * @param {string} prefix - `/api/sites/<id>`
  * @param {{ site: { id: string }, ws: object, db: object, backup?: object, writes?: Function,
- *   deps?: object, vpRoot: string, fetch?: typeof fetch }} context - backup, writes, deps and
- *   fetch are for Apply and the live check.
+ *   deps?: { git?: object }, vpRoot: string, fetch?: typeof fetch }} context - deps.git
+ *   (headCommit, headTree, readBlobs) checks committed HEAD before a delete; backup, writes,
+ *   the rest of deps and fetch are for Apply and the live check.
  */
-export function mountThemeRoutes(router, prefix, { site, ws, db, vpRoot }) {
+export function mountThemeRoutes(router, prefix, { site, ws, db, vpRoot, deps = {} }) {
   const options = { siteId: site.id, vpCdnDir: join(vpRoot, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') };
 
   /** Run a handler, sending a ThemeError as its status and body. */
@@ -53,8 +54,8 @@ export function mountThemeRoutes(router, prefix, { site, ws, db, vpRoot }) {
     sendJson(res, 200, { theme: renameCustomTheme(ws, req.params.id, body(req).name, options) });
   }));
 
-  router.add('DELETE', `${prefix}/theme/custom/:id`, handle((req, res) => {
-    deleteCustomTheme(ws, db, req.params.id);
+  router.add('DELETE', `${prefix}/theme/custom/:id`, handle(async (req, res) => {
+    await deleteCustomTheme(ws, db, req.params.id, deps.git ? { git: deps.git } : {});
     sendJson(res, 200, { ok: true });
   }));
 }

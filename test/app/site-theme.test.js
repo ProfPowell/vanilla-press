@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, rmSync, mkdtempSync } from 'node:fs';
+import { readFileSync, existsSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { saveDocument } from '../../src/store/content.js';
@@ -9,7 +9,7 @@ import {
   readSetting, writeSetting, migrateVpTheme, ensureThemeSetting, themeState,
   saveCustomTheme, importCustomTheme, renameCustomTheme, deleteCustomTheme, ThemeError,
 } from '../../src/app/site-theme.js';
-import { makeGitSite, write } from './git-site-fixture.js';
+import { makeGitSite, write, git } from './git-site-fixture.js';
 
 const VB = 'src/assets/vendor/vanilla-breeze';
 const T = { light: { '--color-primary': 'oklch(0.5 0.2 30)' }, dark: { '--color-primary': 'oklch(0.7 0.2 30)' } };
@@ -44,13 +44,13 @@ describe('site theme store', () => {
     rmSync(fx.root, { recursive: true, force: true });
   });
 
-  it('migration moves vp.json theme to theme.json and clears it from vp.json', () => {
-    write(site, 'config/vp.json', '{ "theme": "swiss" }\n');
+  it('migration copies the vp.json theme to theme.json and leaves vp.json byte-identical', () => {
+    write(site, 'config/vp.json', '{ "theme": "swiss",  "x": 1 }\n');
     assert.equal(migrateVpTheme(ws), true);
     assert.equal(readSetting(ws).name, 'swiss');
     assert.equal(readSetting(ws).mode, 'auto');
     assert.equal(readSetting(ws).files.swiss, '/assets/vendor/vanilla-breeze/themes/swiss.css');
-    assert.deepEqual(JSON.parse(read('config/vp.json')), {});
+    assert.equal(read('config/vp.json'), '{ "theme": "swiss",  "x": 1 }\n');
     assert.match(read('config/theme.json'), /^\{\n {2}"name": "swiss",\n[\s\S]*\}\n$/);
   });
 
@@ -58,12 +58,13 @@ describe('site theme store', () => {
     write(site, 'config/vp.json', '{ "theme": "default" }\n');
     assert.equal(migrateVpTheme(ws), false);
     assert.equal(existsSync(join(site, 'config/theme.json')), false);
-    assert.deepEqual(JSON.parse(read('config/vp.json')), {}); // R1: the key is dropped
+    assert.equal(read('config/vp.json'), '{ "theme": "default" }\n'); // R1: Task 9's commit drops the key
 
     write(site, 'config/vp.json', '{ "theme": "swiss" }\n');
     write(site, 'config/theme.json', '{ "name": "8bit", "mode": "dark" }\n');
     assert.equal(migrateVpTheme(ws), false);
     assert.equal(read('config/theme.json'), '{ "name": "8bit", "mode": "dark" }\n');
+    assert.equal(read('config/vp.json'), '{ "theme": "swiss" }\n');
   });
 
   it('migration leaves no vp.json, a broken vp.json and an unsafe theme alone', () => {
@@ -172,22 +173,59 @@ describe('site theme store', () => {
     assert.throws(() => renameCustomTheme(ws, 'retro-mine', '  ', opts()), (e) => e.status === 400);
   });
 
-  it('delete is refused while the site or a post uses it, naming them', () => {
+  it('delete is refused while the site or a post uses it, naming them', async () => {
     saveCustomTheme(ws, { name: 'Retro Mine', base: '8bit', tokens: T }, opts());
     writeSetting(ws, { ...readSetting(ws), name: 'retro-mine' });
     saveDocument(db, doc('doc_old', { title: 'Old Games', theme: 'retro-mine' }));
-    assert.throws(() => deleteCustomTheme(ws, db, 'retro-mine'),
+    await assert.rejects(deleteCustomTheme(ws, db, 'retro-mine'),
       (e) => e.status === 409 && e.body.usedBy.join() === 'the site theme,Old Games');
     assert.ok(existsSync(join(site, 'src/assets/themes/retro-mine.css')));
 
     writeSetting(ws, { ...readSetting(ws), name: 'default' });
     saveDocument(db, doc('doc_old', { title: 'Old Games' }));
-    deleteCustomTheme(ws, db, 'retro-mine');
+    await deleteCustomTheme(ws, db, 'retro-mine');
     assert.equal(existsSync(join(site, 'src/assets/themes/retro-mine.css')), false);
     assert.deepEqual(readSetting(ws).custom, []);
     assert.equal(readSetting(ws).files['retro-mine'], undefined);
-    assert.throws(() => deleteCustomTheme(ws, db, 'retro-mine'), (e) => e.status === 404);
-    assert.throws(() => deleteCustomTheme(ws, db, 'swiss'), (e) => e.status === 404); // not a custom theme
+    await assert.rejects(deleteCustomTheme(ws, db, 'retro-mine'), (e) => e.status === 404);
+    await assert.rejects(deleteCustomTheme(ws, db, 'swiss'), (e) => e.status === 404); // not a custom theme
+  });
+
+  it('delete is refused while committed HEAD uses it: the live theme.json or a live page', async () => {
+    saveCustomTheme(ws, { name: 'Retro Mine', base: '8bit', tokens: T }, opts());
+    // HEAD: theme.json naming it, and a page (not in the database) whose front matter uses it.
+    writeSetting(ws, { ...readSetting(ws), name: 'retro-mine' });
+    write(site, 'src/posts/live.html', '---\ntitle: "Live Post"\ntheme: retro-mine\nthemeScope: "page"\n---\n<p>x</p>\n');
+    write(site, 'src/posts/other.html', '---\ntitle: "Other"\ntheme: "retro-mine-2"\n---\n<p>x</p>\n');
+    git(site, 'add', '-A');
+    git(site, 'commit', '-m', 'live');
+    // The working tree has moved on: the site theme is default again and the page is gone.
+    writeSetting(ws, { ...readSetting(ws), name: 'default' });
+    rmSync(join(site, 'src/posts/live.html'));
+    await assert.rejects(deleteCustomTheme(ws, db, 'retro-mine'),
+      (e) => e.status === 409 && e.body.usedBy.join() === 'the site theme,Live Post');
+    assert.ok(existsSync(join(site, 'src/assets/themes/retro-mine.css')));
+
+    write(site, 'config/theme.json', JSON.stringify(readSetting(ws)));
+    git(site, 'add', '-A');
+    git(site, 'commit', '-m', 'not live any more');
+    await deleteCustomTheme(ws, db, 'retro-mine');
+    assert.equal(existsSync(join(site, 'src/assets/themes/retro-mine.css')), false);
+  });
+
+  it('delete fails closed (503) when git cannot be read', async () => {
+    saveCustomTheme(ws, { name: 'Retro Mine', base: '8bit', tokens: T }, opts());
+    const broken = { headCommit: async () => { throw new Error('git broke'); } };
+    await assert.rejects(deleteCustomTheme(ws, db, 'retro-mine', { git: broken }),
+      (e) => e.status === 503 && /git broke/.test(e.message));
+    assert.ok(existsSync(join(site, 'src/assets/themes/retro-mine.css')));
+    assert.equal(readSetting(ws).custom.length, 1);
+  });
+
+  it('a failed setting write leaves no orphan theme file, and the R4 default is one write', () => {
+    mkdirSync(join(site, 'config/theme.json'), { recursive: true }); // renaming onto a folder fails
+    assert.throws(() => saveCustomTheme(ws, { name: 'Orphan', base: '8bit', tokens: T }, opts()));
+    assert.equal(existsSync(join(site, 'src/assets/themes/orphan.css')), false);
   });
 
   it('themeState lists custom themes, pages with their own theme, and a preview post', () => {

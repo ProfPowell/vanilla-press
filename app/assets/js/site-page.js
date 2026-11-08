@@ -276,6 +276,16 @@ function showSection(section) {
   if (section === 'components' && !componentState) loadComponents();
   if (section === 'media') startMedia();
   else mediaPage?.then((media) => media?.hide());
+  if (section === 'theme') startTheme();
+}
+
+// Theme is set up on first view, only once (its draft lives until reload); every view refreshes it.
+let themePage = null;
+function startTheme() {
+  themePage ||= import('./theme-page.js')
+    .then((m) => m.initThemeSection({ siteId, root: $('theme-section') }))
+    .catch((err) => showError(err.message));
+  themePage.then((theme) => theme?.show());
 }
 
 // Media is set up on first view, only once; every view refreshes it and applies a ?file= deep link.

@@ -1,0 +1,266 @@
+/**
+ * The Theme section: start from a theme, adjust it, see it live. The draft
+ * (choices not applied yet) lives in this module until the page reloads, so
+ * leaving the section and coming back keeps it. Rules live in theme-view.js,
+ * DOM helpers in theme-preview.js. Apply is wired by the caller (Task 11):
+ * see the returned `draft()` and `state()`.
+ * @module theme-page
+ */
+import { api, h, formatDate } from './app-api.js';
+import {
+  draftFrom, isDirty, cardModels, schemeControl, schemeOf, pagesModel, vbNote,
+} from './theme-view.js';
+import {
+  ensureThemeCss, themeCssReady, computeColors, themeHue, setPreviewCss, previewFragment,
+} from './theme-preview.js';
+import { adjustmentsCss, skippedTokens } from '../../../src/themes/theme-css.js';
+import { ADJUST_ID } from '../../../src/themes/theme-setting.js';
+
+const SAMPLE = {
+  title: 'A sample post',
+  paragraphs: [
+    'This is how a post on your site reads with this theme: headings, body text, links and buttons.',
+    'Write a post to see it here instead.',
+  ],
+};
+
+/**
+ * @param {{ siteId: string, root: HTMLElement }} opts
+ */
+export function initThemeSection({ siteId, root }) {
+  const base = `/api/sites/${encodeURIComponent(siteId)}`;
+  const $ = (id) => root.querySelector(`#${id}`);
+  const prefersDark = matchMedia('(prefers-color-scheme: dark)');
+
+  /** Server state from GET /theme, the applied draft, and the page's own state. */
+  let state = null;
+  let applied = draftFrom(null);
+  let draft = draftFrom(null);
+  /** Literal colors for the draft's hue (R7), and the hue they were computed for. */
+  let colors = null;
+  let colorsFor = '';
+  const view = { query: '', expanded: false, width: 'desktop' };
+  let siteName = '';
+
+  const themeById = (id) => state?.themes.find((t) => t.id === id) || null;
+  const currentTheme = () => themeById(draft.name) || { id: draft.name, name: draft.name };
+
+  function showError(message) {
+    $('theme-error').textContent = message || '';
+    $('theme-error').hidden = !message;
+  }
+
+  // --- Cards ---
+  function card(c) {
+    const theme = themeById(c.id);
+    ensureThemeCss(theme);
+    const swatch = h('span', { class: 'theme-swatch', 'data-theme': c.id, 'aria-hidden': 'true' },
+      h('span', { class: 'theme-swatch-aa' }, 'Aa'),
+      h('span', { class: 'theme-swatch-bar' }));
+    if (c.only) swatch.dataset.mode = c.only;
+    const tier = c.only ? `${c.tierText} · ${c.only === 'light' ? 'Light only' : 'Dark only'}` : c.tierText;
+    return h('li', {},
+      h('button', { type: 'button', class: 'theme-card', 'data-theme-id': c.id, 'aria-pressed': String(c.pressed) },
+        swatch,
+        h('span', { class: 'theme-card-text' },
+          h('span', { class: 'theme-card-name' }, c.name),
+          h('span', { class: 'theme-card-tier' }, tier))));
+  }
+
+  function renderCards() {
+    const m = cardModels(state.themes, { current: draft.name, query: view.query, expanded: view.expanded });
+    $('theme-cards').replaceChildren(...m.cards.map(card));
+    const more = $('theme-more');
+    more.hidden = !m.toggleText;
+    more.textContent = m.toggleText || '';
+    more.setAttribute('aria-expanded', String(view.expanded));
+    const empty = $('theme-cards-empty');
+    empty.textContent = view.query.trim() && !m.cards.length ? `No themes match "${view.query.trim()}".` : '';
+    empty.hidden = !empty.textContent;
+  }
+
+  // --- Adjust ---
+  const pressGroup = (group, attr, value, disabled = false) => {
+    for (const btn of $(group).querySelectorAll(`button[${attr}]`)) {
+      btn.setAttribute('aria-pressed', String(btn.getAttribute(attr) === value));
+      btn.disabled = disabled;
+    }
+  };
+
+  function renderAdjust() {
+    const theme = currentTheme();
+    $('theme-adjust-title').textContent = `Adjust ${theme.name}`;
+    const scheme = schemeControl(theme);
+    pressGroup('theme-scheme', 'data-scheme', scheme.disabled ? theme.only : draft.mode, scheme.disabled);
+    $('theme-scheme-note').textContent = scheme.note || '';
+    $('theme-scheme-note').hidden = !scheme.note;
+    pressGroup('theme-corners', 'data-corners', draft.adjustments.corners);
+    $('theme-heading-font').value = draft.adjustments.headingFont || '';
+    $('theme-body-font').value = draft.adjustments.bodyFont || '';
+    const hue = draft.adjustments.hue ?? themeHue(root, theme.id, schemeOf(theme, draft.mode, prefersDark.matches));
+    $('theme-hue').value = String(Math.round(hue));
+    $('theme-hue-value').textContent = `${Math.round(hue)}°`;
+    $('theme-hue').setAttribute('aria-valuetext', `${Math.round(hue)} degrees${draft.adjustments.hue == null ? ", the theme's own" : ''}`);
+  }
+
+  // --- Preview ---
+  function renderPreviewContent() {
+    $('theme-preview-site').textContent = siteName;
+    const post = state?.preview;
+    $('theme-preview-post').textContent = post?.title ? ` · ${post.title}` : '';
+    const article = $('theme-preview-article');
+    const date = post?.date ? formatDate(post.date) : '';
+    const body = post ? previewFragment(post.html) : SAMPLE.paragraphs.map((p) => h('p', {}, p));
+    article.replaceChildren(
+      ...(date ? [h('p', { class: 'preview-meta' }, date)] : []),
+      h('h1', {}, post?.title || SAMPLE.title),
+      ...(post ? [body] : body),
+      h('p', {}, h('a', { class: 'button', href: '#' }, 'More posts')));
+  }
+
+  /** The adjustments with literal colors for the draft's hue (recomputed when the hue or base changes). */
+  function adjustmentsWithColors() {
+    const { hue } = draft.adjustments;
+    if (hue == null) {
+      colors = null;
+      colorsFor = '';
+    } else if (colorsFor !== `${draft.name}:${hue}`) {
+      colors = computeColors(root, draft.name, hue);
+      colorsFor = `${draft.name}:${hue}`;
+    }
+    return { ...draft.adjustments, colors };
+  }
+
+  function renderPreview() {
+    const theme = currentTheme();
+    const frame = $('theme-preview-frame');
+    frame.dataset.theme = `${draft.name} ${ADJUST_ID}`;
+    frame.dataset.mode = schemeOf(theme, draft.mode, prefersDark.matches);
+    frame.dataset.width = view.width;
+    pressGroup('theme-width', 'data-width', view.width);
+    const adj = adjustmentsWithColors();
+    setPreviewCss(adjustmentsCss(adj));
+    const skipped = skippedTokens(colors);
+    $('theme-skipped').textContent = skipped.length
+      ? `These colors can't be used, so they are left out: ${skipped.join(', ')}.`
+      : '';
+  }
+
+  function renderDirty() {
+    $('theme-dirty').textContent = state && isDirty(applied, draft) ? 'Unapplied changes' : '';
+  }
+
+  function renderPages() {
+    const m = pagesModel(state.pages, siteId, state.themes);
+    $('theme-pages-empty').hidden = !m.empty;
+    $('theme-pages').hidden = m.empty;
+    $('theme-pages').replaceChildren(...m.items.map((p) =>
+      h('li', {}, h('a', { href: p.href }, p.title), h('span', { class: 'theme-note' }, ` · ${p.themeName}`))));
+  }
+
+  /** Re-render after a draft change; the base theme's CSS loads first so colors read right. */
+  async function update({ cards = false } = {}) {
+    if (!state) return;
+    ensureThemeCss(themeById(draft.name));
+    if (cards) renderCards();
+    await themeCssReady(draft.name);
+    renderAdjust();
+    renderPreview();
+    renderDirty();
+  }
+
+  // --- Events ---
+  $('theme-cards').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-theme-id]');
+    if (!btn || btn.dataset.themeId === draft.name) return;
+    // A new base starts from its own hue; fonts, corners and scheme carry over.
+    draft = { ...draft, name: btn.dataset.themeId, adjustments: { ...draft.adjustments, hue: null } };
+    for (const b of $('theme-cards').querySelectorAll('button[data-theme-id]')) {
+      b.setAttribute('aria-pressed', String(b === btn));
+    }
+    update();
+  });
+
+  $('theme-more').addEventListener('click', () => {
+    view.expanded = !view.expanded;
+    renderCards();
+  });
+
+  $('theme-search').addEventListener('input', (e) => {
+    view.query = e.target.value;
+    renderCards();
+  });
+
+  $('theme-hue').addEventListener('input', (e) => {
+    draft = { ...draft, adjustments: { ...draft.adjustments, hue: Number(e.target.value) } };
+    update();
+  });
+
+  $('theme-scheme').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-scheme]');
+    if (!btn || btn.disabled) return;
+    draft = { ...draft, mode: btn.dataset.scheme };
+    update();
+  });
+
+  $('theme-corners').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-corners]');
+    if (!btn) return;
+    draft = { ...draft, adjustments: { ...draft.adjustments, corners: btn.dataset.corners } };
+    update();
+  });
+
+  for (const id of ['theme-heading-font', 'theme-body-font']) {
+    $(id).addEventListener('change', (e) => {
+      draft = { ...draft, adjustments: { ...draft.adjustments, [e.target.dataset.adjust]: e.target.value || null } };
+      update();
+    });
+  }
+
+  // R9: Reset clears hue, fonts, corners and sets Reader's choice.
+  $('theme-reset').addEventListener('click', () => {
+    draft = { ...draft, mode: 'auto', adjustments: { hue: null, headingFont: null, bodyFont: null, corners: 'theme' } };
+    update();
+  });
+
+  $('theme-width').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-width]');
+    if (!btn) return;
+    view.width = btn.dataset.width;
+    renderPreview();
+  });
+
+  prefersDark.addEventListener('change', () => update());
+
+  // --- Load ---
+  async function load() {
+    try {
+      const [theme, sites] = await Promise.all([api(`${base}/theme`), api('/api/sites')]);
+      siteName = sites.find((s) => s.id === siteId)?.name || '';
+      const first = !state;
+      state = theme;
+      applied = draftFrom(theme.setting);
+      if (first) draft = applied;
+      const note = vbNote(theme.vb);
+      $('theme-vb-note').textContent = note || '';
+      $('theme-vb-note').hidden = !note;
+      renderPages();
+      renderPreviewContent();
+      showError('');
+      await update({ cards: true });
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  return {
+    /** Load (first view) or refresh the server state; the draft is kept. */
+    show: load,
+    /** The draft and its literal colors, for Apply. */
+    draft: () => ({ ...draft, adjustments: adjustmentsWithColors() }),
+    /** The last GET /theme response. */
+    state: () => state,
+    /** After a successful Apply: the draft is what is applied now. */
+    markApplied: () => { applied = draft; renderDirty(); },
+  };
+}

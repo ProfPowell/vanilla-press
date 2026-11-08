@@ -373,9 +373,16 @@ export function mountApi(router, db, options) {
     };
   }
 
-  /** Rewrite media.json (with a site) and tell the listener; neither failure breaks the response. */
+  /**
+   * Rewrite media.json (with a site) and tell the listener. The file and row are already
+   * changed, so a failure here is logged, not turned into an error response.
+   */
   function mediaChanged(filename, action) {
-    if (ws) writeMediaJson(ws, db);
+    try {
+      if (ws) writeMediaJson(ws, db);
+    } catch (err) {
+      console.error('media.json write failed:', err);
+    }
     try {
       options.onMediaChanged?.({ filename, action });
     } catch (err) {
@@ -457,10 +464,15 @@ export function mountApi(router, db, options) {
       edited_from: source ? source.filename : null,
       created: new Date().toISOString(),
     };
-    db.prepare(`
-      INSERT INTO media (id, filename, original_name, mime_type, size, width, height, alt, edited_from, created)
-      VALUES (@id, @filename, @original_name, @mime_type, @size, @width, @height, @alt, @edited_from, @created)
-    `).run(row);
+    try {
+      db.prepare(`
+        INSERT INTO media (id, filename, original_name, mime_type, size, width, height, alt, edited_from, created)
+        VALUES (@id, @filename, @original_name, @mime_type, @size, @width, @height, @alt, @edited_from, @created)
+      `).run(row);
+    } catch (err) {
+      rmSync(join(mediaDir, filename), { force: true });
+      throw err;
+    }
     mediaChanged(filename, 'upload');
 
     sendJson(res, 201, { ...mediaItem(row, usageMap()), large: file.data.length > LARGE_BYTES });

@@ -22,6 +22,7 @@ const URL_ATTRS = {
   embed: ['url'],
   component: ['src', 'poster'],
   link: ['href'],
+  card: ['href'],
 };
 
 /**

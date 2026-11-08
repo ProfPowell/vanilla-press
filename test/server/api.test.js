@@ -4,9 +4,9 @@
  * Uses in-memory SQLite and a real HTTP server to test the full API stack.
  */
 
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, request } from 'node:http';
 import Database from 'better-sqlite3';
 import { migrate } from '../../src/store/migrate.js';
 import { createRouter, sendJson } from '../../src/server/router.js';
@@ -339,10 +339,46 @@ describe('API', () => {
       assert.deepEqual(files(), before);
     });
 
-    it('a body far past the limit is refused with 413', async () => {
+    it('a declared size far past the limit is refused before reading (Content-Length)', async () => {
       const { status, data } = await upload(Buffer.alloc(28_000_000), 'enormous.jpg');
       assert.equal(status, 413);
+      assert.match(data.error, /^This file is 26\.7 MB\./);
       assert.ok(data.error.includes('25 MB'));
+    });
+
+    /** POST a chunked multipart body (no Content-Length) of `chunks` x 1 MiB of file data. */
+    const chunkedUpload = (chunks) => new Promise((resolve, reject) => {
+      const boundary = 'xBOUNDARYx';
+      let answer;
+      const r = request({
+        host: '127.0.0.1', port, path: '/api/media', method: 'POST',
+        headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Transfer-Encoding': 'chunked' },
+      }, (res) => {
+        let text = '';
+        res.on('data', (c) => { text += c; });
+        res.on('end', () => {
+          answer = { status: res.statusCode, data: JSON.parse(text) };
+          r.destroy(); // enough: stop sending the rest
+          resolve(answer);
+        });
+      });
+      r.on('error', (err) => { if (!answer) reject(err); });
+      (async () => {
+        r.write(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="stream.jpg"\r\n\r\n`);
+        for (let i = 0; i < chunks && !answer; i++) {
+          // Honour backpressure: the server stops reading once it has answered.
+          if (!r.write(Buffer.alloc(1_048_576))) await new Promise((ok) => r.once('drain', ok).once('close', ok));
+        }
+        if (!answer) r.end(`\r\n--${boundary}--\r\n`);
+      })().catch(() => {});
+    });
+
+    it('a chunked body past the limit is cut off by the body limit', async () => {
+      const before = files();
+      const { status, data } = await chunkedUpload(30);
+      assert.equal(status, 413);
+      assert.match(data.error, /^This file is 26\.0 MB\./);
+      assert.deepEqual(files(), before);
     });
 
     it('large files carry a note', async () => {
@@ -427,6 +463,7 @@ describe('API', () => {
       assert.deepEqual(data.posts, [{ id: doc.id, title: 'Guard figure' }]);
       assert.ok(existsSync(join(MEDIA_DIR, item.filename)));
       assert.equal((await api('/api/media')).data.some((m) => m.id === item.id), true);
+      await api(`/api/documents/${doc.id}`, { method: 'DELETE' });
     });
 
     it('delete is refused while a published post links the file', async () => {
@@ -437,6 +474,30 @@ describe('API', () => {
       assert.equal(status, 409);
       assert.deepEqual(data.posts, [{ id: doc.id, title: 'Guard link' }]);
       assert.ok(existsSync(join(MEDIA_DIR, item.filename)));
+      await api(`/api/documents/${doc.id}`, { method: 'DELETE' });
+    });
+
+    it('delete is refused while a published card links the file', async () => {
+      const { data: item } = await upload(jpeg(1, 1), 'carded.jpg');
+      const card = { type: 'card', attrs: { href: item.src }, children: [{ type: 'paragraph', children: [{ type: 'text', value: 'x' }] }] };
+      const doc = await docUsing('Guard card', 'published', card);
+      const { status } = await api(`/api/media/${item.id}`, { method: 'DELETE' });
+      assert.equal(status, 409);
+      await api(`/api/documents/${doc.id}`, { method: 'DELETE' });
+    });
+
+    it('a failed insert leaves no file behind', async () => {
+      const before = files();
+      db.exec("CREATE TRIGGER fail_media BEFORE INSERT ON media BEGIN SELECT RAISE(ABORT, 'boom'); END");
+      const errors = mock.method(console, 'error', () => {});
+      try {
+        const { status } = await upload(jpeg(1, 1), 'doomed.jpg');
+        assert.equal(status, 500);
+      } finally {
+        errors.mock.restore();
+        db.exec('DROP TRIGGER fail_media');
+      }
+      assert.deepEqual(files(), before);
     });
 
     it('delete of a draft-only file removes it', async () => {

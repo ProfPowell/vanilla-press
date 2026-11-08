@@ -57,3 +57,8 @@ test('mediaUsage maps files to posts with status', () => {
   ]);
   assert.equal(usage.get('b.jpg'), undefined);
 });
+
+test('mediaRefs counts a card href to a media file', () => {
+  const doc = { meta: {}, blocks: [{ type: 'card', attrs: { href: '/media/brochure-1a2b3c.pdf' }, children: [p({ type: 'text', value: 'x' })] }] };
+  assert.deepEqual([...mediaRefs(doc)], ['brochure-1a2b3c.pdf']);
+});

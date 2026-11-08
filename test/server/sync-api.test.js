@@ -209,6 +209,25 @@ describe('API with a site workspace', () => {
     assert.ok(!existsSync(join(site, 'src', 'media', data.filename)));
   });
 
+  it('a media.json write that fails after the upload is logged, not a 500', async () => {
+    const target = at('content/media.json');
+    rmSync(target);
+    mkdirSync(target); // renaming a file onto a directory fails
+    const errors = mock.method(console, 'error', () => {});
+    try {
+      const form = new FormData();
+      form.append('file', new Blob([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 2, 0, 2, 1, 1, 0x11, 0])]), 'ok.jpg');
+      const { status, data } = await api('/api/media', { method: 'POST', form });
+      assert.equal(status, 201);
+      assert.ok(existsSync(join(site, 'src', 'media', data.filename)));
+      assert.ok(errors.mock.calls.length >= 1);
+      await api(`/api/media/${data.id}`, { method: 'DELETE' });
+    } finally {
+      errors.mock.restore();
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
   it('PUT /api/config/theme writes config/vp.json', async () => {
     const { status } = await api('/api/config/theme', { method: 'PUT', body: { value: 'amber' } });
     assert.equal(status, 200);

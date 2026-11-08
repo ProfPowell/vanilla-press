@@ -45,6 +45,7 @@ const LAYER = 'bundle-theme';
 const MAX_VALUE = 2000;
 const MAX_LABEL = 80;
 const MAX_DEPTH = 32;
+const MAX_DROPPED = 50;
 
 // ── token checks ──────────────────────────────────────────────────────────
 
@@ -232,8 +233,13 @@ export function rewriteComposerCss(cssText, id) {
   }
   const light = new Map();
   const dark = new Map();
-  const dropped = [];
-  const drop = (s) => { const l = label(s); if (l && !dropped.includes(l)) dropped.push(l); };
+  const seen = new Set();
+  const drop = (s) => { const l = label(s); if (l) seen.add(l); };
+  const droppedList = () => {
+    const list = [...seen].slice(0, MAX_DROPPED);
+    if (seen.size > MAX_DROPPED) list.push(`…and ${seen.size - MAX_DROPPED} more`);
+    return list;
+  };
 
   const takeBlock = (block, target) => {
     for (const item of parseItems(block)) {
@@ -263,7 +269,7 @@ export function rewriteComposerCss(cssText, id) {
   walk(stripComments(cssText), null);
 
   if (!light.size && !dark.size) {
-    throw new ThemeCssError('Nothing usable: the file sets no custom properties on :root.', 422, dropped);
+    throw new ThemeCssError('Nothing usable: the file sets no custom properties on :root.', 422, droppedList());
   }
   const lightDecls = Object.fromEntries(light);
   const darkDecls = Object.fromEntries(dark);
@@ -276,7 +282,7 @@ export function rewriteComposerCss(cssText, id) {
     schemes = light.size ? singleSchemeOf(lightDecls) : 'dark';
     css = layered(id, only, null);
   }
-  return { css, schemes, dropped };
+  return { css, schemes, dropped: droppedList() };
 }
 
 // ── writers ───────────────────────────────────────────────────────────────
@@ -312,15 +318,42 @@ function layered(id, light, dark) {
   return [`@layer ${LAYER} {`, ...schemeRules(id, light, dark, '  '), '}', ''].join('\n');
 }
 
+const isRecord = (d) => !!d && typeof d === 'object' && !Array.isArray(d);
+
+/**
+ * Names in a light/dark token set that customThemeCss (and the colors of
+ * adjustmentsCss) skip as unsafe, in order, each once. Callers use it to
+ * tell the user which computed values were not saved.
+ * @param {{ light?: Record<string,string>, dark?: Record<string,string> }|null|undefined} sets
+ * @returns {string[]}
+ */
+export function skippedTokens(sets) {
+  const out = new Set();
+  for (const decls of [sets?.light, sets?.dark]) {
+    if (!isRecord(decls)) continue;
+    for (const [name, raw] of Object.entries(decls)) {
+      if (!safeTokenName(name) || !safeTokenValue(typeof raw === 'string' ? squash(raw) : '')) out.add(name);
+    }
+  }
+  return [...out];
+}
+
 /**
  * A saved theme from computed tokens, both schemes when dark is given.
- * Unsafe names and values are skipped.
+ * Unsafe names and values are skipped (see skippedTokens). Throws
+ * ThemeCssError 422 (with the skipped names as `dropped`) when the light
+ * set is missing or has no usable token.
  * @param {string} id
  * @param {{ light: Record<string,string>, dark?: Record<string,string> }} sets
  */
-export function customThemeCss(id, { light, dark } = /** @type {any} */ ({})) {
+export function customThemeCss(id, sets) {
   assertId(id);
-  return layered(id, light, dark ?? null);
+  const light = isRecord(sets) && isRecord(sets.light) ? sets.light : null;
+  const dark = isRecord(sets) && isRecord(sets.dark) ? sets.dark : null;
+  if (!light || !declLines(light, '').length) {
+    throw new ThemeCssError('Nothing usable: the theme has no tokens that can be saved.', 422, skippedTokens(sets));
+  }
+  return layered(id, light, dark);
 }
 
 // ── adjustments (vp-site) ─────────────────────────────────────────────────
@@ -340,6 +373,12 @@ const cornersOf = (c) => (typeof c === 'string' && Object.hasOwn(CORNER_RADII, c
 const formatHue = (h) => String(Math.round(h * 100) / 100);
 const hasDecls = (d) => !!d && typeof d === 'object' && Object.keys(d).length > 0;
 
+/** Tokens the hue, font and corner settings own; colors cannot set them. */
+const SETTING_TOKENS = new Set(['--hue-primary', '--font-heading', '--font-body', ...RADIUS_TOKENS]);
+const colorDecls = (d) => (isRecord(d)
+  ? Object.fromEntries(Object.entries(d).filter(([name]) => !SETTING_TOKENS.has(name)))
+  : null);
+
 /** @param {Adjustments|null|undefined} adj */
 export function isDefaultAdjustments(adj) {
   if (!adj || typeof adj !== 'object') return true;
@@ -358,14 +397,15 @@ export function adjustmentsCss(adj) {
   const decls = Object.create(null);
   if (validHue(adj.hue)) decls['--hue-primary'] = formatHue(adj.hue);
   const colors = adj.colors && typeof adj.colors === 'object' ? adj.colors : {};
-  if (colors.light && typeof colors.light === 'object') Object.assign(decls, colors.light);
+  const light = colorDecls(colors.light);
+  if (light) Object.assign(decls, light);
   const heading = fontOf(adj.headingFont);
   const body = fontOf(adj.bodyFont);
   if (heading) decls['--font-heading'] = heading;
   if (body) decls['--font-body'] = body;
   const radii = cornersOf(adj.corners);
   if (radii) Object.assign(decls, radii);
-  const dark = colors.dark && typeof colors.dark === 'object' ? colors.dark : null;
+  const dark = colorDecls(colors.dark);
   return [...schemeRules(ADJUST_ID, decls, dark, ''), ''].join('\n');
 }
 

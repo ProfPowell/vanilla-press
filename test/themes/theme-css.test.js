@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   IMPORT_LIMIT, ThemeCssError, rewriteComposerCss, customThemeCss, adjustmentsCss,
   isDefaultAdjustments, FONT_STACKS, CORNER_RADII, themeTokenNames, hueColorExpr,
-  safeTokenName, safeTokenValue, singleSchemeOf,
+  safeTokenName, safeTokenValue, singleSchemeOf, skippedTokens,
 } from '../../src/themes/theme-css.js';
 
 /** Every selector the output uses, with declarations removed. */
@@ -193,6 +193,21 @@ describe('rewriteComposerCss', () => {
     const r = rewriteComposerCss(':root { --a:\n  oklch(0.5\n 0.1   30) }', 'x');
     assert.match(r.css, /--a: oklch\(0\.5 0\.1 30\);/);
   });
+  it('caps the dropped list at 50 labels plus a count, quickly', () => {
+    let junk = '';
+    for (let n = 0; junk.length < 250 * 1024; n++) junk += `.c${n}{a:b}`;
+    const t = Date.now();
+    assert.throws(() => rewriteComposerCss(junk, 'x'), (e) => {
+      assert.equal(e.status, 422);
+      assert.equal(e.dropped.length, 51);
+      assert.equal(e.dropped[0], '.c0');
+      assert.match(e.dropped[50], /^…and \d+ more$/);
+      return true;
+    });
+    assert.ok(Date.now() - t < 500, `took ${Date.now() - t} ms`);
+    const r = rewriteComposerCss(`${junk.slice(0, 2000)} :root { --a: 1 }`, 'x');
+    assert.ok(r.dropped.length <= 51);
+  });
   it('keeps dropped labels short', () => {
     const r = rewriteComposerCss(`${'a'.repeat(500)} { color: red } :root { --a: 1 }`, 'x');
     assert.ok(r.dropped[0].length <= 81);
@@ -261,6 +276,18 @@ describe('customThemeCss', () => {
     assert.doesNotMatch(css, /--b|color|--c|--d|data-mode|prefers/);
     assertScoped(css, 'x');
   });
+  it('refuses missing or unusable tokens with 422', () => {
+    for (const sets of [null, undefined, {}, { light: null }, { light: [] }, { light: {} }, { light: { '--a': 'url(x)' } }, { dark: { '--a': '1' } }]) {
+      assert.throws(() => customThemeCss('x', sets), (e) => e instanceof ThemeCssError && e.status === 422, JSON.stringify(sets));
+    }
+    assert.throws(() => customThemeCss('x', { light: { '--a': 'url(x)', 'color': 'red' } }), (e) => e.dropped.join() === '--a,color');
+  });
+  it('skippedTokens lists the names customThemeCss skips, per scheme', () => {
+    assert.deepEqual(skippedTokens({ light: { '--a': '1', '--b': 'url(x)', 'color': 'red' }, dark: { '--a': '1', '--c': 'a;b', '--b': 'image(x)' } }),
+      ['--b', 'color', '--c']);
+    assert.deepEqual(skippedTokens({ light: { '--a': '1' } }), []);
+    assert.deepEqual(skippedTokens(null), []);
+  });
   it('refuses an unsafe id', () => {
     assert.throws(() => customThemeCss('x"] body { color: red } [a="', { light: { '--a': '1' } }), { status: 400 });
   });
@@ -292,6 +319,16 @@ describe('adjustmentsCss', () => {
     assert.match(css, /--ok: 1;/);
     assert.doesNotMatch(css, /hue|--font-heading|radius|url|color:|data-mode/);
     assert.equal(adjustmentsCss(null), '');
+  });
+  it('the hue setting wins over colors; colors cannot set fonts, radii or the hue', () => {
+    const css = adjustmentsCss({ hue: 25, headingFont: null, bodyFont: null, corners: 'theme',
+      colors: { light: { '--hue-primary': '200', '--radius-m': '9rem', '--color-primary': 'red' }, dark: { '--hue-primary': '200', '--font-body': 'x', '--color-primary': 'blue' } } });
+    assert.match(css, /--hue-primary: 25;/);
+    assert.doesNotMatch(css, /200|9rem|--font-body/);
+    assert.match(css, /--color-primary: blue;/);
+    const noHue = adjustmentsCss({ hue: null, headingFont: null, bodyFont: null, corners: 'theme',
+      colors: { light: { '--hue-primary': '200', '--color-primary': 'red' }, dark: null } });
+    assert.doesNotMatch(noHue, /--hue-primary/);
   });
   it('isDefaultAdjustments', () => {
     assert.equal(isDefaultAdjustments({ hue: null, headingFont: null, bodyFont: null, corners: 'theme', colors: null }), true);

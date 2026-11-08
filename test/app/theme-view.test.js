@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   draftFrom, isDirty, cardModels, schemeControl, pagesModel, vbNote, hueOf, schemeOf, previewSrcdoc, escapeHtml,
   applyBody, deleteRefusalText, applyOutcome, libraryNotice, importTooBig, LIVE_POLL_MS, LIVE_POLL_FOR_MS,
+  baselineOf, applyFailureView, liveStep, LIVE_STOPPED_TEXT, tokenReads,
 } from '../../app/assets/js/theme-view.js';
 
 const theme = (id, tier, extra = {}) => ({
@@ -233,5 +234,48 @@ describe('theme-view', () => {
     assert.equal(importTooBig('a'.repeat(256 * 1024)), false);
     assert.equal(importTooBig('a'.repeat(256 * 1024 + 1)), true);
     assert.equal(importTooBig('é'.repeat(128 * 1024 + 1)), true);
+  });
+
+  it('baselineOf drops the literal colors (what isDirty compares)', () => {
+    const d = draftFrom({ name: 'swiss', mode: 'dark', adjustments: { hue: 200, corners: 'round' } });
+    const withColors = { ...d, adjustments: { ...d.adjustments, colors: { light: {}, dark: {} } } };
+    assert.deepEqual(baselineOf(withColors), d);
+    assert.equal(isDirty(baselineOf(withColors), d), false);
+  });
+
+  it('applyFailureView: one live region per failure, baseline and reload as on disk', () => {
+    const build = applyFailureView({ status: 422, data: { error: 'Build failed', log: 'x' } });
+    assert.deepEqual(build, {
+      state: '', report: { message: 'Build failed. Nothing was pushed, and the live site still has the previous theme.', log: 'x' },
+      baseline: false, reload: false,
+    });
+    const files = applyFailureView({ status: 409, data: { error: 'GitHub has changes that conflict with yours.', files: ['a.md'] } });
+    assert.deepEqual(files, {
+      state: '', report: { message: "Applied on this computer, but couldn't push: GitHub has changes that conflict with yours. Conflicting files:", files: ['a.md'] },
+      baseline: true, reload: true,
+    });
+    assert.deepEqual(applyFailureView({ status: 502, data: { error: 'no network' } }),
+      { state: "Applied on this computer, but couldn't push: no network", report: null, baseline: true, reload: true });
+    assert.deepEqual(applyFailureView({ status: 409, data: { error: 'The theme was changed on another computer. Review it and apply again.' } }),
+      { state: 'The theme was changed on another computer. Review it and apply again.', report: null, baseline: false, reload: true });
+    assert.deepEqual(applyFailureView({ status: 422, data: { error: 'This site has no copy of Vanilla Breeze under src/…' } }),
+      { state: 'This site has no copy of Vanilla Breeze under src/…', report: null, baseline: false, reload: false });
+    assert.deepEqual(applyFailureView(new Error('Cannot reach the Vanilla Press app. Is it still running?')),
+      { state: 'Cannot reach the Vanilla Press app. Is it still running?', report: null, baseline: false, reload: false });
+  });
+
+  it('liveStep: live, keep polling, or time out after 5 min', () => {
+    assert.deepEqual(liveStep({ live: true, url: 'https://a.test/' }, 'https://x.test/', 0, 1000), { done: 'live', url: 'https://a.test/' });
+    assert.deepEqual(liveStep({ live: true, url: null }, 'https://x.test/', 0, 1000), { done: 'live', url: 'https://x.test/' });
+    assert.deepEqual(liveStep({ live: false }, 'https://x.test/', 0, 299_999), { done: null });
+    assert.deepEqual(liveStep(null, 'https://x.test/', 0, 1000), { done: null }, 'a failed check tries again');
+    assert.deepEqual(liveStep({ live: false }, 'https://x.test/', 0, 300_000), { done: 'timeout', text: 'Still deploying, check Cloudflare' });
+    assert.equal(LIVE_STOPPED_TEXT, 'Applied and pushed');
+  });
+
+  it('tokenReads: both schemes, or a one-scheme theme read in its scheme as the one (light) block', () => {
+    assert.deepEqual(tokenReads({ id: '8bit' }), [['light', 'light'], ['dark', 'dark']]);
+    assert.deepEqual(tokenReads({ id: 'night', only: 'dark' }), [['light', 'dark']]);
+    assert.deepEqual(tokenReads({ id: 'paper', only: 'light' }), [['light', 'light']]);
   });
 });

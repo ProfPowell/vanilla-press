@@ -85,8 +85,8 @@ export function mountThemeRoutes(router, prefix, {
   });
 
   router.add('POST', `${prefix}/theme/custom`, library(201, (req) => {
-    const { name, base, tokens } = body(req);
-    const theme = saveCustomTheme(ws, { name, base, tokens }, options);
+    const { name, base, tokens, only } = body(req);
+    const theme = saveCustomTheme(ws, { name, base, tokens, only }, options);
     return { send: { theme, skipped: skippedTokens(tokens) }, id: theme.id, what: `save ${theme.name}` };
   }));
 

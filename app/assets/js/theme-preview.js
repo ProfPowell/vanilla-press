@@ -7,7 +7,7 @@
  */
 import { hueColorExpr } from '../../../src/themes/theme-css.js';
 import { ADJUST_ID } from '../../../src/themes/theme-setting.js';
-import { hueOf } from './theme-view.js';
+import { hueOf, tokenReads } from './theme-view.js';
 
 /** The tokens a hue change writes as literal colors, per scheme (R7). */
 export const HUE_TOKENS = ['--color-primary', '--color-interactive'];
@@ -156,8 +156,7 @@ export function computeTokens(probeHost, base, names, adjustmentsCssText) {
       }
       return out;
     });
-    if (base.only === 'light' || base.only === 'dark') return { light: read(base.only) };
-    return { light: read('light'), dark: read('dark') };
+    return Object.fromEntries(tokenReads(base).map(([set, scheme]) => [set, read(scheme)]));
   } finally {
     style.remove();
   }

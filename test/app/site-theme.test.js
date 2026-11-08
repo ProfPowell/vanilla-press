@@ -144,6 +144,21 @@ describe('site theme store', () => {
     assert.doesNotMatch(css, /--b/);
   });
 
+  it('a theme saved from a one-scheme base keeps its scheme (only), given or from the base entry', () => {
+    const night = importCustomTheme(ws, { name: 'Night', css: ':root{--color-background: oklch(0.2 0 0)}' }, opts()).theme;
+    const inherited = saveCustomTheme(ws, { name: 'Night Copy', base: night.id, tokens: T }, opts());
+    assert.equal(inherited.only, 'dark');
+    assert.deepEqual(readSetting(ws).custom.find((c) => c.id === inherited.id), { id: 'night-copy', name: 'Night Copy', base: 'night', only: 'dark' });
+    assert.equal(readSetting(ws).modes['night-copy'], 'dark');
+    assert.doesNotMatch(read('src/assets/themes/night-copy.css'), /data-mode/, 'one block, no dark variant');
+    const given = saveCustomTheme(ws, { name: 'Day', base: '8bit', tokens: { light: T.light }, only: 'light' }, opts());
+    assert.equal(given.only, 'light');
+    assert.equal(saveCustomTheme(ws, { name: 'Both', base: '8bit', tokens: T }, opts()).only, undefined);
+    const status = (fn) => { try { fn(); } catch (e) { return e.status; } return 0; };
+    assert.equal(status(() => saveCustomTheme(ws, { name: 'X', base: '8bit', tokens: T, only: 'sepia' }, opts())), 400);
+    assert.equal(status(() => saveCustomTheme(ws, { name: 'X', base: '8bit', tokens: T, only: 1 }, opts())), 400);
+  });
+
   it('import marks a one-scheme theme and sets modes', () => {
     const { theme, dropped } = importCustomTheme(ws, { name: 'Night', css: ':root{--color-background: oklch(0.2 0 0)} body{color:red}' }, opts());
     assert.equal(theme.id, 'night');

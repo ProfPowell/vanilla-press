@@ -277,6 +277,7 @@ function showSection(section) {
   if (section === 'media') startMedia();
   else mediaPage?.then((media) => media?.hide());
   if (section === 'theme') startTheme();
+  else themePage?.then((theme) => theme?.hide());
 }
 
 // Theme is set up on first view, only once (its draft lives until reload); every view refreshes it.

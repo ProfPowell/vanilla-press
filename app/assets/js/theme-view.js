@@ -6,6 +6,7 @@
  * @module app/theme-view
  */
 import { IMPORT_LIMIT } from '../../../src/themes/theme-css.js';
+import { publishFailure } from '../../../editor/assets/js/site-context.js';
 
 const MODES = ['auto', 'light', 'dark'];
 const FONTS = ['sans', 'serif', 'mono'];
@@ -280,4 +281,69 @@ export function libraryNotice(action, res) {
  */
 export function importTooBig(text) {
   return new TextEncoder().encode(String(text)).length > IMPORT_LIMIT;
+}
+
+/**
+ * The draft as a baseline: no literal colors (isDirty compares the choices only).
+ * @param {Draft & { adjustments: { colors?: object|null } }} d
+ * @returns {Draft}
+ */
+export function baselineOf(d) {
+  const { hue, headingFont, bodyFont, corners } = d.adjustments;
+  return { name: d.name, mode: d.mode, adjustments: { hue, headingFont, bodyFont, corners } };
+}
+
+const BUILD_FAILED_REPORT = 'Build failed. Nothing was pushed, and the live site still has the previous theme.';
+
+/**
+ * What the Theme screen shows after Apply failed. Each failure is announced
+ * once: by the report (role=alert) when there is a log or a file list, else
+ * by the header status. `baseline`: the change was committed on this
+ * computer (only the push failed), so it is what is applied now. `reload`:
+ * load the theme data again (it changed on disk, or another computer applied).
+ * @param {Error & { status?: number, data?: object }} err
+ * @returns {{ state: string, report: { message: string, log?: string, files?: string[] }|null,
+ *   baseline: boolean, reload: boolean }}
+ */
+export function applyFailureView(err) {
+  const failure = publishFailure(err, 'apply');
+  if (failure.log !== undefined) {
+    return { state: '', report: { message: BUILD_FAILED_REPORT, log: failure.log }, baseline: false, reload: false };
+  }
+  if (failure.files) {
+    return {
+      state: '', report: { message: `${failure.message.replace(/\.$/, '')}. Conflicting files:`, files: failure.files },
+      baseline: true, reload: true,
+    };
+  }
+  return { state: failure.message, report: null, baseline: failure.reload, reload: failure.reload || err.status === 409 };
+}
+
+/** The header after the live check was stopped (the section was left). */
+export const LIVE_STOPPED_TEXT = 'Applied and pushed';
+
+/**
+ * One step of the live check after Apply.
+ * @param {{ live?: boolean, url?: string|null }|null} res - GET /theme/live, null when it failed
+ * @param {string} url - the site URL Apply answered
+ * @param {number} startedAt - ms
+ * @param {number} now - ms
+ * @returns {{ done: 'live', url: string } | { done: 'timeout', text: string } | { done: null }}
+ */
+export function liveStep(res, url, startedAt, now) {
+  if (res?.live) return { done: 'live', url: res.url || url };
+  if (now - startedAt >= LIVE_POLL_FOR_MS) return { done: 'timeout', text: 'Still deploying, check Cloudflare' };
+  return { done: null };
+}
+
+/**
+ * Which scheme computeTokens reads for each token set it returns: both
+ * schemes, or for a one-scheme theme its scheme, saved as the one block
+ * (`light`, the base block; the server marks it with `only`).
+ * @param {{ only?: 'light'|'dark' }} base
+ * @returns {Array<['light'|'dark', 'light'|'dark']>} [set, scheme]
+ */
+export function tokenReads(base) {
+  if (base?.only === 'light' || base?.only === 'dark') return [['light', base.only]];
+  return [['light', 'light'], ['dark', 'dark']];
 }

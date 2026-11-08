@@ -294,16 +294,22 @@ function addCustom(ws, name, makeCss, entry, options) {
  * Save a new custom theme from computed tokens (R10). Unsafe token names
  * and values are skipped (theme-css skippedTokens lists them); 422 when none is usable.
  * @param {import('../workspace/workspace.js').Workspace} ws
- * @param {{ name: string, base: string, tokens: { light: Record<string,string>, dark?: Record<string,string> } }} input
+ * @param {{ name: string, base: string, tokens: { light: Record<string,string>, dark?: Record<string,string> },
+ *   only?: 'light'|'dark' }} input - only: the theme has one scheme (default: the base custom theme's)
  * @param {{ siteId?: string, vpCdnDir?: string }} [options]
  */
-export function saveCustomTheme(ws, { name, base, tokens } = {}, options = {}) {
+export function saveCustomTheme(ws, { name, base, tokens, only } = {}, options = {}) {
   const n = checkName(name);
   if (typeof base !== 'string' || !SAFE_ID.test(base)) throw new ThemeError(400, 'The base theme must be a theme id.');
   if (!isRecord(tokens) || !isRecord(tokens.light) || (tokens.dark != null && !isRecord(tokens.dark))) {
     throw new ThemeError(400, 'tokens must be { light, dark } maps of custom properties.');
   }
-  return addCustom(ws, n, (id) => ({ css: customThemeCss(id, tokens) }), () => ({ base }), options).theme;
+  if (only != null && only !== 'light' && only !== 'dark') throw new ThemeError(400, 'only must be "light" or "dark".');
+  // A copy of a one-scheme custom theme keeps its scheme: one block, marked like the base.
+  const scheme = only ?? readSetting(ws)?.custom.find((c) => c.id === base)?.only ?? null;
+  const sets = scheme ? { light: tokens.light } : tokens;
+  return addCustom(ws, n, (id) => ({ css: customThemeCss(id, sets) }),
+    () => ({ base, ...(scheme ? { only: scheme } : {}) }), options).theme;
 }
 
 /**

@@ -952,6 +952,14 @@ describe('app server themes', () => {
     assert.equal((await api('/theme/custom/retro-mine', { method: 'DELETE' })).status, 404);
   });
 
+  it('POST /theme/custom takes only (light|dark) and refuses anything else', async () => {
+    const res = await api('/theme/custom', { method: 'POST', body: { name: 'Light Copy', base: 'swiss', tokens: { light: T.light }, only: 'light' } });
+    assert.equal(res.status, 201, JSON.stringify(res.data));
+    assert.equal(res.data.theme.only, 'light');
+    assert.equal((await api('/theme/custom', { method: 'POST', body: { name: 'Bad', base: 'swiss', tokens: T, only: 'both' } })).status, 400);
+    assert.equal((await api('/theme/custom/light-copy', { method: 'DELETE' })).status, 200);
+  });
+
   it('imports a real Theme Composer export (theme-export output) whole, scoped to the new id', async () => {
     const exported = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'theme-composer-export.css'), 'utf8');
     const res = await api('/theme/import', { method: 'POST', body: { name: 'Composer Modern', css: exported } });

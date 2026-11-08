@@ -278,6 +278,15 @@ describe('title in the document', () => {
     assert.deepEqual(toBlockAst(view.state.doc), [para(' text', ['strong'])]);
   });
 
+  it('a file drop on the title is not swallowed', () => {
+    const plugin = titlePastePlugin();
+    const view = fakeView(stateFor([para('Body text')], 'My title', 1, [plugin]), () => ({ pos: 3, inside: -1 }));
+    const before = view.state.doc;
+    const event = { clientX: 0, clientY: 0, dataTransfer: { files: { length: 1 } } };
+    assert.equal(plugin.props.handleDrop(view, event, Slice.empty, false), false);
+    assert.equal(view.state.doc, before);
+  });
+
   it('a drop onto the body is left to the editor', () => {
     const plugin = titlePastePlugin();
     const state = stateFor([para('Body text')], 'My title', 1, [plugin]);

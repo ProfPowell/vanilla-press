@@ -123,9 +123,17 @@ function createPicker({ kind, heading, resolve }) {
   const queue = createUploadQueue({
     upload: (file, { onProgress }) => api.uploadMedia(file, { onProgress }),
     concurrency: 1,
-    // A queue change is a newer event than a refused drop: its message goes
-    onChange: () => { precheckError = ''; renderUploads(); },
+    // A file added or an upload finishing is newer than a refused drop: its
+    // message goes. Progress ticks keep it.
+    onChange: () => {
+      const states = queue.entries().map((e) => `${e.key}:${e.state}`).join(' ');
+      if (states !== lastStates) precheckError = '';
+      lastStates = states;
+      renderUploads();
+    },
   });
+  /** The queue's entries and their states at the last change. */
+  let lastStates = '';
   /** Keys of finished uploads already handled. */
   const handled = new Set();
   /** A dropped or chosen file of the wrong kind (never uploaded). */

@@ -23,19 +23,21 @@ import { toBlockAst, fromBlockAst } from './ast.js';
 import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
 import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
 import { getCurrentMeta, setCurrentMeta, resetCurrentMeta,
-  getCurrentDocId, setCurrentDocId, takeSaveNotes, clearSaveNotes } from './meta-state.js';
+  getCurrentDocId, setCurrentDocId, takeSaveNotes, clearSaveNotes, addSaveNote } from './meta-state.js';
 import { CodeBlockView } from './blocks/code-block-view.js';
 import { CalloutView } from './blocks/callout-view.js';
 import { CollapsibleView } from './blocks/collapsible-view.js';
 import { CardView } from './blocks/card-view.js';
 import { TabsView } from './blocks/tabs-view.js';
 import { StepsView, StepView } from './blocks/steps-view.js';
-import { FigureView } from './blocks/figure-view.js';
+import { FigureView, focusFigureAlt } from './blocks/figure-view.js';
 import {
   ComponentView, InlineComponentView, componentSettingsPlugin, setComponentDescriptors,
 } from './blocks/component-view.js';
 import { getBlockPalette } from './components/block-palette.js';
 import { insertTargetPlugin } from './insert-target.js';
+import { mediaDropPlugin } from './media-drop.js';
+import { insertPlan, pdfViewerEnabled } from './media-insert.js';
 import { api } from './api-client.js';
 import './components/editor-shell.js';
 import './components/ast-inspector.js';
@@ -218,6 +220,22 @@ export function initEditor() {
       history(),
       // Before the other keymaps: Enter, Backspace, Delete and Mod-a at the title's edge
       keymap(titleKeymap()),
+      // Before titlePastePlugin: files dropped or pasted anywhere (the title
+      // too) upload and land as their blocks
+      ...mediaDropPlugin({
+        upload: (file, opts) => api.uploadMedia(file, opts),
+        plan: async (item) => insertPlan(item, {
+          // Asked per PDF: a package turned on after the editor loaded counts
+          pdfViewer: item.kind === 'pdf' ? pdfViewerEnabled(await api.listComponents().catch(() => null)) : false,
+        }),
+        onInserted: (view, pos, plan) => {
+          // The alt field takes focus unless the writer has moved to another field
+          const active = document.activeElement;
+          const free = !active || active === document.body || view.dom.contains(active);
+          if (plan.focusAlt && free) focusFigureAlt(view, pos);
+          if (plan.note) addSaveNote(plan.note);
+        },
+      }),
       titlePastePlugin(),
       createTitleDecorationsPlugin(),
       buildKeymap(),

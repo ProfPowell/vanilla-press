@@ -214,3 +214,44 @@
 .ProseMirror .pm-component-live-leaf:is([data-state="failed"], [data-state="off"]) > :not(.pm-component-note) {
   display: none;
 }
+
+/* A dropped or pasted file while it uploads (a widget, not part of the
+ * document): its name and progress, or its error with Dismiss */
+.ProseMirror .media-drop-placeholder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-xs) var(--size-s);
+  margin-block: var(--size-m);
+  padding: var(--size-s) var(--size-m);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface-alt);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-s);
+  line-height: var(--line-height-normal);
+  color: var(--color-text);
+  white-space: normal;
+  user-select: none;
+}
+
+.ProseMirror .media-drop-placeholder progress {
+  accent-color: var(--color-primary);
+}
+
+.ProseMirror .media-drop-placeholder[data-state="error"] {
+  border-style: solid;
+  border-color: var(--color-error-text);
+}
+
+.ProseMirror .media-drop-error {
+  flex: 1 1 16rem;
+  margin: 0;
+  color: var(--color-error-text);
+}
+
+.ProseMirror .media-drop-placeholder button {
+  min-block-size: 40px;
+  padding-inline: var(--size-m);
+  font: inherit;
+}

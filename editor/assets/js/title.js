@@ -212,7 +212,8 @@ function dropAcrossTitleEnd(state, pos, slice) {
  * - typing over a selection that runs from the title into the body replaces
  *   it without moving body text into the title;
  * - dropping onto the title inserts the dropped content's plain text (a
- *   drop with no text, such as a rule, changes nothing);
+ *   drop with no text, such as a rule, changes nothing; a drop of files is
+ *   left to media-drop.js);
  * - dragging a selection that runs from the title into the body and dropping
  *   it in the body moves it without joining body text into the title;
  * - cutting a selection that runs from the title into the body removes it
@@ -258,6 +259,8 @@ export function titlePastePlugin() {
         return true;
       },
       handleDrop(view, event, slice, moved) {
+        // Files are uploaded and inserted by media-drop.js, never swallowed here
+        if (event.dataTransfer?.files?.length) return false;
         const found = view.posAtCoords({ left: event.clientX, top: event.clientY });
         if (!found) return false;
         const { state } = view;

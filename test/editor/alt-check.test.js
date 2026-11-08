@@ -44,9 +44,17 @@ describe('altWarnings', () => {
     assert.deepEqual(altWarnings([fig('/media/a.jpg', ''), fig('/media/a.jpg')], []), [{ src: '/media/a.jpg', name: 'a.jpg' }]);
   });
 
-  it('no blocks or no library: safe', () => {
-    assert.deepEqual(altWarnings(undefined, undefined), []);
-    assert.deepEqual(altWarnings([fig('/media/a.jpg', 'x')], null), []);
+  it('no blocks: none', () => {
+    assert.deepEqual(altWarnings(undefined, []), []);
+  });
+
+  it('no library list (the fetch failed or answered something else): none, publish goes ahead', () => {
+    const blocks = [fig('/media/a.jpg', '')];
+    assert.deepEqual(altWarnings(blocks, undefined), []);
+    assert.deepEqual(altWarnings(blocks, null), []);
+    assert.deepEqual(altWarnings(blocks, { error: 'Not found' }), []);
+    // An empty library is a real answer: the file is not in it, so it warns
+    assert.deepEqual(altWarnings(blocks, []), [{ src: '/media/a.jpg', name: 'a.jpg' }]);
   });
 });
 

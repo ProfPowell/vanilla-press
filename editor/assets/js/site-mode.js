@@ -479,22 +479,26 @@ function watchLive(docId, url, pendingText) {
 /**
  * Before Publish or Update: when an image in the post has no alt text (and
  * its file is not marked decorative), ask. Without the media list, go ahead.
+ * Used by the header's primary button and by `vp serve`'s panel Publish.
  * @param {'publish'|'update'} action
+ * @param {HTMLElement} [returnFocus] - focused on Cancel (the header's primary button by default)
  * @returns {Promise<boolean>} whether to go on
  */
-async function altCheckPasses(action) {
+export async function altCheckPasses(action, returnFocus) {
   const doc = getEditorDoc();
-  if (!doc) return true;
+  const confirm = els?.confirm || document.querySelector('confirm-panel[data-confirm]');
+  if (!doc || !confirm) return true;
   let library;
   try {
     library = await api.listMedia();
   } catch {
     return true;
   }
-  const warnings = altWarnings(toBlockAst(doc), Array.isArray(library) ? library : []);
+  // A non-array answer counts as no list (altWarnings gives none): never a false warning
+  const warnings = altWarnings(toBlockAst(doc), library);
   if (!warnings.length) return true;
-  const go = await els.confirm.ask(altWarningText(warnings, action));
-  if (!go) els.primary.focus();
+  const go = await confirm.ask(altWarningText(warnings, action));
+  if (!go) (returnFocus || els?.primary)?.focus();
   return go;
 }
 
@@ -509,7 +513,8 @@ async function onPrimary() {
   try { go = await altCheckPasses(action); } finally { checking = false; }
   if (!go) return;
   if (SITE) return runAction(action);
-  if (action === 'publish') return document.querySelector('meta-panel [data-publish]')?.click();
+  // Already checked: the panel's toggle must not ask again
+  if (action === 'publish') return document.querySelector('meta-panel')?.togglePublish({ altChecked: true });
   return saveDocument(); // a published post's edits already sync when saved
 }
 

@@ -12,13 +12,15 @@ const BODY = 'Screen readers will announce only the file name. Add alt text in t
 /**
  * Every figure whose alt is '' or absent, unless its library file is marked
  * decorative (alt ''). External sources and files not in the library warn.
- * Deduped by src.
+ * Deduped by src. Without a library list (not an array: the fetch failed or
+ * answered something else) there are no warnings, so publishing goes ahead.
  * @param {Array} blocks - the post's block AST
- * @param {Array<{ filename: string, alt: string|null }>} library
+ * @param {Array<{ filename: string, alt: string|null }>|unknown} library
  * @returns {Array<{ src: string, name: string }>}
  */
 export function altWarnings(blocks, library) {
-  const decorative = new Set((library || []).filter((m) => m?.alt === '').map((m) => m.filename));
+  if (!Array.isArray(library)) return [];
+  const decorative = new Set(library.filter((m) => m?.alt === '').map((m) => m.filename));
   const found = new Map();
   const walk = (node) => {
     if (Array.isArray(node)) return node.forEach(walk);

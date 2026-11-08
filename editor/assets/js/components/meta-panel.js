@@ -20,7 +20,7 @@ import { postUrlPath } from '../../../../src/sync/paths.js';
 import {
   saveDocument, loadDocument, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine, metaEdited,
 } from '../editor.js';
-import { onMetaUpdate as onSiteMetaUpdate, isSiteMode } from '../site-mode.js';
+import { onMetaUpdate as onSiteMetaUpdate, isSiteMode, altCheckPasses } from '../site-mode.js';
 import { statusBox, collectionOptions, urlPrefix, featuredModel } from '../settings-view.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
 import { openMediaPicker } from './media-picker.js';
@@ -281,9 +281,21 @@ export class MetaPanel extends HTMLElement {
     });
   }
 
-  async togglePublish() {
+  /**
+   * vp serve: Publish (after the alt check, unless the header already ran it) or Unpublish.
+   * @param {{ altChecked?: boolean }} [options]
+   */
+  async togglePublish({ altChecked = false } = {}) {
     // The app's header owns Publish/Update/Unpublish; a save never sets status there (Ruling P).
     if (isSiteMode) return;
+    const publishing = getCurrentMeta()?.status !== 'published';
+    if (publishing && !altChecked) {
+      if (this._checking) return;
+      this._checking = true;
+      let go;
+      try { go = await altCheckPasses('publish', this.querySelector('[data-publish]')); } finally { this._checking = false; }
+      if (!go) return;
+    }
     // A page not stored yet is created first (saveDocument creates it).
     if (!getCurrentDocId() || getCurrentDocId() === 'doc_new') {
       if (!(await saveDocument())) return;

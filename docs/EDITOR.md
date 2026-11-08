@@ -33,10 +33,10 @@ Choosing a post opens the editor at `/editor/?site=<id>#doc-<id>`.
 - **← Posts** and the site name (the app only), then the save state ("Saved", "Saved · not live yet", "Backed up", ...).
 - **Preview** (published posts) starts the site's dev server and opens the post's page in a new tab.
 - **Post settings** (the panel icon) shows or hides the settings panel on the right.
-- **⋯** (More actions) holds, in order: Export JSON, Show block tree (AST), View live page (when there is one), Delete post... and, in the app for a published post, Unpublish.... Delete is disabled while the post is published ("Unpublish it first"); the server refuses it too (409). Unpublish and Delete ask in an in-page confirmation (Cancel has focus; Escape cancels). Use the arrow keys, Home and End in the menu; Escape closes it.
+- **⋯** (More actions) holds, in order: Export JSON, Show block tree (AST), View live page (when there is one), Delete post... and, in the app for a published post, Unpublish.... Delete is disabled while the post is published ("Unpublish it first"); in the app the server refuses it too (409); the disabled item applies in both modes. Unpublish and Delete ask in an in-page confirmation (Cancel has focus; Escape cancels). Use the arrow keys, Home and End in the menu; Escape closes it.
 - **Publish** (a draft) or **Update** (a published post) is the one primary button. The state beside it shows progress ("Publishing...", "Updating...", "Live"). Unpublish never sits next to it.
 
-`vp serve` has the same top bar without "← Posts" and the site name; Publish and Unpublish are the fixture's own actions there.
+`vp serve` has the same top bar without "← Posts" and the site name; Publish and Unpublish are the fixture's own actions there, and Unpublish stays in the settings panel (see Post settings).
 
 ### Write
 
@@ -89,7 +89,7 @@ The title is the first line of the document, in the serif heading style. It cann
 
 ### Post settings
 
-The panel on the right holds the post's Status (shown, not edited: Publish and Unpublish change it), URL (slug), Description, Tags, Collection and Appearance, plus the settings of the selected component. "Show block tree" in the "⋯" menu swaps the panel for the live Vanilla Press block AST (useful for checking the round trip between ProseMirror and the content model); "Back to settings" returns. In `vp serve` the document browser and the theme picker sit at the bottom of the panel.
+The panel on the right holds the post's Status (in the app it is shown, not edited: Publish and Unpublish change it; in `vp serve` it is an editable select), URL (slug), Description, Tags, Collection and Appearance, plus the settings of the selected component. "Show block tree" in the "⋯" menu swaps the panel for the live Vanilla Press block AST (useful for checking the round trip between ProseMirror and the content model); "Back to settings" returns. In `vp serve` the document browser and the theme picker sit at the bottom of the panel.
 
 ### Export
 

@@ -38,4 +38,20 @@ describe('listThemes', () => {
   it('copes with a missing themes directory', () => {
     assert.deepEqual(listThemes(join(dir, 'nope')).map(t => t.id), ['default', 'classic', 'minimal', 'modern']);
   });
+
+  it('href points at the file for every theme that has one, built-ins too', () => {
+    const base = '/assets/vb';
+    const byId = Object.fromEntries(listThemes(dir, { hrefBase: base }).map(t => [t.id, t]));
+    assert.equal(byId.classic.file, null);
+    assert.equal(byId.classic.href, `${base}/themes/classic.css`);
+    assert.equal(byId.amber.href, `${base}/themes/amber.css`);
+    assert.equal(byId.default.href, null);
+    assert.equal(listThemes(dir).find(t => t.id === 'amber').href, null);
+  });
+
+  it('builtIns option decides which themes need no stylesheet', () => {
+    const byId = Object.fromEntries(listThemes(dir, { builtIns: ['default', 'amber'] }).map(t => [t.id, t]));
+    assert.equal(byId.amber.file, null);
+    assert.equal(byId.classic.file, 'classic.css');
+  });
 });

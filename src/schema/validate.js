@@ -55,6 +55,9 @@ export function validate(doc, { components } = {}) {
         errors.push(`meta is missing required field "${field}"`);
       }
     }
+    if (doc.meta.image !== undefined && doc.meta.image !== null && typeof doc.meta.image !== 'string') {
+      errors.push('meta.image must be a string');
+    }
     if (doc.meta.status && !validStatuses.includes(doc.meta.status)) {
       errors.push(`meta.status "${doc.meta.status}" is not valid (expected: ${validStatuses.join(', ')})`);
     }
@@ -115,6 +118,9 @@ function validateBlock(block, path, errors, ctx) {
     }
     return;
   }
+
+  // A block with optional children (a figure without a caption) may omit them
+  if (def.optionalChildren && block.children === undefined) return;
 
   // Non-leaf blocks must have children
   if (!Array.isArray(block.children)) {

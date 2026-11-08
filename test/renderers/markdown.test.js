@@ -195,6 +195,11 @@ describe('markdown renderer', () => {
       assert.ok(md.includes('[^2]'));
     });
 
+    it('audio embed renders a link', () => {
+      const md = render({ id: 'x', meta: {}, blocks: [{ type: 'embed', attrs: { url: '/media/talk-3f9a2c.mp3', type: 'audio' } }] });
+      assert.ok(md.includes('[audio: /media/talk-3f9a2c.mp3](/media/talk-3f9a2c.mp3)'));
+    });
+
     it('renders embeds', () => {
       const doc = fixture('edge-cases.json');
       const md = render(doc);

@@ -219,8 +219,9 @@ function renderHr(block) {
 function renderFigure(block) {
   const { src, alt, variant } = block.attrs || {};
   const caption = (block.children || []).map(renderBlock).join('');
+  const captionLine = caption ? `${caption}\n` : '';
   const cls = variant && variant !== 'default' ? ` class="${escapeAttr(variant)}"` : '';
-  return `<figure${cls}>\n<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"/>\n${caption}\n</figure>`;
+  return `<figure${cls}>\n<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"/>\n${captionLine}</figure>`;
 }
 
 function renderFigcaption(block) {
@@ -236,6 +237,10 @@ function renderEmbed(block) {
     }
     // Self-hosted video: wrap native <video> per VB's video-player static fallback.
     return `<video-player>\n<video controls>\n<source src="${escapeAttr(url)}"/>\n<p>Your browser does not support video. <a href="${escapeAttr(url)}">Download</a>.</p>\n</video>\n</video-player>`;
+  }
+  if (type === 'audio') {
+    const u = escapeAttr(url);
+    return `<audio-player>\n<audio controls src="${u}">\n<p>Your browser does not support audio. <a href="${u}">Download</a>.</p>\n</audio>\n</audio-player>`;
   }
   // codepen, observable, twitter, etc — VB's social-embed auto-detects provider.
   return `<social-embed url="${escapeAttr(url)}"></social-embed>`;

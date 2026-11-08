@@ -35,6 +35,13 @@ describe('frontMatter', () => {
     const out = frontMatter(d, { layout: 'page' });
     assert.equal(out, `---\ntitle: "X"\ndate: "${localDay('2026-10-01T12:00:00Z')}"\nlayout: "page"\nslug: "x"\nvp_id: "doc_x"\n---\n`);
   });
+  it('image is written after tags', () => {
+    const d = { ...base, meta: { ...base.meta, image: '/media/garden-path-3f9a2c.jpg' } };
+    assert.ok(frontMatter(d, { layout: 'post' }).includes('tags: ["a","b"]\nimage: "/media/garden-path-3f9a2c.jpg"\nlayout:'));
+  });
+  it('a doc with no image has no image line', () => {
+    assert.ok(!frontMatter(base, { layout: 'post' }).includes('image:'));
+  });
   for (const title of ['He said "hi": yes', 'a\nb', '--- x', '#hash']) {
     it(`round-trips title ${JSON.stringify(title)}`, () => {
       const d = { ...base, id: 'doc_x', meta: { ...base.meta, title } };

@@ -51,6 +51,7 @@ function rowToDocument(row) {
       updated: row.updated,
       published: row.published || undefined,
       tags: row.tags ? JSON.parse(row.tags) : undefined,
+      image: row.image || undefined,
     },
     blocks: JSON.parse(row.blocks),
   };
@@ -127,8 +128,8 @@ export function saveDocument(db, doc) {
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO documents (id, title, slug, collection, status, description, author_id, created, updated, published, tags, blocks, plaintext)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO documents (id, title, slug, collection, status, description, author_id, created, updated, published, tags, image, blocks, plaintext)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       slug = excluded.slug,
@@ -139,6 +140,7 @@ export function saveDocument(db, doc) {
       updated = excluded.updated,
       published = excluded.published,
       tags = excluded.tags,
+      image = excluded.image,
       blocks = excluded.blocks,
       plaintext = excluded.plaintext
   `).run(
@@ -153,6 +155,7 @@ export function saveDocument(db, doc) {
     meta.updated || now,
     meta.published || null,
     meta.tags ? JSON.stringify(meta.tags) : null,
+    meta.image || null,
     JSON.stringify(blocks),
     plaintext,
   );

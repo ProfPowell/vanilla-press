@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS documents (
   updated     TEXT NOT NULL,
   published   TEXT,
   tags        TEXT, -- JSON array
+  image       TEXT, -- featured image URL (/media/<file>)
   blocks      TEXT NOT NULL, -- JSON array of block AST
   plaintext   TEXT NOT NULL DEFAULT '',
   UNIQUE(collection, slug)

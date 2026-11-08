@@ -37,6 +37,7 @@ export function frontMatter(doc, { layout }) {
     ['updated', m.updated],
     ['author', m.author_id],
     ['tags', tags.length ? `[${tags.map((t) => JSON.stringify(t)).join(',')}]` : ''],
+    ['image', m.image],
     ['layout', layout],
     ['slug', m.slug],
     ['vp_id', doc.id],

@@ -56,6 +56,14 @@ describe('validate', () => {
       assert.ok(result.errors.some(e => e.includes('"title"')));
     });
 
+    it('meta.image must be a string', () => {
+      const bad = validate({ id: 'x', meta: { ...baseMeta, image: 3 }, blocks: [] });
+      assert.equal(bad.valid, false);
+      assert.ok(bad.errors.includes('meta.image must be a string'));
+      assert.equal(validate({ id: 'x', meta: { ...baseMeta, image: '/media/a.jpg' }, blocks: [] }).valid, true);
+      assert.equal(validate({ id: 'x', meta: { ...baseMeta, image: null }, blocks: [] }).valid, true);
+    });
+
     it('allows an empty title on a draft', () => {
       const result = validate({ id: 'x', meta: { ...baseMeta, title: '' }, blocks: [] });
       assert.equal(result.valid, true, result.errors.join('; '));
@@ -100,6 +108,21 @@ describe('validate', () => {
       id: 'x',
       meta: { title: 't', slug: 's', collection: 'c', status: 'draft' },
       blocks,
+    });
+
+    it('a figure without a caption is valid', () => {
+      const result = validate(validDoc([{ type: 'figure', attrs: { src: '/media/a.jpg', alt: 'x' } }]));
+      assert.equal(result.valid, true, result.errors.join('; '));
+    });
+
+    it('embed type audio is valid', () => {
+      const result = validate(validDoc([{ type: 'embed', attrs: { url: '/media/a.mp3', type: 'audio' } }]));
+      assert.equal(result.valid, true, result.errors.join('; '));
+    });
+
+    it('embed type podcast is invalid', () => {
+      const result = validate(validDoc([{ type: 'embed', attrs: { url: '/media/a.mp3', type: 'podcast' } }]));
+      assert.equal(result.valid, false);
     });
 
     it('rejects unknown block type', () => {

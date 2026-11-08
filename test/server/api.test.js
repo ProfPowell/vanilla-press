@@ -134,6 +134,17 @@ describe('API', () => {
       assert.equal(data.blocks.length, 2);
     });
 
+    it('PUT meta.image then null clears it', async () => {
+      const set = await api(`/api/documents/${docId}`, { method: 'PUT', body: { meta: { image: '/media/a.jpg' } } });
+      assert.equal(set.status, 200);
+      assert.equal(set.data.meta.image, '/media/a.jpg');
+      assert.equal((await api(`/api/documents/${docId}`)).data.meta.image, '/media/a.jpg');
+      const cleared = await api(`/api/documents/${docId}`, { method: 'PUT', body: { meta: { image: null } } });
+      assert.equal(cleared.status, 200);
+      assert.equal(cleared.data.meta.image, undefined);
+      assert.equal((await api(`/api/documents/${docId}`)).data.meta.image, undefined);
+    });
+
     it('lists documents', async () => {
       const { status, data } = await api('/api/documents');
 

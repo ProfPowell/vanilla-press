@@ -14,6 +14,7 @@
  * @typedef {Object} BlockDef
  * @property {string} category - Grouping: prose, media, code, component
  * @property {string|string[]|undefined} children - Content model: 'inline', 'block', specific types, or undefined for leaf
+ * @property {boolean} [optionalChildren] - True if the children key may be absent (figure without a caption)
  * @property {boolean} [leaf] - True if block has no children (uses value instead)
  * @property {Object} [attrs] - Attribute definitions
  */
@@ -47,9 +48,9 @@ export const blockTypes = {
   definition_desc: { category: 'prose',  children: 'block' },
 
   // --- Media ---
-  figure:       { category: 'media',     children: ['figcaption'], attrs: { src: { type: 'string', required: true }, alt: { type: 'string', required: true }, variant: { type: 'string', enum: ['default', 'full', 'bordered', 'float-start', 'float-end', 'centered'] } } },
+  figure:       { category: 'media',     children: ['figcaption'], optionalChildren: true, attrs: { src: { type: 'string', required: true }, alt: { type: 'string', required: true }, variant: { type: 'string', enum: ['default', 'full', 'bordered', 'float-start', 'float-end', 'centered'] } } },
   figcaption:   { category: 'media',     children: 'inline' },
-  embed:        { category: 'media',     leaf: true,             attrs: { url: { type: 'string', required: true }, type: { type: 'string', enum: ['video', 'codepen', 'observable'] } } },
+  embed:        { category: 'media',     leaf: true,             attrs: { url: { type: 'string', required: true }, type: { type: 'string', enum: ['video', 'audio', 'codepen', 'observable'] } } },
 
   // --- Code ---
   code_block:   { category: 'code',      leaf: true,             attrs: { language: { type: 'string', default: 'text' }, filename: { type: 'string' } } },

@@ -187,6 +187,20 @@ describe('saveDocument + getDocument', () => {
     assert.equal(doc.blocks.length, 3);
   });
 
+  it('meta.image round-trips through the store', () => {
+    saveDocument(db, { ...sampleDoc, meta: { ...sampleDoc.meta, image: '/media/a.jpg' } });
+    assert.equal(getDocument(db, 'test_doc01').meta.image, '/media/a.jpg');
+    saveDocument(db, { ...sampleDoc, meta: { ...sampleDoc.meta, image: null } });
+    assert.equal(getDocument(db, 'test_doc01').meta.image, undefined);
+  });
+
+  it('an old documents table gains image', () => {
+    db.exec('ALTER TABLE documents DROP COLUMN image');
+    migrate(db);
+    saveDocument(db, { ...sampleDoc, meta: { ...sampleDoc.meta, image: '/media/b.jpg' } });
+    assert.equal(getDocument(db, 'test_doc01').meta.image, '/media/b.jpg');
+  });
+
   it('returns null for nonexistent document', () => {
     const doc = getDocument(db, 'nonexistent');
     assert.equal(doc, null);

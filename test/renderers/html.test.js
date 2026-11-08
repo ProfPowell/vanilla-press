@@ -191,6 +191,17 @@ describe('html renderer', () => {
       assert.ok(html.includes('<figcaption>'));
     });
 
+    it('audio embed renders an audio-player', () => {
+      const html = render({ id: 'x', meta: {}, blocks: [{ type: 'embed', attrs: { url: '/media/talk-3f9a2c.mp3', type: 'audio' } }] });
+      assert.ok(html.includes('<audio-player>\n<audio controls src="/media/talk-3f9a2c.mp3">\n<p>Your browser does not support audio. <a href="/media/talk-3f9a2c.mp3">Download</a>.</p>\n</audio>\n</audio-player>'));
+    });
+
+    it('a figure without children renders no figcaption', () => {
+      const html = render({ id: 'x', meta: {}, blocks: [{ type: 'figure', attrs: { src: '/media/a.jpg', alt: 'x' } }] });
+      assert.ok(html.includes('<img src="/media/a.jpg" alt="x"'));
+      assert.ok(!html.includes('<figcaption'));
+    });
+
     it('renders lists', () => {
       const doc = fixture('simple-post.json');
       const html = render(doc);

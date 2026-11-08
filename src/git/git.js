@@ -274,6 +274,43 @@ export async function hasHead(dir) {
 }
 
 /**
+ * The HEAD commit's id, or null when there is no repo or no commit yet.
+ * @param {string} dir
+ * @returns {Promise<string|null>}
+ */
+export async function headCommit(dir) {
+  return (await tryGit(dir, ['rev-parse', '--verify', '--quiet', 'HEAD'])) || null;
+}
+
+/**
+ * The files committed in HEAD under a path (`git ls-tree -r`), with their blob ids.
+ * @param {string} dir
+ * @param {string} path - repo-relative
+ * @returns {Promise<Array<{ path: string, oid: string }>>}
+ */
+export async function headTree(dir, path) {
+  const out = await runGit(dir, ['ls-tree', '-r', '-z', '--full-name', 'HEAD', '--', path], { raw: true });
+  const entries = [];
+  for (const line of out.split('\0')) {
+    const tab = line.indexOf('\t');
+    if (tab < 0) continue;
+    const [, type, oid] = line.slice(0, tab).split(' ');
+    if (type === 'blob') entries.push({ path: line.slice(tab + 1), oid });
+  }
+  return entries;
+}
+
+/**
+ * A blob's text by id (`git cat-file blob`).
+ * @param {string} dir
+ * @param {string} oid
+ * @returns {Promise<string>}
+ */
+export async function readBlob(dir, oid) {
+  return runGit(dir, ['cat-file', 'blob', oid], { raw: true });
+}
+
+/**
  * A file's text as committed in HEAD, or null when HEAD has no such file.
  * @param {string} dir
  * @param {string} path - repo-relative

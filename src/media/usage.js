@@ -16,6 +16,16 @@ export function mediaFileOf(url) {
   }
 }
 
+/**
+ * The `/media/<file>` URL of a library file, with the name percent-encoded so
+ * `#`, `%`, `?` and spaces survive (a slugged name is unchanged).
+ * @param {string} filename
+ * @returns {string}
+ */
+export function mediaSrc(filename) {
+  return `/media/${encodeURIComponent(filename)}`;
+}
+
 /** Attribute names that can hold a media URL, by node type. */
 const URL_ATTRS = {
   figure: ['src'],
@@ -64,4 +74,56 @@ export function mediaUsage(docs) {
     }
   }
   return usage;
+}
+
+/** HTML attributes whose value can be a media URL in a page. */
+const HTML_URL_ATTR = /(?:^|[\s"'/])(src|href|poster|content|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+
+const ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
+/** Decode the character references an attribute value may hold. */
+function decodeEntities(text) {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, ref) => {
+    if (ref[0] === '#') {
+      const code = ref[1] === 'x' || ref[1] === 'X' ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);
+      try { return String.fromCodePoint(code); } catch { return m; }
+    }
+    return ENTITIES[ref.toLowerCase()] ?? m;
+  });
+}
+
+/**
+ * Every media file an HTML page (as committed: front matter and markup) refers
+ * to: `/media/<file>` in src, href, poster, content and srcset attributes, and
+ * any front matter value (the featured image). External URLs and text are ignored.
+ * @param {unknown} html
+ * @returns {Set<string>}
+ */
+export function liveMediaRefs(html) {
+  const found = new Set();
+  if (typeof html !== 'string') return found;
+  const add = (url) => {
+    const file = mediaFileOf(url.trim());
+    if (file) found.add(file);
+  };
+  let body = html;
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(html);
+  if (fm) {
+    body = html.slice(fm[0].length);
+    for (const line of fm[1].split(/\r?\n/)) {
+      const m = /^[\w-]+:[ \t]*(.*?)[ \t]*$/.exec(line);
+      if (!m) continue;
+      let value = m[1];
+      if (value.startsWith('"')) {
+        try { value = JSON.parse(value); } catch { continue; }
+      } else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+      if (typeof value === 'string') add(value);
+    }
+  }
+  for (const m of body.matchAll(HTML_URL_ATTR)) {
+    const value = decodeEntities(m[2] ?? m[3] ?? m[4] ?? '');
+    if (m[1].toLowerCase() === 'srcset') {
+      for (const candidate of value.split(',')) add(candidate.trim().split(/\s+/)[0] || '');
+    } else add(value);
+  }
+  return found;
 }

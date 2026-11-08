@@ -136,6 +136,27 @@ test('detailModel: an image with dimensions', () => {
   ]);
 });
 
+test('detailModel: a live-only use and a hand-written page', () => {
+  const m = detail({ filename: 'a#1.jpg', usedIn: [
+    { id: 'p', title: 'Hello', status: 'published', liveOnly: true },
+    { title: 'src/about.html', path: 'src/about.html', status: 'published' },
+  ] });
+  assert.equal(m.url, '/media/a%231.jpg');
+  assert.deepEqual(m.usedIn, [
+    { title: 'Hello', href: '/editor/?site=my%20site#doc-p', statusText: 'Published (live version)' },
+    { title: 'src/about.html', href: null, statusText: 'Published page' },
+  ]);
+});
+
+test('a live-only use counts as used: not Unused, and delete is refused', () => {
+  const live = item({ id: 'L', filename: 'live.jpg', usedIn: [{ id: 'p', title: 'Hello', status: 'published', liveOnly: true }] });
+  const page = item({ id: 'P', filename: 'page.jpg', usedIn: [{ title: 'src/about.html', path: 'src/about.html', status: 'published' }] });
+  assert.deepEqual(filterMedia([live, page], { filter: 'unused' }), []);
+  assert.deepEqual(deleteDecision(live), { allowed: false, message: 'Used by published posts: Hello. Remove it from them and Update first.' });
+  assert.equal(deleteDecision(page).allowed, false);
+  assert.match(deleteDecision(page).message, /src\/about\.html/);
+});
+
 test('detailModel: original is null when it equals the filename', () => {
   assert.equal(detail({ filename: 'a.jpg', original_name: 'a.jpg' }).original, null);
 });

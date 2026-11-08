@@ -557,6 +557,30 @@ describe('mountApi components options', () => {
     }
   }
 
+  it('liveMedia: a failed scan refuses DELETE (503, file kept) but GET still lists', async () => {
+    const errors = [];
+    const orig = console.error;
+    console.error = (...a) => errors.push(a);
+    try {
+      await serve({ liveMedia: async () => { throw new Error('git broke'); } }, async (base) => {
+        const form = new FormData();
+        form.append('file', new Blob([Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>')], { type: 'image/svg+xml' }), 'x.svg');
+        const up = await fetch(`${base}/api/media`, { method: 'POST', body: form });
+        assert.equal(up.status, 201, await up.clone().text());
+        const item = await up.json();
+        const list = await fetch(`${base}/api/media`);
+        assert.equal(list.status, 200);
+        const del = await fetch(`${base}/api/media/${item.id}`, { method: 'DELETE' });
+        assert.equal(del.status, 503);
+        assert.match((await del.json()).error, /Nothing was deleted/);
+        assert.equal((await (await fetch(`${base}/api/media`)).json()).length, 1);
+      });
+    } finally {
+      console.error = orig;
+    }
+    assert.ok(errors.length >= 2);
+  });
+
   it('GET /api/components is served when componentsState is given', async () => {
     const state = { cookSupportsPackages: false, packages: [{ package: 'x', enabled: true }] };
     await serve({ componentsState: () => state }, async (base) => {

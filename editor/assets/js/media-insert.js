@@ -8,6 +8,7 @@
  */
 
 import { enabledDescriptors } from './component-model.js';
+import { mediaSrc } from '../../../src/media/usage.js';
 
 export const PDF_LINK_NOTE = 'Inserted as a link. Turn on the PDF viewer in Components to show PDFs in the page.';
 
@@ -17,7 +18,7 @@ export const PDF_LINK_NOTE = 'Inserted as a link. Turn on the PDF viewer in Comp
  * @param {{ pdfViewer: boolean }} opts whether the site has the pdf-viewer component on
  */
 export function insertPlan(item, { pdfViewer }) {
-  const src = item.src || `/media/${item.filename}`;
+  const src = mediaSrc(item.filename); // encoded: a name with # or % must read back as itself
   if (item.kind === 'image') {
     return { kind: 'figure', attrs: { src, alt: item.alt ?? '' }, focusAlt: item.alt == null };
   }

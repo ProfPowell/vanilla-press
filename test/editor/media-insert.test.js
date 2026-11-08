@@ -23,6 +23,13 @@ function astOf(nodes) {
 }
 
 describe('insertPlan', () => {
+  it('encodes the filename in the URL so the file is found again', () => {
+    const odd = item({ filename: 'a#1.jpg', src: '/media/a#1.jpg' });
+    assert.equal(insertPlan(odd, { pdfViewer: false }).attrs.src, '/media/a%231.jpg');
+    const pct = item({ filename: '100%.pdf', kind: 'pdf', src: undefined });
+    assert.equal(insertPlan(pct, { pdfViewer: false }).href, '/media/100%25.pdf');
+  });
+
   it('an image with alt inserts a figure with it', () => {
     assert.deepEqual(insertPlan(item(), { pdfViewer: false }),
       { kind: 'figure', attrs: { src: '/media/photo.jpg', alt: 'A cat' }, focusAlt: false });

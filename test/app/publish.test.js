@@ -828,4 +828,52 @@ describe('app routes', () => {
     app = null;
     assert.deepEqual(order, ['stopAll:Draft: Bye [CI Skip]']);
   });
+
+  // --- Media used by the live site (the committed pages in HEAD) ---
+  const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000003000000020806000000730100', 'hex');
+  async function uploadPng(name) {
+    const form = new FormData();
+    form.append('file', new Blob([PNG], { type: 'image/png' }), name);
+    const res = await fetch(`${app.url}/api/sites/${siteId}/media`, { method: 'POST', body: form });
+    assert.equal(res.status, 201, await res.clone().text());
+    return res.json();
+  }
+  const mediaItem = async (id) => (await api(`/api/sites/${siteId}/media`)).data.find((m) => m.id === id);
+
+  test('a file the live page still shows is used until Update, even after a save removed it', async () => {
+    await open();
+    const base = `/api/sites/${siteId}`;
+    const item = await uploadPng('garden.png');
+    const para = hello().blocks[0];
+    const fig = { type: 'figure', attrs: { src: item.src, alt: 'Garden' } };
+    assert.equal((await api(`${base}/documents/${ID}`, { method: 'PUT', body: { blocks: [para, fig] } })).status, 200);
+    const pub = await api(`${base}/documents/${ID}/publish`, { method: 'POST' });
+    assert.equal(pub.status, 200, JSON.stringify(pub.data));
+    // The writer swaps the image out; it saves, but is not live yet.
+    assert.equal((await api(`${base}/documents/${ID}`, { method: 'PUT', body: { blocks: [para] } })).status, 200);
+    assert.deepEqual((await mediaItem(item.id)).usedIn, [{ id: ID, title: 'Hello', status: 'published', liveOnly: true }]);
+    const del = await api(`${base}/media/${item.id}`, { method: 'DELETE' });
+    assert.equal(del.status, 409, JSON.stringify(del.data));
+    assert.deepEqual(del.data.posts, [{ id: ID, title: 'Hello' }]);
+    assert.ok(existsSync(join(fx.site, 'src', 'media', item.filename)));
+    // Update makes the page without it live: now the file is unused and can go.
+    assert.equal((await api(`${base}/documents/${ID}/update`, { method: 'POST' })).status, 200);
+    assert.deepEqual((await mediaItem(item.id)).usedIn, []);
+    assert.equal((await api(`${base}/media/${item.id}`, { method: 'DELETE' })).status, 200);
+  });
+
+  test('a committed hand-written page that shows a file blocks its delete', async () => {
+    await open();
+    const base = `/api/sites/${siteId}`;
+    const item = await uploadPng('team.png');
+    write(fx.site, 'src/about.html', `<h1>About</h1>\n<img src="${item.src}" alt="The team">\n`);
+    assert.deepEqual((await mediaItem(item.id)).usedIn, [], 'not committed: not on the live site');
+    git(fx.site, 'add', 'src/about.html');
+    git(fx.site, 'commit', '-m', 'about page');
+    assert.deepEqual((await mediaItem(item.id)).usedIn, [{ title: 'src/about.html', path: 'src/about.html', status: 'published' }]);
+    const del = await api(`${base}/media/${item.id}`, { method: 'DELETE' });
+    assert.equal(del.status, 409, JSON.stringify(del.data));
+    assert.deepEqual(del.data.posts, [{ title: 'src/about.html', path: 'src/about.html' }]);
+    assert.ok(existsSync(join(fx.site, 'src', 'media', item.filename)));
+  });
 });

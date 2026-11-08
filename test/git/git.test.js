@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import {
-  gitStatus, aheadBehind, lastVpCommitAt, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead, hasHead,
+  gitStatus, aheadBehind, lastVpCommitAt, commitPaths, push, cloneRepo, pullFastForward, changedFiles, changedSinceHead, readHead, hasHead, headCommit, headTree, readBlob,
   GitConflictError, GitNotConnectedError, GitError, GitStashConflictError,
 } from '../../src/git/git.js';
 
@@ -348,6 +348,19 @@ test('hasHead is false before the first commit, true after', async () => {
   assert.equal(await hasHead(a), true);
 });
 
+test('headCommit, headTree and readBlob read the committed tree', async () => {
+  const fresh = join(root, 'fresh-tree');
+  execFileSync('git', ['init', '-b', 'main', fresh], { stdio: 'ignore' });
+  assert.equal(await headCommit(fresh), null);
+  write(a, 'src/tree/p q.html', '<img src="/media/x.jpg">\n');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'tree');
+  assert.equal(await headCommit(a), git(a, 'rev-parse', 'HEAD'));
+  write(a, 'src/tree/uncommitted.html', 'u\n');
+  const entries = await headTree(a, 'src/tree');
+  assert.deepEqual(entries.map((e) => e.path), ['src/tree/p q.html']);
+  assert.equal(await readBlob(a, entries[0].oid), '<img src="/media/x.jpg">\n');
+});
 
 test('aheadBehind counts local and upstream-only commits, null without an upstream', async () => {
   assert.deepEqual(await aheadBehind(a), { ahead: 0, behind: 0 });

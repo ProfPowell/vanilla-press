@@ -230,7 +230,7 @@ export function initMediaSection({ siteId, root }) {
       return group;
     }
     group.append(h('ul', { class: 'detail-used' }, ...model.usedIn.map((u) =>
-      h('li', {}, h('a', { href: u.href }, u.title), ` (${u.statusText})`))));
+      h('li', {}, u.href ? h('a', { href: u.href }, u.title) : h('code', {}, u.title), ` (${u.statusText})`))));
     return group;
   }
 

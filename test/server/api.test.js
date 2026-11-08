@@ -13,7 +13,7 @@ import { createRouter, sendJson } from '../../src/server/router.js';
 import { mountApi } from '../../src/server/api.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -475,6 +475,22 @@ describe('API', () => {
       assert.deepEqual(data.posts, [{ id: doc.id, title: 'Guard link' }]);
       assert.ok(existsSync(join(MEDIA_DIR, item.filename)));
       await api(`/api/documents/${doc.id}`, { method: 'DELETE' });
+    });
+
+    it('an odd filename gets an encoded src, and a published post using it blocks delete', async () => {
+      writeFileSync(join(MEDIA_DIR, 'a#1.jpg'), jpeg(1, 1));
+      db.prepare(`INSERT INTO media (id, filename, original_name, mime_type, size, width, height, alt, edited_from, created)
+        VALUES ('oddname1', 'a#1.jpg', 'a#1.jpg', 'image/jpeg', 10, 1, 1, 'x', NULL, '2026-11-07T00:00:00Z')`).run();
+      const item = (await api('/api/media')).data.find((m) => m.id === 'oddname1');
+      assert.equal(item.src, '/media/a%231.jpg');
+      const doc = await docUsing('Odd name', 'published', figure(item.src));
+      const found = (await api('/api/media')).data.find((m) => m.id === 'oddname1');
+      assert.deepEqual(found.usedIn, [{ id: doc.id, title: 'Odd name', status: 'published' }]);
+      const { status, data } = await api('/api/media/oddname1', { method: 'DELETE' });
+      assert.equal(status, 409);
+      assert.deepEqual(data.posts, [{ id: doc.id, title: 'Odd name' }]);
+      await api(`/api/documents/${doc.id}`, { method: 'DELETE' });
+      assert.equal((await api('/api/media/oddname1', { method: 'DELETE' })).status, 200);
     });
 
     it('delete is refused while a published card links the file', async () => {

@@ -19,6 +19,7 @@ import * as defaultGit from '../git/git.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import * as defaultSiteProcess from './site-process.js';
 import { createBackup, BACKUP_PATHS, pageNotLive } from './site-git.js';
+import { createLiveMedia } from './live-media.js';
 import {
   setPublished, BuildError, PublishRejectedError, checkLive, readSiteUrl, publicUrl, builtPage,
 } from './publish.js';
@@ -194,6 +195,8 @@ export async function startApp({
         // Publish/Update refuse it (setPublished, against the enabled ones).
         components: () => catalogComponents(roots),
         componentsState: () => componentsState(roots),
+        // The pages committed in HEAD are the live site: a file they show can't be deleted.
+        liveMedia: createLiveMedia(ws.siteDir, { headCommit: git.headCommit, headTree: git.headTree, readBlob: git.readBlob }),
       });
       const writes = createLock();
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });

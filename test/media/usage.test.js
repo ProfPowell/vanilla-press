@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mediaFileOf, mediaRefs, mediaUsage } from '../../src/media/usage.js';
+import { mediaFileOf, mediaRefs, mediaUsage, liveMediaRefs, mediaSrc } from '../../src/media/usage.js';
 
 const p = (...children) => ({ type: 'paragraph', children });
 
@@ -61,4 +61,38 @@ test('mediaUsage maps files to posts with status', () => {
 test('mediaRefs counts a card href to a media file', () => {
   const doc = { meta: {}, blocks: [{ type: 'card', attrs: { href: '/media/brochure-1a2b3c.pdf' }, children: [p({ type: 'text', value: 'x' })] }] };
   assert.deepEqual([...mediaRefs(doc)], ['brochure-1a2b3c.pdf']);
+});
+
+test('mediaSrc encodes the filename and mediaFileOf round-trips it', () => {
+  assert.equal(mediaSrc('garden-3f9a2c.jpg'), '/media/garden-3f9a2c.jpg');
+  for (const name of ['a#1.jpg', '100%.jpg', 'a?b.png', 'sp ace.jpg', 'garden-3f9a2c.jpg']) {
+    assert.equal(mediaFileOf(mediaSrc(name)), name, name);
+  }
+  assert.equal(mediaSrc('a#1.jpg'), '/media/a%231.jpg');
+});
+
+test('liveMediaRefs finds /media/ files in src, href, poster, content and srcset', () => {
+  const html = `---
+title: "Hi"
+image: "/media/hero-aaaaaa.jpg"
+vp_id: "doc_1"
+---
+<img src="/media/fig-bbbbbb.png" alt="x">
+<a href='/media/report.pdf?dl=1#p2'>r</a>
+<video poster=/media/poster.jpg src="/media/clip.mp4"></video>
+<meta property="og:image" content="/media/og.jpg">
+<img srcset="/media/s-1x.jpg 1x, /media/s-2x.jpg 2x" src="https://cdn.example.com/media/ext.jpg">
+<img data-src="/media/lazy-only.jpg">
+<a href="/media/a%231.jpg">enc</a>
+<a href="/media/q.jpg?a=1&amp;b=2">amp</a>
+<p>/media/in-text.jpg</p>
+<a href="/media/sub/dir.jpg">nested</a>`;
+  assert.deepEqual([...liveMediaRefs(html)].sort(), [
+    'a#1.jpg', 'clip.mp4', 'fig-bbbbbb.png', 'hero-aaaaaa.jpg', 'og.jpg', 'poster.jpg', 'q.jpg', 'report.pdf', 's-1x.jpg', 's-2x.jpg',
+  ]);
+});
+
+test('liveMediaRefs on text with no refs, or not a string, is empty', () => {
+  assert.equal(liveMediaRefs('<h1>Home</h1>').size, 0);
+  assert.equal(liveMediaRefs(null).size, 0);
 });

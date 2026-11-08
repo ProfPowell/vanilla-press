@@ -4,6 +4,7 @@
  */
 import { typeLabel, canEditImage } from './types.js';
 import { formatBytes } from './limits.js';
+import { mediaSrc } from './usage.js';
 
 /** Alt text has three states: `null` never written, `""` decorative, text. */
 export function altState(alt) {
@@ -94,14 +95,15 @@ export function detailModel(item, { siteId, locale } = {}) {
     original: item.original_name && item.original_name !== item.filename ? item.original_name : null,
     meta,
     dims: item.width > 0 && item.height > 0 ? `${item.width} \u00d7 ${item.height} px` : null,
-    url: `/media/${item.filename}`,
+    url: mediaSrc(item.filename),
     showAlt: item.kind === 'image',
     altState: altState(item.alt),
     canEdit: canEditImage(item.mime_type) && !item.missing,
     usedIn: (item.usedIn || []).map((u) => ({
-      title: u.title || 'Untitled',
-      href: `/editor/?site=${encodeURIComponent(siteId)}#doc-${encodeURIComponent(u.id)}`,
-      statusText: u.status === 'published' ? 'Published' : 'Draft',
+      title: u.title || u.path || 'Untitled',
+      // A page Vanilla Press didn't write (u.path, no id) has no post to open.
+      href: u.id ? `/editor/?site=${encodeURIComponent(siteId)}#doc-${encodeURIComponent(u.id)}` : null,
+      statusText: !u.id ? 'Published page' : u.status !== 'published' ? 'Draft' : u.liveOnly ? 'Published (live version)' : 'Published',
     })),
   };
 }

@@ -31,7 +31,7 @@ import { isMissing } from '../sync/media-library.js';
 import { inspectFile } from '../media/inspect.js';
 import { mediaFilename, editedFilename, uniqueFilename } from '../media/names.js';
 import { MAX_BYTES, LARGE_BYTES, tooLargeMessage, unsupportedMessage } from '../media/limits.js';
-import { mediaUsage } from '../media/usage.js';
+import { mediaUsage, mediaSrc } from '../media/usage.js';
 import { kindOf } from '../media/types.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
@@ -72,6 +72,9 @@ function generateId() {
  *   response adds `notices: string[]` for what was dropped, and `dropped: { tag, attr }[]` (the same, as data,
  *   for the editor to remove from its copy). Absent (`vp serve`): structural validation only.
  * @param {() => Object} [options.componentsState] - When given, `GET /api/components` answers its result.
+ * @param {() => Promise<Map<string, Array<{ path: string, vpId: string|null }>>>} [options.liveMedia] - The
+ *   media files the live site shows: file -> the pages committed in the site's git HEAD that show it
+ *   (app/live-media.js). Those count as published uses (Used in, and DELETE refuses). Absent: none.
  */
 export function mountApi(router, db, options) {
   const { rootDir, onSynced, statusByActions = false, components } = options;
@@ -347,10 +350,41 @@ export function mountApi(router, db, options) {
   /** Slack over MAX_BYTES for the multipart envelope and the other fields. */
   const UPLOAD_LIMIT = MAX_BYTES + 1_048_576;
 
-  /** Every document with its usage of media files: Map<filename, [{ id, title, status }]>. */
-  function usageMap() {
+  /**
+   * Every use of each media file: Map<filename, [{ id, title, status, liveOnly? } | { title, path, status }]>.
+   * Saved bodies (draft or published), plus the pages committed in HEAD (the live site): a post whose
+   * saved body dropped a file its committed page still shows is listed as published with `liveOnly`;
+   * a committed page that is no post's is listed by its path. `strict`: a git failure is thrown
+   * (DELETE must not guess); otherwise the live part is skipped and logged.
+   */
+  async function usageMap({ strict = false } = {}) {
     const docs = db.prepare('SELECT id FROM documents').all().map((r) => getDocument(db, r.id));
-    return mediaUsage(docs);
+    const usage = mediaUsage(docs);
+    if (!options.liveMedia) return usage;
+    let live;
+    try {
+      live = await options.liveMedia();
+    } catch (err) {
+      if (strict) throw err;
+      console.error('live media scan failed:', err);
+      return usage;
+    }
+    const byId = new Map(docs.map((d) => [d.id, d]));
+    for (const [file, pages] of live) {
+      const list = usage.get(file) || [];
+      for (const { path, vpId } of pages) {
+        const doc = vpId ? byId.get(vpId) : null;
+        if (doc) {
+          const entry = list.find((u) => u.id === doc.id);
+          if (!entry) list.push({ id: doc.id, title: doc.meta?.title ?? '', status: 'published', liveOnly: true });
+          else if (entry.status !== 'published') Object.assign(entry, { status: 'published', liveOnly: true });
+        } else if (!list.some((u) => u.path === path)) {
+          list.push({ title: path, path, status: 'published' });
+        }
+      }
+      if (list.length) usage.set(file, list);
+    }
+    return usage;
   }
 
   /** A media row as the API returns it. */
@@ -367,7 +401,7 @@ export function mountApi(router, db, options) {
       alt: row.alt,
       edited_from: row.edited_from,
       created: row.created,
-      src: `/media/${row.filename}`,
+      src: mediaSrc(row.filename),
       missing: isMissing(mediaDir, row.filename),
       usedIn: usage.get(row.filename) || [],
     };
@@ -390,8 +424,8 @@ export function mountApi(router, db, options) {
     }
   }
 
-  route.add('GET', '/api/media', jsonErrors((req, res) => {
-    const usage = usageMap();
+  route.add('GET', '/api/media', jsonErrors(async (req, res) => {
+    const usage = await usageMap();
     const rows = db.prepare('SELECT * FROM media ORDER BY created DESC, filename').all();
     sendJson(res, 200, rows.map((row) => mediaItem(row, usage)));
   }));
@@ -475,10 +509,10 @@ export function mountApi(router, db, options) {
     }
     mediaChanged(filename, 'upload');
 
-    sendJson(res, 201, { ...mediaItem(row, usageMap()), large: file.data.length > LARGE_BYTES });
+    sendJson(res, 201, { ...mediaItem(row, await usageMap()), large: file.data.length > LARGE_BYTES });
   }));
 
-  route.add('PUT', '/api/media/:id', jsonErrors((req, res) => {
+  route.add('PUT', '/api/media/:id', jsonErrors(async (req, res) => {
     const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
     if (!row) {
       sendJson(res, 404, { error: 'Media not found' });
@@ -491,17 +525,27 @@ export function mountApi(router, db, options) {
     }
     db.prepare('UPDATE media SET alt = ? WHERE id = ?').run(alt, row.id);
     mediaChanged(row.filename, 'alt');
-    sendJson(res, 200, mediaItem({ ...row, alt }, usageMap()));
+    sendJson(res, 200, mediaItem({ ...row, alt }, await usageMap()));
   }));
 
-  route.add('DELETE', '/api/media/:id', jsonErrors((req, res) => {
+  route.add('DELETE', '/api/media/:id', jsonErrors(async (req, res) => {
     const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
     if (!row) {
       sendJson(res, 404, { error: 'Media not found' });
       return;
     }
-    const users = usageMap().get(row.filename) || [];
-    const published = users.filter((u) => u.status === 'published').map(({ id, title }) => ({ id, title }));
+    // Published uses: a published post's saved body, or any page committed in HEAD (the live site).
+    let usage;
+    try {
+      usage = await usageMap({ strict: true });
+    } catch (err) {
+      console.error('live media scan failed:', err);
+      sendJson(res, 503, { error: `Couldn't check whether the live site uses this file (${err.message}). Nothing was deleted. Try again.` });
+      return;
+    }
+    const users = usage.get(row.filename) || [];
+    const published = users.filter((u) => u.status === 'published')
+      .map(({ id, title, path }) => (id ? { id, title } : { title, path }));
     if (published.length) {
       sendJson(res, 409, { error: 'Used by published posts. Remove it from them and Update first.', posts: published });
       return;

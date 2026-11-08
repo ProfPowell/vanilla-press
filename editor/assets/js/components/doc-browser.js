@@ -35,7 +35,7 @@ export class DocBrowser extends HTMLElement {
       </div>
       <div class="browser-body">
         <div class="browser-controls">
-          <select class="browser-collection" title="Filter by collection">
+          <select class="browser-collection" title="Filter by collection" aria-label="Filter by collection">
             <option value="">All collections</option>
           </select>
           <div class="browser-status-tabs">

@@ -38,6 +38,8 @@ export function createProgramsDetail({ siteId, base, root, siteUrl, host }) {
     try {
       const result = await api(url(program), { method: 'PATCH', body: changes });
       host.replaceProgram({ ...result.program, usedIn: program.usedIn });
+      const heading = body.querySelector('#program-detail-title');
+      if (heading) heading.textContent = result.program.title;
       host.wrote(result);
       setStatus('Saved');
       return result.program;

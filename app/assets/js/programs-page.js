@@ -209,7 +209,7 @@ export function initProgramsSection({ siteId, root, siteUrl = null }) {
     const current = state.programs.find((p) => keyOf(p) === selectedKey) || null;
     if (!current) selectedKey = null;
     detail.show(current); // fresh status, source and Used in
-    if (running && !state.programs.some((p) => keyOf(p) === running.key)) closeRun();
+    followRunning();
   }
 
   // --- Open: the program in an iframe from the program server ---
@@ -223,7 +223,8 @@ export function initProgramsSection({ siteId, root, siteUrl = null }) {
     if (program.sandboxed) frame.setAttribute('sandbox', SANDBOX_ATTR);
     return frame;
   }
-  function openRun(program, button) {
+  /** @param {{ focus?: boolean }} [opts] - focus: false when the frame is rebuilt for a change made elsewhere */
+  function openRun(program, button, { focus = true } = {}) {
     if (!state.runBase) {
       showError('Open is not available yet: the program server is starting. Try again in a moment.');
       return;
@@ -236,6 +237,7 @@ export function initProgramsSection({ siteId, root, siteUrl = null }) {
       : 'Not sandboxed: it runs as it does on the live site.';
     $('program-run-stage').replaceChildren(frameFor(program));
     $('program-run').hidden = false;
+    if (!focus) return;
     $('program-run').scrollIntoView({ block: 'nearest' });
     $('program-run-close').focus();
   }
@@ -248,6 +250,22 @@ export function initProgramsSection({ siteId, root, siteUrl = null }) {
     else root.querySelector('#program-detail [data-action="open"]')?.focus();
   }
   $('program-run-close').addEventListener('click', closeRun);
+
+  /**
+   * The running program follows the state: gone closes it; a changed effective sandbox (its
+   * own setting or its area's default) gets a new frame, so the attribute takes effect.
+   */
+  function followRunning() {
+    if (!running) return;
+    const now = state.programs.find((p) => keyOf(p) === running.key);
+    if (!now) { closeRun(); return; }
+    const frame = $('program-run-stage').querySelector('iframe');
+    if (frame?.hasAttribute('sandbox') !== now.sandboxed) openRun(now, running.button, { focus: false });
+    else {
+      $('program-run-title').textContent = now.title;
+      frame.title = now.title;
+    }
+  }
 
   // --- Detail and Add ---
   const detail = createProgramsDetail({
@@ -262,13 +280,7 @@ export function initProgramsSection({ siteId, root, siteUrl = null }) {
         const programs = state.programs.map((p) => (keyOf(p) === keyOf(fresh) ? fresh : p));
         state = { ...state, programs: withEffectiveSandbox({ areas: state.areas, programs }) };
         render();
-        const now = state.programs.find((p) => keyOf(p) === keyOf(fresh));
-        // A running program follows its sandbox: a new frame, so the attribute takes effect.
-        if (running?.key === keyOf(fresh) && now) {
-          const frame = $('program-run-stage').querySelector('iframe');
-          if (frame?.hasAttribute('sandbox') !== now.sandboxed) openRun(now, running.button);
-          else $('program-run-title').textContent = now.title;
-        }
+        followRunning();
       },
       refresh,
       wrote,

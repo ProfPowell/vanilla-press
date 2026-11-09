@@ -160,7 +160,7 @@ describe('API with a site workspace', () => {
     assert.deepEqual(data.conflicts, []);
     assert.ok(existsSync(at(HTML_REL)));
     assert.ok(existsSync(at('content/media.json')));
-    assert.deepEqual(JSON.parse(readFileSync(at('config/vp.json'), 'utf8')), { theme: 'default' });
+    assert.equal(existsSync(at('config/vp.json')), false); // the theme lives in config/theme.json now
   });
 
   it('DELETE of a published doc is refused (409) and deletes nothing', async () => {
@@ -228,10 +228,14 @@ describe('API with a site workspace', () => {
     }
   });
 
-  it('PUT /api/config/theme writes config/vp.json', async () => {
+  it('PUT /api/config/theme no longer rewrites config/vp.json', async () => {
+    mkdirSync(at('config'), { recursive: true });
+    writeFileSync(at('config/vp.json'), '{ "other": 1 }\n');
     const { status } = await api('/api/config/theme', { method: 'PUT', body: { value: 'amber' } });
     assert.equal(status, 200);
-    assert.deepEqual(JSON.parse(readFileSync(at('config/vp.json'), 'utf8')), { theme: 'amber' });
+    assert.equal(readFileSync(at('config/vp.json'), 'utf8'), '{ "other": 1 }\n');
+    await api('/api/sync', { method: 'POST' });
+    assert.equal(readFileSync(at('config/vp.json'), 'utf8'), '{ "other": 1 }\n');
   });
 });
 

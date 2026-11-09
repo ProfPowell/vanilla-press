@@ -1,6 +1,6 @@
 /**
  * Site-wide files Vanilla Press writes into a Cook site besides documents
- * (`content/media.json`, `config/vp.json`), plus the helpers shared by the
+ * (`content/media.json`), plus the helpers shared by the
  * API and CLI to sync after a save and to sync everything.
  *
  * @module sync/site-files
@@ -90,18 +90,8 @@ export function writeMediaJson(ws, db) {
 }
 
 /**
- * Write `{ theme }` to `config/vp.json`.
- * @param {import('../workspace/workspace.js').Workspace} ws
- * @param {import('better-sqlite3').Database} db
- */
-export function writeVpConfig(ws, db) {
-  const theme = getConfig(db, 'theme') || 'default';
-  writeFileAtomic(join(ws.configDir, 'vp.json'), JSON.stringify({ theme }, null, 2) + '\n');
-}
-
-/**
  * Sync every document (skipping, not overwriting, any that conflict or
- * collide), then write media.json and vp.json.
+ * collide), then write media.json.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {import('better-sqlite3').Database} db
  * @returns {{ synced: number, conflicts: string[] }} conflicts: site-relative paths or error messages
@@ -123,6 +113,5 @@ export function syncAll(ws, db) {
     }
   }
   writeMediaJson(ws, db);
-  writeVpConfig(ws, db);
   return { synced, conflicts };
 }

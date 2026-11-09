@@ -41,6 +41,7 @@
     <span class="header-rule" data-site-name-rule aria-hidden="true"></span>
     <p class="site-name" data-site-name></p>
     <p class="save-pill" data-save-state role="status" aria-live="polite"></p>
+    <p class="page-theme-chip" data-page-theme-chip hidden><span class="page-theme-dot" data-page-theme-dot aria-hidden="true"></span><span data-page-theme-name></span></p>
     <div class="spacer"></div>
     <div class="header-actions">
       <button type="button" class="quiet" data-site-preview>Preview</button>
@@ -58,6 +59,11 @@
   </header>
 
   <main class="editor-pane">
+    <!-- Site mode, a post with its own theme: the site's header, in the theme it gets on the live page -->
+    <div class="site-strip" data-site-strip hidden>
+      <span class="site-strip-name" data-site-strip-name></span>
+      <span class="site-strip-note" data-site-strip-note></span>
+    </div>
     <div class="editor-content" data-vb-no-track>
       <!-- ProseMirror mounts here. data-vb-no-track: VB analytics would tag outbound links and ProseMirror would redraw them forever -->
     </div>

@@ -14,8 +14,11 @@ import { getDocument, saveDocument } from '../store/content.js';
 import { syncDocument } from '../sync/to-site.js';
 import { preflightSave } from '../sync/site-files.js';
 import { outputPaths, postUrlPath } from '../sync/paths.js';
-import { GitNotConnectedError } from '../git/git.js';
-import { BACKUP_PATHS, postPages } from './site-git.js';
+import { GitNotConnectedError, readHead as gitReadHead } from '../git/git.js';
+import { BACKUP_PATHS, THEME_PATHS, postPages } from './site-git.js';
+import {
+  refreshThemeSetting, snapshotFile, restoreFile, themeSettingFile, commitWithTheme, themeConflictResolver,
+} from './site-theme.js';
 import { componentTags } from './components.js';
 import { mediaRefs } from '../media/usage.js';
 import { isMissing } from '../sync/media-library.js';
@@ -115,7 +118,10 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  * Publish, update or unpublish a document: save and sync the status change,
  * run the site's build (on failure the previous version is restored and
  * re-synced), commit the backup paths plus this post's pages (postPages),
- * push. Publishing an already-published post is an Update: it keeps the
+ * push. Publish/Update also refresh config/theme.json (created when the post
+ * has its own theme and the site has none, R4; restored on a failed build)
+ * and commit THEME_PATHS (R3); the commit that first adds theme.json drops
+ * the legacy vp.json `theme` key. Publishing an already-published post is an Update: it keeps the
  * `published` date and the commit says `Update: <title>`.
  * @param {{
  *   site?: Object,
@@ -140,6 +146,7 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean,
  *   kind: 'publish'|'update'|'unpublish', expectedText: string|null }>}
  *   rebased: the push rebased onto commits from elsewhere (the caller re-syncs the store);
+ *   themeFromElsewhere (only when true): another computer changed the theme files, GitHub's were kept;
  *   expectedText: the page this build made (publish/update), for the live check
  * @throws {BuildError|PublishRejectedError|Error} git errors propagate (GitConflictError, ...)
  */
@@ -193,13 +200,40 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   const saved = saveDocument(db, candidate);
   syncDocument(ws, saved, { collectionsConfig, previousDoc: previous });
 
+  // The theme goes live with the post (R3): refresh theme.json's files from the site as it
+  // is (a post with its own theme opts the site in, R4). A failed build puts it back.
+  const settingFile = themeSettingFile(ws);
+  const carriesTheme = publish && (Boolean(previous.meta.theme) || existsSync(settingFile));
+  const settingBefore = carriesTheme ? snapshotFile(settingFile) : null;
+
   // 2. Build check; on failure put the previous version back.
+  const runCheck = async () => {
+    try {
+      await deps.ensureInstalled(ws.siteDir);
+      return await deps.runBuild(ws.siteDir);
+    } catch (err) {
+      return { ok: false, log: err.message };
+    }
+  };
   let build;
   try {
-    await deps.ensureInstalled(ws.siteDir);
-    build = await deps.runBuild(ws.siteDir);
+    if (carriesTheme) refreshThemeSetting(ws, { create: Boolean(previous.meta.theme) });
+    build = await runCheck();
   } catch (err) {
-    build = { ok: false, log: err.message };
+    build = { ok: false, log: `Couldn't write config/theme.json: ${err.message}` };
+  }
+  // The build may have vendored the site's VB copy (R5): refresh again, and build
+  // once more when that changed theme.json, so the commit and the build agree.
+  if (build.ok && carriesTheme) {
+    const built = snapshotFile(settingFile);
+    try {
+      refreshThemeSetting(ws);
+    } catch (err) {
+      build = { ok: false, log: `Couldn't write config/theme.json: ${err.message}` };
+    }
+    const refreshed = snapshotFile(settingFile);
+    const same = built === null ? refreshed === null : refreshed !== null && built.equals(refreshed);
+    if (build.ok && !same) build = await runCheck();
   }
   // Revert only the status change on the current stored version: an edit
   // saved meanwhile is kept. `updated` goes back only if nothing else touched the doc.
@@ -216,6 +250,7 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   };
   if (!build.ok) {
     revertStatus();
+    if (carriesTheme) restoreFile(settingFile, settingBefore);
     throw new BuildError(build.log);
   }
 
@@ -238,7 +273,10 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
       throw new Error(`Nothing was committed: could not list this post's pages (${err.message})`);
     }
     const label = { publish: 'Publish', update: 'Update', unpublish: 'Unpublish' }[kind];
-    sha = await deps.commitPaths(ws.siteDir, [...BACKUP_PATHS, ...pages], `${label}: ${saved.meta.title}`);
+    // Publish/Update carry the theme setting and custom themes (R3); Unpublish does not.
+    const themePaths = publish ? [...THEME_PATHS] : [];
+    const commit = () => deps.commitPaths(ws.siteDir, [...BACKUP_PATHS, ...themePaths, ...pages], `${label}: ${saved.meta.title}`);
+    sha = publish ? await commitWithTheme(ws, deps.readHead || gitReadHead, commit) : await commit();
   }
 
   const siteUrl = publish ? await (deps.readSiteUrl || readSiteUrl)(ws.siteDir) : null;
@@ -249,10 +287,12 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   if (!status.isRepo || !status.hasRemote || !status.hasUpstream) return done('saved');
   let pushResult;
   try {
-    pushResult = await deps.push(ws.siteDir);
+    pushResult = await deps.push(ws.siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });
   } catch (err) {
     if (err instanceof GitNotConnectedError) return done('saved');
     throw err;
   }
-  return done('pushed', Boolean(pushResult?.rebased));
+  // Another computer changed the theme meanwhile: the post went out, GitHub's theme was kept.
+  const themeFromElsewhere = (pushResult?.resolved || []).some((f) => THEME_PATHS.some((p) => f === p || f.startsWith(`${p}/`)));
+  return { ...done('pushed', Boolean(pushResult?.rebased)), ...(themeFromElsewhere ? { themeFromElsewhere } : {}) };
 }

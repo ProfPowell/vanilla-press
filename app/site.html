@@ -6,8 +6,6 @@
 <title>Site - Vanilla Press</title>
 <link rel="stylesheet" href="/assets/vb/vanilla-breeze.css"/>
 <link rel="stylesheet" href="/app/assets/app.css"/>
-<!-- The editor's theme picker first: VB also ships a <theme-picker>, and its registry skips a tag already defined. -->
-<script type="module" src="/editor/assets/js/components/theme-picker.js"></script>
 <script type="module" src="/assets/vb/vanilla-breeze.js"></script>
 <script type="module" src="/editor/assets/js/components/confirm-panel.js"></script>
 <script type="module" src="/app/assets/js/site-page.js"></script>
@@ -99,9 +97,146 @@
       </section>
 
       <section id="theme-section" aria-labelledby="theme-title" hidden>
-        <div class="section-head"><h1 id="theme-title">Theme</h1></div>
-        <p class="lede">The look of every page on the site.</p>
-        <div class="panel theme-panel"><theme-picker id="theme-picker"></theme-picker></div>
+        <div class="section-head">
+          <div>
+            <h1 id="theme-title">Theme</h1>
+            <p class="theme-lede">The look of every page on the site. A post can override it in Post settings.</p>
+          </div>
+          <div class="actions">
+            <p class="theme-status" role="status"><span id="theme-dirty" class="theme-dirty"></span><span id="theme-apply-state" class="theme-apply-state"></span></p>
+            <a class="btn" href="https://profpowell.github.io/vb-design-system/tools/theme-composer/" target="_blank" rel="noopener">Open in Theme Composer<span class="visually-hidden"> (opens in a new tab)</span></a>
+            <button type="button" id="theme-apply" class="primary">Apply to site</button>
+          </div>
+        </div>
+        <p id="theme-error" class="error" role="alert" hidden></p>
+        <div id="theme-report" class="theme-report" role="alert" hidden>
+          <div id="theme-report-body"></div>
+          <button type="button" id="theme-report-close">Dismiss</button>
+        </div>
+        <p id="theme-notice" class="theme-notice" role="status"></p>
+        <div class="theme-layout">
+          <div class="theme-controls">
+            <section aria-labelledby="theme-pick-title">
+              <div class="theme-pick-head">
+                <h2 id="theme-pick-title">Start from a theme</h2>
+                <button type="button" id="theme-more" class="btn-quiet" aria-expanded="false" aria-controls="theme-cards" hidden></button>
+              </div>
+              <label class="search theme-search"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="search" id="theme-search" aria-label="Search themes" placeholder="Search themes" autocomplete="off"/></label>
+              <p id="theme-unknown-note" class="theme-note theme-unknown-note" hidden></p>
+              <ul id="theme-cards" class="theme-cards" aria-labelledby="theme-pick-title"></ul>
+              <p id="theme-cards-empty" class="theme-note" hidden></p>
+              <p id="theme-vb-note" class="theme-note" hidden></p>
+            </section>
+
+            <section class="theme-adjust" aria-labelledby="theme-adjust-title">
+              <h2 id="theme-adjust-title">Adjust</h2>
+              <div class="theme-field">
+                <div class="theme-hue-head">
+                  <label for="theme-hue">Main color hue</label>
+                  <output id="theme-hue-value" for="theme-hue"></output>
+                </div>
+                <input type="range" id="theme-hue" min="0" max="360" step="1" value="0"/>
+              </div>
+              <div class="theme-field">
+                <p id="theme-scheme-label" class="theme-field-label">Color scheme</p>
+                <div id="theme-scheme" role="group" aria-labelledby="theme-scheme-label" class="segmented">
+                  <button type="button" data-scheme="light" aria-pressed="false">Light</button>
+                  <button type="button" data-scheme="dark" aria-pressed="false">Dark</button>
+                  <button type="button" data-scheme="auto" aria-pressed="false">Reader's choice</button>
+                </div>
+                <p id="theme-scheme-note" class="theme-note" hidden></p>
+              </div>
+              <div class="theme-fonts">
+                <div class="theme-field">
+                  <label for="theme-heading-font">Headings</label>
+                  <select id="theme-heading-font" data-adjust="headingFont">
+                    <option value="">Theme's</option><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option>
+                  </select>
+                </div>
+                <div class="theme-field">
+                  <label for="theme-body-font">Body</label>
+                  <select id="theme-body-font" data-adjust="bodyFont">
+                    <option value="">Theme's</option><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option>
+                  </select>
+                </div>
+              </div>
+              <div class="theme-field">
+                <p id="theme-corners-label" class="theme-field-label">Corners</p>
+                <div id="theme-corners" role="group" aria-labelledby="theme-corners-label" class="segmented">
+                  <button type="button" data-corners="theme" aria-pressed="false">Theme's</button>
+                  <button type="button" data-corners="square" aria-pressed="false">Square</button>
+                  <button type="button" data-corners="round" aria-pressed="false">Round</button>
+                </div>
+              </div>
+              <div class="theme-adjust-actions">
+                <button type="button" id="theme-reset">Reset</button>
+                <button type="button" id="theme-save-new">Save as a new theme…</button>
+                <button type="button" id="theme-import">Import from Theme Composer…</button>
+              </div>
+              <p id="theme-skipped" class="theme-note theme-warn" role="status"></p>
+              <p class="theme-note">Fine-tune every token (spacing, shadows, icons) in the Theme Composer, then import its <code class="mono">theme.css</code> here.</p>
+            </section>
+
+            <section class="theme-pages" aria-labelledby="theme-pages-title">
+              <h2 id="theme-pages-title">Pages with their own theme</h2>
+              <p id="theme-pages-empty" class="theme-note">None yet. Give a post its own look under Post settings › Appearance.</p>
+              <ul id="theme-pages" class="theme-pages-list" hidden></ul>
+            </section>
+          </div>
+
+          <section class="theme-preview" aria-labelledby="theme-preview-title">
+            <div class="theme-preview-head">
+              <p id="theme-preview-title" class="theme-preview-title">Preview<span id="theme-preview-post"></span></p>
+              <div id="theme-width" role="group" aria-label="Preview width" class="segmented">
+                <button type="button" data-width="desktop" aria-pressed="true">Desktop</button>
+                <button type="button" data-width="phone" aria-pressed="false">Phone</button>
+              </div>
+            </div>
+            <div class="theme-preview-stage">
+              <iframe id="theme-preview-frame" class="theme-preview-frame" data-width="desktop" title="Preview of a post on the site with this theme" sandbox="allow-same-origin" allow="autoplay 'none'; fullscreen 'none'" referrerpolicy="no-referrer" tabindex="-1"></iframe>
+            </div>
+          </section>
+        </div>
+
+        <dialog id="theme-name-dialog" class="theme-dialog" aria-labelledby="theme-name-title" aria-describedby="theme-name-desc">
+          <form id="theme-name-form" method="dialog" novalidate>
+            <h2 id="theme-name-title">Save as a new theme</h2>
+            <p id="theme-name-desc" class="theme-note"></p>
+            <div class="theme-field">
+              <label for="theme-name-input">Name</label>
+              <input type="text" id="theme-name-input" maxlength="80" autocomplete="off" required aria-describedby="theme-name-error"/>
+            </div>
+            <p id="theme-name-error" class="error" role="alert"></p>
+            <div class="theme-dialog-actions">
+              <button type="button" data-dialog-cancel>Cancel</button>
+              <button type="submit" id="theme-name-ok" class="primary">Save</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog id="theme-import-dialog" class="theme-dialog" aria-labelledby="theme-import-title" aria-describedby="theme-import-desc">
+          <form id="theme-import-form" method="dialog" novalidate>
+            <h2 id="theme-import-title">Import from Theme Composer</h2>
+            <p id="theme-import-desc" class="theme-note">In the Theme Composer, download <code class="mono">theme.css</code>, then choose it here or paste its text. Only its custom properties are kept.</p>
+            <div class="theme-field">
+              <label for="theme-import-file">theme.css file</label>
+              <input type="file" id="theme-import-file" accept=".css,text/css"/>
+            </div>
+            <div class="theme-field">
+              <label for="theme-import-text">Or paste the CSS</label>
+              <textarea id="theme-import-text" rows="7" spellcheck="false" autocomplete="off"></textarea>
+            </div>
+            <div class="theme-field">
+              <label for="theme-import-name">Name</label>
+              <input type="text" id="theme-import-name" maxlength="80" autocomplete="off" required aria-describedby="theme-import-error"/>
+            </div>
+            <p id="theme-import-error" class="error" role="alert"></p>
+            <div class="theme-dialog-actions">
+              <button type="button" data-dialog-cancel>Cancel</button>
+              <button type="submit" id="theme-import-ok" class="primary">Import</button>
+            </div>
+          </form>
+        </dialog>
       </section>
     </div>
   </main>

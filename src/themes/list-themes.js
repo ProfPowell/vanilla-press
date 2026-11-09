@@ -22,13 +22,15 @@ export const BUILT_IN_THEMES = ['default', 'modern', 'minimal', 'classic'];
  * @property {string} name - Display name
  * @property {string} tier - 'core' | 'color' | 'showcase' | 'community'
  * @property {string|null} file - Stylesheet under themes/, or null when built in
+ * @property {string|null} href - URL of the stylesheet whenever the file exists (built-ins too), else null
  */
 
 /**
  * @param {string} vbCdnDir - Path to vanilla-breeze/dist/cdn
+ * @param {{ builtIns?: string[], hrefBase?: string|null }} [opts]
  * @returns {ThemeInfo[]} Sorted: core first, then by tier and name
  */
-export function listThemes(vbCdnDir) {
+export function listThemes(vbCdnDir, { builtIns = BUILT_IN_THEMES, hrefBase = null } = {}) {
   const themesDir = join(vbCdnDir, 'themes');
   const manifestPath = join(themesDir, 'manifest.json');
   const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf-8')) : {};
@@ -36,12 +38,13 @@ export function listThemes(vbCdnDir) {
     ? readdirSync(themesDir).filter(f => f.endsWith('.css')).map(f => f.slice(0, -4))
     : [];
 
-  const ids = new Set([...BUILT_IN_THEMES, ...files]);
+  const ids = new Set([...builtIns, ...files]);
   const themes = [...ids].map(id => ({
     id,
     name: toName(id),
-    tier: BUILT_IN_THEMES.includes(id) ? 'core' : (manifest[id]?.tier || 'color'),
-    file: id !== 'default' && files.includes(id) && !BUILT_IN_THEMES.includes(id) ? `${id}.css` : null,
+    tier: builtIns.includes(id) ? 'core' : (manifest[id]?.tier || 'color'),
+    file: id !== 'default' && files.includes(id) && !builtIns.includes(id) ? `${id}.css` : null,
+    href: hrefBase != null && files.includes(id) ? `${hrefBase}/themes/${id}.css` : null,
   }));
 
   const order = { core: 0, color: 1, showcase: 2, community: 3 };

@@ -50,3 +50,19 @@ export function takeSaveNotes() {
 export function clearSaveNotes() {
   saveNotes = [];
 }
+
+/** The post goes back to the site theme: drop `theme` and `themeScope` from the current meta. */
+export function clearPageTheme() {
+  const { theme, themeScope, ...rest } = currentMeta;
+  currentMeta = rest;
+}
+
+/**
+ * The meta a save sends. The server merges it over the stored meta, so a page
+ * theme the post no longer has (`clearPageTheme`) is sent as null to drop it.
+ * @param {Object} meta
+ * @returns {Object}
+ */
+export function metaToSave(meta) {
+  return { ...meta, theme: meta.theme ?? null, themeScope: meta.themeScope ?? null };
+}

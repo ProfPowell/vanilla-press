@@ -202,6 +202,29 @@ describe('saveDocument + getDocument', () => {
     assert.equal(getDocument(db, 'test_doc01').meta.image, '/media/b.jpg');
   });
 
+  it('meta.theme and meta.themeScope round-trip through the store', () => {
+    saveDocument(db, { ...sampleDoc, meta: { ...sampleDoc.meta, theme: '8bit', themeScope: 'article' } });
+    let meta = getDocument(db, 'test_doc01').meta;
+    assert.equal(meta.theme, '8bit');
+    assert.equal(meta.themeScope, 'article');
+    saveDocument(db, { ...sampleDoc, meta: { ...sampleDoc.meta, theme: 'swiss' } });
+    meta = getDocument(db, 'test_doc01').meta;
+    assert.equal(meta.theme, 'swiss');
+    assert.equal(meta.themeScope, undefined);
+    saveDocument(db, sampleDoc);
+    meta = getDocument(db, 'test_doc01').meta;
+    assert.equal(meta.theme, undefined);
+    assert.equal(meta.themeScope, undefined);
+  });
+
+  it('an old documents table gains theme and theme_scope', () => {
+    db.exec('ALTER TABLE documents DROP COLUMN theme');
+    db.exec('ALTER TABLE documents DROP COLUMN theme_scope');
+    migrate(db);
+    saveDocument(db, { ...sampleDoc, meta: { ...sampleDoc.meta, theme: 'swiss', themeScope: 'page' } });
+    assert.equal(getDocument(db, 'test_doc01').meta.theme, 'swiss');
+  });
+
   it('returns null for nonexistent document', () => {
     const doc = getDocument(db, 'nonexistent');
     assert.equal(doc, null);

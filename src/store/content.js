@@ -52,6 +52,8 @@ function rowToDocument(row) {
       published: row.published || undefined,
       tags: row.tags ? JSON.parse(row.tags) : undefined,
       image: row.image || undefined,
+      theme: row.theme || undefined,
+      themeScope: (row.theme && row.theme_scope) || undefined,
     },
     blocks: JSON.parse(row.blocks),
   };
@@ -128,8 +130,8 @@ export function saveDocument(db, doc) {
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO documents (id, title, slug, collection, status, description, author_id, created, updated, published, tags, image, blocks, plaintext)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO documents (id, title, slug, collection, status, description, author_id, created, updated, published, tags, image, theme, theme_scope, blocks, plaintext)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       slug = excluded.slug,
@@ -141,6 +143,8 @@ export function saveDocument(db, doc) {
       published = excluded.published,
       tags = excluded.tags,
       image = excluded.image,
+      theme = excluded.theme,
+      theme_scope = excluded.theme_scope,
       blocks = excluded.blocks,
       plaintext = excluded.plaintext
   `).run(
@@ -156,6 +160,8 @@ export function saveDocument(db, doc) {
     meta.published || null,
     meta.tags ? JSON.stringify(meta.tags) : null,
     meta.image || null,
+    meta.theme || null,
+    (meta.theme && meta.themeScope) || null,
     JSON.stringify(blocks),
     plaintext,
   );

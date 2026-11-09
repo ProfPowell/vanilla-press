@@ -48,4 +48,12 @@ describe('frontMatter', () => {
       assert.equal(matter(frontMatter(d, { layout: 'post' }) + '<p>x</p>').data.title, title);
     });
   }
+
+  it('carries theme and themeScope before layout; vp_id stays last', () => {
+    const fm = frontMatter({ id: 'doc_1', meta: { title: 'T', theme: '8bit' } }, { layout: 'post' });
+    assert.match(fm, /theme: "8bit"\nthemeScope: "page"\nlayout: "post"/);
+    assert.match(fm, /vp_id: "doc_1"\n---\n$/);
+    assert.match(frontMatter({ id: 'd', meta: { title: 'T', theme: '8bit', themeScope: 'article' } }, { layout: 'post' }), /themeScope: "article"/);
+    assert.doesNotMatch(frontMatter({ id: 'd', meta: { title: 'T' } }, { layout: 'post' }), /theme/);
+  });
 });

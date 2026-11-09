@@ -11,14 +11,18 @@
 
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { realpathSync, statSync, existsSync } from 'node:fs';
+import { join, dirname, extname, relative, isAbsolute, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listSites, getSite, addSite, removeSite, listFolders } from './registry.js';
 import { createPreviews } from './preview.js';
 import * as defaultGit from '../git/git.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import * as defaultSiteProcess from './site-process.js';
-import { createBackup, BACKUP_PATHS, pageNotLive } from './site-git.js';
+import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git.js';
+import { migrateVpTheme } from './site-theme.js';
+import { mountThemeRoutes } from './theme-routes.js';
+import { findSiteVb } from '../themes/site-vb.js';
 import { createLiveMedia } from './live-media.js';
 import {
   setPublished, BuildError, PublishRejectedError, checkLive, readSiteUrl, publicUrl, builtPage,
@@ -44,6 +48,15 @@ const SITE_PATH = /^\/api\/sites\/([^/]+)(?:\/|$)/;
 const SITE_MEDIA_PATH = /^\/sites\/([^/]+)\/media\//;
 /** `/sites/<id>/components/<pkg>/<path>`: a catalog package's files, for the editor to load. */
 const SITE_COMPONENTS_PATH = /^\/sites\/([^/]+)\/components\//;
+/** `/sites/<id>/site/<path>`: the site's VB copy and custom themes (its `src/`), for theme previews. */
+const SITE_FILES_PATH = /^\/sites\/([^/]+)\/site\//;
+/** What `/sites/<id>/site/` serves: stylesheets, scripts, fonts and images, never pages. */
+const SITE_FILE_TYPES = new Set(['.css', '.js', '.mjs', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.woff', '.woff2']);
+/** Custom themes (and vp-site.css), relative to the site's `src/`. */
+const CUSTOM_THEMES_DIR = 'assets/themes';
+/** In the VB copy's folder: its own top-level files, and these subfolders. */
+const VB_OWN_FILE = /^vanilla-breeze(\.[a-z0-9]+)*\.(css|js|mjs)$/;
+const VB_SUBFOLDERS = ['themes', 'fonts'];
 
 const STATIC_MOUNTS = [
   { prefix: '/app/', dir: join(ROOT, 'app') },
@@ -60,13 +73,14 @@ const ACTION_PATH = /\/documents\/[^/]+\/(publish|update|unpublish)$/;
 
 /**
  * A write that changes a site's files (document create, save, reload, delete, sync;
- * media upload, alt edit, delete): it waits for a running publish/update/unpublish (Ruling O).
+ * media upload, alt edit, delete): it waits for a running publish/update/unpublish
+ * (Ruling O). Theme library writes take the locks themselves (theme-routes.js).
  * @param {string} method
  * @param {string} pathname
  * @returns {boolean}
  */
 export function isQueuedWrite(method, pathname) {
-  if (!['POST', 'PUT', 'DELETE'].includes(method)) return false;
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
   const rest = pathname.replace(/^\/api\/sites\/[^/]+/, '');
   if (rest === '/sync') return true;
   if (rest === '/media' || rest.startsWith('/media/')) return true;
@@ -161,7 +175,10 @@ export async function startApp({
         console.warn(`${site.name || site.id}: not pulling, uncommitted changes in ${dirty.slice(0, 3).join(', ')}`);
         return;
       }
-      await git.pullFastForward(ws.siteDir);
+      // An unapplied local theme.json or custom theme gives way to the one GitHub has;
+      // openSite migrates vp.json afterwards only if theme.json is still missing.
+      const { yielded = [] } = (await git.pullFastForward(ws.siteDir, { yieldUntracked: [...THEME_PATHS] })) || {};
+      if (yielded.length) console.warn(`${site.name || site.id}: kept GitHub's ${yielded.join(', ')} (the local copy was not applied)`);
     } catch (err) {
       console.warn(`${site.name || site.id}: pull skipped: ${err.message}`);
     }
@@ -178,16 +195,25 @@ export async function startApp({
         const { adopted } = syncFromSite(ws, db);
         if (adopted.length > 0) backup.noteSaved({ title: 'media library', status: 'draft' });
       };
+      // A legacy vp.json theme moves to config/theme.json (R1) when there is none; a failure only logs.
+      const migrate = () => {
+        try {
+          migrateVpTheme(ws);
+        } catch (err) {
+          console.warn(`${site.name || site.id}: theme migration skipped: ${err.message}`);
+        }
+      };
       backup = createBackup({
         site, ws, git, ...backupTimers,
-        onRebased: syncSite,
+        onRebased: () => { migrate(); syncSite(); },
       });
+      migrate();
       syncSite();
       const prefix = `/api/sites/${site.id}`;
       const router = createRouter();
       const roots = { siteDir: ws.siteDir, vpRoot, catalog };
       mountApi(router, db, {
-        rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix,
+        rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix, siteId: site.id,
         statusByActions: true, // Ruling P: only Publish/Update/Unpublish change status
         onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
         onMediaChanged: ({ filename }) => backup.noteSaved({ title: filename, status: 'draft' }),
@@ -200,6 +226,15 @@ export async function startApp({
       });
       const writes = createLock();
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
+      mountThemeRoutes(router, prefix, {
+        site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,
+        onBuilt: () => vbCache.delete(site.id), // Apply's build may have vendored the site's VB copy
+        deps: {
+          git, // the delete check reads committed HEAD (headCommit, headTree, readBlobs)
+          ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
+          commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus, readHead: git.readHead,
+        },
+      });
       const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);
       return entry;
@@ -259,9 +294,13 @@ export async function startApp({
             components: () => enabledComponents(roots),
           },
         })));
+        vbCache.delete(site.id); // the build may have vendored or moved the site's VB copy
         if (result.expectedText != null) expected.set(docId, { url: result.url, text: result.expectedText });
         else expected.delete(docId);
-        sendJson(res, 200, { status: result.status, url: result.url });
+        sendJson(res, 200, {
+          status: result.status, url: result.url,
+          ...(result.themeFromElsewhere ? { theme: 'The theme was changed on another computer: the version on GitHub was kept.' } : {}),
+        });
       } catch (err) {
         if (err instanceof PublishRejectedError) return sendJson(res, err.status, err.body);
         if (err instanceof BuildError) return sendJson(res, 422, { error: 'Build failed', log: err.log });
@@ -377,6 +416,7 @@ export async function startApp({
   app.add('DELETE', '/api/sites/:siteId', async (req, res) => {
     const { siteId } = req.params;
     removeSite(siteId, { env }); // first, so no new request reopens it
+    vbCache.delete(siteId);
     previews.stop?.(siteId)?.catch?.(() => {});
     await closeSite(siteId, { flush: true });
     sendJson(res, 200, { ok: true });
@@ -387,6 +427,7 @@ export async function startApp({
     if (!site) return sendJson(res, 404, { error: 'Unknown site' });
     try {
       const { url } = await previews.start(site);
+      vbCache.delete(site.id); // a preview build may have vendored the site's VB copy
       sendJson(res, 200, { url });
     } catch (err) {
       sendJson(res, 502, { error: err.message });
@@ -450,6 +491,60 @@ export async function startApp({
     return serveStatic(req, res, [{ prefix: `${match[0]}${entry.package}/`, dir: found.dir }]);
   }
 
+  /**
+   * Serve `/sites/<id>/site/<path>` (GET/HEAD) from the site's `src/`, only
+   * VB's own files in its VB copy's folder (vanilla-breeze.*, themes/, fonts/)
+   * and assets/themes/, only asset types, never a dotfile, and
+   * only when the real path (symlinks resolved) is still there; false when not served.
+   */
+  /** Where each site's VB copy is: siteId -> { path, vb }; dropped when a build may have moved it. */
+  const vbCache = new Map();
+  /** The site's VB copy (findSiteVb), cached while its file is still there; no copy is not cached. */
+  function siteVb(site) {
+    const hit = vbCache.get(site.id);
+    if (hit && hit.path === site.path && existsSync(join(site.path, 'src', hit.vb.url))) return hit.vb;
+    const vb = findSiteVb(site.path);
+    if (vb) vbCache.set(site.id, { path: site.path, vb });
+    else vbCache.delete(site.id);
+    return vb;
+  }
+
+  function serveSiteFiles(req, res, pathname) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+    const match = pathname.match(SITE_FILES_PATH);
+    let id;
+    let rel;
+    try {
+      id = decodeURIComponent(match[1]);
+      rel = decodeURIComponent(pathname.slice(match[0].length));
+    } catch { return false; }
+    const parts = rel.split('/');
+    if (parts.some((p) => !p || p.startsWith('.') || /[\\:\u0000-\u001f\u007f]/.test(p))) return false;
+    if (!SITE_FILE_TYPES.has(extname(rel).toLowerCase())) return false;
+    const site = getSite(id, { env });
+    if (!site) return false;
+    const vb = siteVb(site);
+    const vbDir = vb ? posix.dirname(vb.url).slice(1) : null;
+    const vbPrefix = vbDir ? `${vbDir}/` : '';
+    const allowed = (p) => {
+      if (p.startsWith(`${CUSTOM_THEMES_DIR}/`)) return true;
+      if (vbDir === null || !p.startsWith(vbPrefix)) return false;
+      const inVb = p.slice(vbPrefix.length);
+      return (!inVb.includes('/') && VB_OWN_FILE.test(inVb)) || VB_SUBFOLDERS.some((d) => inVb.startsWith(`${d}/`));
+    };
+    if (!allowed(rel)) return false;
+    let real;
+    try {
+      const srcReal = realpathSync.native(join(site.path, 'src'));
+      const fileReal = realpathSync.native(join(srcReal, ...parts));
+      const inside = relative(srcReal, fileReal);
+      if (!inside || isAbsolute(inside) || inside.split(sep).some((p) => p === '..' || p.startsWith('.'))) return false;
+      if (!allowed(inside.split(sep).join('/')) || !statSync(fileReal).isFile()) return false;
+      real = fileReal;
+    } catch { return false; }
+    return serveFile(res, real, { req, headers: MEDIA_HEADERS });
+  }
+
   const server = createServer(async (req, res) => {
     try {
       if (refuseForeign(req, res, server.address().port)) return;
@@ -467,6 +562,8 @@ export async function startApp({
         if (serveSiteMedia(req, res, pathname)) return;
       } else if (SITE_COMPONENTS_PATH.test(pathname)) {
         if (serveSiteComponent(req, res, pathname)) return;
+      } else if (SITE_FILES_PATH.test(pathname)) {
+        if (serveSiteFiles(req, res, pathname)) return;
       } else if (serveStatic(req, res, STATIC_MOUNTS)) {
         return;
       }

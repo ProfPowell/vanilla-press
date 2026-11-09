@@ -13,12 +13,18 @@ import { collectionOutput } from '../sync/paths.js';
 import { readManifest } from '../sync/manifest.js';
 import { readVpId } from '../sync/front-matter.js';
 import { GitNotConnectedError } from '../git/git.js';
+import { themeConflictResolver } from './site-theme.js';
 
 export const QUIET_MS = 30_000;
 export const MAX_WAIT_MS = 120_000;
 const SKIP = ' [CI Skip]';
 /** What a backup stages: the JSON, uploads and settings, never a page. */
 export const BACKUP_PATHS = Object.freeze(['content', 'src/media', 'config/vp.json']);
+/**
+ * The theme setting and custom themes: committed by Apply, Publish/Update (R3) and
+ * library operations (their own commit), never staged by a backup.
+ */
+export const THEME_PATHS = Object.freeze(['config/theme.json', 'src/assets/themes']);
 const MAX_TITLES = 3;
 
 const trimSlashes = (p) => p.replace(/^\/+|\/+$/g, '');
@@ -178,6 +184,16 @@ export function backupMessage(titles, allDraft) {
 }
 
 /**
+ * Commit message of a theme library change: `Theme library: <what>`, with the CI
+ * skip marker (it never changes the live look).
+ * @param {string} text
+ * @returns {string}
+ */
+export function libraryMessage(text) {
+  return `Theme library: ${commitTitle([text])}${SKIP}`;
+}
+
+/**
  * @typedef {{
  *   pending: number, lastPushAt: string|null, error: string|null, connected: boolean,
  *   lastPushKind: 'draft'|'publish'|null,
@@ -269,6 +285,12 @@ export function createBackup({
 
   /** A push rebased onto commits from elsewhere: let the store pick them up. */
   function afterPush(result) {
+    if (result?.yielded?.length) {
+      console.warn(`${ws.siteDir}: kept GitHub's ${result.yielded.join(', ')} (the local copy was not applied)`);
+    }
+    if (result?.resolved?.length) {
+      console.warn(`${ws.siteDir}: ${result.resolved.join(', ')} changed on another computer too: GitHub's theme kept`);
+    }
     if (!result?.rebased) return;
     try { onRebased(); } catch (err) { console.warn(`Re-sync after rebase failed: ${err.message}`); }
   }
@@ -317,7 +339,9 @@ export function createBackup({
       await git.commitPaths(ws.siteDir, [...BACKUP_PATHS], backupMessage(snapshot.titles, snapshot.allDraft));
       unpushed += snapshot.count; // committed (or nothing to commit): only the push is left
       snapshot = null;
-      const result = await git.push(ws.siteDir);
+      // A local untracked theme.json or custom theme gives way to the one GitHub has, and
+      // a theme conflict keeps GitHub's applied state (library entries from both).
+      const result = await git.push(ws.siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });
       pushed('backup');
       afterPush(result);
     } catch (err) {
@@ -385,6 +409,26 @@ export function createBackup({
   }
 
   /**
+   * Run `fn` in the git queue for a commit outside the backup paths that is
+   * pushed like a backup (a theme library change): when `fn` resolves to
+   * `{ sha }`, the commit counts as unpushed and the backup timer starts.
+   * @template T
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   */
+  function commitLater(fn) {
+    return serial(async () => {
+      const result = await fn();
+      if (result?.sha) {
+        unpushed++;
+        if (firstAt === null) firstAt = now();
+        schedule();
+      }
+      return result;
+    });
+  }
+
+  /**
    * Read git status once so state().connected is right before any push:
    * connected means a repo with a remote and an upstream. Never rejects.
    * @returns {Promise<BackupState>}
@@ -424,5 +468,5 @@ export function createBackup({
     });
   }
 
-  return { noteSaved, flush, state, exclusive, commitOther, dispose, close, init };
+  return { noteSaved, flush, state, exclusive, commitOther, commitLater, dispose, close, init };
 }

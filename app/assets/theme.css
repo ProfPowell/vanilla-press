@@ -1,0 +1,143 @@
+/*
+ * Theme section: theme cards, the Adjust controls and the live preview.
+ * Cards and the preview take their colors and fonts from the real theme CSS
+ * (data-theme on the swatch and the preview frame), so every value here is a
+ * Vanilla Breeze token read in that scope.
+ */
+
+/*
+ * A theme on a nested element (the cards' swatches and the color probe): VB
+ * computes --color-primary and --color-interactive once on :root, so a theme
+ * that only sets the hue, lightness and chroma (amber, ocean, ...) would not
+ * show there. Recompute them on those elements, in the tokens layer, so any
+ * theme that sets the colors itself (bundle-theme) still wins. The probe's
+ * values feed the colors Apply writes (R7).
+ * Remove this once VP's Vanilla Breeze recomputes the derived colors on
+ * [data-theme] itself (the scoped-derived-colors fix on VB's feat/page-theme).
+ * Only these two are recomputed: the cards show only the primary color, and
+ * the preview (an iframe with data-theme on its <html>) needs none of this.
+ */
+@layer tokens {
+  :is(.theme-swatch, .theme-probe)[data-theme] {
+    --color-primary: oklch(var(--lightness-primary) var(--chroma-primary) var(--hue-primary));
+    --color-interactive: var(--color-primary);
+  }
+}
+
+.site-main-inner:has(> #theme-section:not([hidden])) { max-width: 80rem; }
+
+.theme-lede { margin: 0.375rem 0 0; font-size: 0.875rem; color: var(--color-text-muted); }
+.theme-status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.25rem 0.75rem; margin: 0; font-size: 0.8125rem; }
+.theme-status:not(:has(:not(:empty))) { display: none; }
+.theme-dirty { color: var(--color-warning-text); }
+.theme-dirty:empty, .theme-apply-state:empty { display: none; }
+.theme-apply-state { color: var(--color-text-muted); overflow-wrap: anywhere; }
+.theme-apply-state[data-tone="error"] { color: var(--color-error-text); }
+.theme-apply-state[data-tone="done"] { color: var(--color-success-text); }
+.theme-apply-state a { display: inline-flex; align-items: center; min-height: 1.5rem; color: var(--color-success-text); font-weight: 600; }
+#theme-apply:disabled { cursor: progress; opacity: 0.7; }
+
+/* Notes from the library (save, import, rename, delete) and Apply's error report. */
+.theme-notice { margin: 0 0 1rem; padding: 0.6rem 0.9rem; border: 1px solid var(--color-border); border-radius: var(--radius-m); font-size: 0.875rem; overflow-wrap: anywhere; }
+.theme-notice:empty { display: none; }
+.theme-report { display: flex; align-items: flex-start; gap: 0.75rem; margin: 0 0 1rem; padding: 0.75rem 0.9rem; border: 1px solid var(--color-error); border-radius: var(--radius-m); font-size: 0.875rem; }
+.theme-report[hidden] { display: none; }
+.theme-report > div { flex: 1; min-width: 0; }
+.theme-report p { margin: 0; color: var(--color-error-text); }
+.theme-report ul { margin: 0.4rem 0 0; }
+.theme-report pre { max-block-size: 16rem; overflow: auto; margin: 0.5rem 0 0; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-m); background: var(--color-background); font-size: 0.75rem; white-space: pre-wrap; }
+.theme-note { margin: 0; font-size: 0.8125rem; color: var(--color-text-muted); }
+.theme-note[hidden] { display: none; }
+.theme-warn { color: var(--color-warning-text); }
+.theme-warn:empty { margin: 0; }
+
+.theme-layout { display: flex; flex-wrap: wrap; gap: 2rem; align-items: flex-start; }
+.theme-controls { flex: 1 1 20rem; max-width: 23.75rem; min-width: 0; display: flex; flex-direction: column; gap: 1.75rem; }
+.theme-controls h2 { margin: 0; font-family: var(--font-sans); font-size: 0.9375rem; font-weight: 600; letter-spacing: 0; }
+
+/* --- Start from a theme --- */
+.theme-pick-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-block-end: 0.5rem; }
+.theme-pick-head .btn-quiet { min-height: 2.5rem; padding: 0 0.5rem; font-size: 0.8125rem; text-decoration: underline; text-underline-offset: 3px; }
+.theme-pick-head .btn-quiet[hidden] { display: none; }
+.theme-search { margin-block-end: 0.75rem; }
+.theme-cards { list-style: none; margin: 0 0 0.5rem; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem; }
+.theme-cards[data-scroll] { max-block-size: 31rem; overflow-y: auto; padding: 0.25rem; margin-inline: -0.25rem; border-block: 1px solid var(--color-border-subtle); overscroll-behavior: contain; }
+.theme-cards li { position: relative; display: flex; min-width: 0; margin: 0; }
+
+/* A custom card's menu: a disclosure over the swatch's corner. */
+.theme-card-menu { position: absolute; inset-block-start: 0.5rem; inset-inline-end: 0.5rem; }
+.theme-card-menu summary { display: grid; place-items: center; inline-size: 2rem; block-size: 2rem; border: 1px solid var(--color-border); border-radius: var(--radius-m); background: var(--color-background); color: var(--color-text); font-size: 1.125rem; line-height: 1; cursor: pointer; list-style: none; }
+.theme-card-menu summary::-webkit-details-marker { display: none; }
+/* VB animates details open (content-visibility for 0.2 s): a menu opens at once, so Tab reaches its items. */
+.theme-card-menu::details-content { transition: none; }
+.theme-card-menu summary:hover { background: var(--color-surface-raised); }
+.theme-card-menu summary:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.theme-card-menu-list { position: absolute; z-index: 5; inset-block-start: calc(100% + 0.25rem); inset-inline-end: 0; display: flex; flex-direction: column; min-inline-size: 9rem; padding: 0.25rem; border: 1px solid var(--color-border); border-radius: var(--radius-m); background: var(--color-background); box-shadow: var(--shadow-m); }
+.theme-card-menu-list button { justify-content: flex-start; border: 0; background: transparent; font-size: 0.875rem; }
+.theme-card-menu-list button:hover { background: var(--color-surface-raised); }
+.theme-card-menu-list button.danger { color: var(--color-error-text); }
+.theme-card { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0; padding: 0.375rem; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-l); background: var(--color-background); color: var(--color-text); text-align: start; font-weight: 400; }
+.theme-card:hover { background: var(--color-surface-raised); }
+.theme-card[aria-pressed="true"] { border: 2px solid var(--color-primary); padding: calc(0.375rem - 1px); }
+.theme-swatch { display: flex; align-items: flex-end; justify-content: space-between; gap: 0.5rem; block-size: 4rem; padding: 0.5rem 0.625rem; box-sizing: border-box; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-m); background: var(--color-surface, var(--color-background)); color: var(--color-text); overflow: hidden; }
+.theme-swatch-aa { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 700; line-height: 1; white-space: nowrap; }
+.theme-swatch-bar { flex: none; inline-size: 1.75rem; block-size: 0.75rem; border-radius: var(--radius-s); background: var(--color-primary); }
+.theme-card-text { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0 0.375rem; padding: 0.5rem 0.125rem 0.125rem; font-size: 0.8125rem; }
+.theme-card-name { font-weight: 600; overflow-wrap: anywhere; }
+.theme-card-tier { color: var(--color-text-muted); }
+
+/* --- Adjust --- */
+.theme-adjust { display: flex; flex-direction: column; gap: 1.125rem; padding-block-start: 1.5rem; border-block-start: 1px solid var(--color-border-subtle); }
+.theme-field { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+.theme-field label, .theme-field-label { margin: 0; font-size: 0.875rem; font-weight: 600; }
+.theme-hue-head { display: flex; justify-content: space-between; gap: 0.5rem; }
+.theme-hue-head output { font-size: 0.875rem; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+#theme-hue { inline-size: 100%; min-height: 2.5rem; accent-color: var(--color-primary); }
+.theme-fonts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.theme-field select { min-height: 2.5rem; padding: 0 0.5rem; border: 1px solid var(--color-border); border-radius: var(--radius-m); background: var(--color-background); color: var(--color-text); font: inherit; font-size: 0.875rem; }
+.theme-field select:focus-visible, #theme-hue:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.theme-adjust-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.segmented { display: flex; gap: 2px; padding: 3px; border-radius: var(--radius-m); background: var(--color-surface-alt); }
+.segmented button { flex: 1 1 auto; min-height: 2.5rem; padding: 0 0.625rem; white-space: nowrap; border: 0; border-radius: var(--radius-s); background: transparent; color: var(--color-text-muted); font-size: 0.8125rem; }
+.segmented button:hover:not([aria-disabled="true"]) { background: var(--color-background); color: var(--color-text); }
+.segmented button[aria-disabled="true"] { cursor: not-allowed; }
+.segmented button[aria-disabled="true"]:not([aria-pressed="true"]) { opacity: 0.6; }
+.segmented button[aria-pressed="true"] { background: var(--color-background); color: var(--color-text); font-weight: 600; box-shadow: var(--shadow-xs); }
+
+/* --- Pages with their own theme --- */
+.theme-pages { padding: 1rem; border-radius: var(--radius-l); background: var(--color-surface-raised); }
+.theme-pages h2 { margin-block-end: 0.25rem; font-size: 0.875rem; }
+.theme-pages-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; font-size: 0.875rem; }
+.theme-pages-list[hidden] { display: none; }
+.theme-pages-list a { display: inline-flex; align-items: center; min-height: 2.5rem; overflow-wrap: anywhere; }
+
+/* --- Preview --- */
+.theme-preview { flex: 999 1 32.5rem; min-width: 0; }
+.theme-preview-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.625rem; margin-block-end: 0.75rem; }
+.theme-preview-title { margin: 0; font-size: 0.875rem; color: var(--color-text-muted); overflow-wrap: anywhere; }
+#theme-preview-post { color: var(--color-text); font-weight: 600; }
+.theme-preview-head .segmented button { flex: none; }
+.theme-preview-stage { display: flex; justify-content: center; padding: 1.25rem; border-radius: var(--radius-xl); background: var(--color-surface-alt); }
+
+/* The frame is the site's page, in a sandboxed iframe; its layout is theme-preview-frame.css. */
+.theme-preview-frame { display: block; inline-size: 100%; max-inline-size: 860px; min-width: 0; block-size: 40rem; border: 0; border-radius: var(--radius-l); background: var(--color-background); box-shadow: var(--shadow-s); }
+.theme-preview-frame[data-width="phone"] { inline-size: 390px; max-inline-size: 100%; }
+
+@media (max-width: 40rem) {
+  .theme-controls { max-width: none; }
+  .theme-preview-stage { padding: 0.5rem; }
+}
+
+/* --- Dialogs: a name, a Composer import --- */
+.theme-dialog { inline-size: min(30rem, calc(100vw - 2rem)); max-block-size: calc(100dvh - 2rem); padding: 1.5rem; border: 1px solid var(--color-border); border-radius: var(--radius-l); background: var(--color-background); color: var(--color-text); box-shadow: var(--shadow-l); }
+.theme-dialog::backdrop { background: var(--color-backdrop); }
+.theme-dialog form { display: flex; flex-direction: column; gap: 1rem; }
+.theme-dialog h2 { margin: 0; font-family: var(--font-serif); font-size: var(--font-size-l); }
+.theme-dialog .theme-note:empty, .theme-dialog .error:empty { display: none; }
+.theme-dialog .error { margin: 0; font-size: 0.875rem; overflow-wrap: anywhere; }
+.theme-dialog input[type="text"], .theme-dialog textarea { min-height: 2.5rem; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: var(--radius-m); background: var(--color-background); color: var(--color-text); font: inherit; font-size: 0.9375rem; }
+.theme-dialog textarea { font-family: var(--font-mono); font-size: 0.8125rem; resize: vertical; }
+.theme-dialog input[type="file"] { min-height: 2.5rem; font: inherit; font-size: 0.875rem; }
+.theme-dialog :is(input, textarea):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.theme-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }

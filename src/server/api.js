@@ -25,7 +25,7 @@ import { normalizeComponents } from '../components/normalize.js';
 import { syncDocument, unsyncDocument, SyncConflictError } from '../sync/to-site.js';
 import { reloadFromSite } from '../sync/from-site.js';
 import {
-  getCollectionsConfig, preflightSave, writeMediaJson, writeVpConfig, syncAll,
+  getCollectionsConfig, preflightSave, writeMediaJson, syncAll,
 } from '../sync/site-files.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
 import { isMissing } from '../sync/media-library.js';
@@ -36,6 +36,7 @@ import { mediaUsage, mediaSrc } from '../media/usage.js';
 import { kindOf } from '../media/types.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
+import { themeCatalog } from '../themes/site-vb.js';
 import { sendJson, readRawBody } from './router.js';
 
 /** The notice for an attribute a save dropped. */
@@ -58,6 +59,8 @@ function generateId() {
  * @param {string} options.mediaDir - Media upload directory
  * @param {import('../workspace/workspace.js').Workspace} [options.workspace] - Absent means fixture mode (sync disabled)
  * @param {string} [options.prefix='/api'] - URL prefix for every route
+ * @param {string} [options.siteId] - The app's site id: with a workspace, GET /api/themes lists the
+ *   site's own VB copy (hrefs under /sites/<siteId>/site/). Absent (`vp serve`): VP's VB.
  * @param {(e: { docId: string|null, title: string, status: string }) => void} [options.onSynced] - Called after
  *   every successful sync (create, update, delete, reload), and once for POST /api/sync with
  *   `{ docId: null, title: 'all posts' }`. Never called in fixture mode.
@@ -559,9 +562,15 @@ export function mountApi(router, db, options) {
 
   // --- Themes ---
 
-  // Available VB themes (from node_modules/vanilla-breeze/dist/cdn)
+  // Available VB themes: the site's own VB copy when it has one (the app, which serves it
+  // under /sites/<siteId>/site/), else VP's (node_modules/vanilla-breeze/dist/cdn).
   route.add('GET', '/api/themes', (req, res) => {
-    sendJson(res, 200, listThemes(join(rootDir, 'node_modules', 'vanilla-breeze', 'dist', 'cdn')));
+    const vpCdnDir = join(rootDir, 'node_modules', 'vanilla-breeze', 'dist', 'cdn');
+    if (ws && options.siteId) {
+      sendJson(res, 200, themeCatalog({ siteDir: ws.siteDir, siteId: options.siteId, vpCdnDir }).themes);
+      return;
+    }
+    sendJson(res, 200, listThemes(vpCdnDir));
   });
 
   // --- Config ---
@@ -588,7 +597,6 @@ export function mountApi(router, db, options) {
     }
 
     setConfig(db, req.params.key, String(body.value));
-    if (ws && req.params.key === 'theme') writeVpConfig(ws, db);
     sendJson(res, 200, { key: req.params.key, value: String(body.value) });
   });
 

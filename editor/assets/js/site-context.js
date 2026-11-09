@@ -152,11 +152,11 @@ export function confirmText(kind, { title, liveUrl }) {
   };
 }
 
-const PENDING = { publish: 'Publishing…', update: 'Updating…', unpublish: 'Unpublishing…' };
+const PENDING = { publish: 'Publishing…', update: 'Updating…', unpublish: 'Unpublishing…', apply: 'Applying…' };
 
 /**
  * The action slot's text while an action runs (and while the live check waits).
- * @param {'publish'|'update'|'unpublish'} action
+ * @param {'publish'|'update'|'unpublish'|'apply'} action
  * @returns {string}
  */
 export function actionPendingText(action) {
@@ -221,7 +221,7 @@ export function createLiveTracker() {
 }
 
 /**
- * What to show after POST publish/update/unpublish failed.
+ * What to show after POST publish/update/unpublish (or the Theme screen's Apply) failed.
  *
  * - 422 with a log: the build failed; nothing was applied.
  * - 409 with `files`, or 502: the change was applied and committed on this
@@ -231,13 +231,13 @@ export function createLiveTracker() {
  *
  * A failure never starts the live poll.
  * @param {{ status?: number, message?: string, data?: { error?: string, log?: string, files?: string[] } }} err
- * @param {'publish'|'update'|'unpublish'} action
+ * @param {'publish'|'update'|'unpublish'|'apply'} action
  * @returns {{ message: string, reload: boolean, poll: false, log?: string, files?: string[] }}
  */
 export function publishFailure(err, action) {
   const data = err.data || {};
-  const errorText = data.error || err.message || (action === 'update' ? 'Update failed' : 'Publish failed');
-  const done = { publish: 'Published', update: 'Updated', unpublish: 'Unpublished' }[action];
+  const errorText = data.error || err.message || ({ update: 'Update failed', apply: 'Apply failed' }[action] || 'Publish failed');
+  const done = { publish: 'Published', update: 'Updated', unpublish: 'Unpublished', apply: 'Applied' }[action];
   const applied = `${done} on this computer, but couldn't push`;
   if (err.status === 422 && data.log !== undefined) {
     return { message: 'Build failed', log: data.log, reload: false, poll: false };

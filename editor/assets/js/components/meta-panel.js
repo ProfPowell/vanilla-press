@@ -5,7 +5,8 @@
  * publishing status box (site mode; `vp serve` keeps its Status select),
  * URL (the collection's prefix plus the slug), Description with its hint,
  * Featured image (a thumbnail and file name, Choose… and Remove), Tags, Collection (a select from the site's `collections` config) and
- * Appearance. The title is the document's first line (title.js); the slug
+ * Appearance (<appearance-section>). The title is the document's first line
+ * (title.js); the slug
  * follows it until edited here or the post is published (editor.js, slug.js).
  * In `vp serve` the Publish/Unpublish and Preview actions stay here too.
  * Every field edit auto-saves.
@@ -24,6 +25,7 @@ import { onMetaUpdate as onSiteMetaUpdate, isSiteMode, altCheckPasses } from '..
 import { statusBox, collectionOptions, urlPrefix, featuredModel } from '../settings-view.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
 import { openMediaPicker } from './media-picker.js';
+import './appearance-section.js';
 
 export class MetaPanel extends HTMLElement {
   connectedCallback() {
@@ -134,10 +136,7 @@ export class MetaPanel extends HTMLElement {
         <select id="meta-collection"></select>
       </div>
 
-      <details class="appearance">
-        <summary>Appearance</summary>
-        <p>Page theme: site theme</p>
-      </details>
+      <appearance-section></appearance-section>
 
       <div class="actions">
         <button type="button" class="btn btn-publish" data-publish>Publish</button>
@@ -380,6 +379,7 @@ export class MetaPanel extends HTMLElement {
     this.renderUrlPrefix(meta);
     this.renderTags(meta.tags || []);
     this.renderFeatured(meta);
+    this.querySelector('appearance-section')?.render?.(meta);
   }
 
   /**

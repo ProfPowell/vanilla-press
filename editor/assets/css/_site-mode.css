@@ -119,6 +119,28 @@ editor-shell.has-header .site-header {
   white-space: normal;
 }
 
+/* "Page theme: <name>": the open post has its own theme. The dot wears that
+ * theme (data-theme), so it shows the theme's main color. */
+.site-header .page-theme-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-xs);
+  margin: 0;
+  padding: var(--size-3xs, 0.25rem) var(--size-s);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font-size: var(--font-size-s);
+  white-space: nowrap;
+}
+
+.site-header .page-theme-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--radius-xs);
+  background: var(--color-primary);
+}
+
 .site-header .action-state {
   margin: 0;
   font-size: var(--font-size-s);
@@ -293,7 +315,43 @@ editor-shell.site-mode meta-panel .actions {
 }
 
 editor-shell.site-mode .editor-pane {
-  padding-block: var(--size-2xl, 3rem);
+  --pane-pad-block: var(--size-2xl, 3rem);
+  --pane-pad-inline: var(--size-xl);
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--pane-pad-block) var(--pane-pad-inline);
+}
+
+/* The site's header, in the theme it has on the live page (a post with its
+ * own theme): edge to edge across the top of the writing area. */
+.site-strip[hidden] {
+  display: none !important;
+}
+
+.site-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-xs) var(--size-s);
+  align-self: stretch;
+  margin: calc(-1 * var(--pane-pad-block)) calc(-1 * var(--pane-pad-inline)) var(--pane-pad-block);
+  padding: var(--size-s) var(--size-xl);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-body, var(--font-sans));
+}
+
+.site-strip-name {
+  font-family: var(--font-heading, var(--font-sans));
+  font-weight: 700;
+}
+
+.site-strip-note {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-s);
 }
 
 .site-header .action-state:empty {
@@ -346,9 +404,15 @@ editor-shell.site-mode .editor-pane {
 
   editor-shell.has-header .editor-pane,
   editor-shell.site-mode .editor-pane {
+    --pane-pad-block: var(--size-l);
+    --pane-pad-inline: var(--size-m);
     overflow: visible;
     min-height: 60dvh;
-    padding: var(--size-l) var(--size-m);
+    padding: var(--pane-pad-block) var(--pane-pad-inline);
+  }
+
+  .site-strip {
+    padding-inline: var(--size-m);
   }
 
   editor-shell.has-header .settings-panel {

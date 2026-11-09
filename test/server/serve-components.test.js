@@ -65,4 +65,11 @@ describe('vp serve: media is served sandboxed', () => {
     assert.equal(res.headers.get('content-type'), 'image/svg+xml');
     await res.arrayBuffer();
   });
+
+  it('serves the brand files under /brand/ for the editor', async () => {
+    const res = await fetch(`${base}/brand/svg/seal-ink-medium.svg`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/svg+xml');
+    await res.arrayBuffer();
+  });
 });

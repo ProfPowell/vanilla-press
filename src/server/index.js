@@ -96,6 +96,8 @@ export function startServer(options = {}) {
   const staticMounts = [
     { prefix: '/editor/', dir: join(ROOT, 'editor') },
     { prefix: '/src/', dir: join(ROOT, 'src') },
+    // Brand master copy (docs/design/brand/README.md): favicons, seals, manifest, tokens.css
+    { prefix: '/brand/', dir: join(ROOT, 'docs', 'design', 'brand') },
     { prefix: '/test/', dir: join(ROOT, 'test') },
     { prefix: '/kitchen-sink/', dir: join(ROOT, 'kitchen-sink') },
     { prefix: '/assets/vb/', dir: join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') },

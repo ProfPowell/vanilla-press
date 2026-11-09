@@ -62,6 +62,8 @@ const STATIC_MOUNTS = [
   { prefix: '/app/', dir: join(ROOT, 'app') },
   { prefix: '/editor/', dir: join(ROOT, 'editor') },
   { prefix: '/src/', dir: join(ROOT, 'src') },
+  // Brand master copy (docs/design/brand/README.md): favicons, seals, manifest, tokens.css
+  { prefix: '/brand/', dir: join(ROOT, 'docs', 'design', 'brand') },
   { prefix: '/assets/vb/', dir: join(ROOT, 'node_modules', 'vanilla-breeze', 'dist', 'cdn') },
   { prefix: '/assets/code-block/', dir: join(ROOT, 'node_modules', '@profpowell', 'code-block', 'dist') },
   { prefix: '/assets/pdf-viewer/', dir: join(ROOT, 'node_modules', '@profpowell', 'pdf-viewer', 'dist') },

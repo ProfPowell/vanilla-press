@@ -195,6 +195,17 @@ describe('app server', () => {
     assert.equal(res.status, 200);
     assert.match(res.headers.get('content-type'), /javascript/);
   });
+
+  it('serves the brand files under /brand/', async () => {
+    const svg = await fetch(`${app.url}/brand/favicon.svg`);
+    assert.equal(svg.status, 200);
+    assert.equal(svg.headers.get('content-type'), 'image/svg+xml');
+    await svg.arrayBuffer();
+    const manifest = await fetch(`${app.url}/brand/site.webmanifest`);
+    assert.equal(manifest.status, 200);
+    assert.equal(manifest.headers.get('content-type'), 'application/manifest+json');
+    assert.equal((await manifest.json()).name, 'Vanilla Press');
+  });
 });
 
 describe('startApp port', () => {

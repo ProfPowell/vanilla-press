@@ -10,6 +10,9 @@
 import { Plugin, TextSelection } from 'prosemirror-state';
 import { formatItems, wrapInComponent, linkHref, setLink, removeLink } from './menu.js';
 import { initialAttrs } from './component-model.js';
+import { normalizeLinkUrl } from './link-url.js';
+
+export { normalizeLinkUrl };
 
 /**
  * Where to put a toolbar of `size` for a selection `sel` (all viewport coordinates).
@@ -44,22 +47,6 @@ export function toolbarKeyNav(index, count, key) {
     case 'End': return count - 1;
     default: return null;
   }
-}
-
-/**
- * Turn what was typed in the link field into an href, or null when there is
- * nothing usable. Web addresses without a scheme get https://; relative paths,
- * anchors, mailto: and tel: stay as typed; other schemes (javascript:, data:) are refused.
- * @param {string} text
- * @returns {string|null}
- */
-export function normalizeLinkUrl(text) {
-  const t = String(text ?? '').trim();
-  if (!t || /\s/.test(t)) return null;
-  if (/^(\/|#|\?|\.\.?\/)/.test(t)) return t;
-  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(t);
-  if (scheme) return /^(https?|mailto|tel)$/i.test(scheme[1]) ? t : null;
-  return `https://${t}`;
 }
 
 const svg = (paths) => '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" '

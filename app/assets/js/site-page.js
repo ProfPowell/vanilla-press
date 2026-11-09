@@ -94,6 +94,7 @@ async function loadSite() {
     if (!site) throw new Error('Unknown site');
     $('site-name').textContent = site.name;
     document.title = `${site.name} - Vanilla Press`;
+    siteUrl = site.siteUrl || null;
     if (site.siteUrl) {
       $('view-site').href = site.siteUrl;
       $('view-site').hidden = false;
@@ -112,6 +113,7 @@ async function loadSite() {
 }
 
 let lastBackupAt = null;
+let siteUrl = null;
 
 async function loadBackupStatus() {
   const el = $('backup-status');
@@ -276,6 +278,8 @@ function showSection(section) {
   if (section === 'components' && !componentState) loadComponents();
   if (section === 'media') startMedia();
   else mediaPage?.then((media) => media?.hide());
+  if (section === 'programs') startPrograms();
+  else programsPage?.then((programs) => programs?.hide());
   if (section === 'theme') startTheme();
   else themePage?.then((theme) => theme?.hide());
 }
@@ -296,6 +300,15 @@ function startMedia() {
     .then((m) => m.initMediaSection({ siteId, root: $('media-section') }))
     .catch((err) => showError(err.message));
   mediaPage.then((media) => media?.show());
+}
+
+// Programs is set up on first view, only once; every view refreshes it.
+let programsPage = null;
+function startPrograms() {
+  programsPage ||= import('./programs-page.js')
+    .then((m) => m.initProgramsSection({ siteId, root: $('programs-section'), siteUrl }))
+    .catch((err) => showError(err.message));
+  programsPage.then((programs) => programs?.show());
 }
 
 $('rail-sections').addEventListener('click', (e) => {

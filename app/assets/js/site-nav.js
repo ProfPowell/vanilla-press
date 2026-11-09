@@ -6,10 +6,10 @@
  */
 
 /** Sections that work today, in rail order. */
-export const SECTIONS = ['posts', 'media', 'components', 'theme'];
+export const SECTIONS = ['posts', 'media', 'programs', 'components', 'theme'];
 
 /** Sections shown disabled under "Coming later". */
-export const LATER = ['Programs', 'Analytics', 'Social'];
+export const LATER = ['Analytics', 'Social'];
 
 /**
  * The section named by `?section=`, or `posts` when missing or unknown.

@@ -11,7 +11,7 @@ vp            # or: npx vp
 
 `vp` (same as `vp app`) starts the app at `http://127.0.0.1:3007`, opens it in your browser, and shows your sites. Add a site by choosing a folder (its `package.json` must depend on `cook-ssg`) or by cloning a GitHub repo. `VP_NO_OPEN=1` skips opening the browser; `--port <n>` picks the port.
 
-The Sites screen lists your sites; opening one shows its page with a rail on the left (Posts, Media, Components, Theme, at `site.html?site=<id>&section=<name>`). Pick or create a post on the Posts screen and edit: the title is the first line of the page, `/` or the gutter **+** inserts blocks, selecting text brings up the format toolbar (`Alt+F10` moves into it, `Mod+K` links), `Alt+Shift+↑/↓` moves a block, and the top bar's "⋯" menu holds Export, the block tree, View live page, Delete and Unpublish. The editor's shortcuts are listed in `docs/EDITOR.md`.
+The Sites screen lists your sites; opening one shows its page with a rail on the left (Posts, Media, Programs, Components, Theme, at `site.html?site=<id>&section=<name>`). Pick or create a post on the Posts screen and edit: the title is the first line of the page, `/` or the gutter **+** inserts blocks, selecting text brings up the format toolbar (`Alt+F10` moves into it, `Mod+K` links), `Alt+Shift+↑/↓` moves a block, and the top bar's "⋯" menu holds Export, the block tree, View live page, Delete and Unpublish. The editor's shortcuts are listed in `docs/EDITOR.md`.
 
 Saves happen as you type, and are backed up to GitHub about 30 seconds after you stop typing. Backups carry `[CI Skip]` and never include a page, so **a backup never changes the live site**. **Publish** runs the site's `npm run build`, then commits and pushes the page.
 
@@ -34,6 +34,16 @@ The **Media** screen of a site lists the files in its `src/media`: filter All / 
 - **Delete:** a file the live site uses can't be deleted: one used by a published post, or shown by any page committed in the site's git. The refusal names the posts and pages; remove the file there and Update (or commit the page) first. A file used only by drafts is deleted after a confirmation that names them; they then show it as missing. "Used in" lists every use, a live version of an edited post as "Published (live version)". A file gone from `src/media` shows **Missing file**; it can be removed from the library, and Publish refuses a post that uses it.
 - **Featured image:** chosen in Post settings and saved as `image` in the post's front matter. Showing it (and `og:image`) is the site layout's job.
 - **In git:** `content/media.json` (names, alt text, original names) and `src/media` are committed with your draft backups. Files that appear in `src/media` without an entry (copied in by hand, or pulled from another machine) are adopted into the library; entries whose file is missing are flagged.
+
+## Programs
+
+The **Programs** screen of a site manages hand-written programs (demos, games, small tools): each is a folder at `src/<area>/<slug>/` with an `index.html`, which Cook copies to the live site untouched, at `/<area>/<slug>/`. Cards (title, description, date, tags, preview image, listed, sandbox) live in `config/programs.json`.
+
+- **Areas:** programs live in an area (`/demos/`, `/programs/`). The Areas panel lists them with their sandbox default and number of programs: add an area, edit its title and default, and change its path or delete it while it is empty.
+- **Add program:** choose the area, then a folder on this computer (with the folder browser; VP remembers it for Update from source) or a folder to upload (pick it, or drop it on the panel), and the slug. Copying is all or nothing; a program over 50 MB, 2,000 files or 25 MB a file is refused, as are folders with likely secrets. A new program starts **Unlisted**: live at its address, in no list.
+- **Filters:** area, then All / Listed / Unlisted / No card / Sandboxed; search by title or slug. A folder put there by hand shows up with **No card**; it gets one when you save a field.
+- **Detail panel:** the card fields (saved on change), **Sandbox** (Area default, On, Off), the path with Copy, the source folder with **Update from source** (shows what would change, then Apply), Used in, **Write a post about it** (a draft linking to the program, with its title, description and image), **Open** (runs it in the page from VP's program server, sandboxed exactly as the live site will be), View live and **Remove…** (refused while a post or page links to it, naming them).
+- **Goes live at once:** every change on this screen is one commit, pushed straight away (no `[CI Skip]`), so the site rebuilds. Without a repo, or when the push fails, the change stays on this computer and the screen says so.
 
 ## Components in the app
 

@@ -26,6 +26,7 @@
     <ul id="rail-sections" class="rail-list">
       <li><a href="#" data-section="posts">Posts</a></li>
       <li><a href="#" data-section="media">Media</a></li>
+      <li><a href="#" data-section="programs">Programs</a></li>
       <li><a href="#" data-section="components">Components</a></li>
       <li><a href="#" data-section="theme">Theme</a></li>
     </ul>
@@ -91,6 +92,99 @@
           <div id="media-detail-body"></div>
           <p id="media-detail-status" class="detail-status" role="status"></p>
         </aside>
+        </div>
+      </section>
+
+      <section id="programs-section" aria-labelledby="programs-title" hidden>
+        <div class="section-head">
+          <div>
+            <h1 id="programs-title">Programs</h1>
+            <p id="programs-summary" class="media-summary"></p>
+          </div>
+          <div class="actions">
+            <button type="button" id="program-add-btn" class="primary" aria-expanded="false" aria-controls="program-add-panel"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>Add program</button>
+          </div>
+        </div>
+        <p id="programs-error" class="error" role="alert" hidden></p>
+        <p id="programs-note" class="notice" role="status" hidden></p>
+
+        <section id="program-add-panel" class="panel program-add" aria-labelledby="program-add-title" hidden>
+          <h2 id="program-add-title">Add a program</h2>
+          <form id="program-add-form" novalidate>
+            <label for="program-add-area">Area</label>
+            <select id="program-add-area" required></select>
+            <fieldset class="program-from">
+              <legend>From</legend>
+              <label class="detail-check"><input type="radio" name="program-from" value="folder" checked/>A folder on this computer</label>
+              <label class="detail-check"><input type="radio" name="program-from" value="upload"/>Upload a folder</label>
+            </fieldset>
+            <div id="program-from-folder">
+              <label for="program-add-source">Program folder</label>
+              <input id="program-add-source" type="text" autocomplete="off" placeholder="/Users/you/demos/plasma"/>
+              <h3 id="program-browse-title">Browse folders</h3>
+              <nav class="browser" aria-labelledby="program-browse-title">
+                <p class="browser-path"><button type="button" id="program-browse-up">Up</button> <span id="program-browse-current"></span></p>
+                <ul id="program-browse-list"></ul>
+              </nav>
+            </div>
+            <div id="program-from-upload" hidden>
+              <label for="program-add-files">Program folder</label>
+              <input id="program-add-files" type="file" webkitdirectory multiple/>
+              <p id="program-add-drop" class="media-drop">Or drop a folder here. It needs an index.html at its top.</p>
+              <p id="program-add-picked" class="muted" role="status"></p>
+            </div>
+            <label for="program-add-slug">Slug</label>
+            <input id="program-add-slug" type="text" autocomplete="off" required aria-describedby="program-add-url"/>
+            <p id="program-add-url" class="muted"></p>
+            <p id="program-add-error" class="error" role="alert" hidden></p>
+            <p id="program-add-status" class="muted" role="status"></p>
+            <div class="actions">
+              <button type="submit" id="program-add-submit" class="primary">Add program</button>
+              <button type="button" id="program-add-cancel">Cancel</button>
+            </div>
+          </form>
+        </section>
+
+        <details id="program-areas" class="program-areas">
+          <summary><span>Areas <span id="program-areas-count" class="muted"></span></span></summary>
+          <ul id="program-areas-list" class="program-area-list"></ul>
+          <form id="program-area-add" class="program-area-form" novalidate>
+            <h3>Add an area</h3>
+            <div class="row">
+              <label>Path <input type="text" name="path" autocomplete="off" required placeholder="demos"/></label>
+              <label>Title <input type="text" name="title" autocomplete="off" placeholder="Demos"/></label>
+            </div>
+            <label class="detail-check"><input type="checkbox" name="sandbox"/>Sandbox its programs by default</label>
+            <p class="error" role="alert" hidden></p>
+            <button type="submit">Add area</button>
+          </form>
+        </details>
+
+        <section id="program-run" class="program-run" aria-labelledby="program-run-title" hidden>
+          <div class="program-run-head">
+            <h2 id="program-run-title"></h2>
+            <button type="button" id="program-run-close">Close</button>
+          </div>
+          <p id="program-run-note" class="muted"></p>
+          <div id="program-run-stage" class="program-run-stage"></div>
+        </section>
+
+        <div class="media-layout">
+          <div class="media-main">
+            <div class="posts-bar">
+              <div id="program-filters" role="group" aria-label="Filter programs" class="filter-group"></div>
+              <div class="media-tools">
+                <label class="media-type"><span class="visually-hidden">Area</span><select id="program-area-filter"></select></label>
+                <label class="search"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><span class="visually-hidden">Search programs</span><input type="search" id="program-search" placeholder="Search by title or slug" autocomplete="off"/></label>
+              </div>
+            </div>
+            <ul id="program-grid" class="media-grid" aria-labelledby="programs-title"></ul>
+            <p id="program-empty" class="empty" hidden></p>
+          </div>
+          <aside id="program-detail" class="media-detail" aria-label="Program details">
+            <div id="program-detail-body"></div>
+            <p id="program-detail-status" class="detail-status" role="status"></p>
+          </aside>
         </div>
       </section>
 

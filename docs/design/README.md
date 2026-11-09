@@ -27,6 +27,7 @@ All of these screens are built. The table says where each lives now.
 | `Main.dc.html` | Sites list | `app/index.html`, `app/assets/js/sites-page.js` (step 3a) |
 | `Site.dc.html` | Site, Posts section | `app/site.html`, `app/assets/js/site-page.js`, `posts-view.js` (step 3a) |
 | `Media.dc.html` | Site, Media section | Media section of `app/site.html`, `app/assets/js/media-page.js`, `media-detail.js` (step 3b) |
+| (none) | Site, Programs section | No mockup; follows Media. Programs section of `app/site.html`, `app/assets/js/programs-page.js`, `programs-detail.js`, `programs-add.js`, rules in `src/programs/programs-view.js` |
 | `Theme.dc.html` | Site, Theme section | Theme section of `app/site.html`, `app/assets/js/theme-*.js` (step 4). The editor's old `theme-picker.js` remains only in `vp serve`'s fixture tools |
 | `Editor.dc.html` | Editor in site mode | `editor/index.html`, `site-mode.js`, `format-toolbar.js`, `block-handles.js`, `meta-panel.js` (step 3a) |
 | `EditorTheme.dc.html` | Editor, post with its own theme | Appearance section of Post settings: `components/appearance-section.js`, `pane-theme.js` (step 4) |
@@ -73,8 +74,8 @@ Use the custom property, not the hex. Hex values are the mockup's approximations
 - Title "Sites" with one line of explanation. Actions: "Clone from GitHub" (secondary), "Add site" (primary). The existing add/clone panels and folder browser stay; restyle them to match.
 - Each site is a card: name (serif, links to the site), path (mono), published/draft counts, Git status dot + "GitHub · main · in sync", last backup time; actions "View live ↗" and "Open".
 
-### Site shell (rail shared by Posts, Media, Theme)
-- Left rail on `--color-surface-raised`: "← All sites", site name, "View live site ↗", nav (Posts, Media, Theme as links/buttons with `aria-current="page"`), a "Coming later" group with Programs, Analytics and Social shown disabled, and the sync/backup status pinned to the bottom (`role="status"`, fed by the existing `GET /status` and backup state).
+### Site shell (rail shared by Posts, Media, Programs, Theme)
+- Left rail on `--color-surface-raised`: "← All sites", site name, "View live site ↗", nav (Posts, Media, Programs, Components, Theme as links/buttons with `aria-current="page"`), a "Coming later" group with Analytics and Social shown disabled, and the sync/backup status pinned to the bottom (`role="status"`, fed by the existing `GET /status` and backup state).
 
 ### Posts (`Site.dc.html`)
 - Header: "Posts", "Preview site" (secondary), "New post" (primary).
@@ -133,4 +134,4 @@ These are not real data; don't hard-code them:
 
 ## Not designed yet
 
-Dark scheme of the app itself, phone-width editor, add/clone site panels, publish/update progress and error report, conflict ("Load the version on disk") state, Programs / Analytics / Social.
+Dark scheme of the app itself, phone-width editor, add/clone site panels, publish/update progress and error report, conflict ("Load the version on disk") state, Analytics / Social. Programs has no mockup: it follows the Media screen.

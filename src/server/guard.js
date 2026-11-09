@@ -18,6 +18,15 @@
 const API_PREFIX = '/api/';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+/** The request's path as the router parses it (dot segments resolved); unparsable counts as the API. */
+function pathnameOf(url) {
+  try {
+    return new URL(String(url || ''), 'http://x').pathname;
+  } catch {
+    return API_PREFIX;
+  }
+}
+
 /** @param {number} port */
 function allowedHosts(port) {
   return [`127.0.0.1:${port}`, `localhost:${port}`];
@@ -33,7 +42,7 @@ export function checkRequest(req, port) {
   const hosts = allowedHosts(port);
   const host = String(req.headers.host || '').toLowerCase();
   if (!hosts.includes(host)) return false;
-  if (String(req.url || '').startsWith(API_PREFIX)) {
+  if (pathnameOf(req.url).startsWith(API_PREFIX)) {
     const site = String(req.headers['sec-fetch-site'] || '').toLowerCase();
     if (site === 'cross-site' || site === 'same-site') return false;
   }

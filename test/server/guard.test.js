@@ -44,6 +44,12 @@ describe('checkRequest fetch metadata on the API', () => {
     assert.equal(get('/app/index.html', 'cross-site'), true);
     assert.equal(get('/apis', 'cross-site'), true);
   });
+  it('decides /api/ from the parsed path, not the raw request target', () => {
+    assert.equal(get('/./api/sites', 'same-site'), false);
+    assert.equal(get('/x/../api/sites', 'cross-site'), false);
+    assert.equal(get('http://127.0.0.1:3007/api/sites', 'same-site'), false); // absolute-form target
+    assert.equal(get('//api/sites', 'same-site'), true); // parses as host "api", path /sites: not the API
+  });
 });
 
 describe('router content types', () => {

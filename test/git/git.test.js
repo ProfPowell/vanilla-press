@@ -497,3 +497,16 @@ test('lastVpCommitAt is the newest pushed Vanilla Press commit, null before any 
   execFileSync('git', ['init', '-b', 'main', plain], { stdio: 'ignore' });
   assert.equal(await lastVpCommitAt(plain), null);
 });
+
+test('lastVpCommitAt counts a pushed Programs: commit', async () => {
+  write(a, 'p.txt', 'p');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'Hand edit');
+  git(a, 'push');
+  assert.equal(await lastVpCommitAt(a), null);
+  write(a, 'q.txt', 'q');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-m', 'Programs: add plasma');
+  git(a, 'push');
+  assert.equal(await lastVpCommitAt(a), git(a, 'log', '-1', '--format=%cI'));
+});

@@ -405,6 +405,84 @@ describe('program routes', () => {
     await api('/backup', { method: 'POST' });
     assert.equal(lastCommit().message, 'Draft: Pending post [CI Skip]');
   });
+
+  it('a failed push after a real commit shows pending with the error, and the next flush pushes it', async () => {
+    assert.equal((await api('/backup', { method: 'POST' })).data.pending, 0);
+    fakeGit.push = async () => { throw new Error('remote rejected'); };
+    const res = await api('/programs/programs/plasma-three', { method: 'PATCH', body: { title: 'Three pushed later' } });
+    assert.equal(res.data.committed, false);
+    const status = (await api('/status')).data;
+    assert.equal(status.pending, 1, JSON.stringify(status));
+    assert.match(status.error, /remote rejected/);
+    fakeGit.push = defaults.push;
+    const before = pushes.length;
+    const flushed = (await api('/backup', { method: 'POST' })).data;
+    assert.equal(pushes.length, before + 1);
+    assert.equal(flushed.pending, 0);
+    assert.equal(flushed.error, null);
+  });
+
+  it('a stray folder with a secret or a dotfile refuses any program commit (422 naming the file), files kept', async () => {
+    put(site, 'src/programs/leaky/index.html', '<p>leaky</p>');
+    put(site, 'src/programs/leaky/.env', 'TOKEN=1');
+    put(site, 'src/programs/leaky/.DS_Store', 'x');
+    fakeGit.changedFiles = async (dir, paths) => {
+      assert.ok(paths.includes('src/programs'), JSON.stringify(paths));
+      return ['src/programs/leaky/index.html', 'src/programs/leaky/.env', 'src/programs/leaky/.DS_Store'];
+    };
+    const n = commits.length;
+    const env = await api('/programs/programs/plasma-three', { method: 'PATCH', body: { title: 'Env' } });
+    assert.equal(env.status, 422, JSON.stringify(env.data));
+    assert.match(env.data.error, /src\/programs\/leaky\/\.env/);
+    assert.equal(commits.length, n);
+
+    rmSync(join(site, 'src/programs/leaky/.env'));
+    put(site, 'src/programs/leaky/keys/id_rsa', 'secret');
+    fakeGit.changedFiles = async () => ['src/programs/leaky/index.html', 'src/programs/leaky/keys/id_rsa'];
+    const key = await api('/programs/programs/plasma-three', { method: 'PATCH', body: { title: 'Key' } });
+    assert.equal(key.status, 422, JSON.stringify(key.data));
+    assert.match(key.data.error, /src\/programs\/leaky\/keys\/id_rsa/);
+    assert.equal(commits.length, n);
+    assert.ok(existsSync(join(site, 'src/programs/leaky/keys/id_rsa'))); // left on disk
+
+    rmSync(join(site, 'src/programs/leaky/keys'), { recursive: true });
+    put(site, 'src/programs/notes.pem', 'x');
+    fakeGit.changedFiles = async () => ['src/programs/notes.pem'];
+    const loose = await api('/programs/programs/plasma-three', { method: 'PATCH', body: { title: 'Loose' } });
+    assert.equal(loose.status, 422, JSON.stringify(loose.data));
+    assert.match(loose.data.error, /src\/programs\/notes\.pem/);
+    assert.equal(commits.length, n);
+    rmSync(join(site, 'src/programs/notes.pem'));
+
+    // Only .DS_Store left: the folder passes and the change commits.
+    fakeGit.changedFiles = async () => ['src/programs/leaky/index.html', 'src/programs/leaky/.DS_Store'];
+    const ok = await api('/programs/programs/plasma-three', { method: 'PATCH', body: { title: 'Fine' } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.data));
+    assert.equal(commits.length, n + 1);
+    rmSync(join(site, 'src/programs/leaky'), { recursive: true });
+  });
+
+  it('an area holding anything but .DS_Store (a non-slug folder, a loose file) cannot move or be deleted', async () => {
+    assert.equal((await api('/programs/areas', { method: 'POST', body: { path: 'scratch', title: 'Scratch' } })).status, 201);
+    const n = commits.length;
+    put(site, 'src/scratch/My Demo/index.html', '<p>demo</p>');
+    for (const [method, body] of [['PATCH', { path: 'scratchy' }], ['DELETE', undefined]]) {
+      const res = await api('/programs/areas/scratch', { method, body });
+      assert.equal(res.status, 409, `${method} ${JSON.stringify(res.data)}`);
+      assert.match(res.data.error, /empty/);
+    }
+    rmSync(join(site, 'src/scratch/My Demo'), { recursive: true });
+    put(site, 'src/scratch/notes.txt', 'mine');
+    const loose = await api('/programs/areas/scratch', { method: 'DELETE' });
+    assert.equal(loose.status, 409, JSON.stringify(loose.data));
+    assert.equal(commits.length, n);
+    assert.deepEqual(config().areas.map((a) => a.path), ['programs', 'scratch']);
+    rmSync(join(site, 'src/scratch/notes.txt'));
+    put(site, 'src/scratch/.DS_Store', 'x');
+    const del = await api('/programs/areas/scratch', { method: 'DELETE' });
+    assert.equal(del.status, 200, JSON.stringify(del.data));
+    assert.equal(existsSync(join(site, 'src/scratch')), false);
+  });
 });
 
 describe('program upload and Update from source', () => {

@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ProgramError } from '../../src/programs/config.js';
 import {
-  LIMITS, scanFolder, stageFromFolder, stageFromUpload, installStaged, diffFolders, scanToken, contentToken, clearTmp,
+  LIMITS, scanFolder, checkForCommit, stageFromFolder, stageFromUpload, installStaged, diffFolders, scanToken, contentToken, clearTmp,
 } from '../../src/programs/import.js';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'vp-import-'));
@@ -152,6 +152,39 @@ test('certificates and split markers are not private keys', async () => {
   const dir = good({ 'a.txt': '-----BEGIN CERTIFICATE-----\nabc', 'b.txt': '-----BEGIN\nPRIVATE KEY-----', 'c.txt': 'PRIVATE KEY----- -----BEGIN' });
   const scan = await scanFolder(dir);
   assert.equal(scan.files.length, 4);
+});
+
+test('the private-key check is linear: a 2 MB line of repeated -----BEGIN scans in well under a second', async () => {
+  const dir = good({ 'big.txt': '-----BEGIN'.repeat(209_716) });
+  const t = Date.now();
+  const scan = await scanFolder(dir);
+  assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
+  assert.equal(scan.files.length, 2);
+  await refusal(scanFolder(good({ 'k.txt': `${'-----BEGIN'.repeat(1000)} RSA PRIVATE KEY-----` })), 422, /private key/, 'k.txt');
+});
+
+test('checkForCommit: the import rules over the named entries, dotfiles refused, named from the site', async () => {
+  const area = tmp();
+  put(area, 'ok/index.html', '<p>ok</p>');
+  put(area, 'ok/.DS_Store', 'x');
+  put(area, 'My Demo/main.js', '1'); // no index.html: not a program, still checked, not refused
+  put(area, 'leaky/index.html', '<p>x</p>');
+  put(area, 'leaky/.env', 'TOKEN=1');
+  await checkForCommit(area, { only: ['ok', 'My Demo', '.DS_Store'], prefix: 'src/demos/' });
+  await refusal(checkForCommit(area, { only: ['ok', 'leaky'], prefix: 'src/demos/' }), 422,
+    /^src\/demos\/leaky\/\.env would go live.*nothing was committed/, 'src/demos/leaky/.env');
+  put(area, 'nm/node_modules/pkg/id_rsa', 'x');
+  await refusal(checkForCommit(area, { only: ['nm'], prefix: 'src/demos/' }), 422, /private key \(src\/demos\/nm\/node_modules\/pkg\/id_rsa\)\. Programs go live in public, so nothing was committed\./);
+  put(area, 'server.pem', 'x');
+  await refusal(checkForCommit(area, { only: ['server.pem'], prefix: 'src/demos/' }), 422, /src\/demos\/server\.pem/);
+  put(area, '.env', 'x');
+  await refusal(checkForCommit(area, { only: ['.env'], prefix: 'src/demos/' }), 422, /src\/demos\/\.env/);
+  // A named entry that is gone (a deleted folder) is nothing to check.
+  await checkForCommit(area, { only: ['gone'], prefix: 'src/demos/' });
+  if (process.platform !== 'win32') {
+    symlinkSync('/etc/hosts', join(area, 'ok', 'hosts'));
+    await refusal(checkForCommit(area, { only: ['ok'], prefix: 'src/demos/' }), 422, /src\/demos\/ok\/hosts is a symlink/);
+  }
 });
 
 test('the private-key content check reads only files within the per-file limit', async () => {

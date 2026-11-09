@@ -126,7 +126,7 @@ export async function aheadBehind(dir) {
 }
 
 /** Subjects of the commits Vanilla Press makes (see site-git.js and publish). */
-const VP_COMMIT_SUBJECT = '^(Draft|Edit|Publish|Update|Unpublish|Components|Theme|Theme library): ';
+const VP_COMMIT_SUBJECT = '^(Draft|Edit|Publish|Update|Unpublish|Components|Theme|Theme library|Programs): ';
 
 /**
  * Commit time of the newest Vanilla Press commit on the upstream (the last backup).

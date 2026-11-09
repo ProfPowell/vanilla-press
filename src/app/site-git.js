@@ -370,7 +370,9 @@ export function createBackup({
    * Run a publish or unpublish in the git queue: the backup timer is
    * cancelled (pending drafts go into that commit, they are in the owned
    * paths). `fn` resolves to `{ status: 'pushed'|'saved' }`. Saves made
-   * while it runs stay pending.
+   * while it runs stay pending. `unpushedCommit: true` (with `pushError`, the
+   * push's message, or null when not connected) says fn committed but its push
+   * failed: the commit counts as unpushed and a flush is scheduled to push it.
    * @template T
    * @param {() => Promise<T>} fn
    * @returns {Promise<T>}
@@ -387,6 +389,13 @@ export function createBackup({
           afterPush(result);
         }
         else if (result?.status === 'saved') connected = false;
+        if (result?.unpushedCommit) {
+          // fn committed but its push failed: pending until a later flush pushes it.
+          unpushed++;
+          if (result.pushError) error = result.pushError;
+          if (firstAt === null) firstAt = now();
+          schedule();
+        }
         return result;
       } catch (err) {
         if (err?.name?.startsWith('Git')) {

@@ -13,7 +13,7 @@
  * @module app/program-routes
  */
 
-import { existsSync, rmdirSync } from 'node:fs';
+import { existsSync, readdirSync, rmdirSync, rmSync } from 'node:fs';
 import { mkdir, realpath, rename, rm } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -24,7 +24,7 @@ import {
   programsState, buildOnlyPaths,
 } from '../programs/config.js';
 import {
-  LIMITS, stageFromFolder, stageFromUpload, installStaged, diffFolders, contentToken,
+  LIMITS, stageFromFolder, stageFromUpload, installStaged, diffFolders, contentToken, checkForCommit,
 } from '../programs/import.js';
 import { programUsage } from '../programs/usage.js';
 import { BACKUP_PATHS, THEME_PATHS, programMessage } from './site-git.js';
@@ -131,6 +131,29 @@ export function mountProgramRoutes(router, prefix, {
   const areaOut = (path) => programsState(siteDir).areas.find((a) => a.path === path) || null;
   const countIn = (path) => areaOut(path)?.count ?? 0;
 
+  /**
+   * Refuse (409) moving or deleting an area that is not empty: one with programs, or whose
+   * folder holds anything but .DS_Store (a non-slug folder or a loose file counts too).
+   */
+  function checkEmpty(path, doing) {
+    if (countIn(path) > 0) throw new ProgramError(409, `/${path}/ has programs: ${doing} only while it is empty.`);
+    let names = [];
+    try { names = readdirSync(join(siteDir, 'src', path)).filter((n) => n !== '.DS_Store'); } catch { /* no folder: empty */ }
+    if (names.length) {
+      const list = names.sort().slice(0, 3).map((n) => `src/${path}/${n}`).join(', ');
+      throw new ProgramError(409, `/${path}/ holds other files (${list}${names.length > 3 ? ', …' : ''}): ${doing} only while it is empty.`);
+    }
+  }
+
+  /** Remove an emptied area folder (and its .DS_Store); one that holds other files is left as it is. */
+  function removeAreaDir(path) {
+    const dir = join(siteDir, 'src', path);
+    try {
+      rmSync(join(dir, '.DS_Store'), { force: true });
+      rmdirSync(dir);
+    } catch { /* absent, or holds other files */ }
+  }
+
   /** An area named in a URL or body: slug-shaped and configured, else 404. */
   function findArea(config, path) {
     if (typeof path !== 'string' || !SLUG.test(path)) throw new ProgramError(404, `There is no area /${path}/.`);
@@ -192,6 +215,39 @@ export function mountProgramRoutes(router, prefix, {
   }
 
   /**
+   * Before a program commit (R11): run the import rules over every entry directly in the
+   * area folders `dirs` (`src/<area>`) that git reports as new or changed, since the commit
+   * takes them live. A refusal is a 422 naming the file; nothing is committed and the
+   * files and the change stay on disk.
+   */
+  async function checkChanged(dirs, send) {
+    let changed;
+    try {
+      changed = await deps.changedFiles(siteDir, dirs);
+    } catch (err) {
+      throw new NotCommitted(NOT_COMMITTED(err.message), send);
+    }
+    for (const dir of dirs) {
+      const marker = `${dir}/`;
+      const tops = new Set();
+      for (const file of changed) {
+        // git names files from the repo root, which may hold the site folder.
+        const at = file.startsWith(marker) ? 0 : file.indexOf(`/${marker}`) + 1; // 0: not in dir
+        if (at === 0 && !file.startsWith(marker)) continue;
+        tops.add(file.slice(at + marker.length).split('/')[0]);
+      }
+      try {
+        await checkForCommit(join(siteDir, dir), { only: tops, prefix: marker });
+      } catch (err) {
+        if (err instanceof ProgramError) {
+          throw new ProgramError(err.status, `${err.message} Your change is saved on this computer.`, err.body);
+        }
+        throw err;
+      }
+    }
+  }
+
+  /**
    * Commit and push at once (Programs go live). The commit carries config/programs.json and
    * every configured area's folder (R6), so a card and its folder always go live together,
    * plus `extra` (an area folder being moved or removed). The pending drafts exclusive()
@@ -209,9 +265,11 @@ export function mountProgramRoutes(router, prefix, {
       return { status: 'saved', committed: false, note: NOT_COMMITTED('this site folder is not a git repository'), send };
     }
     const areas = programsState(siteDir).areas.map((a) => `src/${a.path}`);
+    await checkChanged([...new Set([...areas, ...extra])], send);
     const paths = [...new Set([...BACKUP_PATHS, PROGRAMS_FILE, ...areas, ...extra])];
+    let sha;
     try {
-      await deps.commitPaths(siteDir, paths, programMessage(what));
+      sha = await deps.commitPaths(siteDir, paths, programMessage(what));
     } catch (err) {
       throw new NotCommitted(NOT_COMMITTED(err.message), send);
     }
@@ -219,7 +277,13 @@ export function mountProgramRoutes(router, prefix, {
       const pushed = await deps.push(siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });
       return { ...pushed, status: 'pushed', committed: true, send };
     } catch (err) {
-      return { ...(err instanceof GitNotConnectedError ? { status: 'saved' } : {}), committed: false, note: NOT_PUSHED(err.message), send };
+      const notConnected = err instanceof GitNotConnectedError;
+      return {
+        ...(notConnected ? { status: 'saved' } : {}),
+        // The commit is local only: the backup counts it as pending and its next flush pushes it.
+        ...(sha ? { unpushedCommit: true, pushError: notConnected ? null : err.message } : {}),
+        committed: false, note: NOT_PUSHED(err.message), send,
+      };
     }
   }
 
@@ -307,9 +371,7 @@ export function mountProgramRoutes(router, prefix, {
     const fields = areaFields(input, config.areas[i]);
     let path = old;
     if (input.path !== undefined && input.path !== old) {
-      if (countIn(old) > 0) {
-        throw new ProgramError(409, `/${old}/ has programs: an area's path can change only while it is empty.`);
-      }
+      checkEmpty(old, 'an area\'s path can change');
       if (input.path === ROUTE_RESERVED) throw new ProgramError(422, RESERVED_AREA);
       if (config.areas.some((a) => isObj(a) && a.path === input.path)) throw new ProgramError(409, `/${input.path}/ is already an area.`);
       const bad = checkAreaPath(siteDir, input.path, { buildOnlyPaths: await buildOnlyPaths(siteDir) });
@@ -318,9 +380,7 @@ export function mountProgramRoutes(router, prefix, {
     }
     config.areas[i] = { ...config.areas[i], path, ...fields };
     writePrograms(siteDir, config);
-    if (path !== old) {
-      try { rmdirSync(join(siteDir, 'src', old)); } catch { /* absent, or holds other files: left as it is */ }
-    }
+    if (path !== old) removeAreaDir(old);
     return { send: { area: areaOut(path) }, paths: [`src/${old}`], what: path === old ? `edit area ${old}` : `move area ${old} to ${path}` };
   }));
 
@@ -328,10 +388,10 @@ export function mountProgramRoutes(router, prefix, {
     const path = req.params.path;
     const config = readPrograms(siteDir);
     const i = findArea(config, path);
-    if (countIn(path) > 0) throw new ProgramError(409, `/${path}/ has programs: an area can be deleted only while it is empty.`);
+    checkEmpty(path, 'an area can be deleted');
     config.areas.splice(i, 1);
     writePrograms(siteDir, config);
-    try { rmdirSync(join(siteDir, 'src', path)); } catch { /* absent, or holds other files: left as it is */ }
+    removeAreaDir(path);
     return { send: { ok: true }, paths: [`src/${path}`], what: `remove area ${path}` };
   }));
 

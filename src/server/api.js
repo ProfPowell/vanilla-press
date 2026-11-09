@@ -618,20 +618,23 @@ export function mountApi(router, db, options) {
 }
 
 /**
- * Parse a multipart/form-data request (minimal implementation).
- * Handles a single file field and text fields.
+ * Parse a multipart/form-data request (minimal implementation): text fields and file parts.
  * @param {import('node:http').IncomingMessage} req
  * @param {string} contentType
- * @returns {Promise<{ file: Object|null, fields: Object }>}
+ * @param {{ limit?: number }} [options] - the body limit while it streams (413 past it); by
+ *   default one media file plus slack
+ * @returns {Promise<{ file: Object|null, files: Object[], fields: Object }>} `file` is the last
+ *   file part; `files` every file part, in order
  */
-async function parseMultipart(req, contentType) {
+export async function parseMultipart(req, contentType, { limit = MAX_BYTES + 1_048_576 } = {}) {
   const boundaryMatch = contentType.match(/boundary=(.+?)(?:;|$)/);
   if (!boundaryMatch) throw new Error('No boundary in content-type');
 
   const boundary = boundaryMatch[1];
-  const raw = await readRawBody(req, { limit: MAX_BYTES + 1_048_576 });
+  const raw = await readRawBody(req, { limit });
   const boundaryBuf = Buffer.from(`--${boundary}`);
   const fields = {};
+  const files = [];
   let file = null;
 
   // Split by boundary
@@ -665,12 +668,13 @@ async function parseMultipart(req, contentType) {
         mimeType: mimeMatch ? mimeMatch[1].trim() : 'application/octet-stream',
         data: body,
       };
+      files.push(file);
     } else {
       fields[nameMatch[1]] = body.toString('utf-8');
     }
   }
 
-  return { file, fields };
+  return { file, files, fields };
 }
 
 /**

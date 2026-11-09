@@ -291,6 +291,16 @@ export function scanToken(scan) {
   return createHash('sha256').update(lines.join('\n')).digest('hex');
 }
 
+// Like scanToken, but a same-size content edit changes it too (an Update preview's token).
+export async function contentToken(stagedDir, scan) {
+  const lines = [];
+  for (const { rel, size } of scan.files) {
+    const sum = createHash('sha256').update(await readFile(join(stagedDir, rel))).digest('hex');
+    lines.push(`${rel}:${size}:${sum}`);
+  }
+  return createHash('sha256').update(lines.sort().join('\n')).digest('hex');
+}
+
 export function clearTmp(siteDir) {
   rmSync(tmpRoot(siteDir), { recursive: true, force: true });
 }

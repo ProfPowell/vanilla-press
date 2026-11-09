@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { request } from 'node:http';
 import { startApp } from '../../src/app/server.js';
 import { LIMITS } from '../../src/programs/import.js';
 
@@ -403,5 +404,236 @@ describe('program routes', () => {
     // The next backup commits the draft under its own title, not as anonymous "changes".
     await api('/backup', { method: 'POST' });
     assert.equal(lastCommit().message, 'Draft: Pending post [CI Skip]');
+  });
+});
+
+describe('program upload and Update from source', () => {
+  let root, env, app, site, id, source;
+  const commits = [];
+  const pushes = [];
+  const fakeGit = {
+    cloneRepo: async () => {},
+    changedFiles: async () => [],
+    pullFastForward: async () => ({}),
+    gitStatus: async () => CONNECTED,
+    commitPaths: async (dir, paths, message) => { commits.push({ paths, message }); return 'abc123'; },
+    push: async (dir) => { pushes.push(dir); return { pushed: true, rebased: false }; },
+  };
+
+  async function api(path, { method = 'GET', body } = {}) {
+    const opts = { method };
+    if (body instanceof FormData) opts.body = body;
+    else if (body !== undefined) {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(`${app.url}/api/sites/${id}${path}`, opts);
+    const text = await res.text();
+    let data = text;
+    try { data = JSON.parse(text); } catch { /* not JSON */ }
+    return { status: res.status, data };
+  }
+  /** A multipart upload: each file's part is named `files`, its filename the relative path (R2). */
+  function form(fields, files) {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+    for (const [rel, text] of Object.entries(files)) fd.append('files', new Blob([text]), rel);
+    return fd;
+  }
+  const config = () => JSON.parse(readFileSync(join(site, 'config', 'programs.json'), 'utf8'));
+  const lastCommit = () => commits[commits.length - 1];
+  const staged = () => (existsSync(join(site, '.vp', 'tmp')) ? readdirSync(join(site, '.vp', 'tmp')) : []);
+  const live = (slug) => join(site, 'src', 'programs', slug);
+
+  /** A chunked multipart upload (no Content-Length) of `mib` MiB of file data. */
+  const chunkedUpload = (mib) => new Promise((resolve, reject) => {
+    const boundary = 'xBOUNDARYx';
+    let answer;
+    const headers = { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Transfer-Encoding': 'chunked' };
+    const r = request({ host: '127.0.0.1', port: new URL(app.url).port, path: `/api/sites/${id}/programs/upload`, method: 'POST', headers }, (res) => {
+      let text = '';
+      res.on('data', (c) => { text += c; });
+      res.on('end', () => {
+        answer = { status: res.statusCode, data: JSON.parse(text) };
+        r.destroy(); // enough: stop sending the rest
+        resolve(answer);
+      });
+    });
+    r.on('error', (err) => { if (!answer) reject(err); });
+    (async () => {
+      r.write(`--${boundary}\r\nContent-Disposition: form-data; name="area"\r\n\r\nprograms\r\n`);
+      r.write(`--${boundary}\r\nContent-Disposition: form-data; name="slug"\r\n\r\nhuge\r\n`);
+      r.write(`--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="huge/index.html"\r\n\r\n`);
+      for (let i = 0; i < mib && !answer; i++) {
+        if (!r.write(Buffer.alloc(1_048_576))) await new Promise((ok) => r.once('drain', ok).once('close', ok));
+      }
+      if (!answer) r.end(`\r\n--${boundary}--\r\n`);
+    })().catch(() => {});
+  });
+
+  before(async () => {
+    root = mkdtempSync(join(tmpdir(), 'vp-program-upload-'));
+    env = { VP_CONFIG_DIR: join(root, 'config') };
+    site = makeSite(root, 'site');
+    put(site, 'config/programs.json', `${JSON.stringify({ areas: [{ path: 'programs', title: 'Programs', sandbox: false }], programs: [] }, null, 2)}\n`);
+    source = join(root, 'plasma-src');
+    put(source, 'index.html', '<p>one</p>');
+    put(source, 'js/a.js', 'a');
+    put(source, 'js/old.js', 'old');
+    app = await startApp({ port: 0, env, git: fakeGit });
+    const res = await fetch(`${app.url}/api/sites`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: site, name: 'Site' }),
+    });
+    id = (await res.json()).id;
+    const added = await api('/programs', { method: 'POST', body: { area: 'programs', source, slug: 'plasma' } });
+    assert.equal(added.status, 201, JSON.stringify(added.data));
+  });
+  after(async () => {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('upload of a picked folder: the wrapper folder is stripped, unlisted, no source, committed and pushed', async () => {
+    const before = pushes.length;
+    const res = await api('/programs/upload', {
+      method: 'POST',
+      body: form({ area: 'programs', slug: 'waves' }, {
+        'waves-demo/index.html': '<h1>Waves</h1>', 'waves-demo/js/waves.js': 'go()', 'waves-demo/.env': 'SECRET=1',
+      }),
+    });
+    assert.equal(res.status, 201, JSON.stringify(res.data));
+    assert.deepEqual(tree(live('waves')), ['index.html', 'js/waves.js']);
+    assert.equal(readFileSync(join(live('waves'), 'js', 'waves.js'), 'utf8'), 'go()');
+    assert.deepEqual(res.data.skipped, ['.env']);
+    assert.equal(res.data.large, false);
+    assert.equal(res.data.committed, true);
+    assert.equal(res.data.program.slug, 'waves');
+    assert.equal(res.data.program.listed, false);
+    assert.equal(res.data.program.source, null);
+    assert.equal(config().programs.find((p) => p.slug === 'waves').listed, false);
+    assert.equal(lastCommit().message, 'Programs: add waves');
+    assert.ok(lastCommit().paths.includes('config/programs.json') && lastCommit().paths.includes('src/programs'));
+    assert.equal(pushes.length, before + 1);
+    assert.deepEqual(staged(), []);
+  });
+
+  it('upload with a taken slug is 409 before anything is staged', async () => {
+    const n = commits.length;
+    const res = await api('/programs/upload', { method: 'POST', body: form({ area: 'programs', slug: 'plasma' }, { 'index.html': 'new' }) });
+    assert.equal(res.status, 409);
+    assert.match(res.data.error, /"plasma" is already taken/);
+    assert.equal(readFileSync(join(live('plasma'), 'index.html'), 'utf8'), '<p>one</p>');
+    assert.equal(commits.length, n);
+    assert.deepEqual(staged(), []);
+  });
+
+  it('upload refuses a bad slug and an unknown area', async () => {
+    assert.equal((await api('/programs/upload', { method: 'POST', body: form({ area: 'programs', slug: 'Bad Slug' }, { 'index.html': 'x' }) })).status, 422);
+    assert.equal((await api('/programs/upload', { method: 'POST', body: form({ area: 'nope', slug: 'x' }, { 'index.html': 'x' }) })).status, 404);
+  });
+
+  it('upload containing id_rsa is 422 with nothing installed', async () => {
+    const n = commits.length;
+    const res = await api('/programs/upload', {
+      method: 'POST', body: form({ area: 'programs', slug: 'leaky' }, { 'leaky/index.html': 'x', 'leaky/id_rsa': 'key' }),
+    });
+    assert.equal(res.status, 422);
+    assert.match(res.data.error, /private key \(id_rsa\)/);
+    assert.equal(existsSync(live('leaky')), false);
+    assert.equal(config().programs.some((p) => p.slug === 'leaky'), false);
+    assert.equal(commits.length, n);
+    assert.deepEqual(staged(), []);
+  });
+
+  it('an upload over the limit while it streams is 413 with nothing staged', async () => {
+    const res = await chunkedUpload(Math.ceil(LIMITS.totalBytes / 1_048_576) + 3);
+    assert.equal(res.status, 413);
+    assert.deepEqual(res.data, { error: 'This program is larger than 50 MB.' });
+    assert.equal(existsSync(live('huge')), false);
+    assert.deepEqual(staged(), []);
+  });
+
+  it('an upload whose declared size is over the limit is 413', async () => {
+    const big = new Uint8Array(LIMITS.totalBytes + 2 * 1_048_576);
+    const res = await api('/programs/upload', { method: 'POST', body: form({ area: 'programs', slug: 'huge' }, { 'huge/index.html': big }) });
+    assert.equal(res.status, 413);
+    assert.deepEqual(res.data, { error: 'This program is larger than 50 MB.' });
+    assert.deepEqual(staged(), []);
+  });
+
+  it('refresh preview lists the added, changed and removed files, and changes nothing', async () => {
+    put(source, 'index.html', '<p>two</p>');
+    put(source, 'js/new.js', 'new');
+    put(source, '.env', 'S');
+    rmSync(join(source, 'js', 'old.js'));
+    const n = commits.length;
+    const res = await api('/programs/programs/plasma/refresh', { method: 'POST', body: { confirm: false } });
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.deepEqual(res.data.preview, {
+      added: ['js/new.js'], changed: ['index.html'], removed: ['js/old.js'],
+      total: '<p>two</p>'.length + 'a'.length + 'new'.length, skipped: ['.env'], large: false,
+    });
+    assert.match(res.data.token, /^[0-9a-f]{64}$/);
+    assert.deepEqual(tree(live('plasma')), ['index.html', 'js/a.js', 'js/old.js']);
+    assert.equal(readFileSync(join(live('plasma'), 'index.html'), 'utf8'), '<p>one</p>');
+    assert.equal(commits.length, n);
+    assert.deepEqual(staged(), []);
+  });
+
+  it('confirm with a stale token is 409, including a same-size content edit (R4)', async () => {
+    const { data } = await api('/programs/programs/plasma/refresh', { method: 'POST', body: { confirm: false } });
+    put(source, 'index.html', '<p>TWO</p>'); // the same size: only the content differs
+    const n = commits.length;
+    const res = await api('/programs/programs/plasma/refresh', { method: 'POST', body: { confirm: true, token: data.token } });
+    assert.equal(res.status, 409);
+    assert.deepEqual(res.data, { error: 'The source folder changed since the preview. Look again.' });
+    assert.equal(readFileSync(join(live('plasma'), 'index.html'), 'utf8'), '<p>one</p>');
+    assert.equal(commits.length, n);
+    assert.deepEqual(staged(), []);
+  });
+
+  it('confirm installs the new copy, commits Programs: update <slug> and pushes', async () => {
+    const before = pushes.length;
+    const { data } = await api('/programs/programs/plasma/refresh', { method: 'POST', body: { confirm: false } });
+    const res = await api('/programs/programs/plasma/refresh', { method: 'POST', body: { confirm: true, token: data.token } });
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.equal(res.data.committed, true);
+    assert.equal(res.data.program.source, source);
+    assert.deepEqual(res.data.skipped, ['.env']);
+    assert.deepEqual(tree(live('plasma')), ['index.html', 'js/a.js', 'js/new.js']);
+    assert.equal(readFileSync(join(live('plasma'), 'index.html'), 'utf8'), '<p>TWO</p>');
+    assert.equal(lastCommit().message, 'Programs: update plasma');
+    assert.doesNotMatch(lastCommit().message, /CI Skip/i);
+    assert.ok(lastCommit().paths.includes('src/programs'));
+    assert.equal(pushes.length, before + 1);
+    assert.deepEqual(staged(), []);
+  });
+
+  it('refresh after the source folder was deleted is 422 "gone or moved" and the live copy is unchanged', async () => {
+    const files = tree(live('plasma'));
+    const moved = `${source}-moved`;
+    const { renameSync } = await import('node:fs');
+    renameSync(source, moved);
+    try {
+      const n = commits.length;
+      for (const confirm of [false, true]) {
+        const res = await api('/programs/programs/plasma/refresh', { method: 'POST', body: { confirm, token: 'x' } });
+        assert.equal(res.status, 422);
+        assert.equal(res.data.error, `The source folder ${source} is gone or moved.`);
+      }
+      assert.deepEqual(tree(live('plasma')), files);
+      assert.equal(commits.length, n);
+      assert.deepEqual(staged(), []);
+    } finally {
+      renameSync(moved, source);
+    }
+  });
+
+  it('refresh on an uploaded program is 422; on an unknown program 404', async () => {
+    const res = await api('/programs/programs/waves/refresh', { method: 'POST', body: { confirm: false } });
+    assert.equal(res.status, 422);
+    assert.deepEqual(res.data, { error: 'This program was uploaded, so it has no source folder. Upload it again to update it.' });
+    assert.equal((await api('/programs/programs/nope/refresh', { method: 'POST', body: { confirm: false } })).status, 404);
+    assert.equal((await api('/programs/programs/x%2F..%2F../refresh', { method: 'POST', body: { confirm: false } })).status, 404);
   });
 });

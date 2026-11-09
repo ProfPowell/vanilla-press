@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ProgramError } from '../../src/programs/config.js';
 import {
-  LIMITS, scanFolder, stageFromFolder, stageFromUpload, installStaged, diffFolders, scanToken, clearTmp,
+  LIMITS, scanFolder, stageFromFolder, stageFromUpload, installStaged, diffFolders, scanToken, contentToken, clearTmp,
 } from '../../src/programs/import.js';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'vp-import-'));
@@ -191,6 +191,18 @@ test('scanToken is stable, order independent and sensitive to names and sizes', 
   assert.equal(scanToken(a), scanToken(b));
   assert.notEqual(scanToken(a), scanToken({ files: [{ rel: 'a', size: 1 }, { rel: 'b', size: 3 }] }));
   assert.notEqual(scanToken(a), scanToken({ files: [{ rel: 'a', size: 1 }, { rel: 'c', size: 2 }] }));
+});
+
+test('contentToken changes with a same-size content edit; scanToken does not (R4)', async () => {
+  const site = tmp();
+  const a = await stageFromUpload(site, [{ rel: 'index.html', data: Buffer.from('<p>one</p>') }]);
+  const again = await stageFromUpload(site, [{ rel: 'index.html', data: Buffer.from('<p>one</p>') }]);
+  const b = await stageFromUpload(site, [{ rel: 'index.html', data: Buffer.from('<p>two</p>') }]);
+  const tokA = await contentToken(a.tmpDir, a.scan);
+  assert.match(tokA, /^[0-9a-f]{64}$/);
+  assert.equal(tokA, await contentToken(again.tmpDir, again.scan));
+  assert.notEqual(tokA, await contentToken(b.tmpDir, b.scan));
+  assert.equal(scanToken(a.scan), scanToken(b.scan));
 });
 
 // ---- staging ----

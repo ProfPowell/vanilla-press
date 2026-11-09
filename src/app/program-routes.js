@@ -6,7 +6,9 @@
  * repo, or when the commit or push fails, the change stays on disk and the
  * response says `committed: false` with a note. Every response is JSON.
  *
- * Upload and Update from source (Task 8) mount here too.
+ * Upload sends a picked folder as multipart (each file part named `files`, its filename the
+ * relative path); Update from source stages the remembered folder again, previews the
+ * difference, and installs it only when confirmed with the preview's token.
  *
  * @module app/program-routes
  */
@@ -16,11 +18,14 @@ import { mkdir, realpath, rename, rm } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { sendJson } from '../server/router.js';
+import { parseMultipart } from '../server/api.js';
 import {
   PROGRAMS_FILE, CARD_KEYS, SLUG, ProgramError, readPrograms, writePrograms, checkSlug, checkAreaPath, cardFromInput,
   programsState, buildOnlyPaths,
 } from '../programs/config.js';
-import { LIMITS, stageFromFolder, installStaged } from '../programs/import.js';
+import {
+  LIMITS, stageFromFolder, stageFromUpload, installStaged, diffFolders, contentToken,
+} from '../programs/import.js';
 import { programUsage } from '../programs/usage.js';
 import { BACKUP_PATHS, THEME_PATHS, programMessage } from './site-git.js';
 import { themeConflictResolver } from './site-theme.js';
@@ -37,6 +42,12 @@ const NOT_PUSHED = (why) => `Committed on this computer, but not pushed to GitHu
 /** `/programs/areas/<x>` is the area route, so no area may be called `areas` (R7). */
 const ROUTE_RESERVED = 'areas';
 const RESERVED_AREA = `"${ROUTE_RESERVED}" is reserved in Vanilla Press: choose another name.`;
+
+/** An upload's body limit while it streams: the program limit plus slack for the envelope. */
+const UPLOAD_LIMIT = LIMITS.totalBytes + 1_048_576;
+const TOO_LARGE = 'This program is larger than 50 MB.';
+const STALE = 'The source folder changed since the preview. Look again.';
+const NO_SOURCE = 'This program was uploaded, so it has no source folder. Upload it again to update it.';
 
 /**
  * A commit that did not happen: thrown out of backup.exclusive (its name is not Git*), so
@@ -139,6 +150,45 @@ export function mountProgramRoutes(router, prefix, {
     const dir = resolve(areaDir, slug);
     if (dirname(dir) !== areaDir) throw missing();
     return dir;
+  }
+
+  /** Refuse (422) a source folder that is the site, inside it, or holds it. */
+  async function checkSource(source) {
+    const [realSource, realSite] = await Promise.all([realpath(source).catch(() => null), realpath(siteDir)]);
+    if (realSource && (within(realSite, realSource) || within(realSource, realSite))) {
+      throw new ProgramError(422, `${source} overlaps this site's own folder. Choose a program folder outside the site. Nothing was copied.`);
+    }
+  }
+
+  /** A new program's area, slug and folder, refusing an unknown area (404), a bad slug (422) or a taken one (409). */
+  function newProgram(config, area, slug) {
+    findArea(config, area);
+    const bad = checkSlug(slug);
+    if (bad) throw new ProgramError(422, bad);
+    const target = programDir(area, slug);
+    if (config.programs.some(same(area, slug)) || existsSync(target)) {
+      throw new ProgramError(409, `"${slug}" is already taken in /${area}/. Choose another slug.`);
+    }
+    return target;
+  }
+
+  /**
+   * Install a staged copy as a new program with the default card (unlisted), the stage
+   * removed either way and nothing half-installed.
+   */
+  async function addStaged(config, area, slug, target, tmpDir) {
+    try {
+      await installStaged(siteDir, tmpDir, area, slug);
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true }); // gone after a rename; a failed install leaves no stage
+    }
+    const { card } = cardFromInput({}, { area, slug }); // the defaults: unlisted
+    try {
+      writePrograms(siteDir, { ...config, programs: [...config.programs, card] });
+    } catch (err) {
+      await rm(target, { recursive: true, force: true }); // nothing half-installed
+      throw err;
+    }
   }
 
   /**
@@ -290,36 +340,96 @@ export function mountProgramRoutes(router, prefix, {
   router.add('POST', `${prefix}/programs`, write(201, async (req) => {
     const { area, source, slug } = body(req);
     const config = readPrograms(siteDir);
-    findArea(config, area);
-    const bad = checkSlug(slug);
-    if (bad) throw new ProgramError(422, bad);
+    const target = newProgram(config, area, slug);
     if (typeof source !== 'string' || !isAbsolute(source)) throw new ProgramError(422, 'Choose a folder on this computer.');
-    const target = programDir(area, slug);
-    const [realSource, realSite] = await Promise.all([realpath(source).catch(() => null), realpath(siteDir)]);
-    if (realSource && (within(realSite, realSource) || within(realSource, realSite))) {
-      throw new ProgramError(422, `${source} overlaps this site's own folder. Choose a program folder outside the site. Nothing was copied.`);
-    }
-    if (config.programs.some(same(area, slug)) || existsSync(target)) {
-      throw new ProgramError(409, `"${slug}" is already taken in /${area}/. Choose another slug.`);
-    }
+    await checkSource(source);
     const { tmpDir, scan } = await stageFromFolder(siteDir, source);
-    try {
-      await installStaged(siteDir, tmpDir, area, slug);
-    } finally {
-      await rm(tmpDir, { recursive: true, force: true }); // gone after a rename; a failed install leaves no stage
-    }
-    const { card } = cardFromInput({}, { area, slug }); // the defaults: unlisted
-    try {
-      writePrograms(siteDir, { ...config, programs: [...config.programs, card] });
-    } catch (err) {
-      await rm(target, { recursive: true, force: true }); // nothing half-installed
-      throw err;
-    }
+    await addStaged(config, area, slug, target, tmpDir);
     setProgramSource(db, area, slug, source);
     return {
       send: { program: programOut(area, slug), skipped: scan.skipped, large: scan.large },
       what: `add ${slug}`,
     };
+  }));
+
+  // Upload: the body is read (limited while it streams) before the write queue is taken.
+  const addUploaded = write(201, async (req) => {
+    const { fields, files } = req.upload;
+    const { area, slug } = fields;
+    const config = readPrograms(siteDir);
+    const target = newProgram(config, area, slug); // refused before anything is staged
+    const list = files.filter((f) => f.fieldName === 'files').map((f) => ({ rel: f.filename, data: f.data }));
+    const { tmpDir, scan } = await stageFromUpload(siteDir, list);
+    await addStaged(config, area, slug, target, tmpDir);
+    deleteProgramSource(db, area, slug); // an uploaded program has no source folder
+    return {
+      send: { program: programOut(area, slug), skipped: scan.skipped, large: scan.large },
+      what: `add ${slug}`,
+    };
+  });
+
+  router.add('POST', `${prefix}/programs/upload`, handle(async (req, res) => {
+    const contentType = req.headers['content-type'] || '';
+    if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
+      throw new ProgramError(400, 'Content-Type must be multipart/form-data');
+    }
+    if (Number(req.headers['content-length']) > UPLOAD_LIMIT) throw new ProgramError(413, TOO_LARGE);
+    try {
+      req.upload = await parseMultipart(req, contentType, { limit: UPLOAD_LIMIT });
+    } catch (err) {
+      if (err.status === 413) throw new ProgramError(413, TOO_LARGE);
+      throw new ProgramError(400, `Could not read the upload (${err.message}).`);
+    }
+    await addUploaded(req, res);
+  }));
+
+  /**
+   * Update from source: stage the remembered folder again. `{ confirm: false }` previews the
+   * difference with a token over every file's content; `{ confirm: true, token }` installs
+   * the new copy only when the folder still matches that preview.
+   */
+  async function stageSource(area, slug) {
+    const current = programDir(area, slug);
+    findArea(readPrograms(siteDir), area);
+    if (!programsState(siteDir).programs.some(same(area, slug))) throw new ProgramError(404, `There is no program /${area}/${slug}/.`);
+    const source = getProgramSource(db, area, slug);
+    if (!source) throw new ProgramError(422, NO_SOURCE);
+    await checkSource(source);
+    const { tmpDir, scan } = await stageFromFolder(siteDir, source);
+    try {
+      return { current, tmpDir, scan, token: await contentToken(tmpDir, scan) };
+    } catch (err) {
+      await rm(tmpDir, { recursive: true, force: true });
+      throw err;
+    }
+  }
+
+  const applyRefresh = write(200, async (req) => {
+    const { area, slug } = req.params;
+    const { tmpDir, scan, token } = await stageSource(area, slug);
+    try {
+      if (token !== body(req).token) throw new ProgramError(409, STALE);
+      await installStaged(siteDir, tmpDir, area, slug, { replace: true });
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true }); // gone after a rename; a refusal leaves no stage
+    }
+    return {
+      send: { program: programOut(area, slug), skipped: scan.skipped, large: scan.large },
+      what: `update ${slug}`,
+    };
+  });
+
+  router.add('POST', `${prefix}/programs/:area/:slug/refresh`, handle(async (req, res) => {
+    if (body(req).confirm === true) return applyRefresh(req, res);
+    const { area, slug } = req.params;
+    const { current, tmpDir, scan, token } = await stageSource(area, slug);
+    let diff;
+    try {
+      diff = await diffFolders(current, scan, tmpDir);
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true }); // a preview installs nothing
+    }
+    sendJson(res, 200, { preview: { ...diff, total: scan.total, skipped: scan.skipped, large: scan.large }, token });
   }));
 
   router.add('PATCH', `${prefix}/programs/:area/:slug`, write(200, async (req) => {

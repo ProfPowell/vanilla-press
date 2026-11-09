@@ -64,3 +64,13 @@ test('programUsage: a same-site absolute link in a saved post counts', () => {
   assert.deepEqual(programUsage({ docs, live: new Map(), area: 'programs', slug: 'plasma', siteHost: 'example.com' }),
     [{ title: 'Abs', path: 'src/posts/abs.html' }]);
 });
+
+test('programRefs: front matter values count (a committed page\'s featured image)', () => {
+  const page = '---\ntitle: "Plasma"\nimage: /programs/plasma/shot.png\n---\n<p>No link.</p>';
+  assert.deepEqual(keys(page), ['programs/plasma']);
+});
+
+test('programUsage: a saved post whose featured image is inside the program counts', () => {
+  const docs = [{ id: 'doc_1', title: 'Shot', path: 'src/posts/shot.html', html: '<p>x</p>', image: '/programs/plasma/shot.png' }];
+  assert.deepEqual(programUsage({ docs, live: new Map(), area: 'programs', slug: 'plasma' }), [{ title: 'Shot', path: 'src/posts/shot.html' }]);
+});

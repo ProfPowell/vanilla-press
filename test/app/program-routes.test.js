@@ -107,6 +107,7 @@ describe('program routes', () => {
     assert.deepEqual(config(), { areas: [{ path: 'programs', title: 'Programs', sandbox: false }], programs: [] });
     assert.equal(lastCommit().message, 'Programs: add area programs');
     assert.ok(lastCommit().paths.includes('config/programs.json'));
+    assert.ok(lastCommit().paths.includes('src/programs')); // R6: every configured area folder
     assert.equal(pushes.length, before + 1);
   });
 
@@ -121,6 +122,9 @@ describe('program routes', () => {
     const page = await api('/programs/areas', { method: 'POST', body: { path: 'about', title: 'A' } });
     assert.equal(page.status, 422);
     assert.match(page.data.error, /already a page on this site \(src\/about\.html\)/);
+    const areas = await api('/programs/areas', { method: 'POST', body: { path: 'areas', title: 'Areas' } });
+    assert.equal(areas.status, 422); // R7: /programs/areas/<x> is the area route
+    assert.match(areas.data.error, /"areas" is reserved/);
     const bad = await api('/programs/areas', { method: 'POST', body: { path: 'Bad Name', title: 'A' } });
     assert.equal(bad.status, 422);
     assert.equal(commits.length, n);
@@ -145,7 +149,7 @@ describe('program routes', () => {
     assert.equal(lastCommit().message, 'Programs: add plasma');
     assert.doesNotMatch(lastCommit().message, /CI Skip/i);
     assert.ok(lastCommit().paths.includes('config/programs.json'));
-    assert.ok(lastCommit().paths.includes('src/programs/plasma'));
+    assert.ok(lastCommit().paths.includes('src/programs'));
     assert.equal(pushes.length, before + 1);
     assert.deepEqual(readdirSync(join(site, '.vp', 'tmp')), []); // the stage was renamed into place
 
@@ -207,8 +211,13 @@ describe('program routes', () => {
     assert.equal(moved.status, 200, JSON.stringify(moved.data));
     assert.deepEqual(config().areas.map((a) => a.path), ['programs', 'lab']);
     assert.equal(lastCommit().message, 'Programs: move area labs to lab');
+    assert.ok(lastCommit().paths.includes('src/programs') && lastCommit().paths.includes('src/lab'));
+    assert.ok(lastCommit().paths.includes('src/labs')); // the old folder, in case it held tracked files
     const taken = await api('/programs/areas/lab', { method: 'PATCH', body: { path: 'programs' } });
     assert.equal(taken.status, 409);
+    const reserved = await api('/programs/areas/lab', { method: 'PATCH', body: { path: 'areas' } });
+    assert.equal(reserved.status, 422);
+    assert.match(reserved.data.error, /"areas" is reserved/);
     const del = await api('/programs/areas/lab', { method: 'DELETE' });
     assert.equal(del.status, 200, JSON.stringify(del.data));
     assert.deepEqual(config().areas.map((a) => a.path), ['programs']);
@@ -225,7 +234,7 @@ describe('program routes', () => {
     const card = config().programs[0];
     assert.deepEqual([card.title, card.description, card.tags, card.listed, card.sandbox], ['Plasma!', 'Old-school.', ['Demo'], true, false]);
     assert.equal(lastCommit().message, 'Programs: edit plasma');
-    assert.ok(lastCommit().paths.includes('src/programs/plasma'));
+    assert.ok(lastCommit().paths.includes('src/programs'));
 
     // sandbox: null goes back to the area default; other fields stay.
     await api('/programs/programs/plasma', { method: 'PATCH', body: { sandbox: null } });
@@ -245,7 +254,7 @@ describe('program routes', () => {
     assert.equal(res.status, 200, JSON.stringify(res.data));
     const card = config().programs.find((p) => p.slug === 'stray');
     assert.deepEqual([card.title, card.listed], ['Stray', false]);
-    assert.ok(lastCommit().paths.includes('src/programs/stray'));
+    assert.ok(lastCommit().paths.includes('src/programs'));
 
     put(site, 'src/programs/broken/main.js', '1');
     const listed = await api('/programs/programs/broken', { method: 'PATCH', body: { listed: true } });
@@ -264,7 +273,24 @@ describe('program routes', () => {
     assert.ok(existsSync(join(site, 'src', 'programs', 'plasma', 'index.html')));
     assert.ok(config().programs.some((p) => p.slug === 'plasma'));
     assert.equal(commits.length, n);
+    // R8: GET lists usedIn for every program.
+    const state = await api('/programs');
+    assert.deepEqual(state.data.programs.find((p) => p.slug === 'plasma').usedIn, [{ title: 'Try plasma', path: 'src/posts/try-plasma.html' }]);
+    assert.deepEqual(state.data.programs.find((p) => p.slug === 'stray').usedIn, []);
     assert.equal((await api('/documents/doc_plasma01', { method: 'DELETE' })).status, 200);
+  });
+
+  it('DELETE while a saved post has a featured image inside the program is 409', async () => {
+    const doc = { ...linkPost('doc_plasma02', 'about-plasma', 'About plasma', '/elsewhere/'),
+      meta: { title: 'About plasma', slug: 'about-plasma', collection: 'posts', status: 'draft', image: '/programs/plasma/shot.png' } };
+    assert.equal((await api('/documents', { method: 'POST', body: doc })).status, 201);
+    try {
+      const res = await api('/programs/programs/plasma', { method: 'DELETE' });
+      assert.equal(res.status, 409, JSON.stringify(res.data));
+      assert.deepEqual(res.data.usedIn, [{ title: 'About plasma', path: 'src/posts/about-plasma.html' }]);
+    } finally {
+      assert.equal((await api('/documents/doc_plasma02', { method: 'DELETE' })).status, 200);
+    }
   });
 
   it('DELETE while a committed page links the program is 409 naming the page', async () => {
@@ -297,7 +323,7 @@ describe('program routes', () => {
     assert.equal(existsSync(join(site, 'src', 'programs', 'plasma')), false);
     assert.equal(config().programs.some((p) => p.slug === 'plasma'), false);
     assert.equal(lastCommit().message, 'Programs: remove plasma');
-    assert.ok(lastCommit().paths.includes('src/programs/plasma'));
+    assert.ok(lastCommit().paths.includes('src/programs'));
     assert.equal(pushes.length, before + 1);
     // Added again from the same folder: no source left over from before.
     put(site, 'src/programs/plasma/index.html', 'by hand');
@@ -335,5 +361,47 @@ describe('program routes', () => {
     assert.equal(res.data.committed, false);
     assert.match(res.data.note, /disk full/);
     assert.equal(config().programs.find((p) => p.slug === 'plasma-three').title, 'Three');
+  });
+
+  it('slug traversal: a card whose slug is not a slug is never listed, edited or removed', async () => {
+    const cfg = config();
+    cfg.programs.push({ area: 'programs', slug: 'x/../..', title: 'Evil', listed: false });
+    writeFileSync(join(site, 'config', 'programs.json'), `${JSON.stringify(cfg, null, 2)}\n`);
+    const files = tree(join(site, 'src'));
+    const n = commits.length;
+    const state = await api('/programs');
+    assert.equal(state.data.programs.some((p) => p.slug === 'x/../..'), false);
+    const del = await api('/programs/programs/x%2F..%2F..', { method: 'DELETE' });
+    assert.equal(del.status, 404, JSON.stringify(del.data));
+    const patch = await api('/programs/programs/x%2F..%2F..', { method: 'PATCH', body: { title: 'X' } });
+    assert.equal(patch.status, 404);
+    const dots = await api('/programs/programs/..', { method: 'DELETE' });
+    assert.equal(dots.status, 404);
+    const area = await api('/programs/%2E%2E/programs', { method: 'DELETE' });
+    assert.equal(area.status, 404);
+    assert.deepEqual(tree(join(site, 'src')), files);
+    assert.equal(commits.length, n);
+    writeFileSync(join(site, 'config', 'programs.json'), `${JSON.stringify({ ...cfg, programs: cfg.programs.filter((p) => p.slug !== 'x/../..') }, null, 2)}\n`);
+  });
+
+  it('POST /programs refuses a source folder that is the site, inside it, or holds it', async () => {
+    for (const src of [site, join(site, 'src'), root]) {
+      const res = await api('/programs', { method: 'POST', body: { area: 'programs', source: src, slug: 'overlap' } });
+      assert.equal(res.status, 422, src);
+      assert.match(res.data.error, /this site's own folder/, src);
+    }
+    assert.equal(existsSync(join(site, 'src', 'programs', 'overlap')), false);
+  });
+
+  it('a failed commit gives the pending drafts back to the backup', async () => {
+    const draft = { ...linkPost('doc_pending1', 'pending-post', 'Pending post', '/nowhere/') };
+    assert.equal((await api('/documents', { method: 'POST', body: draft })).status, 201);
+    fakeGit.commitPaths = async () => { throw new Error('index.lock exists'); };
+    const res = await api('/programs/programs/plasma-three', { method: 'PATCH', body: { title: 'Three again' } });
+    assert.equal(res.data.committed, false);
+    fakeGit.commitPaths = defaults.commitPaths;
+    // The next backup commits the draft under its own title, not as anonymous "changes".
+    await api('/backup', { method: 'POST' });
+    assert.equal(lastCommit().message, 'Draft: Pending post [CI Skip]');
   });
 });

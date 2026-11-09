@@ -23,8 +23,25 @@ function sitePath(url, siteHost) {
 }
 
 /**
- * The `'<area>/<slug>'` keys of every href or src in a page that points at
- * `/<area>/<slug>`, `/<area>/<slug>/` or a file inside it.
+ * The `'<area>/<slug>'` key of a URL pointing at `/<area>/<slug>`, `/<area>/<slug>/`
+ * or a file inside it, or null.
+ * @param {unknown} url
+ * @param {{ siteHost?: string|null }} [options]
+ * @returns {string|null}
+ */
+export function programRefOf(url, { siteHost } = {}) {
+  if (typeof url !== 'string') return null;
+  const path = sitePath(url.trim(), siteHost);
+  if (!path) return null;
+  const [area, slug] = path.split(/[?#]/)[0].split('/').slice(1, 3);
+  if (!area || !slug || !SLUG.test(area) || !SLUG.test(slug)) return null;
+  return `${area}/${slug}`;
+}
+
+/**
+ * The `'<area>/<slug>'` keys of every href or src in a page, and every front matter
+ * value (a committed page's featured image), that points at `/<area>/<slug>`,
+ * `/<area>/<slug>/` or a file inside it.
  * @param {unknown} html
  * @param {{ areas?: string[], siteHost?: string|null }} [options] - areas: only these
  *   (default: any); siteHost: absolute URLs on this host count too
@@ -34,14 +51,25 @@ export function programRefs(html, { areas, siteHost } = {}) {
   const found = new Set();
   if (typeof html !== 'string') return found;
   const only = areas ? new Set(areas) : null;
-  for (const m of html.matchAll(URL_ATTR)) {
-    const path = sitePath(decodeEntities(m[2] ?? m[3] ?? m[4] ?? '').trim(), siteHost);
-    if (!path) continue;
-    const [area, slug] = path.split(/[?#]/)[0].split('/').slice(1, 3);
-    if (!area || !slug || !SLUG.test(area) || !SLUG.test(slug)) continue;
-    if (only && !only.has(area)) continue;
-    found.add(`${area}/${slug}`);
+  const add = (url) => {
+    const key = programRefOf(url, { siteHost });
+    if (key && (!only || only.has(key.split('/')[0]))) found.add(key);
+  };
+  let body = html;
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(html);
+  if (fm) {
+    body = html.slice(fm[0].length);
+    for (const line of fm[1].split(/\r?\n/)) {
+      const m = /^[\w-]+:[ \t]*(.*?)[ \t]*$/.exec(line);
+      if (!m) continue;
+      let value = m[1];
+      if (value.startsWith('"')) {
+        try { value = JSON.parse(value); } catch { continue; }
+      } else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+      add(value);
+    }
   }
+  for (const m of body.matchAll(URL_ATTR)) add(decodeEntities(m[2] ?? m[3] ?? m[4] ?? ''));
   return found;
 }
 
@@ -49,10 +77,10 @@ export function programRefs(html, { areas, siteHost } = {}) {
  * The posts and pages that use a program, one entry each: a saved post by its title
  * (also when only its committed page still links it), any other committed page by its
  * path. The program's own pages don't count.
- * @param {{ docs: Array<{ id: string, title: string, path: string, html: string }>,
+ * @param {{ docs: Array<{ id: string, title: string, path: string, html: string, image?: string|null }>,
  *   live: Map<string, Array<{ path: string, vpId: string|null }>>,
  *   area: string, slug: string, siteHost?: string|null }} input - docs: saved documents with
- *   their rendered bodies; live: createLiveMedia's map with programRefs keys
+ *   their rendered bodies and featured images; live: createLiveMedia's map with programRefs keys
  * @returns {Array<{ title: string, path: string }>}
  */
 export function programUsage({ docs, live, area, slug, siteHost = null }) {
@@ -67,7 +95,9 @@ export function programUsage({ docs, live, area, slug, siteHost = null }) {
     out.push({ title, path });
   };
   for (const doc of docs) {
-    if (programRefs(doc.html, { siteHost }).has(key)) add(doc.title, doc.path, doc.id);
+    if (programRefs(doc.html, { siteHost }).has(key) || programRefOf(doc.image, { siteHost }) === key) {
+      add(doc.title, doc.path, doc.id);
+    }
   }
   const byId = new Map(docs.map((d) => [d.id, d]));
   for (const { path, vpId } of live.get(key) || []) {

@@ -12,12 +12,12 @@
  */
 
 import { existsSync, rmdirSync } from 'node:fs';
-import { mkdir, rename, rm } from 'node:fs/promises';
+import { mkdir, realpath, rename, rm } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { sendJson } from '../server/router.js';
 import {
-  PROGRAMS_FILE, CARD_KEYS, ProgramError, readPrograms, writePrograms, checkSlug, checkAreaPath, cardFromInput,
+  PROGRAMS_FILE, CARD_KEYS, SLUG, ProgramError, readPrograms, writePrograms, checkSlug, checkAreaPath, cardFromInput,
   programsState, buildOnlyPaths,
 } from '../programs/config.js';
 import { LIMITS, stageFromFolder, installStaged } from '../programs/import.js';
@@ -33,6 +33,29 @@ import { getCollectionsConfig } from '../sync/site-files.js';
 
 const NOT_COMMITTED = (why) => `Saved on this computer, but not committed (${why}), so it isn't live yet.`;
 const NOT_PUSHED = (why) => `Committed on this computer, but not pushed to GitHub (${why}), so it isn't live yet. The next backup or Publish pushes it.`;
+
+/** `/programs/areas/<x>` is the area route, so no area may be called `areas` (R7). */
+const ROUTE_RESERVED = 'areas';
+const RESERVED_AREA = `"${ROUTE_RESERVED}" is reserved in Vanilla Press: choose another name.`;
+
+/**
+ * A commit that did not happen: thrown out of backup.exclusive (its name is not Git*), so
+ * the pending drafts it took are given back to the backup, then answered as committed: false.
+ */
+class NotCommitted extends Error {
+  constructor(note, send) {
+    super(note);
+    this.name = 'ProgramNotCommitted';
+    this.note = note;
+    this.send = send;
+  }
+}
+
+/** Is `child` inside `parent` (or the same folder)? */
+const within = (parent, child) => {
+  const rel = relative(parent, child);
+  return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
+};
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const titleFromSlug = (slug) => slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -97,55 +120,85 @@ export function mountProgramRoutes(router, prefix, {
   const areaOut = (path) => programsState(siteDir).areas.find((a) => a.path === path) || null;
   const countIn = (path) => areaOut(path)?.count ?? 0;
 
+  /** An area named in a URL or body: slug-shaped and configured, else 404. */
   function findArea(config, path) {
+    if (typeof path !== 'string' || !SLUG.test(path)) throw new ProgramError(404, `There is no area /${path}/.`);
     const i = config.areas.findIndex((a) => isObj(a) && a.path === path);
     if (i < 0) throw new ProgramError(404, `There is no area /${path}/.`);
     return i;
   }
 
   /**
-   * Commit and push at once (Programs go live). The pending drafts exclusive() took go
-   * into this commit too, as with Publish and Apply. Never throws: a failure is a note.
+   * The folder of /<area>/<slug>/, refusing (404) anything but a slug-shaped area and slug
+   * whose folder is a direct child of src/<area>/ (a card's slug is never trusted as a path).
    */
-  async function goLive(paths, what) {
+  function programDir(area, slug) {
+    const missing = () => new ProgramError(404, `There is no program /${area}/${slug}/.`);
+    if (typeof area !== 'string' || typeof slug !== 'string' || !SLUG.test(area) || !SLUG.test(slug)) throw missing();
+    const areaDir = resolve(siteDir, 'src', area);
+    const dir = resolve(areaDir, slug);
+    if (dirname(dir) !== areaDir) throw missing();
+    return dir;
+  }
+
+  /**
+   * Commit and push at once (Programs go live). The commit carries config/programs.json and
+   * every configured area's folder (R6), so a card and its folder always go live together,
+   * plus `extra` (an area folder being moved or removed). The pending drafts exclusive()
+   * took go in too, as with Publish and Apply. A commit that did not happen throws
+   * NotCommitted (the drafts go back to the backup); a failed push is a note.
+   */
+  async function goLive(extra, what, send) {
     let status;
     try {
       status = await deps.gitStatus(siteDir);
     } catch (err) {
-      return { committed: false, note: NOT_COMMITTED(err.message) };
+      throw new NotCommitted(NOT_COMMITTED(err.message), send);
     }
     if (!status.isRepo) {
-      return { status: 'saved', committed: false, note: NOT_COMMITTED('this site folder is not a git repository') };
+      return { status: 'saved', committed: false, note: NOT_COMMITTED('this site folder is not a git repository'), send };
     }
+    const areas = programsState(siteDir).areas.map((a) => `src/${a.path}`);
+    const paths = [...new Set([...BACKUP_PATHS, PROGRAMS_FILE, ...areas, ...extra])];
     try {
-      await deps.commitPaths(siteDir, [...BACKUP_PATHS, PROGRAMS_FILE, ...paths], programMessage(what));
+      await deps.commitPaths(siteDir, paths, programMessage(what));
     } catch (err) {
-      return { committed: false, note: NOT_COMMITTED(err.message) };
+      throw new NotCommitted(NOT_COMMITTED(err.message), send);
     }
     try {
       const pushed = await deps.push(siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });
-      return { ...pushed, status: 'pushed', committed: true };
+      return { ...pushed, status: 'pushed', committed: true, send };
     } catch (err) {
-      return { ...(err instanceof GitNotConnectedError ? { status: 'saved' } : {}), committed: false, note: NOT_PUSHED(err.message) };
+      return { ...(err instanceof GitNotConnectedError ? { status: 'saved' } : {}), committed: false, note: NOT_PUSHED(err.message), send };
     }
   }
 
   /**
    * A write route: in the backup's git queue, then the write lock, make the change and
-   * take it live. `run` resolves to `{ send, paths, what }`: the JSON to send, the program
-   * folders to commit with config/programs.json, and the commit message text. A
-   * ProgramError from `run` is sent as is, with nothing committed.
+   * take it live. `run` resolves to `{ send, paths, what }`: the JSON to send, any folder
+   * to commit beyond the configured areas, and the commit message text. A ProgramError
+   * from `run` is sent as is, with nothing committed.
    */
   const write = (status, run) => handle(async (req, res) => {
-    const out = await backup.exclusive(() => writes(async () => {
-      const { send, paths, what } = await run(req);
-      return { ...(await goLive(paths, what)), send };
-    }));
+    let out;
+    try {
+      out = await backup.exclusive(() => writes(async () => {
+        const { send, paths = [], what } = await run(req);
+        return goLive(paths, what, send);
+      }));
+    } catch (err) {
+      if (!(err instanceof NotCommitted)) throw err;
+      out = { send: err.send, committed: false, note: err.note };
+    }
     sendJson(res, status, { ...out.send, committed: out.committed, ...(out.note ? { note: out.note } : {}) });
   });
 
-  /** The saved posts and committed pages that link to /<area>/<slug>/. */
-  async function usedIn(area, slug) {
+  /**
+   * A function answering the saved posts and committed pages that use /<area>/<slug>/.
+   * `strict`: a git failure in the committed-page scan is a 502 (Remove must not guess);
+   * otherwise it is logged and only saved posts count.
+   */
+  async function usage({ strict }) {
     const siteUrl = await readSiteUrl(siteDir);
     let siteHost = null;
     try { siteHost = siteUrl ? new URL(siteUrl).host : null; } catch { /* not a URL: relative links only */ }
@@ -156,24 +209,27 @@ export function mountProgramRoutes(router, prefix, {
       // The page it publishes to (a draft's too), as committed pages are named.
       path: outputPaths({ ...doc, meta: { ...doc.meta, status: 'published' } }, collectionsConfig).html,
       html: render(doc, { scope: 'content', bare: true }),
+      image: doc.meta?.image ?? null,
     }));
     let live = new Map();
     if (liveRefs) {
       try {
         live = await liveRefs(siteHost);
       } catch (err) {
-        throw new ProgramError(502, `Could not check where /${area}/${slug}/ is used (${err.message}). Nothing was removed.`);
+        if (strict) throw new ProgramError(502, `Could not check where this program is used (${err.message}). Nothing was removed.`);
+        console.error('live program scan failed:', err);
       }
     }
-    return programUsage({ docs, live, area, slug, siteHost });
+    return (area, slug) => programUsage({ docs, live, area, slug, siteHost });
   }
 
-  router.add('GET', `${prefix}/programs`, handle((req, res) => {
+  router.add('GET', `${prefix}/programs`, handle(async (req, res) => {
     const { areas, programs } = programsState(siteDir);
+    const usedIn = programs.length ? await usage({ strict: false }) : null;
     const base = runUrl();
     sendJson(res, 200, {
       areas,
-      programs: programs.map((p) => ({ ...p, source: getProgramSource(db, p.area, p.slug) })),
+      programs: programs.map((p) => ({ ...p, source: getProgramSource(db, p.area, p.slug), usedIn: usedIn(p.area, p.slug) })),
       runBase: base ? `${base}/${site.id}` : null,
       limits: LIMITS,
     });
@@ -184,12 +240,13 @@ export function mountProgramRoutes(router, prefix, {
   router.add('POST', `${prefix}/programs/areas`, write(201, async (req) => {
     const { path, title, sandbox } = body(req);
     const config = readPrograms(siteDir);
+    if (path === ROUTE_RESERVED) throw new ProgramError(422, RESERVED_AREA);
     if (config.areas.some((a) => isObj(a) && a.path === path)) throw new ProgramError(409, `/${path}/ is already an area.`);
     const bad = checkAreaPath(siteDir, path, { areas: config.areas, buildOnlyPaths: await buildOnlyPaths(siteDir) });
     if (bad) throw new ProgramError(422, bad);
     const area = { path, ...areaFields({ title, sandbox }, { path }) };
     writePrograms(siteDir, { ...config, areas: [...config.areas, area] });
-    return { send: { area: areaOut(path) }, paths: [], what: `add area ${path}` };
+    return { send: { area: areaOut(path) }, what: `add area ${path}` };
   }));
 
   router.add('PATCH', `${prefix}/programs/areas/:path`, write(200, async (req) => {
@@ -203,6 +260,7 @@ export function mountProgramRoutes(router, prefix, {
       if (countIn(old) > 0) {
         throw new ProgramError(409, `/${old}/ has programs: an area's path can change only while it is empty.`);
       }
+      if (input.path === ROUTE_RESERVED) throw new ProgramError(422, RESERVED_AREA);
       if (config.areas.some((a) => isObj(a) && a.path === input.path)) throw new ProgramError(409, `/${input.path}/ is already an area.`);
       const bad = checkAreaPath(siteDir, input.path, { buildOnlyPaths: await buildOnlyPaths(siteDir) });
       if (bad) throw new ProgramError(422, bad);
@@ -213,7 +271,7 @@ export function mountProgramRoutes(router, prefix, {
     if (path !== old) {
       try { rmdirSync(join(siteDir, 'src', old)); } catch { /* absent, or holds other files: left as it is */ }
     }
-    return { send: { area: areaOut(path) }, paths: [], what: path === old ? `edit area ${old}` : `move area ${old} to ${path}` };
+    return { send: { area: areaOut(path) }, paths: [`src/${old}`], what: path === old ? `edit area ${old}` : `move area ${old} to ${path}` };
   }));
 
   router.add('DELETE', `${prefix}/programs/areas/:path`, write(200, async (req) => {
@@ -224,7 +282,7 @@ export function mountProgramRoutes(router, prefix, {
     config.areas.splice(i, 1);
     writePrograms(siteDir, config);
     try { rmdirSync(join(siteDir, 'src', path)); } catch { /* absent, or holds other files: left as it is */ }
-    return { send: { ok: true }, paths: [], what: `remove area ${path}` };
+    return { send: { ok: true }, paths: [`src/${path}`], what: `remove area ${path}` };
   }));
 
   // --- Programs ---
@@ -236,7 +294,11 @@ export function mountProgramRoutes(router, prefix, {
     const bad = checkSlug(slug);
     if (bad) throw new ProgramError(422, bad);
     if (typeof source !== 'string' || !isAbsolute(source)) throw new ProgramError(422, 'Choose a folder on this computer.');
-    const target = join(siteDir, 'src', area, slug);
+    const target = programDir(area, slug);
+    const [realSource, realSite] = await Promise.all([realpath(source).catch(() => null), realpath(siteDir)]);
+    if (realSource && (within(realSite, realSource) || within(realSource, realSite))) {
+      throw new ProgramError(422, `${source} overlaps this site's own folder. Choose a program folder outside the site. Nothing was copied.`);
+    }
     if (config.programs.some(same(area, slug)) || existsSync(target)) {
       throw new ProgramError(409, `"${slug}" is already taken in /${area}/. Choose another slug.`);
     }
@@ -256,13 +318,13 @@ export function mountProgramRoutes(router, prefix, {
     setProgramSource(db, area, slug, source);
     return {
       send: { program: programOut(area, slug), skipped: scan.skipped, large: scan.large },
-      paths: [`src/${area}/${slug}`],
       what: `add ${slug}`,
     };
   }));
 
   router.add('PATCH', `${prefix}/programs/:area/:slug`, write(200, async (req) => {
     const { area, slug } = req.params;
+    programDir(area, slug);
     const config = readPrograms(siteDir);
     findArea(config, area);
     const found = programsState(siteDir).programs.find(same(area, slug));
@@ -284,21 +346,21 @@ export function mountProgramRoutes(router, prefix, {
     if (i >= 0) config.programs[i] = next;
     else config.programs.push(next);
     writePrograms(siteDir, config);
-    return { send: { program: programOut(area, slug) }, paths: [`src/${area}/${slug}`], what: `edit ${slug}` };
+    return { send: { program: programOut(area, slug) }, what: `edit ${slug}` };
   }));
 
   router.add('DELETE', `${prefix}/programs/:area/:slug`, write(200, async (req) => {
     const { area, slug } = req.params;
+    const target = programDir(area, slug);
     const config = readPrograms(siteDir);
     findArea(config, area);
     if (!programsState(siteDir).programs.some(same(area, slug))) throw new ProgramError(404, `There is no program /${area}/${slug}/.`);
-    const uses = await usedIn(area, slug);
+    const uses = (await usage({ strict: true }))(area, slug);
     if (uses.length) {
       const where = uses.length === 1 ? `"${uses[0].title}"` : `${uses.length} posts and pages`;
       throw new ProgramError(409, `/${area}/${slug}/ is used in ${where}. Remove those links first.`, { usedIn: uses });
     }
     // Park the folder first, so a failed config write can put it back.
-    const target = join(siteDir, 'src', area, slug);
     let parked = null;
     if (existsSync(target)) {
       parked = join(siteDir, '.vp', 'tmp', `${randomBytes(8).toString('hex')}-removed`);
@@ -313,6 +375,6 @@ export function mountProgramRoutes(router, prefix, {
     }
     if (parked) await rm(parked, { recursive: true, force: true }).catch(() => {}); // leftovers go with clearTmp
     deleteProgramSource(db, area, slug);
-    return { send: { ok: true }, paths: [`src/${area}/${slug}`], what: `remove ${slug}` };
+    return { send: { ok: true }, what: `remove ${slug}` };
   }));
 }

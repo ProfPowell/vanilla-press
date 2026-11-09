@@ -195,7 +195,8 @@ function subfolders(dir) {
 /** Areas with counts, and every program (carded or stray) with its folder status. */
 export function programsState(siteDir) {
   const { areas, programs } = readPrograms(siteDir);
-  const valid = areas.filter((a) => isObj(a) && typeof a.path === 'string');
+  // Only slug-shaped areas and slugs: anything else could name a path outside src/<area>/.
+  const valid = areas.filter((a) => isObj(a) && typeof a.path === 'string' && SLUG.test(a.path));
   const known = new Set(valid.map((a) => a.path));
   const status = (area, slug) => {
     const dir = join(siteDir, 'src', area, slug);
@@ -204,7 +205,7 @@ export function programsState(siteDir) {
   };
   const out = [];
   for (const area of valid) {
-    const cards = programs.filter((p) => isObj(p) && p.area === area.path && typeof p.slug === 'string');
+    const cards = programs.filter((p) => isObj(p) && p.area === area.path && typeof p.slug === 'string' && SLUG.test(p.slug));
     const carded = new Set(cards.map((p) => p.slug));
     for (const c of cards) {
       out.push({ ...c, url: `/${c.area}/${c.slug}/`, hasCard: true, status: status(c.area, c.slug) });

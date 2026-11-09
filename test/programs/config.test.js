@@ -338,3 +338,19 @@ test('buildOnlyPaths reads config/main.js fresh each call', async () => {
   assert.deepEqual(await buildOnlyPaths(dir), []);
   cleanup(dir);
 });
+
+test('programsState: cards and areas that are not slugs are skipped (no path traversal)', () => {
+  const dir = site();
+  writePrograms(dir, {
+    areas: [{ path: 'programs', title: 'P', sandbox: false }, { path: '..', title: 'Up', sandbox: false }],
+    programs: [
+      { area: 'programs', slug: 'x/../..', title: 'Evil' },
+      { area: 'programs', slug: '..', title: 'Dots' },
+      { area: '..', slug: 'src', title: 'Up' },
+    ],
+  });
+  const state = programsState(dir);
+  assert.deepEqual(state.areas.map((a) => a.path), ['programs']);
+  assert.deepEqual(state.programs, []);
+  cleanup(dir);
+});

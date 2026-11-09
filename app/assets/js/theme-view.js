@@ -147,6 +147,20 @@ export function vbNote(vb) {
 }
 
 /**
+ * A note for a theme id the site's Vanilla Breeze copy doesn't have (one a newer VB
+ * dropped, say): text for textContent, or null. Only said with the site's own copy:
+ * without one the list is Vanilla Press's VB, not the site's.
+ * @param {string|null} name
+ * @param {Array<{id: string}>} themes - the site's themes, custom ones included
+ * @param {{ source?: string }|null} vb
+ * @returns {string|null}
+ */
+export function unknownThemeNote(name, themes, vb) {
+  if (!name || vb?.source !== 'site' || (themes || []).some((t) => t.id === name)) return null;
+  return `This site's Vanilla Breeze has no theme "${name}". Pick another theme and apply.`;
+}
+
+/**
  * The hue of a computed `oklch(...)` color; 0 for `none`; null when it is not oklch.
  * @param {string} color
  * @returns {number|null}

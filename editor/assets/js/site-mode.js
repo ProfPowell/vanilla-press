@@ -153,7 +153,7 @@ async function loadSiteInfo() {
 
 /**
  * Load the site's theme setting and theme list (site mode, once) and show the
- * open post in it. Resolves to `{ setting, themes }`, or null outside site
+ * open post in it. Resolves to `{ setting, themes, vb }`, or null outside site
  * mode or when it could not load (the pane is then left unthemed).
  * @returns {Promise<{ setting: object|null, themes: object[] }|null>}
  */
@@ -162,7 +162,7 @@ export function loadThemeData() {
   themeLoad ||= api.getTheme().then(
     (res) => {
       const setting = res?.setting || null;
-      themeData = { setting, themes: siteThemes(setting, res?.themes, SITE) };
+      themeData = { setting, themes: siteThemes(setting, res?.themes, SITE), vb: res?.vb || null };
       showPaneTheme(getCurrentMeta());
       return themeData;
     },

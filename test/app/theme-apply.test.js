@@ -145,7 +145,8 @@ describe('applyTheme', () => {
 
   it('refuses an unknown theme, a bad mode and an unsafe color (400)', async () => {
     const is400 = (e) => e.status === 400;
-    await assert.rejects(apply({ name: 'nope', mode: 'auto', adjustments: null }), is400);
+    await assert.rejects(apply({ name: 'nope', mode: 'auto', adjustments: null }),
+      (e) => is400(e) && e.message === 'This site\'s Vanilla Breeze has no theme "nope". Pick another theme and apply.');
     await assert.rejects(apply({ name: 'Swiss!', mode: 'auto', adjustments: null }), is400);
     await assert.rejects(apply({ name: 'swiss', mode: 'sepia', adjustments: null }), is400);
     await assert.rejects(apply({ name: 'swiss', mode: 'auto', adjustments: { ...ADJ, colors: { light: { '--color-primary': 'red;}' }, dark: {} } } }), is400);

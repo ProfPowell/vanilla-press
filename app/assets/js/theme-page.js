@@ -14,7 +14,7 @@
  */
 import { api, h, formatDate } from './app-api.js';
 import {
-  draftFrom, isDirty, cardModels, schemeControl, schemeOf, pagesModel, vbNote, previewSrcdoc, baselineOf,
+  draftFrom, isDirty, cardModels, schemeControl, schemeOf, pagesModel, vbNote, previewSrcdoc, baselineOf, unknownThemeNote,
 } from './theme-view.js';
 import {
   ensureThemeCss, themeCssReady, themeCssLoaded, computeColors, themeHue, setPreviewCss, quietPreview,
@@ -92,6 +92,13 @@ export function initThemeSection({ siteId, root }) {
     const empty = $('theme-cards-empty');
     empty.textContent = view.query.trim() && !m.cards.length ? `No themes match "${view.query.trim()}".` : '';
     empty.hidden = !empty.textContent;
+  }
+
+  /** The draft's theme isn't in the site's VB copy (a newer VB dropped it, say): say so. */
+  function renderUnknown() {
+    const note = unknownThemeNote(draft.name, state.themes, state.vb);
+    $('theme-unknown-note').textContent = note || '';
+    $('theme-unknown-note').hidden = !note;
   }
 
   // --- Adjust ---
@@ -228,6 +235,7 @@ export function initThemeSection({ siteId, root }) {
     if (!state) return;
     ensureThemeCss(themeById(draft.name));
     if (cards) renderCards();
+    renderUnknown();
     const name = draft.name;
     await themeCssReady(name);
     if (name !== draft.name) return; // a newer update renders the newer base

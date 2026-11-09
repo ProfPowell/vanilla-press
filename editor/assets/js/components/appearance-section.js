@@ -64,6 +64,7 @@ export class AppearanceSection extends HTMLElement {
           </label>
         </fieldset>
         <div class="appearance-own" data-appearance-own hidden>
+          <p class="appearance-note" data-appearance-unknown hidden></p>
           <ul class="appearance-cards" id="meta-appearance-cards" data-appearance-cards aria-label="Themes"></ul>
           <button type="button" class="appearance-more" data-appearance-more aria-expanded="false" aria-controls="meta-appearance-cards" hidden></button>
           <a class="appearance-adjust" data-appearance-adjust href="/app/site.html">Browse all themes, or adjust this one</a>
@@ -163,6 +164,10 @@ export class AppearanceSection extends HTMLElement {
     } else {
       note.replaceChildren();
     }
+
+    const unknown = section.querySelector('[data-appearance-unknown]');
+    unknown.textContent = m.unknown || '';
+    unknown.hidden = !m.unknown;
 
     const more = section.querySelector('[data-appearance-more]');
     more.hidden = !m.toggleText;

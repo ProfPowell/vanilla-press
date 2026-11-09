@@ -113,6 +113,9 @@ async function build(deps, siteDir) {
  * @throws {ThemeError|BuildError|Error} 400 bad request or unknown theme; 422 R5, or a custom
  *   theme whose file is missing; git errors propagate
  */
+/** Apply's 400 for a theme id the site's Vanilla Breeze copy doesn't have (as the Theme screen says it). */
+const unknownTheme = (name) => `This site's Vanilla Breeze has no theme "${name}". Pick another theme and apply.`;
+
 export async function applyTheme({ ws, body, deps, options = {} }) {
   const { name, mode, adjustments } = checkBody(body);
   const siteDir = ws.siteDir;
@@ -123,7 +126,7 @@ export async function applyTheme({ ws, body, deps, options = {} }) {
   const known = (cat) => Boolean(customEntry) || cat.themes.some((t) => t.id === name);
   let cat = catalog();
   // Without a site VB copy the catalog is VP's: the name is checked after the R5 build.
-  if (cat.source === 'site' && !known(cat)) throw bad(`There is no theme "${name}".`);
+  if (cat.source === 'site' && !known(cat)) throw bad(unknownTheme(name));
   if (customEntry && !existsSync(join(siteDir, 'src', 'assets', 'themes', `${name}.css`))) {
     throw new ThemeError(422, `The custom theme "${customEntry.name}" has no file (src/assets/themes/${name}.css). `
       + 'Save or import it again, or choose another theme.');
@@ -135,7 +138,7 @@ export async function applyTheme({ ws, body, deps, options = {} }) {
     if (!vendored.ok) throw new BuildError(vendored.log);
     cat = catalog();
     if (cat.source !== 'site' && !customEntry && !cat.builtIns.includes(name)) throw new ThemeError(422, NO_VB);
-    if (!known(cat)) throw bad(`There is no theme "${name}".`);
+    if (!known(cat)) throw bad(unknownTheme(name));
   } else {
     await deps.ensureInstalled(siteDir);
   }

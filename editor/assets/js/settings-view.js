@@ -106,14 +106,16 @@ export function pageThemeChoices({ setting, themes } = {}, current = null) {
  * "All N themes" / "Fewer themes" toggle), the "Apply to" scope and the note
  * saying what is stored with the post (`noteKeys`: its key part, set as code).
  * An unsafe `meta.theme` counts as none; an empty `themeScope` as page.
+ * `unknown`: a note when the site's own VB copy (`vb.source` "site") has no theme `meta.theme`.
  * @param {{ theme?: string, themeScope?: string }} meta
  * @param {{ setting: { name?: string, adjust?: string|null }|null,
- *   themes: Array<{ id: string, name?: string, custom?: boolean, only?: string }>, siteId?: string, expanded?: boolean }} data
+ *   themes: Array<{ id: string, name?: string, custom?: boolean, only?: string }>, siteId?: string, expanded?: boolean,
+ *   vb?: { source?: string }|null }} data
  * @returns {{ own: boolean, siteName: string, cards: Array<{ id: string, name: string, pressed: boolean,
  *   only: 'light'|'dark'|null }>, total: number, toggleText: string|null, scope: 'page'|'article',
- *   note: string|null, noteKeys: string|null, adjustHref: string }}
+ *   note: string|null, noteKeys: string|null, unknown: string|null, adjustHref: string }}
  */
-export function appearanceModel(meta, { setting, themes, siteId = '', expanded = false } = {}) {
+export function appearanceModel(meta, { setting, themes, siteId = '', expanded = false, vb = null } = {}) {
   const theme = typeof meta?.theme === 'string' && SAFE_ID.test(meta.theme) ? meta.theme : null;
   const ordered = pageThemeChoices({ setting, themes }, theme);
   const siteTheme = setting?.name || 'default';
@@ -138,6 +140,9 @@ export function appearanceModel(meta, { setting, themes, siteId = '', expanded =
     scope,
     note: noteKeys ? `Saved with this post as ${noteKeys}. The site theme and other pages are unchanged.` : null,
     noteKeys,
+    unknown: theme && vb?.source === 'site' && !ordered.some((t) => t.id === theme)
+      ? `This site's Vanilla Breeze has no theme "${theme}". Pick another theme for this post.`
+      : null,
     adjustHref: `/app/site.html?site=${encodeURIComponent(siteId)}&section=theme`,
   };
 }

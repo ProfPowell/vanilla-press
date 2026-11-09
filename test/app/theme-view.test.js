@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   draftFrom, isDirty, cardModels, schemeControl, pagesModel, vbNote, hueOf, schemeOf, previewSrcdoc, escapeHtml,
   applyBody, deleteRefusalText, applyOutcome, libraryNotice, importTooBig, LIVE_POLL_MS, LIVE_POLL_FOR_MS,
-  baselineOf, applyFailureView, liveStep, LIVE_STOPPED_TEXT, tokenReads,
+  baselineOf, applyFailureView, liveStep, LIVE_STOPPED_TEXT, tokenReads, unknownThemeNote,
 } from '../../app/assets/js/theme-view.js';
 
 const theme = (id, tier, extra = {}) => ({
@@ -277,5 +277,18 @@ describe('theme-view', () => {
     assert.deepEqual(tokenReads({ id: '8bit' }), [['light', 'light'], ['dark', 'dark']]);
     assert.deepEqual(tokenReads({ id: 'night', only: 'dark' }), [['light', 'dark']]);
     assert.deepEqual(tokenReads({ id: 'paper', only: 'light' }), [['light', 'light']]);
+  });
+
+  it('unknownThemeNote: a theme the site\'s Vanilla Breeze does not have (e.g. dropped in a new VB)', () => {
+    const site = { source: 'site' };
+    const themes = THEMES_60.filter((t) => t.id !== 'amber');
+    assert.equal(unknownThemeNote('amber', themes, site),
+      'This site\'s Vanilla Breeze has no theme "amber". Pick another theme and apply.');
+    assert.equal(unknownThemeNote('swiss', themes, site), null);
+    assert.equal(unknownThemeNote('paper', themes, site), null); // custom themes count
+    assert.equal(unknownThemeNote('', themes, site), null);
+    assert.equal(unknownThemeNote(null, themes, site), null);
+    // Without a site copy the list is Vanilla Press's own VB: nothing to say about the site's yet.
+    assert.equal(unknownThemeNote('amber', themes, { source: 'vp' }), null);
   });
 });

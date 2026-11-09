@@ -154,6 +154,16 @@ describe('appearanceModel', () => {
     assert.equal(appearanceModel({ theme: 'Retro!' }, { setting: null, themes: T }).own, false);
   });
 
+  it('a post whose own theme the site\'s Vanilla Breeze does not have gets a note', () => {
+    const m = appearanceModel({ theme: 'amber' }, { setting: { name: 'swiss' }, themes: T, vb: { source: 'site' } });
+    assert.equal(m.own, true);
+    assert.equal(m.unknown, 'This site\'s Vanilla Breeze has no theme "amber". Pick another theme for this post.');
+    assert.equal(m.cards.some((c) => c.pressed), false);
+    assert.equal(appearanceModel({ theme: '8bit' }, { setting: { name: 'swiss' }, themes: T, vb: { source: 'site' } }).unknown, null);
+    assert.equal(appearanceModel({}, { setting: { name: 'swiss' }, themes: T, vb: { source: 'site' } }).unknown, null);
+    assert.equal(appearanceModel({ theme: 'amber' }, { setting: { name: 'swiss' }, themes: T, vb: { source: 'vp' } }).unknown, null);
+  });
+
   it('no theme setting: the site theme is Default', () => {
     assert.equal(appearanceModel({}, { setting: null, themes: T }).siteName, 'Default');
     assert.equal(appearanceModel({}, { setting: null, themes: [] }).siteName, 'Default');

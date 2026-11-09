@@ -4,6 +4,12 @@ The target design for the Vanilla Press app screens and editor: a **quiet writin
 
 Source canvas (interactive, private to Thomas): https://claude.ai/artifact/BRqizim5tK1hHa2Wgv2jba
 
+## Brand
+
+The logo, favicons, app icons, lockups and brand colors are in `brand/` (Bloom Seal 04). Read `brand/README.md` before adding any logo, icon, favicon, splash or social card. Brand colors (`--vp-brand-*`) are for the mark and brand surfaces only; app UI keeps the Vanilla Breeze tokens below. The Sites top bar uses the medium seal next to the Charter "Vanilla Press" name.
+
+Both servers (the app and `vp serve`) serve `brand/` itself at `/brand/`, so this folder stays the only copy. The app pages and the editor link the favicons, the Apple touch icon and `site.webmanifest` from there.
+
 ## How to read the mockups
 
 `mockups/*.dc.html` are Design Component files from the canvas. They are **visual specs, not code to copy**:
@@ -14,14 +20,17 @@ Source canvas (interactive, private to Thomas): https://claude.ai/artifact/BRqiz
 - `canvas.json` is the canvas layout (artboard sizes and order). Ignore it for implementation.
 - Links between mockups (`href="Site.dc.html"`) show navigation: Sites → Site → Editor, rail → Media and Theme, Editor → page theme.
 
-| Mockup | Screen | Replaces |
+All of these screens are built. The table says where each lives now.
+
+| Mockup | Screen | Built as |
 |---|---|---|
-| `Main.dc.html` | Sites list | `app/index.html`, `app/assets/js/sites-page.js` |
-| `Site.dc.html` | Site, Posts section | `app/site.html`, `app/assets/js/site-page.js` |
-| `Media.dc.html` | Site, Media section | the "Coming soon" Media section in `app/site.html`; reuses the media API behind `editor/assets/js/components/media-picker.js` |
-| `Theme.dc.html` | Site, Theme section | the "Coming soon" Theme section; supersedes `editor/assets/js/components/theme-picker.js` as the site-theme UI |
-| `Editor.dc.html` | Editor in site mode | `editor/index.html` header, toolbar, sidebar; `site-mode.js`, `meta-panel.js` |
-| `EditorTheme.dc.html` | Editor, post with its own theme | new: Appearance section of Post settings |
+| `Main.dc.html` | Sites list | `app/index.html`, `app/assets/js/sites-page.js` (step 3a) |
+| `Site.dc.html` | Site, Posts section | `app/site.html`, `app/assets/js/site-page.js`, `posts-view.js` (step 3a) |
+| `Media.dc.html` | Site, Media section | Media section of `app/site.html`, `app/assets/js/media-page.js`, `media-detail.js` (step 3b) |
+| `Theme.dc.html` | Site, Theme section | Theme section of `app/site.html`, `app/assets/js/theme-*.js` (step 4). The editor's old `theme-picker.js` remains only in `vp serve`'s fixture tools |
+| `Editor.dc.html` | Editor in site mode | `editor/index.html`, `site-mode.js`, `format-toolbar.js`, `block-handles.js`, `meta-panel.js` (step 3a) |
+| `EditorTheme.dc.html` | Editor, post with its own theme | Appearance section of Post settings: `components/appearance-section.js`, `pane-theme.js` (step 4) |
+| `Logos.dc.html`, `Seals.dc.html`, `BloomSeal.dc.html`, `BloomSeal04.dc.html` | Logo exploration history | final assets in `brand/` |
 
 ## Direction
 
@@ -47,6 +56,7 @@ Use the custom property, not the hex. Hex values are the mockup's approximations
 | Borders | `--color-border` | `#dedede` |
 | Dividers inside panels | `--color-border-subtle` | `#f1f1f1` / `#ececec` |
 | Primary buttons, links, focus | `--color-primary` / `--color-interactive` | `#2b59c3` |
+| Text on primary buttons | `--color-text-on-primary` | `#ffffff` |
 | "In sync", "Published" | `--color-success`, `--color-success-text` | `#2f8a3e`, `#1d6b2a` |
 | "Not live yet", "No alt text" | `--color-warning-subtle`, `--color-warning-text` | `#fbf3e2`, `#6b4a00` |
 | Unpublish, Delete | `--color-error-text` | `#9b1c1c` |
@@ -86,7 +96,7 @@ Use the custom property, not the hex. Hex values are the mockup's approximations
   - **Adjust <theme>**: main color hue slider, color scheme (Light / Dark / Reader's choice), heading and body font, corners (Theme's / Square / Round). These write token overrides on top of the chosen theme. Deeper edits go through the Theme Composer and come back as an imported `theme.css`.
   - **Pages with their own theme**: list of posts that override the site theme, linking to them.
 - Right column: live **preview** of a real post rendered with the chosen theme and adjustments, Desktop / Phone width toggle. Implement by setting `data-theme` (and override custom properties) on the preview container, as `theme-picker.js` already does for the editor pane.
-- "Apply to site" saves the `theme` config (and overrides) and goes live like Update: build, commit, push.
+- "Apply to site" saves `config/theme.json` (theme, mode, adjustments in `src/assets/themes/vp-site.css`) and goes live like Update: build, commit, push.
 
 ### Editor (`Editor.dc.html`)
 - Top bar: "← Posts", site name, save-state pill ("Saved · not live yet" in warning colors; plain for drafts), then Preview, Post settings toggle (icon button, `aria-pressed`), "⋯" menu, and the primary action (Publish for drafts, Update for published posts).
@@ -107,8 +117,9 @@ Goal: a site has one theme, and any single post can have a full one-off look (e.
 - Appearance section: radio "Site theme" / "Its own theme". With its own theme: a grid of theme cards, a link to adjust it, and "Apply to": "Whole page, header and footer too" or "Article only, keep the site's header and footer".
 - Top bar shows a "Page theme: 8bit" chip.
 - Only the writing area takes the page theme; the app's toolbar, sidebar and buttons stay neutral. The mockup shows the site header strip in the pane so the "Apply to" choice is visible.
-- Proposed storage (names are suggestions): document metadata `theme: "8bit"` and optional `themeScope: "article"`, written to the page's front matter on sync.
-- Proposed rendering: the Cook post layout sets `data-theme` on `<html>` for whole-page scope or on the article element for article scope, and links that theme's stylesheet when it isn't built into `vanilla-breeze.css`. VB theme selectors match any `[data-theme~=id]` element, so scoping works.
+- Storage: document metadata `theme: "8bit"` and `themeScope: "page"` or `"article"` (stored in the `theme` and `theme_scope` columns), written to the page's front matter on sync.
+- Rendering: Cook's built-in theme plugin (Cook 2.6+, `docs-site/src/docs/theme.md` in Cook) reads front matter `theme` and `themeScope`. Page scope sets `data-theme` on `<html>`. Article scope sets it on the first `<article>`, else `<main>`, else falls back to page scope with a warning. The plugin links the theme's stylesheet when it isn't built into `vanilla-breeze.css`. The site theme comes from `config/theme.json`, and its `data-theme` always starts with the theme name (`default vp-site`), because VB reads the first token as the brand.
+- Rulings and known limits: `docs/superpowers/followups/2026-11-08-vp-theme.md`.
 
 ## Placeholders in the mockups
 

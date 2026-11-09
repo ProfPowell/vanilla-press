@@ -1,0 +1,39 @@
+/*
+ * Vanilla Press brand tokens (Bloom Seal 04).
+ *
+ * Brand colors are for the mark, lockups, icons and brand surfaces
+ * (splash, empty states, social cards). App UI keeps using the Vanilla
+ * Breeze semantic tokens (--color-primary, --color-text, ...).
+ * See docs/design/brand/README.md.
+ */
+@layer tokens {
+  :root {
+    /* Ink: the primary seal (C1) */
+    --vp-brand-ink: #23314F;
+    --vp-brand-ink-rim: #141C30;
+
+    /* Vanilla: the reversed seal (C3), used on ink */
+    --vp-brand-vanilla: #ECD89A;
+    --vp-brand-vanilla-rim: #C9AD62;
+
+    /* Bloom */
+    --vp-brand-petal: #F7EEDB;   /* petals on the ink seal; also the "on ink" text color */
+    --vp-brand-eye: #F0C95A;     /* flower centre on the ink seal */
+    --vp-brand-eye-dark: #B07A4A;/* flower centre on the vanilla seal */
+
+    /* Brand surfaces */
+    --vp-brand-paper: #FFFAF0;
+    --vp-brand-parchment: #F4EDE0;
+    --vp-brand-icon-tile: #F3E7B8;
+    --vp-brand-pod: #5A3A24;     /* accent for brand eyebrow labels only */
+
+    /* Type: brand display face for the wordmark and brand headlines only */
+    --vp-brand-font-display: Fraunces, Charter, "Bitstream Charter", Georgia, serif;
+
+    /* Mark sizing */
+    --vp-brand-clear-space: 25%;    /* of the seal's width, on every side */
+    --vp-brand-min-full: 128px;     /* below this use the medium drawing */
+    --vp-brand-min-medium: 32px;    /* below this use the micro drawing */
+    --vp-brand-min-micro: 16px;
+  }
+}

@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vanilla Press — Bloom seal</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#23314f}a:hover{color:#3d2616}
+</style>
+</helmet>
+<div style="width: 1760px; height: 2140px; box-sizing: border-box; padding: 64px; background: #f4ede0; color: #23314f; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column; gap: 44px">
+
+  <svg aria-hidden="true" width="0" height="0" style="position: absolute">
+    <defs>
+      <!-- Wax edges: fill from --wax -->
+      <symbol id="e-scallop" viewBox="0 0 200 200">
+        <g style="fill: var(--wax)">
+          <circle cx="100" cy="100" r="66"></circle>
+          <circle cx="166" cy="100" r="11"></circle><circle cx="161" cy="125.3" r="11"></circle><circle cx="146.7" cy="146.7" r="11"></circle><circle cx="125.3" cy="161" r="11"></circle>
+          <circle cx="100" cy="166" r="11"></circle><circle cx="74.7" cy="161" r="11"></circle><circle cx="53.3" cy="146.7" r="11"></circle><circle cx="39" cy="125.3" r="11"></circle>
+          <circle cx="34" cy="100" r="11"></circle><circle cx="39" cy="74.7" r="11"></circle><circle cx="53.3" cy="53.3" r="11"></circle><circle cx="74.7" cy="39" r="11"></circle>
+          <circle cx="100" cy="34" r="11"></circle><circle cx="125.3" cy="39" r="11"></circle><circle cx="146.7" cy="53.3" r="11"></circle><circle cx="161" cy="74.7" r="11"></circle>
+        </g>
+      </symbol>
+      <symbol id="e-tight" viewBox="0 0 200 200">
+        <g style="fill: var(--wax)">
+          <circle cx="100" cy="100" r="66"></circle>
+          <circle cx="168" cy="100" r="8"></circle><circle cx="165.7" cy="117.6" r="8"></circle><circle cx="158.9" cy="134" r="8"></circle><circle cx="148.1" cy="148.1" r="8"></circle>
+          <circle cx="134" cy="158.9" r="8"></circle><circle cx="117.6" cy="165.7" r="8"></circle><circle cx="100" cy="168" r="8"></circle><circle cx="82.4" cy="165.7" r="8"></circle>
+          <circle cx="66" cy="158.9" r="8"></circle><circle cx="51.9" cy="148.1" r="8"></circle><circle cx="41.1" cy="134" r="8"></circle><circle cx="34.3" cy="117.6" r="8"></circle>
+          <circle cx="32" cy="100" r="8"></circle><circle cx="34.3" cy="82.4" r="8"></circle><circle cx="41.1" cy="66" r="8"></circle><circle cx="51.9" cy="51.9" r="8"></circle>
+          <circle cx="66" cy="41.1" r="8"></circle><circle cx="82.4" cy="34.3" r="8"></circle><circle cx="100" cy="32" r="8"></circle><circle cx="117.6" cy="34.3" r="8"></circle>
+          <circle cx="134" cy="41.1" r="8"></circle><circle cx="148.1" cy="51.9" r="8"></circle><circle cx="158.9" cy="66" r="8"></circle><circle cx="165.7" cy="82.4" r="8"></circle>
+        </g>
+      </symbol>
+      <symbol id="e-poured" viewBox="0 0 200 200">
+        <path d="M100 27 C143 25 174 57 173 99 C175 141 143 174 101 173 C58 175 26 143 27 101 C25 59 57 28 100 27 Z" style="fill: var(--wax)"></path>
+        <path d="M168 128 C176 132 180 140 176 146 C170 146 166 138 164 132 Z" style="fill: var(--wax)"></path>
+      </symbol>
+      <symbol id="e-drip" viewBox="0 0 200 200">
+        <path d="M100 30 C128 28 150 40 162 58 C176 78 174 104 168 124 C162 146 146 164 124 170 C112 174 106 186 100 194 C95 184 92 173 80 170 C56 166 38 150 32 128 C26 106 28 80 40 60 C54 40 74 32 100 30 Z" style="fill: var(--wax)"></path>
+      </symbol>
+      <symbol id="e-disc" viewBox="0 0 200 200">
+        <circle cx="100" cy="100" r="94" style="fill: var(--wax)"></circle>
+      </symbol>
+
+      <symbol id="rim" viewBox="0 0 200 200">
+        <circle cx="100" cy="100" r="55" fill="none" stroke-width="4" style="stroke: var(--rim)"></circle>
+      </symbol>
+      <symbol id="hl" viewBox="0 0 200 200">
+        <path d="M54 78 A50 50 0 0 1 86 48" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="5" stroke-linecap="round"></path>
+      </symbol>
+
+      <!-- Blooms: --petal, --eye, --wax -->
+      <symbol id="b-outline" viewBox="0 0 200 200">
+        <g fill="none" stroke-width="4" stroke-linejoin="round" style="stroke: var(--petal)">
+          <ellipse cx="100" cy="76" rx="9" ry="20"></ellipse>
+          <ellipse cx="100" cy="76" rx="9" ry="20" transform="rotate(72 100 100)"></ellipse>
+          <ellipse cx="100" cy="76" rx="9" ry="20" transform="rotate(144 100 100)"></ellipse>
+          <ellipse cx="100" cy="76" rx="9" ry="20" transform="rotate(216 100 100)"></ellipse>
+          <ellipse cx="100" cy="76" rx="9" ry="20" transform="rotate(288 100 100)"></ellipse>
+        </g>
+        <circle cx="100" cy="100" r="7" style="fill: var(--eye)"></circle>
+      </symbol>
+      <symbol id="b-solid" viewBox="0 0 200 200">
+        <g style="fill: var(--petal)">
+          <ellipse cx="100" cy="74" rx="11" ry="22"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(72 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(144 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(216 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(288 100 100)"></ellipse>
+        </g>
+        <g fill="none" stroke-width="2" stroke-linecap="round" style="stroke: var(--wax)" opacity="0.55">
+          <path d="M100 62 L100 84"></path>
+          <path d="M100 62 L100 84" transform="rotate(72 100 100)"></path>
+          <path d="M100 62 L100 84" transform="rotate(144 100 100)"></path>
+          <path d="M100 62 L100 84" transform="rotate(216 100 100)"></path>
+          <path d="M100 62 L100 84" transform="rotate(288 100 100)"></path>
+        </g>
+        <circle cx="100" cy="100" r="9" style="fill: var(--eye)"></circle>
+        <circle cx="100" cy="100" r="3" style="fill: var(--wax)"></circle>
+      </symbol>
+      <symbol id="b-orchid" viewBox="0 0 200 200">
+        <g stroke-width="2.5" stroke-linejoin="round" style="fill: var(--petal); stroke: var(--wax)">
+          <ellipse cx="100" cy="70" rx="8" ry="27"></ellipse>
+          <ellipse cx="100" cy="70" rx="8" ry="27" transform="rotate(125 100 100)"></ellipse>
+          <ellipse cx="100" cy="70" rx="8" ry="27" transform="rotate(235 100 100)"></ellipse>
+          <ellipse cx="100" cy="78" rx="9" ry="20" transform="rotate(62 100 100)"></ellipse>
+          <ellipse cx="100" cy="78" rx="9" ry="20" transform="rotate(298 100 100)"></ellipse>
+        </g>
+        <path d="M89 98 C86 116 91 130 100 134 C109 130 114 116 111 98 C106 93 94 93 89 98 Z" stroke-width="2.5" style="fill: var(--eye); stroke: var(--wax)"></path>
+        <path d="M95 104 C97 114 103 114 105 104" fill="none" stroke-width="2" style="stroke: var(--wax)"></path>
+      </symbol>
+      <symbol id="b-sprig" viewBox="0 0 200 200">
+        <path d="M104 104 C116 122 128 138 142 148" fill="none" stroke-width="4" stroke-linecap="round" style="stroke: var(--petal)"></path>
+        <path d="M118 126 C130 112 150 112 158 122 C146 134 130 136 118 126 Z" style="fill: var(--petal)" opacity="0.8"></path>
+        <ellipse cx="146" cy="152" rx="6" ry="11" transform="rotate(-50 146 152)" style="fill: var(--eye)"></ellipse>
+        <g style="fill: var(--petal)">
+          <ellipse cx="90" cy="68" rx="10" ry="20"></ellipse>
+          <ellipse cx="90" cy="68" rx="10" ry="20" transform="rotate(72 90 90)"></ellipse>
+          <ellipse cx="90" cy="68" rx="10" ry="20" transform="rotate(144 90 90)"></ellipse>
+          <ellipse cx="90" cy="68" rx="10" ry="20" transform="rotate(216 90 90)"></ellipse>
+          <ellipse cx="90" cy="68" rx="10" ry="20" transform="rotate(288 90 90)"></ellipse>
+        </g>
+        <circle cx="90" cy="90" r="8" style="fill: var(--eye)"></circle>
+        <circle cx="90" cy="90" r="3" style="fill: var(--wax)"></circle>
+      </symbol>
+      <symbol id="b-relief" viewBox="0 0 200 200">
+        <g fill="#000000" fill-opacity="0.32" transform="translate(2.5 2.5)">
+          <ellipse cx="100" cy="74" rx="11" ry="22"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(72 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(144 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(216 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(288 100 100)"></ellipse>
+        </g>
+        <g fill="#ffffff" fill-opacity="0.16" stroke="#ffffff" stroke-opacity="0.5" stroke-width="1.5">
+          <ellipse cx="100" cy="74" rx="11" ry="22"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(72 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(144 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(216 100 100)"></ellipse>
+          <ellipse cx="100" cy="74" rx="11" ry="22" transform="rotate(288 100 100)"></ellipse>
+        </g>
+        <circle cx="100" cy="100" r="9" style="fill: var(--eye)"></circle>
+      </symbol>
+      <symbol id="b-micro" viewBox="0 0 200 200">
+        <g style="fill: var(--petal)">
+          <circle cx="100" cy="62" r="22"></circle>
+          <circle cx="136.1" cy="88.3" r="22"></circle>
+          <circle cx="122.3" cy="130.7" r="22"></circle>
+          <circle cx="77.7" cy="130.7" r="22"></circle>
+          <circle cx="63.9" cy="88.3" r="22"></circle>
+        </g>
+        <circle cx="100" cy="100" r="14" style="fill: var(--eye)"></circle>
+      </symbol>
+    </defs>
+  </svg>
+
+  <header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 32px">
+    <div>
+      <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #5a3a24">Seal 03 · Bloom only</p>
+      <h1 style="margin: 0; font-family: Fraunces, Charter, Georgia, serif; font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -0.02em">The bloom seal</h1>
+      <p style="margin: 14px 0 0; max-width: 860px; font-size: 18px; line-height: 1.5; color: #3b4660">Six ways to draw the flower, four wax edges, six colorways, a drawing tuned for each size, and the mark at work. Wax and flower colors in the top two rows follow the Tweaks panel.</p>
+    </div>
+    <div style="padding: 16px 20px; border-radius: 14px; background: #fffdf8; border: 1.5px solid #e2d6bd; max-width: 380px; font-size: 15px; line-height: 1.45">
+      <strong style="display: block; margin-bottom: 4px; font-family: Fraunces, Charter, Georgia, serif; font-size: 18px">Suggested system</strong>
+      Solid bloom on the 16-bump scallop, in ink, for the logo. The micro drawing for favicons. The outline impression for one-color print.
+    </div>
+  </header>
+
+  <section aria-labelledby="bloom-title" style="display: flex; flex-direction: column; gap: 16px">
+    <h2 id="bloom-title" style="margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #5a3a24">A · The flower</h2>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 22px">
+      <article style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+        <svg role="img" aria-label="Outline bloom seal" width="100%" height="180" viewBox="0 0 200 200" style="--wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-outline"></use><use href="#hl"></use></svg>
+        <h3 style="margin: 0; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">A1 Outline</h3>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">The original: drawn petals, gold eye. Light and delicate.</p>
+      </article>
+      <article style="background: #fffdf8; border: 2px solid #23314f; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+        <svg role="img" aria-label="Solid bloom seal" width="100%" height="180" viewBox="0 0 200 200" style="--wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        <h3 style="margin: 0; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">A2 Solid <span style="font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; color: #5a3a24">· pick</span></h3>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">Filled petals with a pressed vein. Bolder, holds up smaller.</p>
+      </article>
+      <article style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+        <svg role="img" aria-label="Orchid bloom seal" width="100%" height="180" viewBox="0 0 200 200" style="--wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-orchid"></use><use href="#hl"></use></svg>
+        <h3 style="margin: 0; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">A3 True orchid</h3>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">Three sepals, two petals and the trumpet lip of a real vanilla orchid.</p>
+      </article>
+      <article style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+        <svg role="img" aria-label="Bloom with sprig seal" width="100%" height="180" viewBox="0 0 200 200" style="--wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-sprig"></use><use href="#hl"></use></svg>
+        <h3 style="margin: 0; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">A4 Sprig</h3>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">The bloom off-center with a leaf and a bud. More botanical, less icon.</p>
+      </article>
+      <article style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+        <svg role="img" aria-label="Relief bloom seal" width="100%" height="180" viewBox="0 0 200 200" style="--wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-relief"></use><use href="#hl"></use></svg>
+        <h3 style="margin: 0; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">A5 Relief</h3>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">Petals pressed into the wax, lit from the top left. Most like real wax.</p>
+      </article>
+      <article style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+        <svg role="img" aria-label="Hand-pressed bloom seal" width="100%" height="180" viewBox="0 0 200 200" style="--wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-poured"></use><g transform="rotate(14 100 100) translate(3 2)"><use href="#rim"></use><use href="#b-solid"></use></g><use href="#hl"></use></svg>
+        <h3 style="margin: 0; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">A6 Hand-pressed</h3>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">Poured wax, stamp a little off-center and turned. Imperfect on purpose.</p>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="edge-title" style="display: flex; flex-direction: column; gap: 16px">
+    <h2 id="edge-title" style="margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #5a3a24">B · The wax edge (with A2)</h2>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px">
+      <article style="background: #fffdf8; border: 2px solid #23314f; border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 18px">
+        <svg role="img" aria-label="16-bump scallop seal" width="150" height="150" viewBox="0 0 200 200" style="flex: none; --wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        <div><h3 style="margin: 0 0 4px; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">B1 Scallop <span style="font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; color: #5a3a24">· pick</span></h3><p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">16 bumps. Reads as "seal" at any size above 24px.</p></div>
+      </article>
+      <article style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 18px">
+        <svg role="img" aria-label="24-bump scallop seal" width="150" height="150" viewBox="0 0 200 200" style="flex: none; --wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-tight"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        <div><h3 style="margin: 0 0 4px; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">B2 Fine scallop</h3><p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">24 small bumps. More like a coin or a bottle cap.</p></div>
+      </article>
+      <article style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 18px">
+        <svg role="img" aria-label="Poured wax seal" width="150" height="150" viewBox="0 0 200 200" style="flex: none; --wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-poured"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        <div><h3 style="margin: 0 0 4px; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">B3 Poured</h3><p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">A soft round puddle with one overflow. Calm, handmade.</p></div>
+      </article>
+      <article style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 18px">
+        <svg role="img" aria-label="Drip seal" width="150" height="150" viewBox="0 0 200 200" style="flex: none; --wax: {{wax}}; --petal: {{petal}}; --eye: {{eye}}; --rim: {{rim}}"><use href="#e-drip"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        <div><h3 style="margin: 0 0 4px; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">B4 Drip</h3><p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">Uneven edge, one drip. The most character, the least tidy.</p></div>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="color-title" style="display: flex; flex-direction: column; gap: 16px">
+    <h2 id="color-title" style="margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #5a3a24">C · Colorways (A2 + B1)</h2>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 22px">
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+        <div style="height: 200px; border-radius: 16px; background: #fffaf0; border: 1.5px solid #e2d6bd; display: grid; place-items: center"><svg role="img" aria-label="Ink seal" width="150" height="150" viewBox="0 0 200 200" style="--wax: #23314f; --petal: #f7eedb; --eye: #f0c95a; --rim: #141c30"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg></div>
+        <figcaption style="font-size: 14px"><strong>C1 Ink</strong> · primary</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+        <div style="height: 200px; border-radius: 16px; background: #fffaf0; border: 1.5px solid #e2d6bd; display: grid; place-items: center"><svg role="img" aria-label="Pod brown seal" width="150" height="150" viewBox="0 0 200 200" style="--wax: #5a3a24; --petal: #f3e7b8; --eye: #f0c95a; --rim: #3a2416"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg></div>
+        <figcaption style="font-size: 14px"><strong>C2 Pod</strong> · warm</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+        <div style="height: 200px; border-radius: 16px; background: #23314f; display: grid; place-items: center"><svg role="img" aria-label="Vanilla seal" width="150" height="150" viewBox="0 0 200 200" style="--wax: #ecd89a; --petal: #23314f; --eye: #b07a4a; --rim: #c9ad62"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg></div>
+        <figcaption style="font-size: 14px"><strong>C3 Vanilla</strong> · on dark</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+        <div style="height: 200px; border-radius: 16px; background: #ffffff; border: 1.5px solid #e2d6bd; display: grid; place-items: center"><svg role="img" aria-label="Breeze blue seal" width="150" height="150" viewBox="0 0 200 200" style="--wax: #2b59c3; --petal: #ffffff; --eye: #f0c95a; --rim: #1d3f8f"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg></div>
+        <figcaption style="font-size: 14px"><strong>C4 Breeze blue</strong> · app primary</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+        <div style="height: 200px; border-radius: 16px; background: #ffffff; border: 1.5px solid #e2d6bd; display: grid; place-items: center"><svg role="img" aria-label="One-color black seal" width="150" height="150" viewBox="0 0 200 200" style="--wax: #121212; --petal: #ffffff; --eye: #ffffff; --rim: #121212"><use href="#e-scallop"></use><use href="#b-solid"></use></svg></div>
+        <figcaption style="font-size: 14px"><strong>C5 One color</strong> · stamps, fax, laser</figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+        <div style="height: 200px; border-radius: 16px; background: #fffaf0; border: 1.5px solid #e2d6bd; display: grid; place-items: center"><svg role="img" aria-label="Outline impression seal" width="150" height="150" viewBox="0 0 200 200" style="--wax: transparent; --petal: #23314f; --eye: #23314f; --rim: #23314f"><circle cx="100" cy="100" r="70" fill="none" stroke="#23314f" stroke-width="4"></circle><use href="#rim"></use><use href="#b-outline"></use></svg></div>
+        <figcaption style="font-size: 14px"><strong>C6 Impression</strong> · emboss, line</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="opt-title" style="display: flex; flex-direction: column; gap: 16px">
+    <h2 id="opt-title" style="margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #5a3a24">D · Drawn for each size</h2>
+    <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1.3fr; gap: 22px">
+      <div style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 20px">
+        <svg role="img" aria-label="Large seal" width="160" height="160" viewBox="0 0 200 200" style="flex: none; --wax: #23314f; --petal: #f7eedb; --eye: #f0c95a; --rim: #141c30"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        <div><h3 style="margin: 0 0 4px; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">D1 Large</h3><p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">128px and up. Rim, veins, highlight.</p></div>
+      </div>
+      <div style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px">
+        <svg role="img" aria-label="Medium seal" width="64" height="64" viewBox="0 0 200 200" style="flex: none; --wax: #23314f; --petal: #f7eedb; --eye: #f0c95a; --wax-x: 0"><use href="#e-scallop"></use><use href="#b-solid"></use></svg>
+        <svg aria-hidden="true" width="40" height="40" viewBox="0 0 200 200" style="flex: none; --wax: #23314f; --petal: #f7eedb; --eye: #f0c95a"><use href="#e-scallop"></use><use href="#b-solid"></use></svg>
+        <div><h3 style="margin: 0 0 4px; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">D2 Medium</h3><p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">32–96px. No rim or shine.</p></div>
+      </div>
+      <div style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px">
+        <svg role="img" aria-label="Micro seal" width="32" height="32" viewBox="0 0 200 200" style="flex: none; --wax: #23314f; --petal: #f7eedb; --eye: #f0c95a"><use href="#e-disc"></use><use href="#b-micro"></use></svg>
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 200 200" style="flex: none; --wax: #23314f; --petal: #f7eedb; --eye: #f0c95a"><use href="#e-disc"></use><use href="#b-micro"></use></svg>
+        <div><h3 style="margin: 0 0 4px; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">D3 Micro</h3><p style="margin: 0; font-size: 14px; line-height: 1.4; color: #3b4660">16–24px. Plain disc, five round petals.</p></div>
+      </div>
+      <div style="background: #fffdf8; border: 1.5px solid #e2d6bd; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: center; gap: 12px">
+        <h3 style="margin: 0; font-family: Fraunces, Charter, Georgia, serif; font-size: 20px">At 16px, side by side</h3>
+        <div style="display: flex; align-items: center; gap: 22px; font-size: 13px; color: #6a5a44">
+          <span style="display: flex; align-items: center; gap: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 200 200" style="--wax: #23314f; --petal: #f7eedb; --eye: #f0c95a; --rim: #141c30"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use></svg>Large, scaled down</span>
+          <span style="display: flex; align-items: center; gap: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 200 200" style="--wax: #23314f; --petal: #f7eedb; --eye: #f0c95a"><use href="#e-disc"></use><use href="#b-micro"></use></svg>Micro drawing</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="use-title" style="display: flex; flex-direction: column; gap: 16px">
+    <h2 id="use-title" style="margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #5a3a24">E · Lockups and use</h2>
+    <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr; gap: 22px">
+      <div style="height: 200px; border-radius: 16px; background: #fffdf8; border: 1.5px solid #e2d6bd; display: flex; align-items: center; justify-content: center; gap: 18px">
+        <svg aria-hidden="true" width="96" height="96" viewBox="0 0 200 200" style="--wax: #23314f; --petal: #f7eedb; --eye: #f0c95a; --rim: #141c30"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        <span style="font-family: Fraunces, Charter, Georgia, serif; font-size: 46px; font-weight: 700; letter-spacing: -0.02em">Vanilla Press</span>
+      </div>
+      <div style="height: 200px; border-radius: 16px; background: #23314f; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px">
+        <svg aria-hidden="true" width="84" height="84" viewBox="0 0 200 200" style="--wax: #ecd89a; --petal: #23314f; --eye: #b07a4a; --rim: #c9ad62"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        <span style="font-family: Fraunces, Charter, Georgia, serif; font-size: 28px; font-weight: 700; color: #f7eedb">Vanilla Press</span>
+      </div>
+      <div style="height: 200px; border-radius: 16px; background: #fffdf8; border: 1.5px solid #e2d6bd; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px">
+        <div style="width: 120px; height: 120px; border-radius: 28px; background: #f3e7b8; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px #d9c78c">
+          <svg aria-hidden="true" width="96" height="96" viewBox="0 0 200 200" style="--wax: #23314f; --petal: #f7eedb; --eye: #f0c95a; --rim: #141c30"><use href="#e-scallop"></use><use href="#rim"></use><use href="#b-solid"></use><use href="#hl"></use></svg>
+        </div>
+        <span style="font-size: 13px; color: #6a5a44">App icon</span>
+      </div>
+      <div style="height: 200px; border-radius: 16px; background: #ffffff; border: 1.5px solid #e2d6bd; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 16px">
+        <div style="display: flex; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid #f1f1f1">
+          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 200 200" style="--wax: #23314f; --petal: #f7eedb; --eye: #f0c95a"><use href="#e-scallop"></use><use href="#b-solid"></use></svg>
+          <span style="font-family: Charter, 'Bitstream Charter', Georgia, serif; font-weight: 700; font-size: 18px; color: #121212">Vanilla Press</span>
+        </div>
+        <span style="display: inline-flex; align-self: flex-start; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: #eef5ec; color: #1d6b2a; font-size: 14px; font-weight: 600">
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 200 200" style="--wax: #2f8a3e; --petal: #ffffff; --eye: #ffffff"><use href="#e-scallop"></use><use href="#b-solid"></use></svg>Published
+        </span>
+        <span style="font-size: 13px; color: #6a5a44">Top bar, and a "Published" badge</span>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"wax":{"editor":"color","default":"#23314f","options":["#23314f","#5a3a24","#2b59c3","#121212"]},"petal":{"editor":"color","default":"#f7eedb","options":["#f7eedb","#f3e7b8","#ffffff"]},"eye":{"editor":"color","default":"#f0c95a","options":["#f0c95a","#b07a4a","#f7eedb"]},"$preview":{"width":1760,"height":2140}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const wax = this.props.wax ?? '#23314f';
+    const rims = { '#23314f': '#141c30', '#5a3a24': '#3a2416', '#2b59c3': '#1d3f8f', '#121212': '#000000' };
+    return {
+      wax,
+      petal: this.props.petal ?? '#f7eedb',
+      eye: this.props.eye ?? '#f0c95a',
+      rim: rims[wax.toLowerCase()] || 'rgba(0,0,0,0.35)'
+    };
+  }
+}
+</script>
+</body>
+</html>

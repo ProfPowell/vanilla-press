@@ -22,12 +22,12 @@ const MARK_KEY = {
 
 /** Patterns tried in order; each must end at the end of the text. Group 1 is the inner text. */
 const PATTERNS = [
-  { mark: 'link', re: /(?<!!)\[([^\][]+)\]\(([^)\s]+)\)$/ },
+  { mark: 'link', re: /(?<!!)\[([^\s\][](?:[^\][]*[^\s\][])?)\]\(([^)\s]+)\)$/ },
   { mark: 'strong', re: /\*\*([^\s*](?:[^*]*[^\s*])?)\*\*$/ },
   { mark: 'strong', re: /(?<!\w)__([^\s_](?:[^_]*[^\s_])?)__$/ },
   { mark: 'strikethrough', re: /~~([^\s~](?:[^~]*[^\s~])?)~~$/ },
   { mark: 'highlight', re: /==([^\s=](?:[^=]*[^\s=])?)==$/ },
-  { mark: 'code', re: /`([^`]+)`$/ },
+  { mark: 'code', re: /`([^\s`](?:[^`]*[^\s`])?)`$/ },
   { mark: 'em', re: /(?<![*\w])\*([^\s*](?:[^*]*[^\s*])?)\*$/ },
   { mark: 'em', re: /(?<![_\w])_([^\s_](?:[^_]*[^\s_])?)_$/ },
 ];

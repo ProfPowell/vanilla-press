@@ -21,7 +21,9 @@ describe('matchInlineMark', () => {
   for (const [input, want] of cases) {
     it(`matches ${JSON.stringify(input)}`, () => assert.deepEqual(matchInlineMark(input), want));
   }
-  for (const input of ['[x](javascript:alert(1))', 'snake_case_', 'a_b_', '2 * 3 *', '** x**', '****', '**bold*', '***']) {
+  for (const input of ['[x](javascript:alert(1))', 'snake_case_', 'a_b_', '2 * 3 *', '** x**', '****', '**bold*', '***',
+    '` x `', '`a `', '` a`', 'use ` to quote and then `', '[ x ](u.com)', '[x ](u.com)', '[ x](u.com)',
+    '** a**', '**a **', '__ a__', '__a __', '* a*', '*a *', '_ a_', '_a _', '~~ a~~', '~~a ~~', '== a==', '==a ==']) {
     it(`ignores ${JSON.stringify(input)}`, () => assert.equal(matchInlineMark(input), null));
   }
 });

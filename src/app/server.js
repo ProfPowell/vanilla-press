@@ -23,6 +23,7 @@ import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git
 import { migrateVpTheme } from './site-theme.js';
 import { mountThemeRoutes } from './theme-routes.js';
 import { findSiteVb } from '../themes/site-vb.js';
+import { HOST, listen } from '../server/listen.js';
 import { startProgramServer } from '../programs/program-server.js';
 import { createLiveMedia } from './live-media.js';
 import {
@@ -42,8 +43,6 @@ import { packageDir } from '../components/describe.js';
 import { setComponent, componentsState, enabledComponents, catalogComponents, ComponentError } from './components.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const HOST = '127.0.0.1';
-const PORT_ATTEMPTS = 20;
 const SITE_PATH = /^\/api\/sites\/([^/]+)(?:\/|$)/;
 /** `/sites/<id>/media/<file>`: a site's uploads (its `src/media`), for the editor to display. */
 const SITE_MEDIA_PATH = /^\/sites\/([^/]+)\/media\//;
@@ -98,31 +97,6 @@ function createLock() {
     tail = run.catch(() => {});
     return run;
   };
-}
-
-/**
- * Listen on `HOST`, trying `port`, `port+1`, ... (port 0: the OS picks, no fallback).
- * @param {import('node:http').Server} server
- * @param {number} port
- * @returns {Promise<number>} the bound port
- */
-async function listen(server, port) {
-  const attempts = port === 0 ? 1 : PORT_ATTEMPTS;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      await new Promise((resolve, reject) => {
-        const onError = (err) => { server.off('listening', onListening); reject(err); };
-        const onListening = () => { server.off('error', onError); resolve(); };
-        server.once('error', onError);
-        server.once('listening', onListening);
-        server.listen(port + i, HOST);
-      });
-      return server.address().port;
-    } catch (err) {
-      if (err.code !== 'EADDRINUSE' || i === attempts - 1) throw err;
-    }
-  }
-  throw new Error('unreachable');
 }
 
 /**

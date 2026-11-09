@@ -16,9 +16,8 @@ import { join, sep } from 'node:path';
 import { readPrograms, effectiveSandbox, SLUG } from './config.js';
 import { serveFile } from '../server/static.js';
 import { checkRequest } from '../server/guard.js';
+import { HOST, listen } from '../server/listen.js';
 
-const HOST = '127.0.0.1';
-const PORT_ATTEMPTS = 20;
 export const SANDBOX_CSP = 'sandbox allow-scripts allow-forms allow-popups allow-pointer-lock allow-modals';
 
 const BASE_HEADERS = {
@@ -151,22 +150,7 @@ export async function startProgramServer({ port = 0, resolveSite }) {
     }
   });
 
-  const attempts = port === 0 ? 1 : PORT_ATTEMPTS;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      await new Promise((resolve, reject) => {
-        const onError = (err) => { server.off('listening', onListening); reject(err); };
-        const onListening = () => { server.off('error', onError); resolve(); };
-        server.once('error', onError);
-        server.once('listening', onListening);
-        server.listen(port + i, HOST);
-      });
-      break;
-    } catch (err) {
-      if (err.code !== 'EADDRINUSE' || i === attempts - 1) throw err;
-    }
-  }
-  bound = server.address().port;
+  bound = await listen(server, port);
 
   const close = () => new Promise((resolve) => {
     server.close(() => resolve());

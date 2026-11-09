@@ -23,9 +23,11 @@ import { readVpId } from '../sync/front-matter.js';
  * next call tries again).
  * @param {string} siteDir
  * @param {LiveMediaGit} git
+ * @param {{ refs?: (html: string) => Iterable<string> }} [options] - refs: the map's keys
+ *   for one page (default: the media files it shows; programs pass their own)
  * @returns {() => Promise<Map<string, Array<{ path: string, vpId: string|null }>>>}
  */
-export function createLiveMedia(siteDir, git) {
+export function createLiveMedia(siteDir, git, { refs = liveMediaRefs } = {}) {
   let cached = null; // { sha, promise }
   let blobs = new Map(); // oid -> { refs: string[], vpId }
 
@@ -41,7 +43,7 @@ export function createLiveMedia(siteDir, git) {
       if (!info) {
         if (!texts.has(oid)) throw new Error(`git has no page ${path}`);
         const text = texts.get(oid);
-        info = { refs: [...liveMediaRefs(text)], vpId: readVpId(text) };
+        info = { refs: [...refs(text)], vpId: readVpId(text) };
       }
       seen.set(oid, info);
       for (const file of info.refs) {

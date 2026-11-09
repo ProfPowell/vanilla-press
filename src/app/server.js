@@ -22,6 +22,9 @@ import * as defaultSiteProcess from './site-process.js';
 import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git.js';
 import { migrateVpTheme } from './site-theme.js';
 import { mountThemeRoutes } from './theme-routes.js';
+import { mountProgramRoutes } from './program-routes.js';
+import { clearTmp } from '../programs/import.js';
+import { createLivePrograms } from '../programs/usage.js';
 import { findSiteVb } from '../themes/site-vb.js';
 import { HOST, listen } from '../server/listen.js';
 import { startProgramServer } from '../programs/program-server.js';
@@ -76,7 +79,8 @@ const ACTION_PATH = /\/documents\/[^/]+\/(publish|update|unpublish)$/;
 /**
  * A write that changes a site's files (document create, save, reload, delete, sync;
  * media upload, alt edit, delete): it waits for a running publish/update/unpublish
- * (Ruling O). Theme library writes take the locks themselves (theme-routes.js).
+ * (Ruling O). Theme library and program writes take the locks themselves
+ * (theme-routes.js, program-routes.js).
  * @param {string} method
  * @param {string} pathname
  * @returns {boolean}
@@ -186,6 +190,12 @@ export async function startApp({
       });
       migrate();
       syncSite();
+      // Stages left by a run that stopped mid-copy: no program route is mounted yet, so none is in progress.
+      try {
+        clearTmp(ws.siteDir);
+      } catch (err) {
+        console.warn(`${site.name || site.id}: could not clear .vp/tmp: ${err.message}`);
+      }
       const prefix = `/api/sites/${site.id}`;
       const router = createRouter();
       const roots = { siteDir: ws.siteDir, vpRoot, catalog };
@@ -211,6 +221,12 @@ export async function startApp({
           ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
           commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus, readHead: git.readHead,
         },
+      });
+      // git is the override Proxy, read on each use. programsUrl is read per request: the
+      // program server binds after the app server.
+      mountProgramRoutes(router, prefix, {
+        site, ws, db, backup, writes, deps: git, liveRefs: createLivePrograms(ws.siteDir, git),
+        programsUrl: () => programsUrl,
       });
       const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);
@@ -555,6 +571,8 @@ export async function startApp({
     }
   });
 
+  /** The program server's origin, once it is up (it binds after the app server). */
+  let programsUrl = null;
   const bound = await listen(server, port);
 
   // The program server (R1): up before startApp returns, so programsUrl is known when sites mount
@@ -572,7 +590,7 @@ export async function startApp({
     await new Promise((resolve) => { server.close(() => resolve()); });
     throw err;
   }
-  const programsUrl = programs.url;
+  programsUrl = programs.url;
 
   // However the process ends (a second Ctrl-C, process.exit, a crash), no detached preview survives it.
   const killPreviews = () => previews.killAllSync?.();

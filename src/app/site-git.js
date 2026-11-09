@@ -194,6 +194,16 @@ export function libraryMessage(text) {
 }
 
 /**
+ * Commit message of a program change: `Programs: <what>`, with no CI skip marker
+ * (the push rebuilds the live site, so the change goes live).
+ * @param {string} text
+ * @returns {string}
+ */
+export function programMessage(text) {
+  return `Programs: ${commitTitle([text])}`;
+}
+
+/**
  * @typedef {{
  *   pending: number, lastPushAt: string|null, error: string|null, connected: boolean,
  *   lastPushKind: 'draft'|'publish'|null,

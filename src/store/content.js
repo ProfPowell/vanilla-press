@@ -253,3 +253,36 @@ export function getAllPublished(db) {
 export function getAllDocuments(db) {
   return db.prepare('SELECT * FROM documents').all().map(rowToDocument);
 }
+
+/**
+ * The folder a program was added from, or null.
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} area
+ * @param {string} slug
+ * @returns {string|null}
+ */
+export function getProgramSource(db, area, slug) {
+  const row = db.prepare('SELECT source FROM program_sources WHERE area = ? AND slug = ?').get(area, slug);
+  return row ? row.source : null;
+}
+
+/**
+ * Remember the folder a program was added from (replacing any earlier one).
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} area
+ * @param {string} slug
+ * @param {string} source
+ */
+export function setProgramSource(db, area, slug, source) {
+  db.prepare('INSERT OR REPLACE INTO program_sources (area, slug, source) VALUES (?, ?, ?)').run(area, slug, source);
+}
+
+/**
+ * Forget a program's source folder.
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} area
+ * @param {string} slug
+ */
+export function deleteProgramSource(db, area, slug) {
+  db.prepare('DELETE FROM program_sources WHERE area = ? AND slug = ?').run(area, slug);
+}

@@ -82,3 +82,11 @@ CREATE TABLE IF NOT EXISTS config (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Where each program was added from (Update from source): local to this computer, never in the repo
+CREATE TABLE IF NOT EXISTS program_sources (
+  area   TEXT NOT NULL,
+  slug   TEXT NOT NULL,
+  source TEXT NOT NULL,
+  PRIMARY KEY (area, slug)
+);

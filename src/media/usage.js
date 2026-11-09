@@ -81,7 +81,7 @@ const HTML_URL_ATTR = /(?:^|[\s"'/])(src|href|poster|content|srcset)\s*=\s*(?:"(
 
 const ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
 /** Decode the character references an attribute value may hold. */
-function decodeEntities(text) {
+export function decodeEntities(text) {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, ref) => {
     if (ref[0] === '#') {
       const code = ref[1] === 'x' || ref[1] === 'X' ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);

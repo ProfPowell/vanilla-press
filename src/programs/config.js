@@ -9,7 +9,7 @@ export const PROGRAMS_FILE = 'config/programs.json';
 export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RESERVED_AREAS = ['media', 'assets', 'layouts', 'includes'];
 const AREA_KEYS = ['path', 'title', 'sandbox'];
-const CARD_KEYS = ['area', 'slug', 'title', 'description', 'date', 'tags', 'image', 'listed', 'sandbox', 'previewClass', 'order'];
+export const CARD_KEYS = ['area', 'slug', 'title', 'description', 'date', 'tags', 'image', 'listed', 'sandbox', 'previewClass', 'order'];
 
 export class ProgramError extends Error {
   constructor(status, message, body = {}) {

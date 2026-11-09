@@ -150,6 +150,7 @@ export async function stageFromFolder(siteDir, source) {
 function checkUploadPaths(files) {
   const names = new Set();
   const folded = new Map();
+  const spelling = new Map();
   const dirs = new Set();
   for (const { rel } of files) {
     if (typeof rel !== 'string' || !rel || rel.startsWith('/') || rel.includes('\\')) {
@@ -164,10 +165,18 @@ function checkUploadPaths(files) {
     }
     if (names.has(rel)) throw refuse(`${rel} appears twice. ${NOTHING_COPIED}`, rel);
     names.add(rel);
-    const key = fold(rel);
-    if (folded.has(key)) throw refuse(`${folded.get(key)} and ${rel} differ only by case. macOS treats them as the same file, so nothing was copied.`, rel);
-    folded.set(key, rel);
-    for (let i = 1; i < parts.length; i++) dirs.add(fold(parts.slice(0, i).join('/')));
+    // Every folder prefix and the file itself: one folded path, one spelling.
+    for (let i = 1; i <= parts.length; i++) {
+      const exact = parts.slice(0, i).join('/');
+      const key = fold(exact);
+      const seen = spelling.get(key);
+      if (seen !== undefined && seen !== exact) {
+        throw refuse(`${seen} and ${exact} differ only by case. macOS treats them as the same file, so nothing was copied.`, rel);
+      }
+      spelling.set(key, exact);
+      if (i < parts.length) dirs.add(key);
+    }
+    folded.set(fold(rel), rel);
   }
   for (const [key, rel] of folded) {
     if (dirs.has(key)) throw refuse(`${rel} is both a file and a folder. ${NOTHING_COPIED}`, rel);

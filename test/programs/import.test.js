@@ -303,6 +303,8 @@ test('stageFromUpload refuses paths that escape, duplicates and file/folder clas
   }
   await refusal(stageFromUpload(site, [f('index.html'), f('index.html')]), 422, /twice|duplicate|same/i);
   await refusal(stageFromUpload(site, [f('index.html'), f('A.txt'), f('a.txt')]), 422, /differ only by case/i);
+  await refusal(stageFromUpload(site, [f('index.html'), f('Img/a.png'), f('img/b.png')]), 422, /differ only by case/i);
+  await refusal(stageFromUpload(site, [f('index.html'), f('A/x'), f('a/y')]), 422, /differ only by case/i);
   await refusal(stageFromUpload(site, [f('index.html'), f('a'), f('a/b')]), 422, /file and a folder|clash|both/i);
   assert.deepEqual(stageDirs(site), []);
   assert.ok(!existsSync(join(site, 'evil.txt')));

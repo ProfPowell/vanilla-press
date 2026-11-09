@@ -26,6 +26,26 @@ describe('checkRequest', () => {
   });
 });
 
+describe('checkRequest fetch metadata on the API', () => {
+  const host = '127.0.0.1:3007';
+  const get = (url, site) => checkRequest({ method: 'GET', url, headers: { host, ...(site ? { 'sec-fetch-site': site } : {}) } }, 3007);
+  it('refuses cross-site and same-site fetches of /api/', () => {
+    assert.equal(get('/api/sites', 'same-site'), false);
+    assert.equal(get('/api/sites', 'cross-site'), false);
+    assert.equal(get('/api/sites/s1/documents?x=1', 'same-site'), false);
+  });
+  it('allows same-origin, user-initiated (none) and absent Sec-Fetch-Site on /api/', () => {
+    assert.equal(get('/api/sites', 'same-origin'), true);
+    assert.equal(get('/api/sites', 'none'), true);
+    assert.equal(get('/api/sites'), true);
+  });
+  it('refuses a write too, and leaves pages alone', () => {
+    assert.equal(checkRequest({ method: 'POST', url: '/api/sites', headers: { host, 'sec-fetch-site': 'same-site' } }, 3007), false);
+    assert.equal(get('/app/index.html', 'cross-site'), true);
+    assert.equal(get('/apis', 'cross-site'), true);
+  });
+});
+
 describe('router content types', () => {
   it('rejects a body that is not strictly application/json or multipart with 415', async () => {
     const router = createRouter();

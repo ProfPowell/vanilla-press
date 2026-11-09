@@ -601,5 +601,14 @@ export async function startApp({
     await close();
   }
 
-  return { server, port: bound, url: `http://${HOST}:${bound}`, close, shutdown };
+  /**
+   * The GET-capable route tables, for the test that audits them: the app router's, and
+   * the (opened) site router's for a site id. Read-only `{ method, pattern }` lists.
+   */
+  async function routeTables(siteId) {
+    const site = getSite(siteId, { env });
+    return { app: app.routes(), site: site ? (await getOpen(site)).router.routes() : [] };
+  }
+
+  return { server, port: bound, url: `http://${HOST}:${bound}`, close, shutdown, routeTables };
 }

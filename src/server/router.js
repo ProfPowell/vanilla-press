@@ -9,10 +9,10 @@
 
 /**
  * Create a router.
- * @returns {{ add: Function, handle: Function }}
+ * @returns {{ add: Function, handle: Function, routes: Function }}
  */
 export function createRouter() {
-  const routes = [];
+  const table = [];
 
   /**
    * Register a route.
@@ -26,8 +26,9 @@ export function createRouter() {
       paramNames.push(name);
       return '([^/]+)';
     });
-    routes.push({
+    table.push({
       method: method.toUpperCase(),
+      pattern,
       regex: new RegExp(`^${regex}$`),
       paramNames,
       handler,
@@ -45,7 +46,7 @@ export function createRouter() {
     const pathname = url.pathname;
     const method = req.method.toUpperCase();
 
-    for (const route of routes) {
+    for (const route of table) {
       if (route.method !== method) continue;
       const match = pathname.match(route.regex);
       if (!match) continue;
@@ -81,7 +82,15 @@ export function createRouter() {
     return false;
   }
 
-  return { add, handle };
+  /**
+   * The registered routes, read-only: `{ method, pattern }` for each, in order.
+   * @returns {Array<{ method: string, pattern: string }>}
+   */
+  function routes() {
+    return table.map(({ method, pattern }) => ({ method, pattern }));
+  }
+
+  return { add, handle, routes };
 }
 
 /**

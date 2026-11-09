@@ -6,11 +6,16 @@
  * - the Host header must be `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding);
  * - a request other than GET/HEAD/OPTIONS must have no Origin, or our own (CSRF).
  *
+ * - an `/api/` request the browser marks `Sec-Fetch-Site: cross-site` or `same-site` is
+ *   refused: a program served from another port of this machine is same-site, and must
+ *   not reach the API (absent, `same-origin` and `none` pass; pages are not the API).
+ *
  * Strict JSON content types are enforced in the router (see router.js).
  *
  * @module server/guard
  */
 
+const API_PREFIX = '/api/';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /** @param {number} port */
@@ -20,7 +25,7 @@ function allowedHosts(port) {
 
 /**
  * Whether a request may be handled.
- * @param {{ method?: string, headers: Object<string, string|undefined> }} req
+ * @param {{ method?: string, url?: string, headers: Object<string, string|undefined> }} req
  * @param {number} port - the port the server is bound to
  * @returns {boolean}
  */
@@ -28,6 +33,10 @@ export function checkRequest(req, port) {
   const hosts = allowedHosts(port);
   const host = String(req.headers.host || '').toLowerCase();
   if (!hosts.includes(host)) return false;
+  if (String(req.url || '').startsWith(API_PREFIX)) {
+    const site = String(req.headers['sec-fetch-site'] || '').toLowerCase();
+    if (site === 'cross-site' || site === 'same-site') return false;
+  }
   const method = String(req.method || 'GET').toUpperCase();
   if (SAFE_METHODS.has(method)) return true;
   const origin = req.headers.origin;

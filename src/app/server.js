@@ -23,6 +23,7 @@ import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git
 import { migrateVpTheme } from './site-theme.js';
 import { mountThemeRoutes } from './theme-routes.js';
 import { findSiteVb } from '../themes/site-vb.js';
+import { startProgramServer } from '../programs/program-server.js';
 import { createLiveMedia } from './live-media.js';
 import {
   setPublished, BuildError, PublishRejectedError, checkLive, readSiteUrl, publicUrl, builtPage,
@@ -138,7 +139,7 @@ async function listen(server, port) {
  * }} [options] - git and siteProcess override the real functions one by one (for tests);
  *   backup injects the draft-backup timers; fetch is used by the live check;
  *   components: the component catalog and the VP root its packages (and npm ranges) come from.
- * @returns {Promise<{ server: import('node:http').Server, port: number, url: string,
+ * @returns {Promise<{ server: import('node:http').Server, port: number, url: string, programsUrl: string,
  *   close: () => Promise<void>, shutdown: () => Promise<void> }>} shutdown: for quitting the
  *   app (the CLI registers it for SIGINT/SIGTERM/SIGHUP): flushes every open site's backup, then
  *   stops previews and closes. close stops without flushing.
@@ -582,15 +583,35 @@ export async function startApp({
 
   const bound = await listen(server, port);
 
+  // The program server (R1): up before startApp returns, so programsUrl is known when sites mount
+  // routes. Its own origin; any registered site works, not only opened ones.
+  let programs;
+  try {
+    programs = await startProgramServer({
+      port: port === 0 ? 0 : bound + 1,
+      resolveSite: (siteId) => {
+        const site = getSite(siteId, { env });
+        return site ? { siteDir: site.path } : null;
+      },
+    });
+  } catch (err) {
+    await new Promise((resolve) => { server.close(() => resolve()); });
+    throw err;
+  }
+  const programsUrl = programs.url;
+
   // However the process ends (a second Ctrl-C, process.exit, a crash), no detached preview survives it.
   const killPreviews = () => previews.killAllSync?.();
   process.on('exit', killPreviews);
 
   async function close() {
-    await new Promise((resolve) => {
-      server.close(() => resolve());
-      server.closeAllConnections?.();
-    });
+    await Promise.all([
+      new Promise((resolve) => {
+        server.close(() => resolve());
+        server.closeAllConnections?.();
+      }),
+      programs.close(),
+    ]);
     await Promise.all([...new Set([...open.keys(), ...opening.keys()])].map((id) => closeSite(id)));
     await previews.stopAll();
     process.off('exit', killPreviews); // only once every preview is down
@@ -610,5 +631,5 @@ export async function startApp({
     return { app: app.routes(), site: site ? (await getOpen(site)).router.routes() : [] };
   }
 
-  return { server, port: bound, url: `http://${HOST}:${bound}`, close, shutdown, routeTables };
+  return { server, port: bound, url: `http://${HOST}:${bound}`, programsUrl, close, shutdown, routeTables };
 }

@@ -268,6 +268,9 @@ export function initEditor() {
       component_blocks: (node, view, getPos) => new ComponentView(node, view, getPos),
       component_inline: (node, view, getPos) => new InlineComponentView(node, view, getPos),
     },
+    // Keep the line being typed clear of the window's top and bottom edges
+    scrollMargin: { top: 80, bottom: 120, left: 0, right: 0 },
+    scrollThreshold: { top: 80, bottom: 120, left: 0, right: 0 },
     dispatchTransaction(transaction) {
       const oldDoc = editorView.state.doc;
       const newState = editorView.state.apply(transaction);

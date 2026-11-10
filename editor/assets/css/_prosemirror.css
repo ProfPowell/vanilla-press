@@ -12,6 +12,9 @@
   color: var(--color-text);
   white-space: pre-wrap;
   word-wrap: break-word;
+  /* Room to write: the last line can scroll up off the bottom edge */
+  padding-block-end: 40vh;
+  padding-block-end: 40dvh;
 }
 
 /* The meta line above the title (a widget, not part of the document) */

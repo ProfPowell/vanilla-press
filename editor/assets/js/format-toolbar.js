@@ -11,6 +11,7 @@ import { Plugin, TextSelection } from 'prosemirror-state';
 import { formatItems, wrapInComponent, linkHref, setLink, removeLink } from './menu.js';
 import { initialAttrs } from './component-model.js';
 import { normalizeLinkUrl } from './link-url.js';
+import { placePopover } from './popover-place.js';
 
 export { normalizeLinkUrl };
 
@@ -24,11 +25,12 @@ export { normalizeLinkUrl };
  * @returns {{ top: number, left: number, placement: 'above'|'below' }}
  */
 export function toolbarPosition(sel, size, viewport, gap = 8) {
-  const above = sel.top - size.height - gap >= 0;
-  const top = above ? sel.top - size.height - gap : sel.bottom + gap;
   const centered = (sel.left + sel.right) / 2 - size.width / 2;
-  const left = Math.max(gap, Math.min(centered, viewport.width - size.width - gap));
-  return { top, left, placement: above ? 'above' : 'below' };
+  const p = placePopover(
+    { top: sel.top, bottom: sel.bottom, left: centered, right: centered },
+    size, viewport, { gap, margin: 8, prefer: 'above' },
+  );
+  return { top: p.top, left: p.left, placement: p.side };
 }
 
 /**

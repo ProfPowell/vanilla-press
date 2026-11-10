@@ -9,6 +9,8 @@
  * @module editor/components/more-menu
  */
 
+import { placePopover } from '../popover-place.js';
+
 const DOTS = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">'
   + '<circle cx="5" cy="12" r="1.75"></circle><circle cx="12" cy="12" r="1.75"></circle>'
   + '<circle cx="19" cy="12" r="1.75"></circle></svg>';
@@ -88,7 +90,28 @@ export class MoreMenu extends HTMLElement {
     if (!items.length) return;
     this.menu.hidden = false;
     this.button.setAttribute('aria-expanded', 'true');
-    items.at(at).focus();
+    this.place();
+    this.onReflow = (e) => { if (!e || e.target !== this.menu) this.place(); };
+    window.addEventListener('scroll', this.onReflow, true);
+    window.addEventListener('resize', this.onReflow);
+    items.at(at).focus({ preventScroll: true });
+  }
+
+  /** Keep the open menu on screen: below the button, flipping above, scrolling when short. */
+  place() {
+    const a = this.button.getBoundingClientRect();
+    const width = this.menu.offsetWidth;
+    // Right-align the menu to the button, like the CSS did
+    const left = a.right - width;
+    const p = placePopover(
+      { top: a.top, bottom: a.bottom, left, right: left },
+      { width, height: this.menu.scrollHeight + 2 },
+      { width: document.documentElement.clientWidth, height: window.innerHeight },
+      { gap: 6 },
+    );
+    this.menu.style.top = `${p.top}px`;
+    this.menu.style.left = `${p.left}px`;
+    this.menu.style.maxHeight = p.maxHeight == null ? '' : `${p.maxHeight}px`;
   }
 
   /** @param {boolean} [restoreFocus] */
@@ -96,6 +119,11 @@ export class MoreMenu extends HTMLElement {
     const wasOpen = !this.menu.hidden;
     this.menu.hidden = true;
     this.button.setAttribute('aria-expanded', 'false');
+    if (this.onReflow) {
+      window.removeEventListener('scroll', this.onReflow, true);
+      window.removeEventListener('resize', this.onReflow);
+      this.onReflow = null;
+    }
     if ((restoreFocus || wasOpen) && this.menu.contains(document.activeElement)) this.button.focus();
   }
 

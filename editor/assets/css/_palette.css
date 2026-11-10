@@ -1,6 +1,6 @@
 /* Block palette popover (slash commands) */
 .block-palette {
-  position: absolute;
+  position: fixed; /* viewport coordinates from placePopover */
   z-index: 100;
   min-width: 280px;
   max-width: 340px;

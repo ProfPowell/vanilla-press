@@ -13,6 +13,7 @@
 import { Selection, NodeSelection } from 'prosemirror-state';
 import { Fragment } from 'prosemirror-model';
 import { schema } from '../schema.js';
+import { placePopover } from '../popover-place.js';
 import { openMediaPicker } from './media-picker.js';
 import { nodeTypeFor, initialAttrs, paletteEntries } from '../component-model.js';
 import { insertPlan, nodesFor, pdfViewerEnabled } from '../media-insert.js';
@@ -260,11 +261,19 @@ export class BlockPalette {
     this.visible = true;
 
     this.render();
+    this.el.classList.add('open'); // displayed first, so position() can measure it
     this.position();
-    this.el.classList.add('open');
+    this.onReflow = (e) => { if (!e || e.target !== this.el) this.position(); }; // the list's own scrolling is not a reason to re-place
+    window.addEventListener('scroll', this.onReflow, true);
+    window.addEventListener('resize', this.onReflow);
   }
 
   close() {
+    if (this.onReflow) {
+      window.removeEventListener('scroll', this.onReflow, true);
+      window.removeEventListener('resize', this.onReflow);
+      this.onReflow = null;
+    }
     this.visible = false;
     this.filter = '';
     this.selected = 0;
@@ -289,14 +298,24 @@ export class BlockPalette {
   position() {
     if (!this.view) return;
     const coords = this.view.coordsAtPos(this.triggerPos);
-    this.el.style.left = `${coords.left}px`;
-    this.el.style.top = `${coords.bottom + 4}px`;
+    const scrolled = this.el.scrollTop;
+    this.el.style.maxHeight = ''; // measure at the natural (CSS) height
+    const p = placePopover(
+      coords,
+      { width: this.el.offsetWidth, height: this.el.offsetHeight },
+      { width: document.documentElement.clientWidth, height: window.innerHeight },
+    );
+    this.el.style.left = `${p.left}px`;
+    this.el.style.top = `${p.top}px`;
+    if (p.maxHeight != null) this.el.style.maxHeight = `${p.maxHeight}px`;
+    this.el.scrollTop = scrolled;
   }
 
   updateFilter(char) {
     this.filter += char;
     this.selected = 0;
     this.render();
+    this.position();
   }
 
   backspace() {
@@ -304,6 +323,7 @@ export class BlockPalette {
       this.filter = this.filter.slice(0, -1);
       this.selected = 0;
       this.render();
+      this.position();
     } else {
       this.close();
     }
@@ -313,12 +333,14 @@ export class BlockPalette {
     if (this.items.length === 0) return;
     this.selected = (this.selected - 1 + this.items.length) % this.items.length;
     this.highlightSelected();
+    this.items[this.selected].el.scrollIntoView({ block: 'nearest' });
   }
 
   moveDown() {
     if (this.items.length === 0) return;
     this.selected = (this.selected + 1) % this.items.length;
     this.highlightSelected();
+    this.items[this.selected].el.scrollIntoView({ block: 'nearest' });
   }
 
   selectCurrent() {

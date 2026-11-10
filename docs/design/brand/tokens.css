@@ -2,9 +2,11 @@
  * Vanilla Press brand tokens (Bloom Seal 04).
  *
  * Brand colors are for the mark, lockups, icons and brand surfaces
- * (splash, empty states, social cards). App UI keeps using the Vanilla
- * Breeze semantic tokens (--color-primary, --color-text, ...).
- * See docs/design/brand/README.md.
+ * (splash, empty states, social cards), and they brand the app's chrome:
+ * app/assets/brand-ui.css maps the Vanilla Breeze semantic tokens
+ * (--color-primary, --color-text, ...) to these values, light and dark.
+ * The writing area is not branded: it keeps the site's own theme.
+ * See docs/design/brand/README.md and docs/design/README.md.
  */
 @layer tokens {
   :root {

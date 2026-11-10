@@ -84,12 +84,11 @@ export class ThemePicker extends HTMLElement {
     const theme = (this._themes || []).find(t => t.id === themeId);
     const isDefault = !theme || theme.id === 'default';
 
-    // Scope data-theme to the content pane only — editor chrome stays unthemed
+    // Scope data-theme to the content pane only — editor chrome stays unthemed.
+    // The default theme is an empty data-theme, not none: VB re-declares its
+    // tokens on [data-theme], which keeps the branded chrome out of the pane.
     const pane = document.querySelector('.editor-pane');
-    if (pane) {
-      if (isDefault) pane.removeAttribute('data-theme');
-      else pane.setAttribute('data-theme', themeId);
-    }
+    if (pane) pane.setAttribute('data-theme', isDefault ? '' : themeId);
 
     // Load the theme stylesheet unless it's built into vanilla-breeze.css
     let link = document.getElementById('theme-link');

@@ -56,13 +56,13 @@ Two colorways. Use **Ink** on light backgrounds and **Vanilla** on ink or dark b
 `seal-mono.svg` is the one-color version: the wax is `currentColor` and the bloom is cut through to whatever is behind it. Use it inline where the mark must follow text color (app chrome icons, print, stamps, embossing).
 
 ### Brand colors versus app colors
-The brand palette is for the mark and brand surfaces only: logo, favicon, app icon, splash, empty-state illustrations, social cards, the docs site header. **App UI keeps using the Vanilla Breeze semantic tokens** (`--color-primary`, `--color-text`, `--color-border` …) as described in `../README.md`. Don't restyle buttons, links or focus rings with `--vp-brand-*`. The one shared value: `--vp-brand-petal` (`#F7EEDB`) is the text color on ink brand surfaces.
+**The app's chrome is branded; the writing area is not.** The chrome (the Sites, Site and Theme screens, and the editor's top bar, settings panel, menus, palette and toolbars) wears the brand through `app/assets/brand-ui.css`, which maps the Vanilla Breeze semantic tokens (`--color-primary`, `--color-text`, `--color-border` …) to brand values in light and dark. See the token tables in `../README.md`. Screen CSS keeps using the VB tokens: don't write `--vp-brand-*` into buttons, links or focus rings directly. The writing area (the editor pane and its content) and the Theme screen's preview keep the site's own theme, so a post looks the same in the editor as on the live site. `--vp-brand-petal` (`#F7EEDB`) is the text color on ink brand surfaces.
 
 ## Type
 
 - **Wordmark:** "Vanilla Press" in **Fraunces Bold**, tracking −0.02em. The lockup and wordmark SVGs have the text converted to outlines, so they need no font. Use the SVG files; don't retype the wordmark in HTML.
-- **Brand headlines** (splash, marketing, social cards) may use Fraunces via `--vp-brand-font-display`. Fraunces is licensed under the SIL Open Font License; if a page needs it live, self-host it (the `@fontsource/fraunces` package has the files). Don't load it from Google Fonts in the app.
-- **App UI** stays on Vanilla Breeze fonts: `--font-sans` for controls, `--font-serif` (Charter) for writing and page titles. The app's top bar pairs the medium seal with "Vanilla Press" set in Charter Bold at UI size. That is the one place the name is live text.
+- **Brand headlines** (splash, marketing, social cards) and the app's **screen titles** use Fraunces via `--vp-brand-font-display` (the app's `--vp-title-font`). It is self-hosted: `fonts/fraunces-latin-wght-normal.woff2` (the variable latin subset, weights 100–900, copied once from `@fontsource-variable/fraunces` 5.3.0) with its license in `fonts/OFL.txt` (SIL Open Font License 1.1), served at `/brand/fonts/`. `app/assets/brand-ui.css` declares the `@font-face`. Don't load it from Google Fonts in the app.
+- **App UI** otherwise stays on Vanilla Breeze fonts: `--font-sans` for controls, `--font-serif` (Charter) for writing, and h2 and below. The app's top bar pairs the medium seal with "Vanilla Press" set in Charter Bold at UI size. That is the one place the name is live text.
 
 ## Lockups
 

@@ -106,24 +106,31 @@ export function siteThemes(setting, themes, siteId) {
   return list;
 }
 
-/** Set (or remove) `data-theme` and `data-mode` on an element. */
-function setAttrs(el, attrs) {
+/**
+ * Set (or remove) `data-theme` and `data-mode` on an element.
+ * `keepTheme`: with no ids, leave `data-theme=""` instead of removing it.
+ */
+function setAttrs(el, attrs, { keepTheme = false } = {}) {
   if (!el) return;
   if (attrs?.ids) el.setAttribute('data-theme', attrs.ids);
+  else if (keepTheme) el.setAttribute('data-theme', '');
   else el.removeAttribute('data-theme');
   if (attrs?.mode) el.setAttribute('data-mode', attrs.mode);
   else el.removeAttribute('data-mode');
 }
 
 /**
- * Show a `paneTheme` result: theme attributes on `.editor-pane`,
+ * Show a `paneTheme` result: theme attributes on `.editor-pane` (always a
+ * `data-theme`, empty for no theme),
  * `.editor-content` and the site header strip, the stylesheets it needs
  * (`<link data-vp-theme-css>`, added once each), and the "Page theme" chip.
  * @param {PaneTheme} model
  * @param {Document} [doc]
  */
 export function applyPaneTheme(model, doc = document) {
-  setAttrs(doc.querySelector('.editor-pane'), model.pane);
+  // The pane always carries data-theme, so VB re-declares the theme's tokens
+  // there and the branded chrome (app/assets/brand-ui.css) never reaches it.
+  setAttrs(doc.querySelector('.editor-pane'), model.pane, { keepTheme: true });
   setAttrs(doc.querySelector('.editor-content'), model.content);
 
   const strip = doc.querySelector('[data-site-strip]');

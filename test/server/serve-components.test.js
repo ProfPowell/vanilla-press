@@ -72,4 +72,15 @@ describe('vp serve: media is served sandboxed', () => {
     assert.equal(res.headers.get('content-type'), 'image/svg+xml');
     await res.arrayBuffer();
   });
+
+  it('serves the branded chrome and its font at the app\'s paths', async () => {
+    const css = await fetch(`${base}/app/assets/brand-ui.css`);
+    assert.equal(css.status, 200);
+    assert.match(css.headers.get('content-type'), /^text\/css/);
+    await css.arrayBuffer();
+    const font = await fetch(`${base}/brand/fonts/fraunces-latin-wght-normal.woff2`);
+    assert.equal(font.status, 200);
+    assert.equal(font.headers.get('content-type'), 'font/woff2');
+    await font.arrayBuffer();
+  });
 });

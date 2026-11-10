@@ -1,0 +1,60 @@
+/*
+ * The branded chrome: Vanilla Breeze's semantic tokens mapped to the Bloom
+ * Seal brand (docs/design/brand/README.md, "Brand colors versus app colors").
+ *
+ * Linked right after vanilla-breeze.css and /brand/tokens.css by the app
+ * pages and the editor, so this layer comes after every VB layer and before
+ * the editor's. Screen CSS keeps using the VB tokens.
+ *
+ * - The scheme follows prefers-color-scheme only, never data-mode.
+ * - Brand colors come from tokens.css (--vp-brand-*). The hex values here are
+ *   the in-between UI shades, which are not brand colors.
+ * - The writing area is not branded: the tokens are set on :root only, and
+ *   the editor pane always carries data-theme (an empty one when the site has
+ *   no theme), where VB's tokens layer re-declares the site theme's values.
+ *   The Theme screen's preview frame is its own document and never links this.
+ */
+
+@font-face {
+  font-family: Fraunces;
+  src: url(/brand/fonts/fraunces-latin-wght-normal.woff2) format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@layer brand-ui {
+  :root {
+    color-scheme: light dark;
+
+    --color-background: var(--vp-brand-paper);
+    --color-surface-raised: var(--vp-brand-parchment);
+    --color-surface-alt: #EAE0CC;
+    --color-border: #DCD1BD;
+    --color-border-subtle: #ECE3D2;
+    --color-text: #1A2133;
+    --color-text-muted: #4A5164;
+    --color-text-subtle: #5F6577;
+    --color-primary: var(--vp-brand-ink);
+    --color-interactive: var(--color-primary);
+    --color-text-on-primary: var(--vp-brand-petal);
+
+    /* Screen titles (Task 6): Fraunces, falling back to Charter */
+    --vp-title-font: var(--vp-brand-font-display);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background: var(--vp-brand-ink-rim);
+      --color-surface-raised: var(--vp-brand-ink);
+      --color-surface-alt: #2E3D5E;
+      --color-border: #46577D;
+      --color-border-subtle: #2C3A5A;
+      --color-text: var(--vp-brand-petal);
+      --color-text-muted: #CFC8B8;
+      --color-text-subtle: #B4B0A6;
+      --color-primary: var(--vp-brand-vanilla);
+      --color-interactive: var(--color-primary);
+      --color-text-on-primary: var(--vp-brand-ink);
+    }
+  }
+}

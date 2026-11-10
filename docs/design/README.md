@@ -6,7 +6,15 @@ Source canvas (interactive, private to Thomas): https://claude.ai/artifact/BRqiz
 
 ## Brand
 
-The logo, favicons, app icons, lockups and brand colors are in `brand/` (Bloom Seal 04). Read `brand/README.md` before adding any logo, icon, favicon, splash or social card. Brand colors (`--vp-brand-*`) are for the mark and brand surfaces only; app UI keeps the Vanilla Breeze tokens below. The Sites top bar uses the medium seal next to the Charter "Vanilla Press" name.
+The logo, favicons, app icons, lockups and brand colors are in `brand/` (Bloom Seal 04). Read `brand/README.md` before adding any logo, icon, favicon, splash or social card.
+
+**The app's chrome is branded; the writing area is not.**
+
+- The chrome is the Sites, Site (all sections) and Theme screens, and the editor's top bar, settings panel, menus, palette and toolbars. It wears ink, paper, parchment and vanilla.
+- `app/assets/brand-ui.css` maps the Vanilla Breeze semantic tokens to brand values (the tables below), in its own `@layer` after VB's. The app pages and the editor link `/brand/tokens.css` and it right after `vanilla-breeze.css`. Screen CSS keeps using the VB tokens, never `--vp-brand-*` hex values.
+- The writing area (`.editor-pane`, `.editor-content`) shows the post as the site will: the pane always carries `data-theme` (empty when the site has no theme), so VB re-declares the site theme's tokens there. The Theme screen's preview frame is its own document and never links `brand-ui.css`.
+- The scheme follows `prefers-color-scheme` only, so dark chrome around a light post is expected.
+- Screen titles use Fraunces (`--vp-title-font`), self-hosted from `brand/fonts/`. The Sites top bar uses the medium seal next to the "Vanilla Press" name.
 
 Both servers (the app and `vp serve`) serve `brand/` itself at `/brand/`, so this folder stays the only copy. The app pages and the editor link the favicons, the Apple touch icon and `site.webmanifest` from there.
 
@@ -36,33 +44,56 @@ All of these screens are built. The table says where each lives now.
 ## Direction
 
 - The content dominates; the app's buttons, toolbars and panels recede. One primary action per screen (Add site, New post, Upload, Apply to site, Update/Publish).
-- Two type roles: the app's own controls use `--font-sans` (system UI); the user's writing and page/section titles use `--font-serif` (Charter, VB's `--font-display`).
-- Neutral grays plus one main color (`--color-primary`, hue 260). Status colors only for status.
+- Type roles: the app's own controls use `--font-sans` (system UI); screen titles use Fraunces (`--vp-title-font`, falling back to Charter); the user's writing and h2 and below use `--font-serif` (Charter).
+- Brand neutrals (paper, parchment, ink-black text) plus one main color: ink in light, vanilla in dark (`--color-primary`). Status colors only for status. The writing area keeps the site theme's colors.
 - Hairline borders, 8–12px radii, no shadows except menus and the floating format toolbar.
 - Every page layout is fluid and works at phone width: rail + content is a wrapping flex row, so the rail stacks above the content on narrow screens.
 - Touch targets ≥ 44px for primary controls (`--size-touch-min`), ≥ 40px elsewhere. Text contrast ≥ 4.5:1.
 
 ## Tokens
 
-Use the custom property, not the hex. Hex values are the mockup's approximations of VB defaults (light scheme).
+Use the custom property, not the hex. `app/assets/brand-ui.css` sets these for the chrome; `test/app/brand-ui.test.js` checks every text pair at 4.5:1 or more and the focus ring at 3:1 or more, in both schemes. The writing area keeps the site theme's values.
+
+### Light scheme
+
+| Use | VB token | Value |
+|---|---|---|
+| Page background | `--color-background` | paper `#FFFAF0` |
+| Rail, settings panel, cards' raised surface | `--color-surface-raised` | parchment `#F4EDE0` |
+| Selected nav item, segmented track, hover | `--color-surface-alt` | `#EAE0CC` |
+| Borders | `--color-border` | `#DCD1BD` |
+| Dividers | `--color-border-subtle` | `#ECE3D2` |
+| Text | `--color-text` | ink-black `#1A2133` |
+| Secondary text | `--color-text-muted` | `#4A5164` |
+| Labels and hints | `--color-text-subtle` | `#5F6577` (4.99:1 on parchment) |
+| Primary buttons, links, focus | `--color-primary`, `--color-interactive` | ink `#23314F` |
+| Text on primary | `--color-text-on-primary` | petal `#F7EEDB` |
+
+### Dark scheme
+
+| Use | VB token | Value |
+|---|---|---|
+| Page background | `--color-background` | ink-rim `#141C30` |
+| Raised surfaces | `--color-surface-raised` | ink `#23314F` |
+| Selected nav item, segmented track, hover | `--color-surface-alt` | `#2E3D5E` |
+| Borders | `--color-border` | `#46577D` (a lighter ink) |
+| Dividers | `--color-border-subtle` | `#2C3A5A` |
+| Text | `--color-text` | petal `#F7EEDB` |
+| Secondary text | `--color-text-muted` | `#CFC8B8` (7.76:1 on ink) |
+| Labels and hints | `--color-text-subtle` | `#B4B0A6` (5.97:1 on ink) |
+| Primary buttons, links, focus | `--color-primary`, `--color-interactive` | vanilla `#ECD89A` |
+| Text on primary | `--color-text-on-primary` | ink `#23314F` |
+
+### Unchanged Vanilla Breeze tokens
 
 | Use | VB token | Mockup value |
 |---|---|---|
-| Page background | `--color-background` | `#ffffff` |
-| Rail / settings panel background | `--color-surface-raised` | `#f8f8f8` / `#fbfbfb` |
-| Selected nav item, segmented control track | `--color-surface-alt` | `#f1f1f1` / `#ececec` |
-| Text | `--color-text` | `#121212` |
-| Secondary text | `--color-text-muted` | `#555555` |
-| Labels, hints, disabled items | `--color-text-subtle` (check contrast; mockup darkened it to `#6b6b6b`) | `#6b6b6b` |
-| Borders | `--color-border` | `#dedede` |
-| Dividers inside panels | `--color-border-subtle` | `#f1f1f1` / `#ececec` |
-| Primary buttons, links, focus | `--color-primary` / `--color-interactive` | `#2b59c3` |
-| Text on primary buttons | `--color-text-on-primary` | `#ffffff` |
 | "In sync", "Published" | `--color-success`, `--color-success-text` | `#2f8a3e`, `#1d6b2a` |
 | "Not live yet", "No alt text" | `--color-warning-subtle`, `--color-warning-text` | `#fbf3e2`, `#6b4a00` |
 | Unpublish, Delete | `--color-error-text` | `#9b1c1c` |
 | App controls font | `--font-sans` | system-ui |
-| Content and titles | `--font-serif` / `--font-display` | Charter |
+| Screen titles | `--vp-title-font` | Fraunces, falling back to Charter |
+| Content, h2 and below | `--font-serif` / `--font-display` | Charter |
 | Paths, slugs, code | `--font-mono` | ui-monospace |
 | Radii | `--radius-m` (8px) controls, `--radius-l` / `--radius-xl` cards | 8 / 10–12px |
 | Content measure | `--measure-normal` | ~680px column |
@@ -134,4 +165,4 @@ These are not real data; don't hard-code them:
 
 ## Not designed yet
 
-Dark scheme of the app itself, phone-width editor, add/clone site panels, publish/update progress and error report, conflict ("Load the version on disk") state, Analytics / Social. Programs has no mockup: it follows the Media screen.
+Phone-width editor, add/clone site panels, publish/update progress and error report, conflict ("Load the version on disk") state, Analytics / Social. Programs has no mockup: it follows the Media screen.

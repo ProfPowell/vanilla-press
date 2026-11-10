@@ -206,6 +206,17 @@ describe('app server', () => {
     assert.equal(manifest.headers.get('content-type'), 'application/manifest+json');
     assert.equal((await manifest.json()).name, 'Vanilla Press');
   });
+
+  it('serves the branded chrome and its font', async () => {
+    const css = await fetch(`${app.url}/app/assets/brand-ui.css`);
+    assert.equal(css.status, 200);
+    assert.match(css.headers.get('content-type'), /^text\/css/);
+    await css.arrayBuffer();
+    const font = await fetch(`${app.url}/brand/fonts/fraunces-latin-wght-normal.woff2`);
+    assert.equal(font.status, 200);
+    assert.equal(font.headers.get('content-type'), 'font/woff2');
+    await font.arrayBuffer();
+  });
 });
 
 describe('startApp port', () => {

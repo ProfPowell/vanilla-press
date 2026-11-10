@@ -95,6 +95,8 @@ export function startServer(options = {}) {
   // Static file mount points: URL prefix → filesystem path
   const staticMounts = [
     { prefix: '/editor/', dir: join(ROOT, 'editor') },
+    // The branded chrome (brand-ui.css), which the editor links at the app's path
+    { prefix: '/app/assets/', dir: join(ROOT, 'app', 'assets') },
     { prefix: '/src/', dir: join(ROOT, 'src') },
     // Brand master copy (docs/design/brand/README.md): favicons, seals, manifest, tokens.css
     { prefix: '/brand/', dir: join(ROOT, 'docs', 'design', 'brand') },

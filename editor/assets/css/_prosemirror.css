@@ -68,8 +68,10 @@
 }
 
 /* A selected block (NodeSelection) shows its own outline, not the text
- * highlight (prosemirror-view's own rule, which this sheet doesn't load) */
-.ProseMirror.ProseMirror-hideselection ::selection {
+ * highlight (prosemirror-view's own rule, which this sheet doesn't load).
+ * Not in the block's own fields (figure Src/Alt, embed URL): Tab into one
+ * selects its value while the class is still on */
+.ProseMirror.ProseMirror-hideselection :not(input, textarea)::selection {
   background: transparent;
 }
 

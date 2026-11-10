@@ -26,3 +26,13 @@ describe('editor site-mode css', () => {
     });
   }
 });
+
+describe('editor prosemirror css', () => {
+  const pm = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'editor', 'assets', 'css', '_prosemirror.css'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  it('hiding the selection for a selected block spares the fields inside it (figure Src/Alt, embed URL)', () => {
+    const rules = [...pm.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((m) => /ProseMirror-hideselection/.test(m[1]) && /::selection/.test(m[1]));
+    assert.ok(rules.length > 0, 'no hide-selection ::selection rule');
+    for (const [, selector] of rules) assert.match(selector, /:not\(input,\s*textarea\)::selection/, selector.trim());
+  });
+});

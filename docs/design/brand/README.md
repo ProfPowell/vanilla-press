@@ -115,7 +115,7 @@ Head markup (adjust the path to where the files are served):
 
 - **Serving:** `docs/` isn't served by the app. Copy the runtime files (favicons, `svg/`, the PNGs you need, `tokens.css`) to `app/assets/brand/` so they're served under `/app/assets/brand/`, or add a static mount in `src/app/server.js` (`STATIC_MOUNTS`). Keep this folder as the master copy.
 - **App and editor `<head>`:** add the favicon links above to `app/index.html`, `app/site.html` and `editor/index.html`.
-- **Top bar** (`Main.dc.html` header): `seal-ink-medium.svg` at 28–32px, then "Vanilla Press" in `--font-serif` bold. Use `<img src="…" alt="">` with the name as adjacent text, or `alt="Vanilla Press"` if the image stands alone.
+- **Top bar** (`Main.dc.html` header): the app's top bars are ink (`.on-ink` in `app/assets/brand-ui.css`), so they use `seal-vanilla-medium.svg` at 28px, then "Vanilla Press" in `--font-serif` bold and petal. On a light surface (the rail, empty states) use `seal-ink-medium.svg`, swapped for the vanilla one in dark with `<picture>` and `prefers-color-scheme`. Use `<img src="…" alt="">` with the name as adjacent text, or `alt="Vanilla Press"` if the image stands alone.
 - **Inline in UI** where the mark must follow the theme: inline `seal-mono.svg` and set `color` (it uses `currentColor`).
 - **Empty states and "Published" moments** may use the full seal or the stacked lockup. A green "Published" badge may use `seal-mono.svg` in the success color; that's the only sanctioned recolor.
 - **Tokens:** import `tokens.css` once (it declares `@layer tokens`, matching Vanilla Breeze's layer order) where brand surfaces need the colors.

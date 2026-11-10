@@ -81,7 +81,7 @@ export function initProgramsSection({ siteId, root, siteUrl = null }) {
     const focused = document.activeElement?.closest?.('.program-tile')?.dataset.key;
     $('program-grid').replaceChildren(...shown.map(tile));
     if (focused) $('program-grid').querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
-    $('program-empty').textContent = emptyText(state.programs.length);
+    $('program-empty-text').textContent = emptyText(state.programs.length);
     $('program-empty').hidden = shown.length > 0;
   }
 

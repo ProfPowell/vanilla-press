@@ -1,6 +1,9 @@
-/* The editor's top bar (the app, and vp serve): "← Posts" and the site name
- * (app only), the save pill, then Preview, Post settings, the "⋯" menu and
- * the primary button. .has-header is set by site-mode.js in both; .site-mode
+/* The editor's top bar (the app, and vp serve): the vanilla seal, "← Posts"
+ * and the site name (app only), the save pill, then Preview, Post settings,
+ * the "⋯" menu and the primary button. It is an ink bar (.on-ink in
+ * app/assets/brand-ui.css): the tokens below are its on-ink values, so its
+ * buttons, save pill and focus ring read on ink, and Publish is vanilla with
+ * ink text. The "⋯" menu gets the page's tokens back. .has-header is set by site-mode.js in both; .site-mode
  * only in the app. .settings-hidden hides the Post settings panel (in vp
  * serve its doc browser and theme picker go with it). */
 
@@ -41,6 +44,12 @@ editor-shell.has-header .site-header {
   background: var(--color-background);
   border-block-end: 1px solid var(--color-border-subtle);
   font-family: var(--font-sans);
+}
+
+.site-header .bar-seal {
+  flex: none;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
 }
 
 .site-header .spacer {

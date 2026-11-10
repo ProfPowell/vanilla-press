@@ -41,7 +41,7 @@ function renderPosts() {
   }
   const shown = filterPosts(allDocs, view);
   $('posts').replaceChildren(...shown.map(postRow));
-  $('empty').textContent = emptyText(view.filter, view.query);
+  $('empty-text').textContent = emptyText(view.filter, view.query);
   $('empty').hidden = shown.length > 0;
 }
 

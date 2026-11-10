@@ -52,7 +52,9 @@ async function loadSites() {
   try {
     const sites = await api('/api/sites');
     listEl.replaceChildren(...sites.map(card));
-    statusEl.textContent = sites.length ? '' : 'No sites yet. Add a Cook site folder or clone one from GitHub.';
+    statusEl.textContent = '';
+    $('sites-empty-text').textContent = 'No sites yet. Add a Cook site folder or clone one from GitHub.';
+    $('sites-empty').hidden = sites.length > 0;
   } catch (err) {
     statusEl.textContent = err.message;
   }

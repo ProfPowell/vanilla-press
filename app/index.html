@@ -17,8 +17,8 @@
 <script type="module" src="/app/assets/js/sites-page.js"></script>
 </head>
 <body>
-<header class="topbar">
-  <p class="wordmark"><img src="/brand/svg/seal-ink-medium.svg" alt="" width="28" height="28"/>Vanilla Press</p>
+<header class="topbar on-ink">
+  <p class="wordmark"><img src="/brand/svg/seal-vanilla-medium.svg" alt="" width="28" height="28"/>Vanilla Press</p>
   <p class="topbar-address">Local · <span id="local-address"></span></p>
 </header>
 <main class="app-page sites-page">
@@ -64,6 +64,7 @@
 
   <p id="status" role="status"></p>
   <ul id="sites" class="site-list" aria-label="Your sites"></ul>
+  <p id="sites-empty" class="empty" hidden><picture><source srcset="/brand/svg/seal-vanilla-medium.svg" media="(prefers-color-scheme: dark)"/><img src="/brand/svg/seal-ink-medium.svg" alt="" width="64" height="64"/></picture><span id="sites-empty-text"></span></p>
 </main>
 </body>
 </html>

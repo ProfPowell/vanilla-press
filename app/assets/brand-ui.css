@@ -15,6 +15,10 @@
  *   test/app/brand-ui.test.js checks that the served VB re-declares every
  *   --color-* token set here on :where([data-theme]).
  *   The Theme screen's preview frame is its own document and never links this.
+ * - Ink bars (.on-ink: the Sites top bar and the editor's top bar) are ink in
+ *   light and ink-rim in dark, with petal text, vanilla primary and the dark
+ *   color scheme, so VB's light-dark() status colors read on ink. A menu that
+ *   opens from a bar ([role="menu"]) gets the page's tokens back.
  */
 
 @font-face {
@@ -25,7 +29,7 @@
 }
 
 @layer brand-ui {
-  :root {
+  :root, .on-ink [role="menu"] {
     color-scheme: light dark;
 
     --color-background: var(--vp-brand-paper);
@@ -41,12 +45,39 @@
     --color-interactive: var(--color-primary);
     --color-text-on-primary: var(--vp-brand-petal);
 
-    /* Screen titles (Task 6): Fraunces, falling back to Charter */
+    /* Screen titles: Fraunces, falling back to Charter */
     --vp-title-font: var(--vp-brand-font-display);
   }
 
+  /* Ink bars: the dark chrome values on ink */
+  .on-ink {
+    color-scheme: dark;
+
+    --color-background: var(--vp-brand-ink);
+    --color-surface: var(--vp-brand-ink);
+    --color-surface-raised: var(--vp-brand-ink);
+    --color-surface-alt: #2E3D5E;
+    --color-border: #46577D;
+    --color-border-subtle: #2C3A5A;
+    --color-text: var(--vp-brand-petal);
+    --color-text-muted: #CFC8B8;
+    --color-text-subtle: #B4B0A6;
+    --color-primary: var(--vp-brand-vanilla);
+    --color-interactive: var(--color-primary);
+    --color-text-on-primary: var(--vp-brand-ink);
+    /* No status colors here: the dark scheme picks VB's dark ones (light-dark()), and menus keep the page's */
+
+    background: var(--color-background);
+    color: var(--color-text);
+  }
+
+  /* `color` inherits as a computed value: a bar's menu sets it again from its own tokens */
+  .on-ink [role="menu"] {
+    color: var(--color-text);
+  }
+
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root, .on-ink [role="menu"] {
       --color-background: var(--vp-brand-ink-rim);
       --color-surface: var(--vp-brand-ink-rim); /* inputs, palettes, menus: ink-rim, apart from ink panels */
       --color-surface-raised: var(--vp-brand-ink);
@@ -61,6 +92,12 @@
       --color-text-on-primary: var(--vp-brand-ink);
       /* VB's dark error text (#FF7972) is 4.2:1 on a hovered menu row (surface-alt) */
       --color-error-text: #FF908A;
+    }
+
+    /* The bars sit on ink-rim, the page's own dark background */
+    .on-ink {
+      --color-background: var(--vp-brand-ink-rim);
+      --color-surface: var(--vp-brand-ink-rim);
     }
   }
 }

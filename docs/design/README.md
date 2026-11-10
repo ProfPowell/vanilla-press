@@ -14,7 +14,7 @@ The logo, favicons, app icons, lockups and brand colors are in `brand/` (Bloom S
 - `app/assets/brand-ui.css` maps the Vanilla Breeze semantic tokens to brand values (the tables below), in its own `@layer` after VB's. The app pages and the editor link `/brand/tokens.css` and it right after `vanilla-breeze.css`. Screen CSS keeps using the VB tokens, never `--vp-brand-*` hex values.
 - The writing area (`.editor-pane`, `.editor-content`) shows the post as the site will: the pane always carries `data-theme` (empty when the site has no theme), so VB re-declares the site theme's tokens there. The Theme screen's preview frame is its own document and never links `brand-ui.css`.
 - The scheme follows `prefers-color-scheme` only, so dark chrome around a light post is expected.
-- Screen titles use Fraunces (`--vp-title-font`), self-hosted from `brand/fonts/`. The Sites top bar uses the medium seal next to the "Vanilla Press" name.
+- Screen titles use Fraunces (`--vp-title-font`), self-hosted from `brand/fonts/`. The Sites top bar and the editor's top bar are ink bars (`.on-ink` in `app/assets/brand-ui.css`: ink in light, ink-rim in dark, petal text, vanilla primary, the dark color scheme), with the vanilla medium seal; the Sites bar adds the "Vanilla Press" name. A menu that opens from a bar gets the page's tokens back. The rail shows the ink medium seal above the site name (vanilla in dark), and empty states show it at 64px and 35% opacity above their text.
 
 Both servers (the app and `vp serve`) serve `brand/` itself at `/brand/`, so this folder stays the only copy. The app pages and the editor link the favicons, the Apple touch icon and `site.webmanifest` from there.
 

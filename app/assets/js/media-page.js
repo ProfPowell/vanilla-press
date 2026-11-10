@@ -81,7 +81,7 @@ export function initMediaSection({ siteId, root }) {
     const focused = document.activeElement?.closest?.('.media-tile')?.dataset.id; // rebuilding must not drop focus
     $('media-grid').replaceChildren(...shown.map(tile));
     if (focused) $('media-grid').querySelector(`[data-id="${CSS.escape(focused)}"]`)?.focus();
-    $('media-empty').textContent = emptyText(view);
+    $('media-empty-text').textContent = emptyText(view);
     $('media-empty').hidden = shown.length > 0;
   }
 

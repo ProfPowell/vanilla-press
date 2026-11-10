@@ -270,7 +270,7 @@ export function initEditor() {
       steps: (node) => new StepsView(node),
       step: (node, view, getPos) => new StepView(node, view, getPos),
       figure: (node, view, getPos) => new FigureView(node, view, getPos),
-      embed: (node) => new EmbedView(node),
+      embed: (node, view, getPos) => new EmbedView(node, view, getPos),
       component_leaf: (node, view, getPos) => new ComponentView(node, view, getPos),
       component_blocks: (node, view, getPos) => new ComponentView(node, view, getPos),
       component_inline: (node, view, getPos) => new InlineComponentView(node, view, getPos),

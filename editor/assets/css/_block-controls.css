@@ -197,3 +197,64 @@
   max-width: 100%;
   border-radius: var(--radius-m);
 }
+
+/* Figure and embed: the media shows on its own; its fields sit in a row
+ * under it, in normal flow, while the block is selected or a field has focus. */
+.pm-figure,
+.ProseMirror .pm-embed {
+  position: relative;
+}
+
+.pm-figure .figure-media {
+  cursor: pointer;
+}
+
+.pm-figure[data-selected],
+.ProseMirror .pm-embed[data-selected] {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-m);
+}
+
+.pm-node-view .media-fields,
+.pm-embed .media-fields {
+  position: static;
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-xs);
+  margin-block-start: var(--size-xs);
+  padding: var(--size-xs) var(--size-s);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  font-size: var(--font-size-s);
+  opacity: 1;
+  pointer-events: auto;
+  box-shadow: none;
+}
+
+:is(.pm-figure, .pm-embed):is([data-selected], :focus-within) > .media-fields {
+  display: flex;
+}
+
+/* "Alt: Missing": a small badge on the frame while the figure isn't selected */
+.pm-figure .figure-alt-missing {
+  position: absolute;
+  inset-block-start: var(--size-xs);
+  inset-inline-start: var(--size-xs);
+  padding: 0 var(--size-xs);
+  background: var(--color-background);
+  color: var(--color-error-text);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-m);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  pointer-events: none;
+  user-select: none;
+}
+
+.pm-figure .figure-alt-missing[hidden],
+.pm-figure[data-selected] > .figure-alt-missing {
+  display: none;
+}

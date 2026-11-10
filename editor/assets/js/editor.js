@@ -37,7 +37,7 @@ import {
 } from './blocks/component-view.js';
 import { getBlockPalette } from './components/block-palette.js';
 import { insertTargetPlugin } from './insert-target.js';
-import { trailingParagraphPlugin, typeAfterMedia, TRAILING_META } from './block-nav.js';
+import { trailingParagraphPlugin, typeAfterMediaPlugin } from './block-nav.js';
 import { mediaDropPlugin } from './media-drop.js';
 import { insertPlan, pdfViewerEnabled } from './media-insert.js';
 import { api } from './api-client.js';
@@ -213,24 +213,16 @@ export function initEditor() {
       // First: while the palette is open it owns Enter, Escape, arrows and
       // Backspace, which the keymaps below would otherwise consume.
       createSlashPlugin(),
+      // Typing with an image or embed selected starts a paragraph after it.
+      // After the slash plugin (its palette sees keys first), before the
+      // input rules (which could otherwise replace the selected media).
+      typeAfterMediaPlugin(),
       // Before titlePastePlugin: a dragged list item, tab or step never
       // drops out of its kind of parent (onto the title either)
       blockHandlesPlugin({
         addAt: (view, pos) => getBlockPalette().open(view, pos, { insertAfter: pos }),
       }),
       buildInputRules(),
-      // Typing with an image or embed selected starts a paragraph after it
-      // (after the slash plugin, so its palette check sees the key first)
-      new Plugin({
-        props: {
-          handleTextInput(view, _from, _to, text) {
-            const tr = typeAfterMedia(view.state, text);
-            if (!tr) return false;
-            view.dispatch(tr);
-            return true;
-          },
-        },
-      }),
       history(),
       // A line to type in after a post's last image or embed
       trailingParagraphPlugin(),
@@ -300,10 +292,9 @@ export function initEditor() {
       }
 
       // A save's own clean-up (attributes the server removed) is already saved
-      // The trailing paragraph after a last image (block-nav.js) is not an
-      // edit either. It is usually appended to a selection-only transaction,
-      // which never reaches here as a change; this covers one dispatched alone.
-      if (transaction.docChanged && !transaction.getMeta(SERVER_NORMALIZED) && !transaction.getMeta(TRAILING_META)) {
+      // (The trailing paragraph after a last image, block-nav.js, is appended
+      // to the root transaction: it never shows up here as a change.)
+      if (transaction.docChanged && !transaction.getMeta(SERVER_NORMALIZED)) {
         setSaveStatus('unsaved');
         debouncedSave();
       }

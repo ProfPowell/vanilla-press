@@ -163,6 +163,25 @@ export function typeAfterMedia(state, text) {
   return paragraphAfter(state, text);
 }
 
+/**
+ * Typing with a media block selected goes through `typeAfterMedia`. Register
+ * it ahead of the input rules: with a node selection their text-before is
+ * the whole doc's text, so a closing `*` could match an opener in the block
+ * above and replace the media.
+ */
+export function typeAfterMediaPlugin() {
+  return new Plugin({
+    props: {
+      handleTextInput(view, _from, _to, text) {
+        const tr = typeAfterMedia(view.state, text);
+        if (!tr) return false;
+        view.dispatch(tr);
+        return true;
+      },
+    },
+  });
+}
+
 const isEmptyParagraph = (node) => !!node && node.type.name === 'paragraph' && node.childCount === 0;
 
 /** The tracked trailing paragraph's position if it is still an empty top-level paragraph. */

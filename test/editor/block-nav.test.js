@@ -1,12 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { history, undo, redo } from 'prosemirror-history';
 import { schema } from '../../editor/assets/js/schema.js';
 import { toBlockAst, fromBlockAst } from '../../editor/assets/js/ast.js';
 import {
   isMediaBlock, trailingParagraphPlugin,
-  navDown, navUp, navRight, navLeft, enterAfterMedia, typeAfterMedia,
+  navDown, navUp, navRight, navLeft, enterAfterMedia, typeAfterMedia, typeAfterMediaPlugin,
 } from '../../editor/assets/js/block-nav.js';
 
 const p = (t) => ({ type: 'paragraph', children: t ? [{ type: 'text', value: t }] : [] });
@@ -295,5 +296,32 @@ describe('toBlockAst drops the trailing paragraph', () => {
 
   it('and keeps a lone empty paragraph', () => {
     assert.deepEqual(blocks([p('')]), ['paragraph']);
+  });
+});
+
+describe('typing on a selected media block runs before the input rules', () => {
+  it('the plugin types after a selected figure, even a closing * after an unclosed *word above', () => {
+    let state = selectNode(stateFor([p('Rated *great'), figure(), p('After')]), 2);
+    const plugin = typeAfterMediaPlugin();
+    const view = { get state() { return state; }, dispatch(tr) { state = state.apply(tr); } };
+    const { from, to } = state.selection;
+    assert.equal(plugin.props.handleTextInput(view, from, to, '*'), true);
+    assert.deepEqual(names(state), ['p(Rated *great)', 'figure', 'p(*)', 'p(After)']);
+  });
+
+  it('declines without a media node selection, leaving the key to the others', () => {
+    const state = cursorAtEnd(stateFor([p('a'), embed()]), 1);
+    const view = { state, dispatch() { throw new Error('no dispatch expected'); } };
+    assert.equal(typeAfterMediaPlugin().props.handleTextInput(view, 2, 2, '*'), false);
+  });
+
+  it('editor.js registers it after the slash plugin and before the input rules', () => {
+    const src = readFileSync(new URL('../../editor/assets/js/editor.js', import.meta.url), 'utf8');
+    const plugins = src.slice(src.indexOf('plugins: ['));
+    const slash = plugins.indexOf('createSlashPlugin()');
+    const typing = plugins.indexOf('typeAfterMediaPlugin()');
+    const rules = plugins.indexOf('buildInputRules()');
+    assert.ok(slash >= 0 && typing >= 0 && rules >= 0, 'all three are in the plugin list');
+    assert.ok(slash < typing && typing < rules, `order: slash ${slash}, typing ${typing}, input rules ${rules}`);
   });
 });

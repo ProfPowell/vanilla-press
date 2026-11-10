@@ -198,8 +198,12 @@ editor-shell.has-header .site-header {
   padding: 0;
 }
 
-.site-header button[aria-pressed="true"] {
+/* Pressed and open: surface-alt alone is ~1.2:1 on ink, so a primary
+   (vanilla) underline marks the state at well over 3:1, light and dark */
+.site-header button[aria-pressed="true"],
+.site-header more-menu > button[aria-expanded="true"] {
   background: var(--color-surface-alt);
+  box-shadow: inset 0 -3px 0 var(--color-primary);
 }
 
 .site-header button.primary {

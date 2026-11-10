@@ -427,6 +427,25 @@ describe('brand surfaces: the ink bars', () => {
     });
   }
 
+  it('a pressed toggle and the open "⋯" on the bar carry a primary (vanilla) inset underline', () => {
+    const siteMode = cssRules(stripComments(read('editor', 'assets', 'css', '_site-mode.css')));
+    for (const selector of ['.site-header button[aria-pressed="true"]', '.site-header more-menu > button[aria-expanded="true"]']) {
+      const rule = siteMode.find((r) => r.selectors.includes(selector));
+      assert.ok(rule, `no rule for ${selector}`);
+      assert.match(rule.body, /box-shadow:\s*inset\s+0\s+-[23]px\s+0\s+var\(--color-primary\)/, selector);
+    }
+  });
+
+  for (const [label, scheme] of [['light', onInkLight], ['dark', onInkDark]]) {
+    it(`${label}: the pressed marker (primary) is at least 3:1 on the bar and on the pressed background`, () => {
+      assert.equal(hex(scheme, '--color-primary'), '#ECD89A');
+      for (const bg of ['--color-background', '--color-surface-alt']) {
+        const ratio = contrast(hex(scheme, '--color-primary'), hex(scheme, bg));
+        assert.ok(ratio >= 3, `${hex(scheme, '--color-primary')} on ${hex(scheme, bg)} is ${ratio.toFixed(2)}:1`);
+      }
+    });
+  }
+
   it('light: save and publish errors on the bar (VB\'s dark error text, by color-scheme) are at least 4.5:1', () => {
     assert.equal(declsFor('.on-ink', false).has('--color-error-text'), false, 'menus would inherit it');
     const ratio = contrast(vbDark('--color-error-text'), hex(onInkLight, '--color-background'));

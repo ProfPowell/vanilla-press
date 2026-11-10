@@ -15,7 +15,7 @@
 import { inputRules, wrappingInputRule, textblockTypeInputRule,
   InputRule } from 'prosemirror-inputrules';
 import { schema } from './schema.js';
-import { matchInlineMark, applyInlineMark } from './inline-marks.js';
+import { inlineMarkHandler } from './inline-marks.js';
 
 /**
  * Code block: ``` optionally followed by language → code_block
@@ -90,22 +90,12 @@ function hrRule() {
 
 /**
  * Inline marks: one rule per closing delimiter (* _ ` ~ = and the ) of a link).
- * Skips code blocks, the title and text already in code.
+ * The handler (in inline-marks.js) declines unless the cursor is empty.
  */
 function inlineMarkRules() {
   return ['*', '_', '`', '~', '=', ')'].map(ch => new InputRule(
     new RegExp(`${ch.replace(/[*)]/, '\\$&')}$`),
-    (state, match, start, end) => {
-      const $end = state.doc.resolve(end);
-      const parent = $end.parent;
-      if (parent.type === schema.nodes.code_block || parent.type === schema.nodes.title) return null;
-      const before = parent.textBetween(0, $end.parentOffset, null, '\ufffc');
-      const found = matchInlineMark(before + ch);
-      if (!found) return null;
-      const from = end - (before.length - found.start);
-      if (state.doc.rangeHasMark(from, end, schema.marks.code)) return null;
-      return applyInlineMark(state, found, from, end);
-    }
+    (state, match, start, end) => inlineMarkHandler(state, ch, start, end)
   ));
 }
 

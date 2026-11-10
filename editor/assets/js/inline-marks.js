@@ -67,3 +67,28 @@ export function applyInlineMark(state, match, from, to) {
   const tr = state.tr.replaceWith(from, to, schema.text(match.text, marked));
   return tr.removeStoredMark(type);
 }
+
+/**
+ * Input-rule handler for a closing delimiter `ch` typed over [start, end).
+ * Declines (returns null) unless the input is at an empty text cursor, so a
+ * typed character over a selection behaves like ordinary typing.
+ * Skips code blocks, the title and text already in code.
+ * @param {import('prosemirror-state').EditorState} state
+ * @param {string} ch - the character just typed
+ * @param {number} start
+ * @param {number} end
+ * @returns {import('prosemirror-state').Transaction | null}
+ */
+export function inlineMarkHandler(state, ch, start, end) {
+  if (start !== end || !state.selection.empty) return null;
+  const $end = state.doc.resolve(end);
+  const parent = $end.parent;
+  if (!parent.isTextblock) return null;
+  if (parent.type === schema.nodes.code_block || parent.type === schema.nodes.title) return null;
+  const before = parent.textBetween(0, $end.parentOffset, null, '￼');
+  const found = matchInlineMark(before + ch);
+  if (!found) return null;
+  const from = end - (before.length - found.start);
+  if (state.doc.rangeHasMark(from, end, schema.marks.code)) return null;
+  return applyInlineMark(state, found, from, end);
+}

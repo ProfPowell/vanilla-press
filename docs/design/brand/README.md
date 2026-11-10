@@ -36,10 +36,12 @@ Don't scale one drawing to every size. Use the drawing made for the size you ren
 | Rendered size | Drawing | Files |
 |---|---|---|
 | 128px and up | **Full**: rim, veins, shine | `svg/seal-ink.svg`, `svg/seal-vanilla.svg` |
-| 32–127px | **Medium**: no rim, no veins, no shine | `svg/seal-ink-medium.svg`, `svg/seal-vanilla-medium.svg` |
-| 16–31px | **Micro**: plain disc, five round petals | `svg/seal-ink-micro.svg`, `svg/seal-vanilla-micro.svg`, `favicon.svg` |
+| 28–127px | **Medium**: no rim, no veins, no shine | `svg/seal-ink-medium.svg`, `svg/seal-vanilla-medium.svg` |
+| 16–27px | **Micro**: plain disc, five round petals | `svg/seal-ink-micro.svg`, `svg/seal-vanilla-micro.svg`, `favicon.svg` |
 
 Minimum size is 16px. Below that, don't use the mark.
+
+The app's top bars and rail show the seal at 28px, so they use the medium drawing. At 28px (56 device pixels on a retina screen) the medium drawing keeps the scalloped wax edge, which the micro drawing's plain disc drops.
 
 ## Colors
 
@@ -84,7 +86,7 @@ Horizontal: seal height = 96, gap = 18, wordmark 46 units, vertically centred on
 - Don't put the Ink seal on ink, or the Vanilla seal on paper; contrast collapses.
 - Don't set the seal on busy photos or patterns.
 - Don't change the wordmark's font, weight or spacing, or place the wordmark left of the seal.
-- Don't use the full drawing below 128px or the medium drawing below 32px.
+- Don't use the full drawing below 128px or the medium drawing below 28px.
 
 ## Icons and favicons
 
@@ -115,7 +117,7 @@ Head markup (adjust the path to where the files are served):
 
 - **Serving:** `docs/` isn't served by the app. Copy the runtime files (favicons, `svg/`, the PNGs you need, `tokens.css`) to `app/assets/brand/` so they're served under `/app/assets/brand/`, or add a static mount in `src/app/server.js` (`STATIC_MOUNTS`). Keep this folder as the master copy.
 - **App and editor `<head>`:** add the favicon links above to `app/index.html`, `app/site.html` and `editor/index.html`.
-- **Top bar** (`Main.dc.html` header): the app's top bars are ink (`.on-ink` in `app/assets/brand-ui.css`), so they use `seal-vanilla-medium.svg` at 28px, then "Vanilla Press" in `--font-serif` bold and petal. On a light surface (the rail, empty states) use `seal-ink-medium.svg`, swapped for the vanilla one in dark with `<picture>` and `prefers-color-scheme`. Use `<img src="…" alt="">` with the name as adjacent text, or `alt="Vanilla Press"` if the image stands alone.
+- **Top bar** (`Main.dc.html` header): the app's top bars are ink (`.on-ink` in `app/assets/brand-ui.css`), so they use `seal-vanilla-medium.svg` at 28px (the medium drawing, per the size table), then "Vanilla Press" in `--font-serif` bold and petal. On a light surface (the rail, empty states) use `seal-ink-medium.svg`, swapped for the vanilla one in dark with `<picture>` and `prefers-color-scheme`. Use `<img src="…" alt="">` with the name as adjacent text, or `alt="Vanilla Press"` if the image stands alone.
 - **Inline in UI** where the mark must follow the theme: inline `seal-mono.svg` and set `color` (it uses `currentColor`).
 - **Empty states and "Published" moments** may use the full seal or the stacked lockup. A green "Published" badge may use `seal-mono.svg` in the success color; that's the only sanctioned recolor.
 - **Tokens:** import `tokens.css` once (it declares `@layer tokens`, matching Vanilla Breeze's layer order) where brand surfaces need the colors.

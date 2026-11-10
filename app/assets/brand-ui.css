@@ -12,6 +12,8 @@
  * - The writing area is not branded: the tokens are set on :root only, and
  *   the editor pane always carries data-theme (an empty one when the site has
  *   no theme), where VB's tokens layer re-declares the site theme's values.
+ *   test/app/brand-ui.test.js checks that the served VB re-declares every
+ *   --color-* token set here on :where([data-theme]).
  *   The Theme screen's preview frame is its own document and never links this.
  */
 
@@ -27,6 +29,7 @@
     color-scheme: light dark;
 
     --color-background: var(--vp-brand-paper);
+    --color-surface: var(--vp-brand-paper); /* inputs, palettes, menus: paper, apart from parchment panels */
     --color-surface-raised: var(--vp-brand-parchment);
     --color-surface-alt: #EAE0CC;
     --color-border: #DCD1BD;
@@ -45,6 +48,7 @@
   @media (prefers-color-scheme: dark) {
     :root {
       --color-background: var(--vp-brand-ink-rim);
+      --color-surface: var(--vp-brand-ink-rim); /* inputs, palettes, menus: ink-rim, apart from ink panels */
       --color-surface-raised: var(--vp-brand-ink);
       --color-surface-alt: #2E3D5E;
       --color-border: #46577D;
@@ -55,6 +59,8 @@
       --color-primary: var(--vp-brand-vanilla);
       --color-interactive: var(--color-primary);
       --color-text-on-primary: var(--vp-brand-ink);
+      /* VB's dark error text (#FF7972) is 4.2:1 on a hovered menu row (surface-alt) */
+      --color-error-text: #FF908A;
     }
   }
 }

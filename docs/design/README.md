@@ -59,6 +59,7 @@ Use the custom property, not the hex. `app/assets/brand-ui.css` sets these for t
 | Use | VB token | Value |
 |---|---|---|
 | Page background | `--color-background` | paper `#FFFAF0` |
+| Inputs, palettes, menus | `--color-surface` | paper `#FFFAF0` |
 | Rail, settings panel, cards' raised surface | `--color-surface-raised` | parchment `#F4EDE0` |
 | Selected nav item, segmented track, hover | `--color-surface-alt` | `#EAE0CC` |
 | Borders | `--color-border` | `#DCD1BD` |
@@ -74,6 +75,7 @@ Use the custom property, not the hex. `app/assets/brand-ui.css` sets these for t
 | Use | VB token | Value |
 |---|---|---|
 | Page background | `--color-background` | ink-rim `#141C30` |
+| Inputs, palettes, menus | `--color-surface` | ink-rim `#141C30` |
 | Raised surfaces | `--color-surface-raised` | ink `#23314F` |
 | Selected nav item, segmented track, hover | `--color-surface-alt` | `#2E3D5E` |
 | Borders | `--color-border` | `#46577D` (a lighter ink) |
@@ -83,6 +85,7 @@ Use the custom property, not the hex. `app/assets/brand-ui.css` sets these for t
 | Labels and hints | `--color-text-subtle` | `#B4B0A6` (5.97:1 on ink) |
 | Primary buttons, links, focus | `--color-primary`, `--color-interactive` | vanilla `#ECD89A` |
 | Text on primary | `--color-text-on-primary` | ink `#23314F` |
+| Delete, Unpublish | `--color-error-text` | `#FF908A` (4.94:1 on surface-alt; VB's `#FF7972` is 4.2) |
 
 ### Unchanged Vanilla Breeze tokens
 

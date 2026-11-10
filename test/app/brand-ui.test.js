@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyPaneTheme } from '../../editor/assets/js/pane-theme.js';
+import { applyPaneTheme, paneTheme } from '../../editor/assets/js/pane-theme.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (...p) => readFileSync(join(ROOT, ...p), 'utf8');
@@ -62,6 +62,11 @@ const TEXT_PAIRS = [
   ['--color-text', '--color-surface-raised'],
   ['--color-text-muted', '--color-surface-raised'],
   ['--color-text-subtle', '--color-surface-raised'],
+  // Inputs, palettes and menus: text on surface
+  ['--color-text', '--color-surface'],
+  ['--color-text-muted', '--color-surface'],
+  ['--color-text-subtle', '--color-surface'],
+  ['--color-primary', '--color-surface'],
   ['--color-text-on-primary', '--color-primary'],
   ['--color-primary', '--color-background'],
   // Selected nav item and hover: text on surface-alt
@@ -70,7 +75,7 @@ const TEXT_PAIRS = [
 ];
 
 const OVERRIDDEN = [
-  '--color-background', '--color-surface-raised', '--color-surface-alt', '--color-border',
+  '--color-background', '--color-surface', '--color-surface-raised', '--color-surface-alt', '--color-border',
   '--color-border-subtle', '--color-text', '--color-text-muted', '--color-text-subtle',
   '--color-primary', '--color-interactive', '--color-text-on-primary',
 ];
@@ -93,16 +98,32 @@ describe('brand-ui.css tokens', () => {
       assert.ok(ratio >= 3, `${ratio.toFixed(2)}:1`);
     });
 
+    it(`${label}: inputs and menus (surface) stand apart from raised panels`, () => {
+      assert.notEqual(hex(scheme, '--color-surface'), hex(scheme, '--color-surface-raised'));
+    });
+
     it(`${label}: interactive is the primary color`, () => {
       assert.equal(hex(scheme, '--color-interactive'), hex(scheme, '--color-primary'));
     });
   }
 
-  it('dark: muted and subtle stay readable on surface-alt too', () => {
+  it('dark: subtle and primary stay readable on surface-alt too', () => {
     for (const fg of ['--color-text-subtle', '--color-primary']) {
       const ratio = contrast(hex(dark, fg), hex(dark, '--color-surface-alt'));
       assert.ok(ratio >= 4.5, `${fg}: ${ratio.toFixed(2)}:1`);
     }
+  });
+
+  // Delete and Unpublish rows in menus, hovered (surface-alt) or not; the danger button (text-on-primary on error-text).
+  for (const bg of ['--color-background', '--color-surface', '--color-surface-raised', '--color-surface-alt']) {
+    it(`dark: --color-error-text on ${bg} is at least 4.5:1`, () => {
+      const ratio = contrast(hex(dark, '--color-error-text'), hex(dark, bg));
+      assert.ok(ratio >= 4.5, `${hex(dark, '--color-error-text')} on ${hex(dark, bg)} is ${ratio.toFixed(2)}:1`);
+    });
+  }
+  it('dark: the danger button (text-on-primary on error-text) is at least 4.5:1', () => {
+    const ratio = contrast(hex(dark, '--color-text-on-primary'), hex(dark, '--color-error-text'));
+    assert.ok(ratio >= 4.5, `${ratio.toFixed(2)}:1`);
   });
 
   it('light: the fixed in-between values and brand colors', () => {
@@ -188,18 +209,105 @@ function fakeEl() {
   };
 }
 
+/** A fake document holding the pane and the content element. */
+function fakeDoc() {
+  const pane = fakeEl();
+  const content = fakeEl();
+  const doc = {
+    pane, content,
+    querySelector: (sel) => ({ '.editor-pane': pane, '.editor-content': content }[sel] || null),
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    createElement: () => ({ ...fakeEl(), remove() {} }),
+    head: { append() {}, appendChild() {} },
+  };
+  return doc;
+}
+
+const THEMES = [{ id: 'default', name: 'Default', href: null }, { id: 'swiss', name: 'Swiss', href: '/s/swiss.css' }];
+
 describe('applyPaneTheme keeps the writing area unbranded', () => {
-  it('a site with no theme leaves data-theme="" on the pane, not no attribute', () => {
-    const pane = fakeEl();
-    const content = fakeEl();
-    const doc = {
-      querySelector: (s) => ({ '.editor-pane': pane, '.editor-content': content }[s] || null),
-      querySelectorAll: () => [],
-      head: { append() {} },
-    };
-    pane.setAttribute('data-theme', 'swiss');
-    applyPaneTheme({ pane: { ids: '', mode: null }, content: null, strip: null, chip: null, hrefs: [] }, doc);
-    assert.equal(pane.getAttribute('data-theme'), '');
-    assert.equal(content.hasAttribute('data-theme'), false);
+  const cases = [
+    ['a site with no theme', null, {}, ''],
+    ['the site theme', { name: 'swiss', mode: 'auto' }, {}, 'swiss'],
+    ['a page theme, page scope', { name: 'default', mode: 'light' }, { theme: 'swiss' }, 'swiss'],
+    ['a page theme, article scope', { name: 'default', mode: 'auto' }, { theme: 'swiss', themeScope: 'article' }, 'default'],
+    ['a page theme on a site with no theme.json', null, { theme: 'swiss' }, 'swiss'],
+  ];
+  for (const [label, setting, meta, ids] of cases) {
+    it(`${label}: the pane keeps a data-theme (${JSON.stringify(ids)})`, () => {
+      const doc = fakeDoc();
+      doc.pane.setAttribute('data-theme', 'old');
+      applyPaneTheme(paneTheme(setting, meta, THEMES), doc);
+      assert.equal(doc.pane.getAttribute('data-theme'), ids);
+    });
+  }
+
+  it('going from a theme back to none leaves data-theme="" on the pane, and none on the content', () => {
+    const doc = fakeDoc();
+    applyPaneTheme(paneTheme({ name: 'default' }, { theme: 'swiss', themeScope: 'article' }, THEMES), doc);
+    assert.equal(doc.content.getAttribute('data-theme'), 'swiss');
+    applyPaneTheme(paneTheme(null, {}, THEMES), doc);
+    assert.equal(doc.pane.getAttribute('data-theme'), '');
+    assert.equal(doc.content.hasAttribute('data-theme'), false);
+  });
+});
+
+describe('<theme-picker> (vp serve) keeps the writing area unbranded', () => {
+  it('the default theme sets data-theme="" on the pane, not no attribute', async () => {
+    const saved = Object.fromEntries(['HTMLElement', 'customElements', 'document'].map((k) => [k, globalThis[k]]));
+    const doc = fakeDoc();
+    globalThis.HTMLElement = class {};
+    globalThis.customElements = { define() {} };
+    globalThis.document = doc;
+    try {
+      const { ThemePicker } = await import('../../editor/assets/js/components/theme-picker.js');
+      const picker = new ThemePicker();
+      picker._themes = [{ id: 'default' }, { id: 'swiss', file: 'swiss.css' }];
+      picker.setTheme('swiss');
+      assert.equal(doc.pane.getAttribute('data-theme'), 'swiss');
+      picker.setTheme('default');
+      assert.equal(doc.pane.getAttribute('data-theme'), '');
+      picker.setTheme('unknown');
+      assert.equal(doc.pane.getAttribute('data-theme'), '');
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete globalThis[k];
+        else globalThis[k] = v;
+      }
+    }
+  });
+});
+
+/*
+ * The served Vanilla Breeze (/assets/vb/) must re-declare every token the
+ * brand overrides on any [data-theme] element: that is what keeps the brand
+ * (set on :root) out of the writing area, which always carries data-theme.
+ */
+describe('the served Vanilla Breeze re-declares the brand tokens on [data-theme]', () => {
+  const vbCss = read('node_modules', 'vanilla-breeze', 'dist', 'cdn', 'vanilla-breeze.css');
+  const rules = [...vbCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+    selectors: m[1].split(',').map((x) => x.trim()),
+    names: new Set([...m[2].matchAll(/(--[\w-]+)\s*:/g)].map((d) => d[1])),
+  }));
+  const brandNames = [...new Set([...light.keys(), ...decls(darkCss).keys()])].filter((n) => n.startsWith('--color-'));
+
+  it('the check covers every token the brand overrides', () => {
+    for (const n of OVERRIDDEN) assert.ok(brandNames.includes(n), n);
+  });
+
+  it('a :where([data-theme]) rule declares every --color-* token the brand sets', () => {
+    const covered = new Set();
+    for (const r of rules) {
+      if (r.selectors.includes(':where([data-theme])')) for (const n of r.names) covered.add(n);
+    }
+    const missing = brandNames.filter((n) => !covered.has(n));
+    assert.deepEqual(missing, [], `not re-declared on [data-theme]: ${missing.join(', ')}`);
+  });
+
+  it('the dark rules (data-mode=dark and system dark) also reach [data-theme] elements', () => {
+    const dark = rules.filter((r) => r.names.has('--color-background') && r.selectors.some((x) => /data-mode=dark/.test(x)));
+    assert.ok(dark.some((r) => r.selectors.some((x) => /^:where\(\[data-mode=dark\] \[data-theme\]/.test(x))), 'data-mode=dark rule');
+    assert.ok(rules.some((r) => r.names.has('--color-background') && r.selectors.some((x) => /^:where\(\[data-theme\]:not\(\[data-mode=light\]/.test(x))), 'system dark rule');
   });
 });

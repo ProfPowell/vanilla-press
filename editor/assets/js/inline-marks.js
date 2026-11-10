@@ -85,7 +85,7 @@ export function inlineMarkHandler(state, ch, start, end) {
   const parent = $end.parent;
   if (!parent.isTextblock) return null;
   if (parent.type === schema.nodes.code_block || parent.type === schema.nodes.title) return null;
-  const before = parent.textBetween(0, $end.parentOffset, null, '￼');
+  const before = parent.textBetween(0, $end.parentOffset, null, '\ufffc');
   const found = matchInlineMark(before + ch);
   if (!found) return null;
   const from = end - (before.length - found.start);

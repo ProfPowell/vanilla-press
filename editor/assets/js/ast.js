@@ -40,6 +40,13 @@ export function toBlockAst(pmDoc) {
     const block = nodeToBlock(child);
     if (block) blocks.push(block);
   });
+  // The editor's trailing paragraph (block-nav.js): an empty last paragraph
+  // after anything but a paragraph is not part of the post
+  const last = blocks[blocks.length - 1];
+  const before = blocks[blocks.length - 2];
+  if (before && before.type !== 'paragraph' && last.type === 'paragraph' && !(last.children || []).length) {
+    blocks.pop();
+  }
   return blocks;
 }
 

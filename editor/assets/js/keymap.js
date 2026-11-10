@@ -12,6 +12,7 @@ import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-li
 import { schema } from './schema.js';
 import { goToNextCell } from 'prosemirror-tables';
 import { moveBlock, movableBlockAt } from './block-handles.js';
+import { navDown, navUp, navRight, navLeft, enterAfterMedia } from './block-nav.js';
 
 /**
  * Set heading at given level, or toggle back to paragraph if already at that level.
@@ -98,7 +99,14 @@ const keys = {
   // Lists
   'Tab': chainCommands(codeBlockTab, goToNextCell(1), sinkListItem(schema.nodes.list_item)),
   'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item)),
-  'Enter': chainCommands(codeBlockNewline, splitListItem(schema.nodes.list_item)),
+  'Enter': chainCommands(enterAfterMedia, codeBlockNewline, splitListItem(schema.nodes.list_item)),
+
+  // Past figures, embeds and other media blocks (block-nav.js); anywhere
+  // else they return false and the default movement applies
+  'ArrowDown': navDown,
+  'ArrowUp': navUp,
+  'ArrowRight': navRight,
+  'ArrowLeft': navLeft,
   'Backspace': chainCommands(undoInputRule, baseKeymap.Backspace),
 
   // Structure

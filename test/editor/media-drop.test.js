@@ -258,7 +258,10 @@ describe('mediaDropPlugin', () => {
     view.dispatch(view.state.tr.delete(target, target + 2));
     held.release();
     await settle();
-    assert.deepEqual(names(view.state.doc), ['paragraph', 'a.png', 'paragraph']);
+    // Read the doc itself: toBlockAst drops an empty last paragraph after a figure
+    const blocks = [];
+    view.state.doc.forEach((n, _o, i) => { if (i > 0) blocks.push(n.type.name === 'figure' ? n.attrs.src.replace('/media/', '') : n.type.name); });
+    assert.deepEqual(blocks, ['paragraph', 'a.png', 'paragraph']);
   });
 
   it('the large-file note reaches onInserted', async () => {

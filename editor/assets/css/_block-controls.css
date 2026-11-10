@@ -238,6 +238,12 @@
   display: flex;
 }
 
+/* While a block is dragged by its handle the figure is node-selected: keep its
+   fields hidden so it doesn't grow under the pointer and shift the drop targets */
+[data-block-dragging] :is(.pm-figure, .pm-embed) > .media-fields {
+  display: none;
+}
+
 /* "Alt: Missing": a small badge on the frame while the figure isn't selected */
 .pm-figure .figure-alt-missing {
   position: absolute;

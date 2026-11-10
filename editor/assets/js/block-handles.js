@@ -218,7 +218,10 @@ class BlockHandles {
     this.addButton.addEventListener('mousedown', (e) => e.preventDefault());
     this.addButton.addEventListener('click', () => this.addAfter());
     this.dragButton.addEventListener('dragstart', (e) => this.dragStart(e));
+    this.endDrag = () => { delete this.host.dataset.blockDragging; };
+    this.host.addEventListener('drop', this.endDrag);
     this.dragButton.addEventListener('dragend', () => {
+      this.endDrag();
       const { dragging } = this.view;
       const { item } = this.drag;
       setTimeout(() => {
@@ -254,6 +257,8 @@ class BlockHandles {
     const block = this.target;
     if (!block || !event.dataTransfer) { event.preventDefault(); return; }
     const { view } = this;
+    // Before selecting: a selected figure or embed would show its fields and grow
+    this.host.dataset.blockDragging = '';
     const selection = NodeSelection.create(view.state.doc, block.pos);
     view.dispatch(view.state.tr.setSelection(selection));
     const slice = selection.content();
@@ -317,6 +322,8 @@ class BlockHandles {
   destroy() {
     this.host.removeEventListener('mousemove', this.onMouseMove);
     this.host.removeEventListener('mouseleave', this.onMouseLeave);
+    this.host.removeEventListener('drop', this.endDrag);
+    this.endDrag();
     this.view.dom.removeEventListener('focus', this.onFocusChange);
     this.view.dom.removeEventListener('blur', this.onFocusChange);
     this.el.remove();

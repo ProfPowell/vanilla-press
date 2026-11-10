@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { schema } from '../../editor/assets/js/schema.js';
 import { toBlockAst } from '../../editor/assets/js/ast.js';
@@ -209,5 +210,14 @@ describe('the empty-line placeholder', () => {
     const state = EditorState.create({ doc, plugins: [blockHandlesPlugin()], selection: TextSelection.create(doc, doc.child(0).nodeSize + 1) });
     assert.equal(placeholders(state).length, 1);
     assert.deepEqual(toBlockAst(state.doc), [{ type: 'paragraph', children: [] }]);
+  });
+});
+
+describe('block drag css', () => {
+  it('hides a selected figure or embed\'s fields while a block is dragged', () => {
+    const css = readFileSync(new URL('../../editor/assets/css/_block-controls.css', import.meta.url), 'utf8');
+    const show = css.indexOf(':is(.pm-figure, .pm-embed):is([data-selected], :focus-within) > .media-fields');
+    const hide = css.search(/\[data-block-dragging\] :is\(\.pm-figure, \.pm-embed\) > \.media-fields \{\s*display: none;/);
+    assert.ok(show >= 0 && hide > show, 'the drag rule must follow the show rule (same specificity)');
   });
 });

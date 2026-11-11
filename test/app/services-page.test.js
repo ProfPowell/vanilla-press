@@ -42,7 +42,7 @@ test('servicesView: Openverse is ready and has no key field', () => {
 test('servicesView: Pexels without a key needs one; no Remove yet', () => {
   assert.equal(row('pexels').status, 'Needs a key');
   assert.equal(row('pexels').tone, 'warn');
-  assert.deepEqual(row('pexels').key, { hasKey: false, placeholder: '', canRemove: false });
+  assert.deepEqual(row('pexels').key, { label: 'Pexels API key', hasKey: false, placeholder: '', canRemove: false });
   assert.equal(row('pexels').signupUrl, 'https://pexels.test/api');
 });
 
@@ -50,7 +50,7 @@ test('servicesView: Pixabay turned off says so, even with a key', () => {
   assert.equal(row('pixabay').status, 'Turned off');
   assert.equal(row('pixabay').tone, 'off');
   assert.equal(row('pixabay').enabled, false);
-  assert.deepEqual(row('pixabay').key, { hasKey: true, placeholder: KEY_SAVED_PLACEHOLDER, canRemove: true });
+  assert.deepEqual(row('pixabay').key, { label: 'Pixabay API key', hasKey: true, placeholder: KEY_SAVED_PLACEHOLDER, canRemove: true });
 });
 
 test('servicesView: a saved key reads as saved, never shown', () => {
@@ -61,4 +61,16 @@ test('servicesView: a saved key reads as saved, never shown', () => {
 
 test('servicesView: tolerates a missing state', () => {
   assert.deepEqual(servicesView(undefined), { groups: [] });
+});
+
+test('servicesView: the key field is named as the service names it', () => {
+  const v = servicesView({ groups: [{ id: 'image-search', label: 'Image search', services: [
+    svc('unsplash', 'Unsplash', { keyName: 'Access Key' }),
+    svc('pexels', 'Pexels', { keyName: 'API key' }),
+    svc('legacy', 'Legacy'),
+  ] }] });
+  const [unsplash, pexels, legacy] = v.groups[0].services;
+  assert.equal(unsplash.key.label, 'Unsplash Access Key');
+  assert.equal(pexels.key.label, 'Pexels API key');
+  assert.equal(legacy.key.label, 'Legacy API key');
 });

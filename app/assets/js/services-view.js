@@ -8,7 +8,7 @@ export const KEY_SAVED_PLACEHOLDER = 'Key saved — enter a new one to replace i
 
 /**
  * @typedef {{ id: string, label: string, needsKey: boolean, hasKey: boolean,
- *   enabled: boolean, ready: boolean, signupUrl: string|null }} ServiceState
+ *   enabled: boolean, ready: boolean, signupUrl: string|null, keyName?: string|null }} ServiceState
  */
 
 /**
@@ -29,7 +29,7 @@ export function serviceRow(s) {
     enabled: s.enabled,
     signupUrl: s.signupUrl ?? null,
     key: s.needsKey
-      ? { hasKey: s.hasKey, placeholder: s.hasKey ? KEY_SAVED_PLACEHOLDER : '', canRemove: s.hasKey }
+      ? { label: `${s.label} ${s.keyName || 'API key'}`, hasKey: s.hasKey, placeholder: s.hasKey ? KEY_SAVED_PLACEHOLDER : '', canRemove: s.hasKey }
       : null,
   };
 }

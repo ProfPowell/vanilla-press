@@ -15,7 +15,8 @@ export const SERVICE_GROUPS = [
 
 /**
  * @typedef {{ id: string, label: string, group: string, needsKey: boolean,
- *   signupUrl: string|null, mode: 'copy'|'link' }} Service
+ *   signupUrl: string|null, mode: 'copy'|'link', keyName?: string }} Service
+ *   keyName: what the service's own key page calls the key to paste (default 'API key').
  */
 
 /** @type {Service[]} */
@@ -23,5 +24,5 @@ export const SERVICES = [
   { id: 'openverse', label: 'Openverse', group: 'image-search', needsKey: false, signupUrl: null, mode: 'copy' },
   { id: 'pexels', label: 'Pexels', group: 'image-search', needsKey: true, signupUrl: 'https://www.pexels.com/api/', mode: 'copy' },
   { id: 'pixabay', label: 'Pixabay', group: 'image-search', needsKey: true, signupUrl: 'https://pixabay.com/api/docs/', mode: 'copy' },
-  { id: 'unsplash', label: 'Unsplash', group: 'image-search', needsKey: true, signupUrl: 'https://unsplash.com/developers', mode: 'link' },
+  { id: 'unsplash', label: 'Unsplash', group: 'image-search', needsKey: true, signupUrl: 'https://unsplash.com/developers', mode: 'link', keyName: 'Access Key' },
 ];

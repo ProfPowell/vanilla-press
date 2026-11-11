@@ -58,6 +58,14 @@ describe('services store', () => {
     assert.equal(by.pixabay.hasKey, true);
   });
 
+  it('each keyed service names its key as the service does', () => {
+    const by = Object.fromEntries(servicesState(env).groups[0].services.map((s) => [s.id, s]));
+    assert.equal(by.unsplash.keyName, 'Access Key');
+    assert.equal(by.pexels.keyName, 'API key');
+    assert.equal(by.pixabay.keyName, 'API key');
+    assert.equal(by.openverse.keyName, null);
+  });
+
   it('enabled: false makes ready false', () => {
     const s = updateService('openverse', { enabled: false }, env);
     assert.equal(s.enabled, false);

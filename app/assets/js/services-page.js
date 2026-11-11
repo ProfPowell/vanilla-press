@@ -42,7 +42,7 @@ function serviceCard(row) {
   if (row.key) {
     const inputId = `service-${row.id}-key`;
     const form = h('form', { class: 'service-key', 'data-id': row.id },
-      h('label', { for: inputId }, `${row.label} API key`),
+      h('label', { for: inputId }, row.key.label),
       h('div', { class: 'row' },
         h('input', {
           id: inputId, name: 'key', type: 'password', autocomplete: 'off', spellcheck: 'false',

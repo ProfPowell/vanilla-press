@@ -14,7 +14,7 @@ import { SERVICES, SERVICE_GROUPS } from './catalog.js';
 
 /**
  * @typedef {{ id: string, label: string, needsKey: boolean, hasKey: boolean,
- *   enabled: boolean, ready: boolean, signupUrl: string|null }} ServiceState
+ *   enabled: boolean, ready: boolean, signupUrl: string|null, keyName: string|null }} ServiceState
  */
 
 function servicesFile(env) {
@@ -77,6 +77,7 @@ function stateOf(service, stored) {
     enabled,
     ready: enabled && (!service.needsKey || hasKey),
     signupUrl: service.signupUrl,
+    keyName: service.needsKey ? (service.keyName ?? 'API key') : null,
   };
 }
 

@@ -352,6 +352,16 @@ dialog.media-picker[data-dragging] {
   min-block-size: 24rem;
 }
 
+.web-image-edit-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-s);
+}
+
+.web-image-edit-note:empty {
+  display: none;
+}
+
 .web-image-edit-actions {
   display: flex;
   gap: var(--size-s);

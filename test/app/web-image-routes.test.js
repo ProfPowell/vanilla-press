@@ -13,13 +13,17 @@ import { createRouter, sendJson } from '../../src/server/router.js';
 import { mountServiceRoutes } from '../../src/app/service-routes.js';
 import { createImageSearch } from '../../src/services/image-search.js';
 import { updateService } from '../../src/services/store.js';
+import Database from 'better-sqlite3';
+import { migrate } from '../../src/store/migrate.js';
+import { mountApi } from '../../src/server/api.js';
+import { MAX_BYTES } from '../../src/media/limits.js';
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 3, 0, 4, 1, 1, 0x11, 0]);
 const KEY = 'SECRET-UNSPLASH-KEY';
 const DOWNLOAD = 'https://api.unsplash.com/photos/u1/download?ixid=abc';
 
 describe('web image routes', () => {
-  let root, env, server, base, calls, imageAnswer, pingAnswer;
+  let root, env, server, base, calls, imageAnswer, pingAnswer, db;
 
   const fakeFetch = async (url, init = {}) => {
     calls.push({ url: String(url), headers: init.headers || {} });
@@ -52,6 +56,10 @@ describe('web image routes', () => {
     const router = createRouter();
     const imageSearch = createImageSearch({ env, fetch: fakeFetch });
     mountServiceRoutes(router, { env, fetch: fakeFetch, imageSearch });
+    // The site's import reads the same search, as in the app
+    db = new Database(':memory:');
+    migrate(db);
+    mountApi(router, db, { rootDir: root, mediaDir: join(root, 'media'), webImages: imageSearch });
     server = createServer(async (req, res) => {
       if (!(await router.handle(req, res))) sendJson(res, 404, { error: 'Not found' });
     });
@@ -63,6 +71,7 @@ describe('web image routes', () => {
   });
   after(() => {
     server.close();
+    db.close();
     rmSync(root, { recursive: true, force: true });
   });
   beforeEach(() => {
@@ -105,6 +114,30 @@ describe('web image routes', () => {
       const res = await fetch(`${base}/api/web-images/unsplash/u1/image`);
       assert.equal(res.status, 400);
       assert.deepEqual(calls, []);
+    });
+
+    it('a 30 MB original streams through the proxy (60 MiB cap), and import still refuses it', async () => {
+      const big = Buffer.concat([JPEG, Buffer.alloc(30 * 1000 * 1000)]);
+      assert.ok(big.length > MAX_BYTES);
+      imageAnswer = () => new Response(big, { headers: { 'Content-Type': 'image/jpeg' } });
+      const res = await fetch(`${base}/api/web-images/openverse/ov-1/image`);
+      assert.equal(res.status, 200);
+      assert.equal(Number(res.headers.get('content-length')), big.length);
+      assert.equal((await res.arrayBuffer()).byteLength, big.length);
+      const imported = await fetch(`${base}/api/media/import`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'openverse', id: 'ov-1' }),
+      });
+      assert.equal(imported.status, 413);
+      assert.match((await imported.json()).error, /larger than 25/);
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media').get().n, 0);
+    });
+
+    it('the proxy refuses more than 60 MiB', async () => {
+      imageAnswer = () => new Response(new ReadableStream({ start() {} }), {
+        headers: { 'Content-Type': 'image/jpeg', 'Content-Length': String(62_914_560 + 1) },
+      });
+      assert.equal((await fetch(`${base}/api/web-images/openverse/ov-1/image`)).status, 413);
     });
 
     it('a failed download is 502', async () => {

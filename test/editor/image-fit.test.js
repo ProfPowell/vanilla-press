@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { fitWithin } from '../../editor/assets/js/image-fit.js';
+import { fitWithin, importPath } from '../../editor/assets/js/image-fit.js';
 
 describe('fitWithin', () => {
   it('scales a landscape image down to 2400 on the long edge', () => {
@@ -27,5 +27,34 @@ describe('fitWithin', () => {
   it('unknown sizes are not scaled', () => {
     assert.deepEqual(fitWithin(0, 0), { width: 0, height: 0, scaled: false });
     assert.deepEqual(fitWithin(undefined, 300), { width: 0, height: 300, scaled: false });
+  });
+});
+
+describe('importPath', () => {
+  const copy = (over) => ({ source: 'openverse', id: '1', mode: 'copy', width: 1280, height: 853, ...over });
+
+  it('an Unsplash result is used by link, even when asked to edit', () => {
+    assert.equal(importPath(copy({ source: 'unsplash', mode: 'link' }), { edit: false }), 'link');
+    assert.equal(importPath(copy({ source: 'unsplash', mode: 'link' }), { edit: true }), 'link');
+  });
+
+  it('Edit first edits, whatever the size', () => {
+    assert.equal(importPath(copy(), { edit: true }), 'edit');
+    assert.equal(importPath(copy({ width: 0, height: 0 }), { edit: true }), 'edit');
+  });
+
+  it('a known size over 2400px is downsized in the browser', () => {
+    assert.equal(importPath(copy({ width: 6000, height: 4000 }), { edit: false }), 'downsize');
+  });
+
+  it('an unknown size is probed: loaded and measured, never imported blind', () => {
+    for (const size of [{ width: 0, height: 0 }, { width: 0, height: 900 }, { width: 900, height: null }, { width: undefined, height: undefined }]) {
+      assert.equal(importPath(copy(size), { edit: false }), 'probe', JSON.stringify(size));
+    }
+  });
+
+  it('a known size that fits is imported by the server', () => {
+    assert.equal(importPath(copy(), { edit: false }), 'import');
+    assert.equal(importPath(copy({ width: 2400, height: 1600 })), 'import');
   });
 });

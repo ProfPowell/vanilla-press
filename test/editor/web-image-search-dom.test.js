@@ -1,0 +1,102 @@
+import { describe, it, before, after, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { parseHTML } from 'linkedom';
+
+// <web-image-search> in a real DOM (linkedom), with fetch stubbed.
+const win = parseHTML('<!doctype html><html><body></body></html>');
+const GLOBALS = ['document', 'HTMLElement', 'customElements', 'CustomEvent', 'Event', 'Node'];
+const saved = {};
+let calls, answers, focused;
+
+before(async () => {
+  for (const k of GLOBALS) { saved[k] = globalThis[k]; globalThis[k] = win[k]; }
+  saved.fetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    const answer = answers.shift();
+    return answer instanceof Response ? answer : Response.json(answer);
+  };
+  await import('../../editor/assets/js/components/web-image-search.js');
+  // Record focus: linkedom has no focus model
+  const proto = win.HTMLElement.prototype;
+  const realFocus = proto.focus;
+  proto.focus = function focus() { focused = this; return realFocus?.call(this); };
+});
+after(() => {
+  for (const k of GLOBALS) globalThis[k] = saved[k];
+  globalThis.fetch = saved.fetch;
+});
+beforeEach(() => { calls = []; answers = []; focused = null; win.document.body.replaceChildren(); });
+
+const CREDIT = { name: 'Ana Lee', site: 'Pexels' };
+const result = (id, over) => ({ source: 'pexels', id, mode: 'copy', thumb: 't.jpg', url: 'u.jpg', width: 800, height: 600, description: `Barn ${id}`, credit: CREDIT, ...over });
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+function mount(attrs = {}) {
+  const el = win.document.createElement('web-image-search');
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  win.document.body.append(el);
+  return el;
+}
+
+async function submit(el, q) {
+  const input = el.querySelector('input');
+  input.value = q;
+  el.querySelector('form').dispatchEvent(new win.Event('submit', { cancelable: true }));
+  await tick(); await tick();
+}
+
+const names = (el) => [...el.querySelectorAll('.web-image-card button')].map((b) => b.getAttribute('aria-label'));
+
+describe('<web-image-search>', () => {
+  it('each card\'s buttons have their own accessible names', async () => {
+    const el = mount();
+    answers.push({ results: [result('1'), result('2', { description: '' }), result('3', { source: 'unsplash', mode: 'link', description: 'Hill' })], errors: [], hasMore: false });
+    await submit(el, 'barn');
+    assert.deepEqual(names(el), [
+      'Insert: Barn 1', 'Edit first: Barn 1',
+      'Insert: Photo by Ana Lee on Pexels', 'Edit first: Photo by Ana Lee on Pexels',
+      'Insert: Hill',
+    ]);
+  });
+
+  it('"Add" for the library, and credit as text', async () => {
+    const el = mount({ for: 'library' });
+    answers.push({ results: [result('1', { credit: { name: '<b>x</b>', site: 'Pexels' } })], errors: [], hasMore: false });
+    await submit(el, 'barn');
+    assert.ok(calls[0].includes('for=library'));
+    assert.deepEqual(names(el), ['Add: Barn 1', 'Edit first: Barn 1']);
+    const credit = el.querySelector('.web-image-credit');
+    assert.equal(credit.textContent, 'Photo by <b>x</b> on Pexels');
+    assert.equal(credit.querySelector('b'), null);
+  });
+
+  it('per-source errors are announced, in a polite live region', async () => {
+    const el = mount();
+    answers.push({ results: [result('1')], errors: [{ source: 'pixabay', label: 'Pixabay', message: "Pixabay didn't accept the key" }], hasMore: false });
+    await submit(el, 'barn');
+    const lines = [...el.querySelectorAll('.web-image-search-error')];
+    assert.deepEqual(lines.map((l) => l.textContent), ["Pixabay didn't accept the key"]);
+    const region = lines[0].closest('[aria-live]');
+    assert.equal(region?.getAttribute('aria-live'), 'polite');
+  });
+
+  it('Enter on the same query searches again (after an expired result)', async () => {
+    const el = mount();
+    answers.push({ results: [result('1')], errors: [], hasMore: false }, { results: [result('1')], errors: [], hasMore: false });
+    await submit(el, 'barn');
+    await submit(el, 'barn');
+    assert.equal(calls.length, 2);
+  });
+
+  it('when Load more hides itself, focus moves to the first new result', async () => {
+    const el = mount();
+    answers.push({ results: [result('1')], errors: [], hasMore: true }, { results: [result('2')], errors: [], hasMore: false });
+    await submit(el, 'barn');
+    el.querySelector('.web-image-search-more').dispatchEvent(new win.Event('click'));
+    await tick(); await tick();
+    assert.ok(calls[1].includes('page=2'));
+    assert.equal(el.querySelector('.web-image-search-more').hidden, true);
+    assert.equal(focused?.getAttribute('aria-label'), 'Insert: Barn 2');
+  });
+});

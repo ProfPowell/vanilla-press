@@ -1,5 +1,6 @@
 /**
- * The size an image is stored at: pure, no DOM. Tested in Node.
+ * The size a web image is stored at, and how it gets there: pure, no DOM.
+ * Tested in Node.
  *
  * @module editor/image-fit
  */
@@ -26,4 +27,23 @@ export function fitWithin(width, height, max = MAX_EDGE) {
     height: Math.max(1, Math.round(h * ratio)),
     scaled: true,
   };
+}
+
+/**
+ * How a chosen web image search result reaches the post:
+ * - `link`: used by its URL (Unsplash), never copied or edited;
+ * - `edit`: loaded into the image editor, saved at most `MAX_EDGE`;
+ * - `downsize`: known to be over `MAX_EDGE`: made smaller in the browser;
+ * - `probe`: size unknown: loaded and measured in the browser, made smaller if
+ *   it needs to be (the server would store it at whatever size it is);
+ * - `import`: known to fit: the server copies it.
+ * @param {{ mode: 'copy'|'link', width?: number, height?: number }} result
+ * @param {{ edit?: boolean }} [opts]
+ * @returns {'link'|'edit'|'downsize'|'probe'|'import'}
+ */
+export function importPath(result, { edit = false } = {}) {
+  if (result.mode === 'link') return 'link';
+  if (edit) return 'edit';
+  if (!(Number(result.width) > 0) || !(Number(result.height) > 0)) return 'probe';
+  return fitWithin(result.width, result.height).scaled ? 'downsize' : 'import';
 }

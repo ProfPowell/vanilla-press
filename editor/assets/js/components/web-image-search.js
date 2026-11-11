@@ -58,12 +58,14 @@ export class WebImageSearch extends HTMLElement {
       oninput: () => this.schedule(),
     });
     this.status = el('p', { class: 'web-image-search-status', role: 'status' });
-    this.errors = el('div', { class: 'web-image-search-errors' });
+    // A source that failed is announced, like the count in the status line
+    this.errors = el('div', { class: 'web-image-search-errors', 'aria-live': 'polite' });
     this.grid = el('ul', { class: 'web-image-search-grid', 'aria-label': 'Web images' });
     this.more = el('button', { type: 'button', class: 'web-image-search-more', hidden: true, onclick: () => this.loadMore() }, 'Load more');
     const form = el('form', {
       class: 'web-image-search-form', role: 'search',
-      onsubmit: (e) => { e.preventDefault(); this.searchNow(); },
+      // Enter always searches, even the same words again (after "Search again")
+      onsubmit: (e) => { e.preventDefault(); this.searchNow({ force: true }); },
     },
     el('label', { for: inputId }, 'Search the web for images'),
     this.input);
@@ -84,10 +86,11 @@ export class WebImageSearch extends HTMLElement {
     this.timer = setTimeout(() => this.searchNow(), DEBOUNCE_MS);
   }
 
-  searchNow() {
+  /** Search now. Typing that ends where it started repeats nothing, unless `force`. */
+  searchNow({ force = false } = {}) {
     clearTimeout(this.timer);
     const q = this.input.value.trim();
-    if (q === this.query && this.results.length) return;
+    if (!force && q === this.query && this.results.length) return;
     this.query = q;
     this.page = 1;
     this.results = [];
@@ -131,9 +134,13 @@ export class WebImageSearch extends HTMLElement {
     const fresh = results.filter((r) => !seen.has(`${r.source}|${r.id}`));
     this.results.push(...fresh);
     this.errors.replaceChildren(...errors.map((e) => el('p', { class: 'web-image-search-error' }, e.message)));
-    this.grid.append(...fresh.map((r, i) => this.card(r, `${this.uid}-${request}-${i}`)));
+    const cards = fresh.map((r, i) => this.card(r, `${this.uid}-${request}-${i}`));
+    this.grid.append(...cards);
+    // Load more, pressed for the last page, goes away: focus goes to what it brought
+    const moreHadFocus = page > 1 && !hasMore;
     this.more.hidden = !hasMore;
     this.more.disabled = false;
+    if (moreHadFocus && cards.length) cards[0].querySelector('button')?.focus();
     if (!this.results.length) this.status.textContent = `No images found for “${query}”.`;
     else this.status.textContent = `${this.results.length} image${this.results.length === 1 ? '' : 's'} found.`;
   }
@@ -144,15 +151,17 @@ export class WebImageSearch extends HTMLElement {
     }));
     const creditId = `${id}-credit`;
     const label = this.purpose === 'library' ? 'Add' : 'Insert';
+    // Each button's own name: which picture it is
+    const what = result.description || creditText(result.credit) || `${result.source} ${result.id}`;
     return el('li', { class: 'web-image-card', 'data-source': result.source },
       el('span', { class: 'web-image-thumb' },
         el('img', { src: result.thumb, alt: result.description || '', loading: 'lazy', referrerpolicy: 'no-referrer' })),
       el('p', { class: 'web-image-credit', id: creditId }, creditText(result.credit)),
       el('span', { class: 'web-image-actions' },
-        el('button', { type: 'button', class: 'primary', 'data-action': 'insert', 'aria-describedby': creditId, onclick: () => choose(false) }, label),
+        el('button', { type: 'button', class: 'primary', 'data-action': 'insert', 'aria-label': `${label}: ${what}`, 'aria-describedby': creditId, onclick: () => choose(false) }, label),
         result.mode === 'link'
           ? null
-          : el('button', { type: 'button', 'data-action': 'edit', 'aria-describedby': creditId, onclick: () => choose(true) }, 'Edit first')));
+          : el('button', { type: 'button', 'data-action': 'edit', 'aria-label': `Edit first: ${what}`, 'aria-describedby': creditId, onclick: () => choose(true) }, 'Edit first')));
   }
 }
 

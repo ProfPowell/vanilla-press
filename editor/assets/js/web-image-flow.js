@@ -5,19 +5,29 @@
  *   photo by its URL: `{ src, alt, credit }`. It is never copied.
  * - **Edit first:** load the image (same origin, through the app) into an
  *   `<image-editor>`; Save uploads the edit, at most 2400px, credited as
- *   adapted.
- * - **Too big** (over 2400px on its long edge): downsize it on a canvas and
- *   upload that, credited (not adapted: it is the same picture).
- * - **Otherwise:** the server copies it into the library (`/media/import`).
+ *   adapted. A different picture opened or dropped in the editor is the
+ *   writer's own: it is saved with no credit.
+ * - **Too big** (over 2400px on its long edge), or **size unknown**: load it,
+ *   downsize it on a canvas if it needs it, and upload that, credited (not
+ *   adapted: it is the same picture).
+ * - **Otherwise:** the server copies it into the library (`/media/import`);
+ *   one it refuses as too large (413) is downsized in the browser instead.
  *
+ * Which of these runs is `importPath` (image-fit.js).
  * @module editor/web-image-flow
  */
 
 import { api } from './api-client.js';
-import { fitWithin } from './image-fit.js';
+import { fitWithin, importPath } from './image-fit.js';
 import { exportFormat } from '../../../src/media/types.js';
 
 const QUALITY = 0.92;
+
+/** What a writer sees when the browser can't decode an image (not the browser's own words). */
+export const DECODE_ERROR = "This image couldn't be opened. Try another one.";
+
+/** Shown under the editor once the writer opens or drops another picture. */
+export const REPLACED_NOTE = "This is a different picture now, so it won't carry the web credit.";
 /** The extension for a type the library accepts (the server checks the bytes too). */
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 
@@ -53,7 +63,12 @@ const formatOf = (blob) => exportFormat(blob.type) || 'jpeg';
 
 /** `blob` at most 2400px on its long edge (re-encoded only when it was larger). */
 async function fitBlob(blob, format) {
-  const bitmap = await createImageBitmap(blob);
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(blob);
+  } catch {
+    throw new Error(DECODE_ERROR);
+  }
   try {
     const fit = fitWithin(bitmap.width, bitmap.height);
     if (!fit.scaled) return blob;
@@ -71,14 +86,21 @@ async function fitBlob(blob, format) {
   }
 }
 
-/** Upload `blob` as `<source>-<id>.<ext>`, with the result's alt, credit and source. */
+/**
+ * Upload `blob` as `<source>-<id>.<ext>`, with the result's alt, `credit` and
+ * source; with `credit: null`, none of the three (the picture is not the result's).
+ */
 function upload(result, blob, credit) {
   const name = `${result.source}-${result.id}.${EXT[blob.type] || 'jpg'}`.replace(/[^\w.-]/g, '-');
-  return api.uploadMedia(new File([blob], name, { type: blob.type }), {
-    alt: result.description || null,
-    credit,
-    source: result.source,
-  });
+  return api.uploadMedia(new File([blob], name, { type: blob.type }), credit
+    ? { alt: result.description || null, credit, source: result.source }
+    : {});
+}
+
+/** Load a copy-mode result through the proxy and upload it at most 2400px, credited. */
+async function downsizeAndUpload(result) {
+  const blob = await fetchImage(result);
+  return upload(result, await fitBlob(blob, formatOf(blob)), result.credit);
 }
 
 /**
@@ -102,16 +124,41 @@ async function editThenUpload(result, slot) {
     throw err;
   }
   const format = formatOf(blob);
+  try {
+    // Edits at 2400px lose nothing (the copy is capped there) and keep a huge original responsive
+    blob = await fitBlob(blob, format);
+  } catch (err) {
+    slot.replaceChildren();
+    slot.hidden = true;
+    throw err;
+  }
   const url = URL.createObjectURL(blob);
   const editor = h('image-editor', { src: url, format });
+  // The first load is the result; any later one is a picture the writer opened or dropped
+  let loads = 0;
+  const replacedNote = h('p', { class: 'web-image-edit-note', role: 'status' });
+  editor.addEventListener('image-load', () => {
+    loads += 1;
+    if (loads > 1) replacedNote.textContent = REPLACED_NOTE;
+  });
   const error = h('p', { class: 'media-picker-error', role: 'alert', hidden: true });
   const save = h('button', { type: 'button', class: 'primary', 'data-action': 'save-edit' }, 'Save and insert');
   const cancel = h('button', { type: 'button', 'data-action': 'cancel-edit' }, 'Cancel');
-  slot.replaceChildren(editor, error, h('div', { class: 'web-image-edit-actions' }, save, cancel));
+  slot.replaceChildren(editor, replacedNote, error, h('div', { class: 'web-image-edit-actions' }, save, cancel));
   save.focus();
 
   return new Promise((resolve) => {
+    // Escape belongs to the editor (it closes a tool); with no tool open it is
+    // Cancel: back to the results. Never the picker's: that would lose the search.
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      if (editor.currentTool) return;
+      if (!cancel.disabled) close(null);
+    };
+    slot.addEventListener('keydown', onKey, true);
     const close = (value) => {
+      slot.removeEventListener('keydown', onKey, true);
       URL.revokeObjectURL(url);
       slot.replaceChildren();
       slot.hidden = true;
@@ -124,7 +171,8 @@ async function editThenUpload(result, slot) {
       save.textContent = 'Saving…';
       try {
         const edited = await fitBlob(await editor.getBlob(format, QUALITY), format);
-        close(await upload(result, edited, { ...result.credit, adapted: true }));
+        const credit = loads > 1 ? null : { ...result.credit, adapted: true };
+        close(await upload(result, edited, credit));
       } catch (err) {
         error.textContent = `${err.message || "Couldn't save the image."} Your edits are still here; try again.`;
         error.hidden = false;
@@ -144,15 +192,22 @@ async function editThenUpload(result, slot) {
  *   the new MediaItem; the link for an Unsplash photo; null when editing was cancelled
  */
 export async function chooseWebImage(result, { edit = false, editIn } = {}) {
-  if (result.mode === 'link') {
-    await api.pingUnsplash(result.id);
-    // No description is no alt yet (the figure's alt field opens), not decorative
-    return { src: result.url, alt: result.description || null, credit: result.credit };
+  switch (importPath(result, { edit })) {
+    case 'link':
+      await api.pingUnsplash(result.id);
+      // No description is no alt yet (the figure's alt field opens), not decorative
+      return { src: result.url, alt: result.description || null, credit: result.credit };
+    case 'edit':
+      return editThenUpload(result, editIn);
+    case 'downsize':
+    case 'probe':
+      return downsizeAndUpload(result);
+    default:
+      try {
+        return await api.importWebImage({ source: result.source, id: result.id });
+      } catch (err) {
+        if (err.status !== 413) throw err;
+        return downsizeAndUpload(result); // the proxy takes a larger original than an import
+      }
   }
-  if (edit) return editThenUpload(result, editIn);
-  if (fitWithin(result.width, result.height).scaled) {
-    const blob = await fetchImage(result);
-    return upload(result, await fitBlob(blob, formatOf(blob)), result.credit);
-  }
-  return api.importWebImage({ source: result.source, id: result.id });
 }

@@ -228,6 +228,26 @@ describe('image search', () => {
     await assert.rejects(search.image('pixabay', '195893'), (err) => err.status === 413);
   });
 
+  it('image() takes a per-call maxBytes over the default', async () => {
+    const body = async () => new Response(new Uint8Array(8192), { headers: { 'Content-Type': 'image/png' } });
+    const search = createImageSearch({ env, now, maxBytes: 4096, fetch: fakeFetch({ image: body }) });
+    await search.search('fox', { page: 1 });
+    await assert.rejects(search.image('pixabay', '195893'), (err) => err.status === 413);
+    const { data } = await search.image('pixabay', '195893', { maxBytes: 8192 });
+    assert.equal(data.length, 8192);
+  });
+
+  it('image() takes a per-call timeoutMs', async () => {
+    const stalled = async (url, init) => new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    });
+    const search = createImageSearch({ env, now, imageTimeoutMs: 60_000, fetch: fakeFetch({ image: stalled }) });
+    await search.search('fox', { page: 1 });
+    const started = Date.now();
+    await assert.rejects(search.image('pixabay', '195893', { timeoutMs: 30 }), (err) => err.status === 504);
+    assert.ok(Date.now() - started < 2000);
+  });
+
   it('image() accepts a body exactly at the cap', async () => {
     const exact = async () => new Response(new Uint8Array(4096), { headers: { 'Content-Type': 'image/png' } });
     const search = createImageSearch({ env, now, maxBytes: 4096, fetch: fakeFetch({ image: exact }) });

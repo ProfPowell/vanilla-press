@@ -115,11 +115,19 @@ function createPicker({ kind, heading, resolve }) {
     ...(web ? [web.tabs, web.libraryPanel, web.webPanel] : libraryParts));
 
   // Escape: the dialog's cancel event. Close it ourselves so the promise settles.
-  dialog.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); });
+  // While a web image is being edited, Escape leaves the editor (back to the
+  // results), never the picker: closing would lose the edits and the search.
+  dialog.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    if (web?.leaveEditor()) return;
+    finish(null);
+  });
   // A search box with text eats the first Escape (it clears itself): close on any Escape.
+  // The image editor handles its own Escape first (and prevents it).
   dialog.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
     e.preventDefault();
+    if (web?.leaveEditor()) return;
     finish(null);
   });
   dialog.addEventListener('dragover', (e) => { e.preventDefault(); dialog.dataset.dragging = ''; });
@@ -172,6 +180,10 @@ function createPicker({ kind, heading, resolve }) {
       webStatus, editSlot, searchEl);
 
     let busy = false;
+    // A new search clears the last choice's error ("Search again — …")
+    const clearError = () => { if (!busy) webStatus.replaceChildren(); };
+    searchEl.addEventListener('submit', clearError);
+    searchEl.addEventListener('input', clearError);
     searchEl.addEventListener('web-image-choose', async (e) => {
       if (busy || done) return;
       const { result, edit } = e.detail;
@@ -219,7 +231,14 @@ function createPicker({ kind, heading, resolve }) {
     }
     select('library');
 
-    return { tabs, libraryPanel, webPanel, select };
+    /** While editing: Cancel the edit (when it can be) and say so; else false. */
+    function leaveEditor() {
+      if (editSlot.hidden) return false;
+      editSlot.querySelector('[data-action="cancel-edit"]:not(:disabled)')?.click();
+      return true;
+    }
+
+    return { tabs, libraryPanel, webPanel, select, leaveEditor };
   }
 
   const queue = createUploadQueue({

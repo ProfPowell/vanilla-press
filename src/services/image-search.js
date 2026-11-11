@@ -193,29 +193,32 @@ export function createImageSearch({
    * not deliver it.
    * @param {string} source
    * @param {string} id
+   * @param {{ maxBytes?: number, timeoutMs?: number }} [limits] this call's cap and
+   *   deadline (default: the search's): the image proxy, which never stores the
+   *   bytes, takes a larger original than an import may
    * @returns {Promise<{ data: Buffer, contentType: string }>}
    */
-  async function image(source, id) {
+  async function image(source, id, { maxBytes: cap = maxBytes, timeoutMs: deadline = imageTimeoutMs } = {}) {
     const item = get(source, id);
     if (!item) throw Object.assign(new Error('Search again — this result has expired'), { status: 404 });
     const label = SERVICES.find((s) => s.id === source)?.label || source;
-    const tooLarge = () => new SourceError(`${label} sent an image larger than ${formatBytes(maxBytes)}`, 413);
+    const tooLarge = () => new SourceError(`${label} sent an image larger than ${formatBytes(cap)}`, 413);
     try {
       return await fetchWithin(item.url, {}, label, async (res) => {
         if (!res.ok || !res.body) throw new SourceError(`${label} couldn't send the image`, 502);
-        if (Number(res.headers.get('content-length')) > maxBytes) throw tooLarge();
+        if (Number(res.headers.get('content-length')) > cap) throw tooLarge();
         const chunks = [];
         let total = 0;
         for await (const chunk of res.body) {
           total += chunk.byteLength;
-          if (total > maxBytes) throw tooLarge();
+          if (total > cap) throw tooLarge();
           chunks.push(chunk);
         }
         return {
           data: Buffer.concat(chunks, total),
           contentType: res.headers.get('content-type') || 'application/octet-stream',
         };
-      }, imageTimeoutMs);
+      }, deadline);
     } catch (err) {
       throw Object.assign(new Error(err.message), { status: err.status || 502 });
     }

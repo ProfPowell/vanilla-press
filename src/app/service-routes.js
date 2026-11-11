@@ -19,6 +19,13 @@ const MAX_QUERY = 100;
 const EXPIRED = 'Search again — this result has expired';
 /** Unsplash asks for the ping; it should not hold up inserting the photo. */
 const PING_TIMEOUT_MS = 5000;
+/**
+ * The image proxy never stores what it serves, so it takes a larger original
+ * (60 MiB, 60 seconds) than an import (MAX_BYTES): the editor downsizes it to
+ * 2,400px before it is uploaded.
+ */
+const PROXY_MAX_BYTES = 62_914_560;
+const PROXY_TIMEOUT_MS = 60_000;
 
 /**
  * @param {{ add: Function }} router
@@ -69,7 +76,7 @@ export function mountServiceRoutes(router, {
     if (item.mode !== 'copy') return sendJson(res, 400, { error: 'This image is used by link only; load it from its own URL' });
     let data;
     try {
-      ({ data } = await imageSearch.image(source, id));
+      ({ data } = await imageSearch.image(source, id, { maxBytes: PROXY_MAX_BYTES, timeoutMs: PROXY_TIMEOUT_MS }));
     } catch (err) {
       return sendJson(res, err.status || 502, { error: err.message });
     }

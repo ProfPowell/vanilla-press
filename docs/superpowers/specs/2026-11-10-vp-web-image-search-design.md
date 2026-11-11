@@ -69,7 +69,8 @@ along.
 - bg-wc and border-wc picking, and page backgrounds (pass 2).
 - Text or drawing tools in the image editor.
 - Bulk import, collections or favorites from a source.
-- Hotlinked (remote) images in published pages.
+- Hotlinked (remote) images in published pages, except Unsplash (see
+  below).
 
 ## Anti-goals
 
@@ -127,10 +128,7 @@ These would make it a failure even if it worked:
   - **Openverse** works with no key, so search works on first run.
   - **Pexels** and **Pixabay** each need a free key. Both allow keeping a
     copy. Pixabay requires one.
-  - **Unsplash is left out of this pass.** Its API guidelines ask apps to
-    hotlink its image URLs rather than serve their own copies, which
-    conflicts with keeping a copy. It can be added later if its terms allow
-    it. The Services screen doesn't list it yet.
+  - **Unsplash** is included by link only (see "Unsplash, by link" below).
 - **License filter (Openverse):**
   - Exclude No-Derivatives licenses, because editing is offered.
   - Also exclude Non-Commercial licenses, so a copy is safe on any site.
@@ -193,6 +191,22 @@ These would make it a failure even if it worked:
     that show no caption.
   - The credit is still saved with the image in the library. Where it's
     shown on the page is the writer's call.
+
+- **Unsplash, by link (decided with the user: "unsplash can be included via
+  a link").**
+  - Unsplash is an Image search service with its own key.
+  - Its results are inserted by link: the figure's `src` is Unsplash's
+    image URL, as its API guidelines require.
+  - No copy is saved and "Edit first" isn't offered on its results, so
+    Unsplash results appear in the picker only, not in the Media screen's
+    "Add from web".
+  - **On insert, the server:**
+    - calls the photo's `download_location` endpoint, as the guidelines
+      require;
+    - credits "Photo by {creator} on Unsplash", with the links carrying
+      Unsplash's referral parameters (`utm_source=<app name>&utm_medium=referral`).
+  - A linked image has no media library row. Its credit lives on the
+    figure like any other.
 
 ## Left to the builder
 

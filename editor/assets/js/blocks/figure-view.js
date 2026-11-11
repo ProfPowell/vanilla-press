@@ -77,8 +77,9 @@ export class FigureView {
     this.srcInput.addEventListener('change', () => this.setAttr('src', this.srcInput.value));
     this.altInput.addEventListener('change', () => this.setAttr('alt', this.altInput.value));
 
-    // Browse: pick an image from the library. The figure keeps its own alt
-    // unless it has none, then it takes the library's.
+    // Browse: pick an image from the library (or the web). The figure keeps
+    // its own alt unless it has none, then it takes the library's. The credit
+    // is the new image's: another picture's credit would be wrong.
     browseBtn.addEventListener('click', async () => {
       const item = await openMediaPicker({ kind: 'image' });
       if (!item) return;
@@ -89,6 +90,7 @@ export class FigureView {
           ...this.node.attrs,
           src: item.src,
           alt: this.node.attrs.alt || (item.alt ?? ''),
+          credit: item.credit ?? null,
         })
       );
     });

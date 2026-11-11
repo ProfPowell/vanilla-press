@@ -64,6 +64,43 @@ describe('insertPlan', () => {
   });
 });
 
+describe('credited images', () => {
+  const credit = { name: 'Ana Lee', url: 'https://www.pexels.com/@ana', site: 'Pexels', siteUrl: 'https://www.pexels.com' };
+
+  it('the figure from an item with a credit carries it', () => {
+    const plan = insertPlan(item({ credit }), { pdfViewer: false });
+    assert.deepEqual(plan, { kind: 'figure', attrs: { src: '/media/photo.jpg', alt: 'A cat', credit }, focusAlt: false });
+    const { blocks, result } = astOf(nodesFor(plan, schema));
+    assert.deepEqual(blocks, [{ type: 'figure', attrs: { src: '/media/photo.jpg', alt: 'A cat', credit } }]);
+    assert.deepEqual(result.errors, []);
+  });
+
+  it('an item without a credit has no credit attr', () => {
+    for (const over of [{}, { credit: null }]) {
+      const plan = insertPlan(item(over), { pdfViewer: false });
+      assert.equal('credit' in plan.attrs, false);
+      const [node] = nodesFor(plan, schema);
+      assert.equal(node.attrs.credit, null);
+      assert.deepEqual(astOf([node]).blocks, [{ type: 'figure', attrs: { src: '/media/photo.jpg', alt: 'A cat' } }]);
+    }
+  });
+
+  it('a linked web image (src, alt, credit; no file) inserts a figure at its URL', () => {
+    const src = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';
+    const plan = insertPlan({ src, alt: 'A red barn', credit }, { pdfViewer: false });
+    assert.deepEqual(plan, { kind: 'figure', attrs: { src, alt: 'A red barn', credit }, focusAlt: false });
+    const { blocks, result } = astOf(nodesFor(plan, schema));
+    assert.deepEqual(blocks, [{ type: 'figure', attrs: { src, alt: 'A red barn', credit } }]);
+    assert.deepEqual(result.errors, []);
+  });
+
+  it('a linked web image with no description opens the alt field', () => {
+    const plan = insertPlan({ src: 'https://images.unsplash.com/p', alt: null, credit }, { pdfViewer: false });
+    assert.equal(plan.focusAlt, true);
+    assert.equal(plan.attrs.alt, '');
+  });
+});
+
 describe('nodesFor round-trips through toBlockAst', () => {
   it('figure: no caption', () => {
     const { blocks, result } = astOf(nodesFor(insertPlan(item(), { pdfViewer: false }), schema));

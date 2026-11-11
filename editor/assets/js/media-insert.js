@@ -12,16 +12,24 @@ import { mediaSrc } from '../../../src/media/usage.js';
 
 export const PDF_LINK_NOTE = 'Inserted as a link. Turn on the PDF viewer in Components to show PDFs in the page.';
 
+/** A figure for an image at `src`, carrying its credit when it has one. */
+function figurePlan(src, { alt, credit }) {
+  const attrs = { src, alt: alt ?? '' };
+  if (credit) attrs.credit = credit;
+  return { kind: 'figure', attrs, focusAlt: alt == null };
+}
+
 /**
- * The block a chosen file becomes.
+ * The block a chosen file becomes: a MediaItem, or a linked web image
+ * `{ src, alt, credit }`.
  * @param {object} item MediaItem
  * @param {{ pdfViewer: boolean }} opts whether the site has the pdf-viewer component on
  */
 export function insertPlan(item, { pdfViewer }) {
+  // A web image used by link (Unsplash) is no file: { src, alt, credit }
+  if (!item.filename) return figurePlan(item.src, item);
   const src = mediaSrc(item.filename); // encoded: a name with # or % must read back as itself
-  if (item.kind === 'image') {
-    return { kind: 'figure', attrs: { src, alt: item.alt ?? '' }, focusAlt: item.alt == null };
-  }
+  if (item.kind === 'image') return figurePlan(src, item);
   if (item.kind === 'video' || item.kind === 'audio') {
     return { kind: 'embed', attrs: { url: src, type: item.kind } };
   }
@@ -38,7 +46,7 @@ export function insertPlan(item, { pdfViewer }) {
 export function nodesFor(plan, schema) {
   switch (plan.kind) {
     case 'figure':
-      return [schema.nodes.figure.create({ src: plan.attrs.src, alt: plan.attrs.alt })];
+      return [schema.nodes.figure.create({ src: plan.attrs.src, alt: plan.attrs.alt, credit: plan.attrs.credit ?? null })];
     case 'embed':
       return [schema.nodes.embed.create({ url: plan.attrs.url, type: plan.attrs.type })];
     case 'component':

@@ -1,9 +1,12 @@
 /**
  * The media picker: a modal <dialog> for choosing a file from the site's
- * library, or uploading one and choosing it.
+ * library, or uploading one and choosing it. An image picker in the app's
+ * editor also has a "From the web" tab: a search of the web image services.
  *
  * `openMediaPicker({ kind })` resolves with the chosen MediaItem, or null when
- * the dialog is closed (Escape, Close). Focus returns to whatever had it.
+ * the dialog is closed (Escape, Close). A web image copied into the library
+ * resolves as its MediaItem (after the alt step); one used by link (Unsplash)
+ * as `{ src, alt, credit }`. Focus returns to whatever had it.
  * Pure logic (filtering, tiles, alt states, upload checks) lives in
  * src/media and media-upload.js; this module only renders and wires events.
  *
@@ -16,6 +19,7 @@ import { createUploadQueue } from '../media-upload.js';
 import { filterMedia, tileModel, altForCheckbox, emptyText, ALT_PLACEHOLDER } from '../../../../src/media/library-view.js';
 import { ACCEPTED } from '../../../../src/media/types.js';
 import { ACCEPT_ATTR } from '../../../../src/media/limits.js';
+import { chooseWebImage } from '../web-image-flow.js';
 
 const HEADINGS = {
   image: 'Choose an image',
@@ -93,16 +97,22 @@ function createPicker({ kind, heading, resolve }) {
   const grid = el('ul', { class: 'media-picker-grid', 'aria-label': 'Files' });
   const empty = el('p', { class: 'media-picker-empty', hidden: true });
 
-  const dialog = el('dialog', { class: 'media-picker', 'aria-labelledby': titleId },
-    el('header', { class: 'media-picker-header' },
-      el('h2', { id: titleId }, heading || HEADINGS[kind]),
-      el('button', { type: 'button', class: 'media-picker-close', onclick: () => finish(null) }, 'Close')),
+  const libraryParts = [
     el('div', { class: 'media-picker-tools' }, search, uploadBtn, fileInput),
     el('p', { class: 'media-picker-drop-hint' }, 'Or drop a file anywhere in this window.'),
     status,
     selected,
     grid,
-    empty);
+    empty,
+  ];
+  // The web tab: images only, and only in the app (its search and editor are the app's)
+  const web = kind === 'image' && SITE ? createWebTab() : null;
+
+  const dialog = el('dialog', { class: 'media-picker', 'aria-labelledby': titleId },
+    el('header', { class: 'media-picker-header' },
+      el('h2', { id: titleId }, heading || HEADINGS[kind]),
+      el('button', { type: 'button', class: 'media-picker-close', onclick: () => finish(null) }, 'Close')),
+    ...(web ? [web.tabs, web.libraryPanel, web.webPanel] : libraryParts));
 
   // Escape: the dialog's cancel event. Close it ourselves so the promise settles.
   dialog.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); });
@@ -117,8 +127,100 @@ function createPicker({ kind, heading, resolve }) {
   dialog.addEventListener('drop', (e) => {
     e.preventDefault();
     delete dialog.dataset.dragging;
-    if (e.dataTransfer?.files?.length) addFiles([e.dataTransfer.files[0]]);
+    if (!e.dataTransfer?.files?.length) return;
+    web?.select('library'); // the upload's progress shows there
+    addFiles([e.dataTransfer.files[0]]);
   });
+
+  /**
+   * "Your library" (the picker as it always was) and "From the web" tabs.
+   * Arrow keys, Home and End move between the tabs.
+   */
+  function createWebTab() {
+    const tabIds = { library: 'media-picker-tab-library', web: 'media-picker-tab-web' };
+    const panelIds = { library: 'media-picker-panel-library', web: 'media-picker-panel-web' };
+    const tab = (name, text) => el('button', {
+      type: 'button', role: 'tab', id: tabIds[name], class: 'media-picker-tab',
+      'aria-controls': panelIds[name], 'data-tab': name,
+      onclick: () => select(name, { focus: true }),
+    }, text);
+    const tabButtons = { library: tab('library', 'Your library'), web: tab('web', 'From the web') };
+    const tabs = el('div', { class: 'media-picker-tabs', role: 'tablist', 'aria-label': 'Where the image comes from' },
+      tabButtons.library, tabButtons.web);
+    tabs.addEventListener('keydown', (e) => {
+      const order = ['library', 'web'];
+      const at = order.indexOf(e.target.dataset?.tab);
+      if (at < 0) return;
+      const next = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: order.length - 1 }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      const name = order[(next + order.length) % order.length];
+      select(name);
+      tabButtons[name].focus();
+    });
+
+    const libraryPanel = el('div', { role: 'tabpanel', id: panelIds.library, class: 'media-picker-panel', 'aria-labelledby': tabIds.library },
+      ...libraryParts);
+    // Defined on first use: the element class needs a DOM (Node tests import this module)
+    const defined = import('./web-image-search.js');
+    const searchEl = el('web-image-search', { for: 'picker' });
+    const webStatus = el('div', { class: 'media-picker-status', role: 'status' });
+    defined.catch(() => webStatus.replaceChildren(el('p', { class: 'media-picker-error', role: 'alert' },
+      "Couldn't load the web search. Reload the page to try again.")));
+    const editSlot = el('div', { class: 'media-picker-web-edit', hidden: true });
+    const webPanel = el('div', { role: 'tabpanel', id: panelIds.web, class: 'media-picker-panel', 'aria-labelledby': tabIds.web },
+      webStatus, editSlot, searchEl);
+
+    let busy = false;
+    searchEl.addEventListener('web-image-choose', async (e) => {
+      if (busy || done) return;
+      const { result, edit } = e.detail;
+      busy = true;
+      // Editing shows its own progress where the editor goes
+      webStatus.replaceChildren(...(edit ? [] : [el('p', { class: 'media-picker-loading' },
+        result.mode === 'link' ? 'Inserting…' : 'Adding it to your library…')]));
+      if (edit) searchEl.hidden = true;
+      let chosen;
+      try {
+        chosen = await chooseWebImage(result, { edit, editIn: editSlot });
+      } catch (err) {
+        if (done) return;
+        webStatus.replaceChildren(el('p', { class: 'media-picker-error', role: 'alert' }, err.message));
+        searchEl.hidden = false;
+        busy = false;
+        return;
+      }
+      busy = false;
+      if (done) return;
+      webStatus.replaceChildren();
+      searchEl.hidden = false;
+      if (!chosen) { // editing cancelled: back to the results
+        searchEl.focus();
+        return;
+      }
+      if (!chosen.filename) { finish(chosen); return; } // used by link
+      // A copy is in the library now: its alt text, then "Use this file"
+      items = [chosen, ...items.filter((i) => i.id !== chosen.id)];
+      select('library');
+      renderGrid();
+      showUploaded(chosen, { added: true });
+    });
+
+    function select(name, { focus = false } = {}) {
+      for (const [n, button] of Object.entries(tabButtons)) {
+        const on = n === name;
+        button.setAttribute('aria-selected', String(on));
+        button.tabIndex = on ? 0 : -1;
+      }
+      libraryPanel.hidden = name !== 'library';
+      webPanel.hidden = name !== 'web';
+      if (focus && name === 'web') defined.then(() => { if (!webPanel.hidden) searchEl.focus(); }, () => {});
+      else if (focus) search.focus();
+    }
+    select('library');
+
+    return { tabs, libraryPanel, webPanel, select };
+  }
 
   const queue = createUploadQueue({
     upload: (file, { onProgress }) => api.uploadMedia(file, { onProgress }),
@@ -178,8 +280,11 @@ function createPicker({ kind, heading, resolve }) {
     }
   }
 
-  /** The new upload, selected: an image gets its alt fields; then "Use this file". */
-  function showUploaded(item) {
+  /**
+   * The new upload, selected: an image gets its alt fields; then "Use this file".
+   * `added`: a web image just copied in (its alt is the result's description).
+   */
+  function showUploaded(item, { added = false } = {}) {
     uploaded = item;
     const isImage = item.kind === 'image';
     const error = el('p', { class: 'media-picker-error', role: 'alert', hidden: true });
@@ -217,7 +322,7 @@ function createPicker({ kind, heading, resolve }) {
     } }, 'Use this file');
 
     selected.replaceChildren(
-      el('p', { class: 'media-picker-selected-name' }, 'Uploaded ', el('span', { class: 'media-picker-file' }, item.filename)),
+      el('p', { class: 'media-picker-selected-name' }, added ? 'Added to your library as ' : 'Uploaded ', el('span', { class: 'media-picker-file' }, item.filename)),
       isImage ? el('div', { class: 'media-picker-preview' }, el('img', { src: displayMediaUrl(item.src, SITE), alt: '' })) : null,
       isImage ? el('div', { class: 'field' }, el('label', { for: altId }, 'Alt text'), altArea) : null,
       isImage ? el('div', { class: 'field field-check' }, decorative, el('label', { for: 'media-picker-decorative' }, 'Decorative (no alt text needed)')) : null,

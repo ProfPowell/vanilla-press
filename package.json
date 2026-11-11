@@ -32,7 +32,7 @@
     "@profpowell/browser-window": "^1.4.7",
     "@profpowell/code-block": "^2.9.0",
     "@profpowell/code-playground": "^0.2.0",
-    "@profpowell/image-editor": "^0.1.0",
+    "@profpowell/image-editor": "^0.2.0",
     "@profpowell/marquee-wc": "^1.7.1",
     "@profpowell/pdf-viewer": "^0.2.0",
     "@profpowell/terminal-window": "^2.1.0",

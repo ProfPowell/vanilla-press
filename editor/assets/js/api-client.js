@@ -12,6 +12,8 @@ import { uploadMedia as uploadFile } from './media-upload.js';
 
 /** `/api/sites/<site>` in the app's editor (`?site=`), else `/api` (`vp serve`). */
 const BASE = apiBase(SITE);
+/** The app's own routes (web image search): the same for every site. */
+const APP_BASE = '/api';
 
 let workspacePromise = null;
 
@@ -22,9 +24,9 @@ let workspacePromise = null;
  * @returns {Promise<*>}
  */
 async function request(path, options = {}) {
-  const { method = 'GET', body, query } = options;
+  const { method = 'GET', body, query, base = BASE } = options;
 
-  let url = `${BASE}${path}`;
+  let url = `${base}${path}`;
   if (query) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(query)) {
@@ -62,6 +64,7 @@ async function request(path, options = {}) {
  * @returns {Promise<*>}
  */
 async function parseBody(res) {
+  if (res.status === 204) return null;
   const text = await res.text();
   try {
     return JSON.parse(text);
@@ -126,10 +129,34 @@ export const api = {
   /**
    * Upload one media file: the new MediaItem (plus `large`). Errors say what went wrong.
    * @param {File} file
-   * @param {{ alt?: string|null, onProgress?: (fraction: number) => void }} [opts]
+   * @param {{ alt?: string|null, credit?: object, source?: string, onProgress?: (fraction: number) => void }} [opts]
    */
   uploadMedia(file, opts = {}) {
     return uploadFile(BASE, file, opts);
+  },
+
+  /**
+   * Search the web image services (app only): { results, errors, hasMore }.
+   * @param {string} q
+   * @param {{ page?: number, for?: 'picker'|'library' }} [opts]
+   */
+  searchWebImages(q, { page = 1, for: purpose = 'picker' } = {}) {
+    return request('/web-images', { base: APP_BASE, query: { q, page, for: purpose } });
+  },
+
+  /** The same-origin URL of a copy-mode search result's image bytes (app only). */
+  webImageUrl(source, id) {
+    return `${APP_BASE}/web-images/${encodeURIComponent(source)}/${encodeURIComponent(id)}/image`;
+  },
+
+  /** Copy a search result into the library: the new MediaItem, with the search's credit. */
+  importWebImage({ source, id, alt }) {
+    return request('/media/import', { method: 'POST', body: { source, id, alt } });
+  },
+
+  /** Tell Unsplash a photo is being used (its download_location), as its guidelines ask. */
+  pingUnsplash(id) {
+    return request(`/web-images/unsplash/${encodeURIComponent(id)}/download`, { base: APP_BASE, method: 'POST' });
   },
 
   /** List the media library: MediaItem[]. */

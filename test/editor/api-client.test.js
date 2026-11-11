@@ -35,6 +35,26 @@ describe('editor api client', () => {
     ]);
   });
 
+  it('web images: search, import and the Unsplash ping', async () => {
+    globalThis.fetch = async (url, opts) => {
+      calls.push({ url, method: opts.method, body: opts.body });
+      return new Response(url.endsWith('/download') ? null : '{}', { status: url.endsWith('/download') ? 204 : 200 });
+    };
+    await api.searchWebImages('red barn', { page: 2, for: 'library' });
+    await api.importWebImage({ source: 'pexels', id: '12', alt: 'A barn' });
+    await api.pingUnsplash('a/b');
+    assert.deepEqual(calls, [
+      { url: '/api/web-images?q=red+barn&page=2&for=library', method: 'GET', body: undefined },
+      { url: '/api/media/import', method: 'POST', body: '{"source":"pexels","id":"12","alt":"A barn"}' },
+      { url: '/api/web-images/unsplash/a%2Fb/download', method: 'POST', body: undefined },
+    ]);
+  });
+
+  it('a failed web search throws with the server\'s message', async () => {
+    globalThis.fetch = async () => new Response('{"error":"Type something to search for"}', { status: 400 });
+    await assert.rejects(api.searchWebImages(' '), { message: 'Type something to search for', status: 400 });
+  });
+
   it('the api object literal has no duplicate method names', () => {
     const src = readFileSync(join(jsDir, 'api-client.js'), 'utf8');
     const body = src.slice(src.indexOf('export const api = {'));

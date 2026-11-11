@@ -294,3 +294,190 @@ dialog.media-picker[data-dragging] {
 .media-picker-empty[hidden] {
   display: none;
 }
+
+/* Tabs: "Your library" and "From the web" (an image picker in the app) */
+.media-picker-tabs {
+  display: flex;
+  gap: var(--size-xs);
+  padding: 0 var(--size-m);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+.media-picker-tab {
+  min-height: 40px;
+  margin-block-end: -1px;
+  padding: 0 var(--size-m);
+  border: 1px solid transparent;
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.media-picker-tab[aria-selected="true"] {
+  border-color: var(--color-border-subtle);
+  border-block-end-color: var(--color-background);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.media-picker-panel {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  padding-block-start: var(--size-s);
+  overflow: hidden;
+}
+
+.media-picker-panel[hidden] {
+  display: none;
+}
+
+.media-picker-web-edit {
+  display: grid;
+  gap: var(--size-s);
+  margin: var(--size-s) var(--size-m) var(--size-m);
+  overflow-y: auto;
+}
+
+.media-picker-web-edit[hidden],
+.media-picker web-image-search[hidden] {
+  display: none;
+}
+
+.media-picker-web-edit image-editor {
+  display: block;
+  min-block-size: 24rem;
+}
+
+.web-image-edit-actions {
+  display: flex;
+  gap: var(--size-s);
+}
+
+/* <web-image-search> (components/web-image-search.js) */
+web-image-search {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
+.web-image-search-form {
+  display: grid;
+  gap: var(--size-xs);
+  padding: 0 var(--size-m);
+}
+
+.web-image-search-form label {
+  font-size: var(--font-size-s);
+  font-weight: 600;
+}
+
+.web-image-search-input {
+  min-height: 40px;
+  padding: 0 var(--size-s);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.web-image-search-status,
+.web-image-search-error {
+  margin: var(--size-xs) var(--size-m) 0;
+  font-size: var(--font-size-s);
+}
+
+.web-image-search-status {
+  color: var(--color-text-muted);
+}
+
+.web-image-search-status:empty {
+  display: none;
+}
+
+.web-image-search-error {
+  color: var(--color-error-text);
+}
+
+.web-image-search-grid {
+  list-style: none;
+  margin: 0;
+  padding: var(--size-m);
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--size-s);
+}
+
+.web-image-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-xs);
+  min-width: 0;
+  margin: 0;
+  padding: var(--size-xs);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-m);
+}
+
+.web-image-thumb {
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--radius-m);
+  background: var(--color-surface-alt);
+}
+
+.web-image-thumb img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.web-image-credit {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-s);
+  overflow-wrap: anywhere;
+}
+
+.web-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xs);
+  margin-block-start: auto;
+}
+
+.web-image-actions button,
+.web-image-search-more,
+.web-image-edit-actions button {
+  min-height: 40px;
+  padding: 0 var(--size-s);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.web-image-actions button.primary,
+.web-image-edit-actions button.primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-weight: 600;
+}
+
+.web-image-search-more {
+  align-self: center;
+  margin-block-end: var(--size-m);
+}
+
+.web-image-search-more[hidden] {
+  display: none;
+}

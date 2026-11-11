@@ -160,7 +160,8 @@ export class ComponentSettings extends HTMLElement {
     button.addEventListener('click', async () => {
       const item = await openMediaPicker({ kind });
       if (!item || !input.isConnected) return;
-      input.value = mediaSrc(item.filename);
+      // A library file's URL, or a web image's own (used by link)
+      input.value = item.filename ? mediaSrc(item.filename) : item.src;
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     return button;

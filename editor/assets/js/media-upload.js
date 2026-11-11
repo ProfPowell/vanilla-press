@@ -11,15 +11,19 @@ const UNREACHABLE = "Upload failed: the app didn't answer. Is vp still running?"
  * POST one file to `<base>/media`.
  * @param {string} base e.g. `/api/sites/<id>`
  * @param {File} file
- * @param {{ alt?: string|null, editedFrom?: string, onProgress?: (fraction: number) => void }} [opts]
+ * @param {{ alt?: string|null, editedFrom?: string, credit?: object, source?: string,
+ *   onProgress?: (fraction: number) => void }} [opts] `credit` is a Credit (sent as JSON);
+ *   `source` the web image service it came from
  * @returns {Promise<object>} the new MediaItem plus `large`
  */
-export function uploadMedia(base, file, { alt, editedFrom, onProgress } = {}) {
+export function uploadMedia(base, file, { alt, editedFrom, credit, source, onProgress } = {}) {
   return new Promise((resolve, reject) => {
     const form = new FormData();
     form.append('file', file, file.name);
     if (alt != null) form.append('alt', alt);
     if (editedFrom) form.append('edited_from', editedFrom);
+    if (credit) form.append('credit', JSON.stringify(credit));
+    if (source) form.append('source', source);
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${base}/media`);
     xhr.responseType = 'text';

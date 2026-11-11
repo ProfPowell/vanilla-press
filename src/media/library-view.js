@@ -18,6 +18,22 @@ export const needsAlt = (item) => item.kind === 'image' && altState(item.alt) ==
 export const FILTERS = [['all', 'All'], ['needs-alt', 'Needs alt text'], ['unused', 'Unused'], ['missing', 'Missing file']];
 export const TYPES = [['all', 'All types'], ['image', 'Images'], ['video', 'Video'], ['audio', 'Audio'], ['pdf', 'PDF']];
 
+/** A linked item (an Unsplash photo: its URL, no file): its badge on the Media screen, its marker in the picker. */
+export const LINKED_BADGE = 'Linked from Unsplash';
+export const LINKED_MARKER = 'Linked';
+export const LINKED_NOTE = "This picture stays on Unsplash; Vanilla Press links to it, so it can't be edited here.";
+
+/**
+ * The URL that shows an item in the app: a linked item's remote URL, else the
+ * site's file under `/sites/<siteId>/media/`.
+ * @param {{ filename: string, linked?: boolean, src?: string }} item MediaItem
+ * @param {string} siteId
+ */
+export function displaySrc(item, siteId) {
+  if (item.linked) return item.src;
+  return `/sites/${encodeURIComponent(siteId)}/media/${encodeURIComponent(item.filename)}`;
+}
+
 export const DROP_TEXT = 'Drop files here, or paste from the clipboard. Files go to src/media and back up with your next save.';
 
 const newestFirst = (a, b) =>
@@ -52,12 +68,14 @@ export function tileModel(item) {
   const badges = [];
   if (needsAlt(item)) badges.push('No alt text');
   if (item.missing) badges.push('Missing file');
+  if (item.linked) badges.push(LINKED_BADGE);
   return {
     name: item.filename,
     kind: item.kind,
     thumb: item.kind === 'image' && !item.missing,
     typeLabel: typeLabel(item.mime_type),
     badges,
+    linked: Boolean(item.linked),
   };
 }
 
@@ -81,7 +99,7 @@ export const ALT_HINT = 'Screen readers will announce only the file name. Leave 
 export const altForCheckbox = (checked) => (checked ? '' : null);
 
 /** The web image services a library image can come from, by name (a hand-written credit is `manual`). */
-const SOURCE_NAMES = { openverse: 'Openverse', pexels: 'Pexels', pixabay: 'Pixabay' };
+const SOURCE_NAMES = { openverse: 'Openverse', pexels: 'Pexels', pixabay: 'Pixabay', unsplash: 'Unsplash' };
 
 /** The Credit fieldset's text fields, in order; `link` fields must be whole http(s) URLs. The Adapted checkbox follows. */
 export const CREDIT_FIELDS = [
@@ -163,19 +181,23 @@ export function detailModel(item, { siteId, locale } = {}) {
   const added = item.created
     ? new Date(item.created).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
-  const meta = [typeLabel(item.mime_type), Number.isFinite(item.size) ? formatBytes(item.size) : null, added ? `added ${added}` : null]
+  const linked = Boolean(item.linked);
+  // A linked item has no file, so no size
+  const size = !linked && Number.isFinite(item.size) ? formatBytes(item.size) : null;
+  const meta = [typeLabel(item.mime_type), size, added ? `added ${added}` : null]
     .filter(Boolean).join(' \u00b7 ');
   return {
     title: item.filename,
     original: item.original_name && item.original_name !== item.filename ? item.original_name : null,
     meta,
     dims: item.width > 0 && item.height > 0 ? `${item.width} \u00d7 ${item.height} px` : null,
-    url: mediaSrc(item.filename),
+    url: linked ? item.src : mediaSrc(item.filename),
     showAlt: item.kind === 'image',
     showCredit: item.kind === 'image',
-    source: SOURCE_NAMES[item.source] ? `From ${SOURCE_NAMES[item.source]}` : null,
+    source: linked ? LINKED_BADGE : SOURCE_NAMES[item.source] ? `From ${SOURCE_NAMES[item.source]}` : null,
+    linkedNote: linked ? LINKED_NOTE : null,
     altState: altState(item.alt),
-    canEdit: canEditImage(item.mime_type) && !item.missing,
+    canEdit: !linked && canEditImage(item.mime_type) && !item.missing,
     usedIn: (item.usedIn || []).map((u) => ({
       title: u.title || u.path || 'Untitled',
       // A page Vanilla Press didn't write (u.path, no id) has no post to open.
@@ -253,6 +275,16 @@ export function deleteDecision(item) {
     return { allowed: false, message: refusedDeleteMessage(published) };
   }
   const drafts = users.filter((u) => u.status !== 'published');
+  if (item.linked) {
+    // No file: only the library entry goes, and posts keep showing the photo from Unsplash.
+    const tail = 'It leaves your library only; the picture stays on Unsplash.';
+    return {
+      allowed: true,
+      heading: `Remove "${item.filename}" from the library?`,
+      body: drafts.length ? `Used in drafts: ${titles(drafts)}. They keep linking to it. ${tail}` : tail,
+      confirm: 'Remove from library',
+    };
+  }
   const tail = 'The file is removed from src/media; git history keeps a copy.';
   return {
     allowed: true,

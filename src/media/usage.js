@@ -26,6 +26,16 @@ export function mediaSrc(filename) {
   return `/media/${encodeURIComponent(filename)}`;
 }
 
+/**
+ * The URL a post uses for a library item: a linked item's remote URL (an
+ * Unsplash photo has no file), else its `/media/<file>` URL.
+ * @param {{ filename: string, linked?: boolean, src?: string }} item MediaItem
+ * @returns {string}
+ */
+export function mediaItemSrc(item) {
+  return item.linked ? item.src : mediaSrc(item.filename);
+}
+
 /** Attribute names that can hold a media URL, by node type. */
 const URL_ATTRS = {
   figure: ['src'],

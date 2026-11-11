@@ -44,7 +44,7 @@ export class WebImageSearch extends HTMLElement {
     this.timer = null;
   }
 
-  /** 'library' (copy-mode sources only, "Add") or 'picker'. */
+  /** 'library' ("Add"; an Unsplash result becomes a linked library item) or 'picker'. */
   get purpose() {
     return this.getAttribute('for') === 'library' ? 'library' : 'picker';
   }

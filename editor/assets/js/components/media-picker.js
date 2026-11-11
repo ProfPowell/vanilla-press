@@ -4,9 +4,10 @@
  * editor also has a "From the web" tab: a search of the web image services.
  *
  * `openMediaPicker({ kind })` resolves with the chosen MediaItem, or null when
- * the dialog is closed (Escape, Close). A web image copied into the library
- * resolves as its MediaItem (after the alt step); one used by link (Unsplash)
- * as `{ src, alt, credit }`. Focus returns to whatever had it.
+ * the dialog is closed (Escape, Close). A web image added to the library
+ * resolves as its MediaItem (after the alt step): a copy, or for an Unsplash
+ * photo a linked item (`linked: true`, `src` its URL, no file). Focus returns
+ * to whatever had it.
  * Pure logic (filtering, tiles, alt states, upload checks) lives in
  * src/media and media-upload.js; this module only renders and wires events.
  *
@@ -16,7 +17,9 @@
 import { api } from '../api-client.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
 import { createUploadQueue } from '../media-upload.js';
-import { filterMedia, tileModel, altForCheckbox, emptyText, ALT_PLACEHOLDER } from '../../../../src/media/library-view.js';
+import {
+  filterMedia, tileModel, altForCheckbox, emptyText, ALT_PLACEHOLDER, LINKED_BADGE, LINKED_MARKER,
+} from '../../../../src/media/library-view.js';
 import { ACCEPTED } from '../../../../src/media/types.js';
 import { ACCEPT_ATTR } from '../../../../src/media/limits.js';
 import { chooseWebImage } from '../web-image-flow.js';
@@ -189,8 +192,7 @@ function createPicker({ kind, heading, resolve }) {
       const { result, edit } = e.detail;
       busy = true;
       // Editing shows its own progress where the editor goes
-      webStatus.replaceChildren(...(edit ? [] : [el('p', { class: 'media-picker-loading' },
-        result.mode === 'link' ? 'Inserting…' : 'Adding it to your library…')]));
+      webStatus.replaceChildren(...(edit ? [] : [el('p', { class: 'media-picker-loading' }, 'Adding it to your library…')]));
       if (edit) searchEl.hidden = true;
       let chosen;
       try {
@@ -210,8 +212,7 @@ function createPicker({ kind, heading, resolve }) {
         searchEl.focus();
         return;
       }
-      if (!chosen.filename) { finish(chosen); return; } // used by link
-      // A copy is in the library now: its alt text, then "Use this file"
+      // It is in the library now (a copy, or a linked Unsplash photo): its alt text, then "Use this file"
       items = [chosen, ...items.filter((i) => i.id !== chosen.id)];
       select('library');
       renderGrid();
@@ -356,6 +357,9 @@ function createPicker({ kind, heading, resolve }) {
     const shown = filterMedia(items, { type: kind, query });
     grid.replaceChildren(...shown.map((item) => {
       const tile = tileModel(item);
+      // A linked item's marker is the short word, in text (not colour alone)
+      const badges = tile.badges.filter((b) => b !== LINKED_BADGE).map((b) => [b, b === 'Missing file' ? 'missing-file' : 'no-alt']);
+      if (tile.linked) badges.push([LINKED_MARKER, 'linked']);
       const thumb = tile.thumb
         ? el('img', { src: displayMediaUrl(item.src, SITE), alt: '', loading: 'lazy' })
         : el('span', {}, tile.typeLabel);
@@ -365,9 +369,9 @@ function createPicker({ kind, heading, resolve }) {
       },
       el('span', { class: 'media-picker-thumb' }, thumb),
       el('span', { class: 'media-picker-name' }, tile.name),
-      tile.badges.length
-        ? el('span', { class: 'media-picker-badges' }, ...tile.badges.map((b) =>
-          el('span', { class: 'media-picker-badge', 'data-badge': b === 'Missing file' ? 'missing-file' : 'no-alt' }, b)))
+      badges.length
+        ? el('span', { class: 'media-picker-badges' }, ...badges.map(([text, key]) =>
+          el('span', { class: 'media-picker-badge', 'data-badge': key }, text)))
         : null));
     }));
     empty.hidden = !loaded || shown.length > 0;

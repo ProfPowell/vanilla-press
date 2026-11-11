@@ -80,6 +80,13 @@ describe('<web-image-search>', () => {
     assert.equal(credit.querySelector('b'), null);
   });
 
+  it('the library offers an Unsplash (link) result with "Add" only, no "Edit first"', async () => {
+    const el = mount({ for: 'library' });
+    answers.push({ results: [result('1'), result('u1', { source: 'unsplash', mode: 'link', description: 'Hill' })], errors: [], hasMore: false, ready: 2 });
+    await submit(el, 'barn');
+    assert.deepEqual(names(el), ['Add: Barn 1', 'Edit first: Barn 1', 'Add: Hill']);
+  });
+
   it('with no source ready, it says to turn one on in Services, with a link', async () => {
     const el = mount();
     answers.push({ results: [], errors: [], hasMore: false, ready: 0 });

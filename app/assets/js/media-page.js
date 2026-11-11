@@ -6,7 +6,7 @@
  */
 import { api, h } from './app-api.js';
 import {
-  FILTERS, TYPES, DROP_TEXT, filterMedia, headerCounts, tileModel, emptyText, needsAlt,
+  FILTERS, TYPES, DROP_TEXT, filterMedia, headerCounts, tileModel, emptyText, needsAlt, displaySrc,
 } from '../../../src/media/library-view.js';
 import { createMediaDetail } from './media-detail.js';
 import { ACCEPT_ATTR } from '../../../src/media/limits.js';
@@ -56,7 +56,7 @@ export function initMediaSection({ siteId, root }) {
     const m = tileModel(item);
     const thumb = h('span', { class: 'media-thumb' });
     if (m.thumb) {
-      thumb.append(h('img', { src: `/sites/${encodeURIComponent(siteId)}/media/${encodeURIComponent(item.filename)}`, alt: '', loading: 'lazy' }));
+      thumb.append(h('img', { src: displaySrc(item, siteId), alt: '', loading: 'lazy' }));
     } else {
       thumb.append(icon(m.kind), h('span', {}, m.typeLabel));
     }

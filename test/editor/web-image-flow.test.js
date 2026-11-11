@@ -54,9 +54,18 @@ describe('chooseWebImage', () => {
     await assert.rejects(chooseWebImage(result({ width: 6000, height: 4000 })), { message: DECODE_ERROR });
   });
 
-  it('a link result pings Unsplash and returns the link', async () => {
-    const link = await chooseWebImage(result({ source: 'unsplash', id: 'u1', mode: 'link', url: 'https://images.unsplash.com/u1' }));
-    assert.deepEqual(link, { src: 'https://images.unsplash.com/u1', alt: 'A fox', credit: { name: 'Jane', site: 'Openverse' } });
-    assert.deepEqual(calls, ['POST /api/web-images/unsplash/u1/download']);
+  it('a link result is added to the library as a linked item (the server pings Unsplash), and is that MediaItem', async () => {
+    const linked = { id: 'm2', filename: 'unsplash-u1', kind: 'image', linked: true, src: 'https://images.unsplash.com/u1' };
+    let body;
+    importAnswer = () => Response.json(linked, { status: 201 });
+    const real = globalThis.fetch;
+    globalThis.fetch = async (url, opts = {}) => {
+      if (String(url).endsWith('/media/import')) body = JSON.parse(opts.body);
+      return real(url, opts);
+    };
+    const item = await chooseWebImage(result({ source: 'unsplash', id: 'u1', mode: 'link', url: 'https://images.unsplash.com/u1' }));
+    assert.deepEqual(item, linked);
+    assert.deepEqual(body, { source: 'unsplash', id: 'u1' });
+    assert.deepEqual(calls, ['POST /api/media/import']); // no separate client ping
   });
 });

@@ -1,8 +1,9 @@
 /**
  * What choosing a web image result does (browser only):
  *
- * - **Link (Unsplash):** tell Unsplash about the download, then use the
- *   photo by its URL: `{ src, alt, credit }`. It is never copied.
+ * - **Link (Unsplash):** the server adds it to the library as a linked item
+ *   (its URL and credit, never a file) and tells Unsplash about the download;
+ *   the result is that MediaItem (`linked: true`, `src` the photo's URL).
  * - **Edit first:** load the image (same origin, through the app) into an
  *   `<image-editor>`; Save uploads the edit, at most 2400px, credited as
  *   adapted. A different picture opened or dropped in the editor is the
@@ -188,15 +189,14 @@ async function editThenUpload(result, slot, saveText) {
  * @param {object} result a WebImage from `api.searchWebImages`
  * @param {{ edit?: boolean, editIn?: HTMLElement, saveText?: string }} [opts] `editIn`: where
  *   the image editor shows (required for `edit`); `saveText`: its Save button's words
- * @returns {Promise<object|{ src: string, alt: string|null, credit: object }|null>}
- *   the new MediaItem; the link for an Unsplash photo; null when editing was cancelled
+ * @returns {Promise<object|null>} the MediaItem (a linked one for an Unsplash photo);
+ *   null when editing was cancelled
  */
 export async function chooseWebImage(result, { edit = false, editIn, saveText = 'Save and insert' } = {}) {
   switch (importPath(result, { edit })) {
     case 'link':
-      await api.pingUnsplash(result.id);
-      // No description is no alt yet (the figure's alt field opens), not decorative
-      return { src: result.url, alt: result.description || null, credit: result.credit };
+      // The server pings Unsplash (once) and answers the linked item, new or already there
+      return api.importWebImage({ source: result.source, id: result.id });
     case 'edit':
       return editThenUpload(result, editIn, saveText);
     case 'downsize':

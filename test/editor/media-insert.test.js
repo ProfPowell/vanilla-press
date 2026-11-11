@@ -85,17 +85,19 @@ describe('credited images', () => {
     }
   });
 
-  it('a linked web image (src, alt, credit; no file) inserts a figure at its URL', () => {
+  const linked = (o) => item({ id: 'u', filename: 'unsplash-u1', original_name: 'unsplash-u1', linked: true, credit, ...o });
+
+  it('a linked library item (Unsplash: no file) inserts a figure at its remote URL, with its credit', () => {
     const src = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';
-    const plan = insertPlan({ src, alt: 'A red barn', credit }, { pdfViewer: false });
+    const plan = insertPlan(linked({ src, alt: 'A red barn' }), { pdfViewer: false });
     assert.deepEqual(plan, { kind: 'figure', attrs: { src, alt: 'A red barn', credit }, focusAlt: false });
     const { blocks, result } = astOf(nodesFor(plan, schema));
     assert.deepEqual(blocks, [{ type: 'figure', attrs: { src, alt: 'A red barn', credit } }]);
     assert.deepEqual(result.errors, []);
   });
 
-  it('a linked web image with no description opens the alt field', () => {
-    const plan = insertPlan({ src: 'https://images.unsplash.com/p', alt: null, credit }, { pdfViewer: false });
+  it('a linked item with no alt opens the alt field', () => {
+    const plan = insertPlan(linked({ src: 'https://images.unsplash.com/p', alt: null }), { pdfViewer: false });
     assert.equal(plan.focusAlt, true);
     assert.equal(plan.attrs.alt, '');
   });

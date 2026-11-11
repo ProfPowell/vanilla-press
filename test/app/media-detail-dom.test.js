@@ -113,3 +113,30 @@ describe('Credit fieldset autosave', () => {
     assert.equal($('#media-detail-status').textContent, 'Added a.jpg to your library.');
   });
 });
+
+describe('a linked (Unsplash) item', () => {
+  const U = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';
+  const linked = () => item('u', {
+    filename: 'unsplash-u1', original_name: 'unsplash-u1', size: 0, width: 2400, height: 1600,
+    source: 'unsplash', credit: { name: 'Sam', site: 'Unsplash' }, src: U, linked: true,
+  });
+
+  it('previews from Unsplash, says so, and offers no Edit image', () => {
+    detail.show(linked());
+    assert.equal($('.detail-preview img').getAttribute('src'), U);
+    assert.equal($('[data-source="unsplash"]').textContent, 'Linked from Unsplash');
+    assert.equal($('.detail-linked-note').textContent,
+      "This picture stays on Unsplash; Vanilla Press links to it, so it can't be edited here.");
+    assert.equal($('[data-action="edit-image"]'), null);
+    assert.equal($('#media-url').textContent, U);
+    assert.ok($('#media-alt'), 'alt text still editable');
+    assert.ok($('#media-credit-name'), 'credit still editable');
+  });
+
+  it('a file keeps its Edit image button and its own preview URL', () => {
+    detail.show(items[0]);
+    assert.ok($('[data-action="edit-image"]'));
+    assert.equal($('.detail-preview img').getAttribute('src'), '/sites/s/media/a.jpg');
+    assert.equal($('.detail-linked-note'), null);
+  });
+});

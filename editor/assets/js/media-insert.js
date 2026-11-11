@@ -8,7 +8,7 @@
  */
 
 import { enabledDescriptors } from './component-model.js';
-import { mediaSrc } from '../../../src/media/usage.js';
+import { mediaItemSrc } from '../../../src/media/usage.js';
 
 export const PDF_LINK_NOTE = 'Inserted as a link. Turn on the PDF viewer in Components to show PDFs in the page.';
 
@@ -20,15 +20,14 @@ function figurePlan(src, { alt, credit }) {
 }
 
 /**
- * The block a chosen file becomes: a MediaItem, or a linked web image
- * `{ src, alt, credit }`.
+ * The block a chosen file becomes. A linked item (an Unsplash photo: no file)
+ * is a figure at its remote URL, credited like a copied image.
  * @param {object} item MediaItem
  * @param {{ pdfViewer: boolean }} opts whether the site has the pdf-viewer component on
  */
 export function insertPlan(item, { pdfViewer }) {
-  // A web image used by link (Unsplash) is no file: { src, alt, credit }
-  if (!item.filename) return figurePlan(item.src, item);
-  const src = mediaSrc(item.filename); // encoded: a name with # or % must read back as itself
+  // encoded: a name with # or % must read back as itself; a linked item is its remote URL
+  const src = mediaItemSrc(item);
   if (item.kind === 'image') return figurePlan(src, item);
   if (item.kind === 'video' || item.kind === 'audio') {
     return { kind: 'embed', attrs: { url: src, type: item.kind } };

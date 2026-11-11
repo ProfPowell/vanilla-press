@@ -285,6 +285,11 @@ dialog.media-picker[data-dragging] {
   color: var(--color-error-text);
 }
 
+.media-picker-badge[data-badge="linked"] {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
 .media-picker-empty {
   margin: 0 var(--size-m) var(--size-m);
   color: var(--color-text-muted);

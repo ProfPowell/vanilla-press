@@ -17,7 +17,7 @@
 import { settingsFields, coerce } from '../component-model.js';
 import { pickerKind } from '../media-insert.js';
 import { openMediaPicker } from './media-picker.js';
-import { mediaSrc } from '../../../../src/media/usage.js';
+import { mediaItemSrc } from '../../../../src/media/usage.js';
 
 /** Text fields that hold a media file's URL get a Choose… button. */
 const MEDIA_FIELDS = new Set(['src', 'poster']);
@@ -160,8 +160,8 @@ export class ComponentSettings extends HTMLElement {
     button.addEventListener('click', async () => {
       const item = await openMediaPicker({ kind });
       if (!item || !input.isConnected) return;
-      // A library file's URL, or a web image's own (used by link)
-      input.value = item.filename ? mediaSrc(item.filename) : item.src;
+      // A library file's URL, or a linked item's remote URL (an Unsplash photo)
+      input.value = mediaItemSrc(item);
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     return button;

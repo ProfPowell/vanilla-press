@@ -6,7 +6,7 @@
 import { api, h } from './app-api.js';
 import {
   ALT_PLACEHOLDER, ALT_HINT, detailModel, altForCheckbox, createAltSaver, deleteDecision, refusedDeleteMessage,
-  CREDIT_FIELDS, CREDIT_NOTE, creditFormValues, creditFromForm,
+  CREDIT_FIELDS, CREDIT_NOTE, creditFormValues, creditFromForm, displaySrc,
 } from '../../../src/media/library-view.js';
 import { creditText } from '../../../src/media/credit.js';
 import { exportFormat } from '../../../src/media/types.js';
@@ -22,7 +22,7 @@ import { uploadMedia } from '../../../editor/assets/js/media-upload.js';
  */
 export function createMediaDetail({ siteId, base, root, host }) {
   const $ = (id) => root.querySelector(`#${id}`);
-  const displayUrl = (item) => `/sites/${encodeURIComponent(siteId)}/media/${encodeURIComponent(item.filename)}`;
+  const displayUrl = (item) => displaySrc(item, siteId); // a linked item: its Unsplash URL
   const detailBody = $('media-detail-body');
   const setStatus = (text) => { $('media-detail-status').textContent = text || ''; };
   let shownId = null; // the item the panel is built for
@@ -364,6 +364,7 @@ export function createMediaDetail({ siteId, base, root, host }) {
         h('h2', { id: 'detail-title' }, model.title),
         model.original ? h('p', { class: 'detail-muted' }, `Uploaded as ${model.original}`) : null,
         model.source ? h('p', { class: 'detail-muted', 'data-source': item.source }, model.source) : null,
+        model.linkedNote ? h('p', { class: 'detail-muted detail-linked-note' }, model.linkedNote) : null,
         h('p', { class: 'detail-muted' }, model.meta),
         model.dims ? h('p', { class: 'detail-muted' }, model.dims) : null),
       model.showAlt ? altField(item) : null,

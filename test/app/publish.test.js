@@ -208,6 +208,22 @@ describe('setPublished', () => {
     assert.equal(off.kind, 'unpublish');
   });
 
+  test('a linked (Unsplash) featured image and figure publish as-is: no file is looked for', async () => {
+    const ws = setup();
+    const U = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';
+    const cur = getDocument(db, ID);
+    saveDocument(db, { ...cur, meta: { ...cur.meta, image: U }, blocks: [...cur.blocks,
+      { type: 'figure', attrs: { src: U, alt: 'A hill', credit: { name: 'Sam', site: 'Unsplash' } } }] });
+    let built = 0;
+    const d = { ...deps(), runBuild: async (dir) => { built++; return runBuild(dir); } };
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d });
+    assert.equal(res.kind, 'publish');
+    assert.equal(built, 1);
+    const committed = git(fx.site, 'show', `HEAD:${git(fx.site, 'show', '--name-only', '--format=', 'HEAD').split('\n').find((f) => f.endsWith('.html') && f.startsWith('src/'))}`);
+    assert.ok(committed.includes(`image: ${JSON.stringify(U)}`) || committed.includes(`image: ${U}`), committed.slice(0, 400));
+    assert.ok(committed.includes(U.replaceAll('&', '&amp;')) || committed.includes(`src="${U}"`));
+  });
+
   test('build failure keeps an edit saved during the build', async () => {
     const ws = setup();
     const edited = [{ type: 'paragraph', children: [{ type: 'text', value: 'Edited during the build.' }] }];

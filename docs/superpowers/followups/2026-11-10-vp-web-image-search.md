@@ -9,7 +9,8 @@ Each ruling ends with its cost if it's wrong.
 
 - **R1, Unsplash in pickers with no caption:**
   - An Unsplash photo used as a featured image or component source is
-    published with no credit, and no library record is kept.
+    published with no credit. Its linked library item keeps the credit
+    (see "Linked Unsplash items" below), but nothing shows it there.
   - This is as the user decided: "There needs to be some trust".
   - *Cost:* the writer must credit it by hand.
 - **R2, a corrupt key file:** a corrupt `services.json` is set aside
@@ -45,6 +46,20 @@ Each ruling ends with its cost if it's wrong.
 - **R9, the Services link in search:** it opens in a new tab, because the
   editor has no unsaved-changes guard. *Cost:* none.
 
+## Linked Unsplash items (2026-11-11)
+
+- Choosing an Unsplash result (any picker, or Add from web on the Media
+  screen) adds a **linked** library item: a row with the photo's
+  `images.unsplash.com` URL (`url` column, in `media.json`) and credit,
+  named `unsplash-<id>`, with no file. The server pings Unsplash's
+  `download_location` once per choice (`imageSearch.pingDownload`, shared
+  with the old ping route); choosing the same photo again pings and
+  reuses the item.
+- It shows in the Media screen as "Linked from Unsplash", previews from
+  Unsplash, can't be edited, and keeps alt and credit editing. Delete
+  removes only the row. "Used in" matches its exact URL.
+- The library search now includes Unsplash (its cards offer "Add" only).
+
 ## Deferred
 
 **Worth a small fix soon:**
@@ -56,9 +71,6 @@ Each ruling ends with its cost if it's wrong.
   Media screen's client list until refresh. The server is correct.
 - From Services, the only way back is "All sites", not the site you came
   from.
-- If only Unsplash has a key, the Media screen's "Add from web" says to
-  turn on a source, without explaining that Unsplash can't add to the
-  library.
 
 **Robustness:**
 - Credit strings have no length cap.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mediaFileOf, mediaRefs, mediaUsage, liveMediaRefs, mediaSrc } from '../../src/media/usage.js';
+import { mediaFileOf, mediaRefs, mediaUsage, liveMediaRefs, mediaSrc, mediaItemSrc } from '../../src/media/usage.js';
 
 const p = (...children) => ({ type: 'paragraph', children });
 
@@ -117,4 +117,11 @@ test('a linked item counts where its exact URL is used, keyed by its filename', 
     { id: 'd1', title: 'Hills', status: 'published' },
     { id: 'd2', title: 'Other', status: 'draft' },
   ]);
+});
+
+test('mediaItemSrc: a linked item is its remote URL, a file its /media/ URL', () => {
+  const U = 'https://images.unsplash.com/photo-1';
+  assert.equal(mediaItemSrc({ filename: 'unsplash-u1', linked: true, src: U }), U);
+  assert.equal(mediaItemSrc({ filename: 'a#1.jpg', linked: false, src: '/media/a%231.jpg' }), '/media/a%231.jpg');
+  assert.equal(mediaItemSrc({ filename: 'a#1.jpg' }), '/media/a%231.jpg');
 });

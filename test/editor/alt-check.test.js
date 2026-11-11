@@ -31,6 +31,13 @@ describe('altWarnings', () => {
     assert.deepEqual(altWarnings([fig(src, '')], [lib('x.png', '')]), [{ src, name: src }]);
   });
 
+  it('a linked (Unsplash) item marked decorative: none; otherwise warns, named by its filename', () => {
+    const U = 'https://images.unsplash.com/photo-1?w=2400';
+    const linked = (alt) => ({ id: 'u', filename: 'unsplash-u1', src: U, linked: true, kind: 'image', alt });
+    assert.deepEqual(altWarnings([fig(U, '')], [linked('')]), []);
+    assert.deepEqual(altWarnings([fig(U, '')], [linked(null)]), [{ src: U, name: 'unsplash-u1' }]);
+  });
+
   it('a file not in the library warns', () => {
     assert.deepEqual(altWarnings([fig('/media/gone.jpg', '')], [lib('a.jpg', '')]), [{ src: '/media/gone.jpg', name: 'gone.jpg' }]);
   });

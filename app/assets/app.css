@@ -147,6 +147,7 @@ input[type="text"] { min-height: 2.5rem; padding: 0 0.75rem; border: 1px solid v
 .media-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-block-start: 0.25rem; }
 .media-badge { padding: 1px 0.5rem; border-radius: var(--radius-pill); background: var(--color-warning-subtle); color: var(--color-warning-text); font-size: 0.75rem; }
 .media-badge[data-badge="missing-file"] { background: var(--color-error-subtle); color: var(--color-error-text); }
+.media-badge[data-badge="linked-from-unsplash"] { background: var(--color-surface-alt); color: var(--color-text); }
 .media-drop { margin: 1.5rem 0 0; padding: 1.75rem; border: var(--border-width-medium) dashed var(--color-border); border-radius: var(--radius-xl); text-align: center; color: var(--color-text-muted); font-size: 0.875rem; }
 .media-drop[data-dragging] { border-color: var(--color-primary); background: var(--color-surface-raised); color: var(--color-text); }
 .upload-list { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: 0.5rem; }

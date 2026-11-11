@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   altState, needsAlt, FILTERS, TYPES, filterMedia, headerCounts, tileModel, emptyText, DROP_TEXT,
   detailModel, ALT_PLACEHOLDER, ALT_HINT, altForCheckbox, createAltSaver, deleteDecision, refusedDeleteMessage,
+  LINKED_BADGE, LINKED_MARKER, LINKED_NOTE, displaySrc,
 } from '../../src/media/library-view.js';
 
 const item = (o) => ({
@@ -92,9 +93,9 @@ test('headerCounts: singular, plural, zero missing', () => {
 
 test('tileModel badges', () => {
   const s = sample();
-  assert.deepEqual(tileModel(s[0]), { name: 'old.jpg', kind: 'image', thumb: true, typeLabel: 'JPEG image', badges: [] });
+  assert.deepEqual(tileModel(s[0]), { name: 'old.jpg', kind: 'image', thumb: true, typeLabel: 'JPEG image', badges: [], linked: false });
   assert.deepEqual(tileModel(s[1]).badges, ['No alt text']);
-  assert.deepEqual(tileModel(s[2]), { name: 'clip.mp4', kind: 'video', thumb: false, typeLabel: 'MP4 video', badges: [] });
+  assert.deepEqual(tileModel(s[2]), { name: 'clip.mp4', kind: 'video', thumb: false, typeLabel: 'MP4 video', badges: [], linked: false });
   assert.deepEqual(tileModel(s[3]).badges, []);
   const gone = tileModel(item({ missing: true, alt: null }));
   assert.deepEqual(gone.badges, ['No alt text', 'Missing file']);
@@ -261,4 +262,50 @@ test('take() hands over the pending alt synchronously and cancels its timer', as
 test('refusedDeleteMessage names the posts and pages that still use the file', () => {
   assert.equal(refusedDeleteMessage([{ title: 'Hello' }, { title: 'src/about.html' }, { title: '' }]),
     'Used by published posts: Hello, src/about.html, Untitled. Remove it from them and Update first.');
+});
+
+// --- Linked (Unsplash) items ---
+const U = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';
+const linkedItem = (o) => item({
+  id: 'u', filename: 'unsplash-u1', original_name: 'unsplash-u1', size: 0, width: 2400, height: 1600,
+  source: 'unsplash', credit: { name: 'Sam', site: 'Unsplash' }, src: U, linked: true, created: '2026-11-03T12:00:00Z', ...o,
+});
+
+test('linked copy', () => {
+  assert.equal(LINKED_BADGE, 'Linked from Unsplash');
+  assert.equal(LINKED_MARKER, 'Linked');
+  assert.equal(LINKED_NOTE, "This picture stays on Unsplash; Vanilla Press links to it, so it can't be edited here.");
+});
+
+test('a linked tile shows its badge and a thumbnail from the remote URL', () => {
+  const t = tileModel(linkedItem());
+  assert.equal(t.linked, true);
+  assert.equal(t.thumb, true);
+  assert.deepEqual(t.badges, ['Linked from Unsplash']);
+  assert.equal(displaySrc(linkedItem(), 'my site'), U);
+  assert.equal(displaySrc(item({ filename: 'a#1.jpg' }), 'my site'), '/sites/my%20site/media/a%231.jpg');
+});
+
+test('detailModel: a linked item is its URL, says where it lives, and cannot be edited', () => {
+  const m = detailModel(linkedItem(), { siteId: 's', locale: 'en-US' });
+  assert.equal(m.url, U);
+  assert.equal(m.source, 'Linked from Unsplash');
+  assert.equal(m.linkedNote, LINKED_NOTE);
+  assert.equal(m.canEdit, false);
+  assert.equal(m.showAlt, true);
+  assert.equal(m.showCredit, true);
+  assert.equal(m.meta, 'JPEG image \u00b7 added Nov 3, 2026'); // no "0 B": there is no file
+  assert.equal(detail({}).linkedNote, null);
+});
+
+test('deleting a linked item removes it from the library, not a file', () => {
+  const d = deleteDecision(linkedItem());
+  assert.equal(d.allowed, true);
+  assert.equal(d.heading, 'Remove "unsplash-u1" from the library?');
+  assert.doesNotMatch(d.body, /src\/media|file/);
+  assert.match(d.body, /library/);
+  assert.equal(d.confirm, 'Remove from library');
+  const drafts = deleteDecision(linkedItem({ usedIn: [{ id: 'd', title: 'Hills', status: 'draft' }] }));
+  assert.match(drafts.body, /^Used in drafts: Hills\./);
+  assert.equal(deleteDecision(linkedItem({ usedIn: [{ id: 'p', title: 'Live', status: 'published' }] })).allowed, false);
 });

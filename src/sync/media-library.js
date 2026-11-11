@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { inspectFile } from '../media/inspect.js';
 import { writeMediaJson, MEDIA_FIELDS } from './site-files.js';
+import { storedCredit, mediaSource } from '../media/credit.js';
 
 export { MEDIA_FIELDS };
 
@@ -46,6 +47,8 @@ export function normalizeEntry(entry) {
     alt: legacy && alt === '' ? null : alt,
     edited_from: str(entry.edited_from),
     created: entry.created,
+    source: mediaSource(entry.source),
+    credit: storedCredit(entry.credit),
   };
 }
 
@@ -143,6 +146,8 @@ export function adoptStrayFiles(db, mediaDir) {
       alt: null,
       edited_from: null,
       created: statSync(path).mtime.toISOString(),
+      source: null,
+      credit: null,
     });
     adopted.push(name);
   }

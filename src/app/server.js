@@ -205,6 +205,7 @@ export async function startApp({
       const roots = { siteDir: ws.siteDir, vpRoot, catalog };
       mountApi(router, db, {
         rootDir: ROOT, mediaDir: ws.mediaDir, workspace: ws, prefix, siteId: site.id,
+        webImages: imageSearch, // import copies a result this search cached
         statusByActions: true, // Ruling P: only Publish/Update/Unpublish change status
         onSynced: ({ title, status }) => backup.noteSaved({ title, status }),
         onMediaChanged: ({ filename }) => backup.noteSaved({ title: filename, status: 'draft' }),
@@ -367,7 +368,7 @@ export async function startApp({
 
   const app = createRouter();
 
-  mountServiceRoutes(app, { env, imageSearch });
+  mountServiceRoutes(app, { env, imageSearch, fetch: fetchImpl });
 
   app.add('GET', '/api/sites', async (req, res) => {
     const sites = await Promise.all(listSites({ env }).map(async (site) => {

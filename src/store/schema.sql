@@ -65,7 +65,9 @@ CREATE TABLE IF NOT EXISTS media (
   height      INTEGER,
   alt         TEXT, -- NULL: never written, '': decorative
   edited_from TEXT,
-  created     TEXT NOT NULL
+  created     TEXT NOT NULL,
+  source      TEXT, -- 'openverse' | 'pexels' | 'pixabay' | 'manual' | NULL
+  credit      TEXT  -- JSON Credit (media/credit.js), or NULL
 );
 
 -- Authors table

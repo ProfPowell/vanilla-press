@@ -31,7 +31,7 @@ afterEach(() => {
 
 const entry = (o = {}) => ({
   id: 'aaaa1111', filename: 'a-aaaa11.png', original_name: 'a.png', mime_type: 'image/png',
-  size: 10, width: 3, height: 2, alt: 'An a', edited_from: null, created: '2026-01-01T00:00:00.000Z', ...o,
+  size: 10, width: 3, height: 2, alt: 'An a', edited_from: null, created: '2026-01-01T00:00:00.000Z', source: null, credit: null, ...o,
 });
 const writeJson = (entries) => {
   mkdirSync(ws.contentDir, { recursive: true });
@@ -65,6 +65,28 @@ describe('media.json -> store', () => {
     db.prepare('DELETE FROM media').run();
     loadMediaJson(ws, db);
     assert.equal(rows()[0].alt, '');
+  });
+
+  it('credit and source survive a round trip; media.json holds the credit as an object', () => {
+    const credit = { name: 'Jane', url: 'https://x.example/j', site: 'Pexels', adapted: true };
+    writeJson([entry({ source: 'pexels', credit })]);
+    loadMediaJson(ws, db);
+    assert.deepEqual(JSON.parse(rows()[0].credit), credit);
+    writeMediaJson(ws, db);
+    const [written] = JSON.parse(readFileSync(join(ws.contentDir, 'media.json'), 'utf8'));
+    assert.deepEqual(written.credit, credit);
+    assert.equal(written.source, 'pexels');
+    db.prepare('DELETE FROM media').run();
+    loadMediaJson(ws, db);
+    assert.equal(rows()[0].source, 'pexels');
+    assert.deepEqual(JSON.parse(rows()[0].credit), credit);
+  });
+
+  it('an unusable credit or source in media.json is none', () => {
+    writeJson([entry({ source: 'somewhere', credit: { name: '  ', url: 'javascript:1' } })]);
+    loadMediaJson(ws, db);
+    assert.equal(rows()[0].source, null);
+    assert.equal(rows()[0].credit, null);
   });
 
   it('media.json replaces the store', () => {

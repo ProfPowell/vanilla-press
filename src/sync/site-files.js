@@ -14,10 +14,12 @@ import {
   syncDocument, checkSync, changedOnDisk, SyncConflictError, readManifest, writeFileAtomic,
 } from './to-site.js';
 import { outputPaths } from './paths.js';
+import { normalizeCredit } from '../media/credit.js';
 
 /** The media.json / media-table columns, in the order they are written. */
 export const MEDIA_FIELDS = [
   'id', 'filename', 'original_name', 'mime_type', 'size', 'width', 'height', 'alt', 'edited_from', 'created',
+  'source', 'credit',
 ];
 
 let warnedCollections = false;
@@ -84,8 +86,9 @@ export function preflightSave(ws, db, candidate, collectionsConfig) {
  * @param {import('better-sqlite3').Database} db
  */
 export function writeMediaJson(ws, db) {
+  // The credit is stored as JSON text; media.json holds it as an object, for people to read.
   const rows = db.prepare('SELECT * FROM media ORDER BY created, id').all()
-    .map((row) => Object.fromEntries(MEDIA_FIELDS.map((f) => [f, row[f] ?? null])));
+    .map((row) => Object.fromEntries(MEDIA_FIELDS.map((f) => [f, f === 'credit' ? normalizeCredit(row.credit) : row[f] ?? null])));
   writeFileAtomic(join(ws.contentDir, 'media.json'), JSON.stringify(rows, null, 2) + '\n');
 }
 

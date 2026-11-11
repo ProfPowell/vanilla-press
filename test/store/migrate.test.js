@@ -17,7 +17,7 @@ describe('migrate', () => {
     ins(db, 'old', '');
     migrate(db);
     const cols = db.prepare('PRAGMA table_info(media)').all().map((c) => c.name);
-    for (const c of ['original_name', 'width', 'height', 'edited_from']) assert.ok(cols.includes(c), c);
+    for (const c of ['original_name', 'width', 'height', 'edited_from', 'source', 'credit']) assert.ok(cols.includes(c), c);
     assert.equal(db.prepare("SELECT alt FROM media WHERE id = 'old'").get().alt, null);
     ins(db, 'new', '');
     migrate(db);

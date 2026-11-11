@@ -30,7 +30,8 @@ import {
 import { writeFileAtomic } from '../sync/atomic-write.js';
 import { isMissing } from '../sync/media-library.js';
 import { inspectFile } from '../media/inspect.js';
-import { mediaFilename, editedFilename, uniqueFilename } from '../media/names.js';
+import { mediaFilename, editedFilename, uniqueFilename, slugBase } from '../media/names.js';
+import { normalizeCredit, storedCredit, validCredit, mediaSource } from '../media/credit.js';
 import { MAX_BYTES, LARGE_BYTES, tooLargeMessage, unsupportedMessage } from '../media/limits.js';
 import { mediaUsage, mediaSrc } from '../media/usage.js';
 import { kindOf } from '../media/types.js';
@@ -38,6 +39,9 @@ import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
 import { themeCatalog } from '../themes/site-vb.js';
 import { sendJson, readRawBody } from './router.js';
+
+/** A media source that is a web image service (not a credit written by hand). */
+const isWebSource = (source) => Boolean(mediaSource(source)) && source !== 'manual';
 
 /** The notice for an attribute a save dropped. */
 const droppedNotice = ({ tag, attr }) => `Removed "${attr}" from <${tag}>: this version of the component doesn't have it.`;
@@ -64,8 +68,12 @@ function generateId() {
  * @param {(e: { docId: string|null, title: string, status: string }) => void} [options.onSynced] - Called after
  *   every successful sync (create, update, delete, reload), and once for POST /api/sync with
  *   `{ docId: null, title: 'all posts' }`. Never called in fixture mode.
- * @param {(e: { filename: string, action: 'upload'|'alt'|'delete' }) => void} [options.onMediaChanged] - Called after
- *   every media write (upload, alt edit, delete); a throwing listener never breaks the response.
+ * @param {(e: { filename: string, action: 'upload'|'alt'|'credit'|'delete' }) => void} [options.onMediaChanged] - Called after
+ *   every media write (upload or import, alt or credit edit, delete); a throwing listener never breaks the response.
+ * @param {{ get: (source: string, id: string) => Object|null,
+ *   image: (source: string, id: string) => Promise<{ data: Buffer, contentType: string }> }} [options.webImages] - The
+ *   app's web image search (services/image-search.js): POST /api/media/import copies one of its cached
+ *   results into the library. Absent: import answers 503.
  * @param {boolean} [options.statusByActions=false] - The app (Ruling P): a document save never
  *   changes `status` or `published` (PUT keeps the stored values; POST create stores a draft, or
  *   keeps an existing document's values); only Publish/Update/Unpublish change them. `vp serve`
@@ -405,6 +413,8 @@ export function mountApi(router, db, options) {
       alt: row.alt,
       edited_from: row.edited_from,
       created: row.created,
+      source: row.source ?? null,
+      credit: normalizeCredit(row.credit),
       src: mediaSrc(row.filename),
       missing: isMissing(mediaDir, row.filename),
       usedIn: usage.get(row.filename) || [],
@@ -426,6 +436,25 @@ export function mountApi(router, db, options) {
     } catch (err) {
       console.error('onMediaChanged error:', err);
     }
+  }
+
+  /** Whether a media file name is in use, on disk or in the library. */
+  const nameTaken = (name) => existsSync(join(mediaDir, name))
+    || Boolean(db.prepare('SELECT 1 FROM media WHERE filename = ?').get(name));
+
+  /** Write the file and insert its row; a failed insert removes the file again. */
+  function storeMedia(row, data) {
+    writeFileAtomic(join(mediaDir, row.filename), data);
+    try {
+      db.prepare(`
+        INSERT INTO media (id, filename, original_name, mime_type, size, width, height, alt, edited_from, created, source, credit)
+        VALUES (@id, @filename, @original_name, @mime_type, @size, @width, @height, @alt, @edited_from, @created, @source, @credit)
+      `).run(row);
+    } catch (err) {
+      rmSync(join(mediaDir, row.filename), { force: true });
+      throw err;
+    }
+    mediaChanged(row.filename, 'upload');
   }
 
   route.add('GET', '/api/media', jsonErrors(async (req, res) => {
@@ -473,45 +502,60 @@ export function mountApi(router, db, options) {
       return;
     }
 
-    let source = null;
+    let original = null;
     if (fields.edited_from) {
-      source = db.prepare('SELECT * FROM media WHERE filename = ?').get(fields.edited_from);
-      if (!source) {
+      original = db.prepare('SELECT * FROM media WHERE filename = ?').get(fields.edited_from);
+      if (!original) {
         sendJson(res, 400, { error: 'The image being edited is no longer in the library.' });
         return;
       }
     }
 
-    const taken = (name) => existsSync(join(mediaDir, name))
-      || Boolean(db.prepare('SELECT 1 FROM media WHERE filename = ?').get(name));
-    const filename = uniqueFilename(
-      (id) => (source ? editedFilename(source.filename, info.ext, id) : mediaFilename(file.filename, info.ext, id)),
-      taken,
-    );
+    // credit: a JSON Credit; source: where it came from (a credit alone is written by hand).
+    let credit = null;
+    if (fields.credit) {
+      let given = null;
+      try { given = JSON.parse(fields.credit); } catch { /* refused below */ }
+      if (!validCredit(given)) {
+        sendJson(res, 400, { error: 'credit must be a JSON credit: { name?, url?, site?, siteUrl?, license?, licenseUrl?, adapted? }' });
+        return;
+      }
+      credit = storedCredit(given);
+    }
+    let source = null;
+    if (fields.source) {
+      source = mediaSource(fields.source);
+      if (!source) {
+        sendJson(res, 400, { error: 'source must be openverse, pexels, pixabay or manual' });
+        return;
+      }
+    }
+    // An edited copy keeps the original's credit, marked adapted, unless the upload gives one.
+    if (original && !credit && original.credit) {
+      credit = storedCredit({ ...normalizeCredit(original.credit), adapted: true });
+      source ||= original.source;
+    }
+    if (credit && !source) source = 'manual';
 
-    writeFileAtomic(join(mediaDir, filename), file.data);
+    const filename = uniqueFilename(
+      (id) => (original ? editedFilename(original.filename, info.ext, id) : mediaFilename(file.filename, info.ext, id)),
+      nameTaken,
+    );
     const row = {
       id: crypto.randomUUID().slice(0, 8),
       filename,
-      original_name: source ? source.original_name : file.filename,
+      original_name: original ? original.original_name : file.filename,
       mime_type: info.mime,
       size: file.data.length,
       width: info.width,
       height: info.height,
-      alt: source ? source.alt : ('alt' in fields ? fields.alt : null),
-      edited_from: source ? source.filename : null,
+      alt: original ? original.alt : ('alt' in fields ? fields.alt : null),
+      edited_from: original ? original.filename : null,
       created: new Date().toISOString(),
+      source,
+      credit,
     };
-    try {
-      db.prepare(`
-        INSERT INTO media (id, filename, original_name, mime_type, size, width, height, alt, edited_from, created)
-        VALUES (@id, @filename, @original_name, @mime_type, @size, @width, @height, @alt, @edited_from, @created)
-      `).run(row);
-    } catch (err) {
-      rmSync(join(mediaDir, filename), { force: true });
-      throw err;
-    }
-    mediaChanged(filename, 'upload');
+    storeMedia(row, file.data);
 
     sendJson(res, 201, { ...mediaItem(row, await usageMap()), large: file.data.length > LARGE_BYTES });
   }));
@@ -522,14 +566,94 @@ export function mountApi(router, db, options) {
       sendJson(res, 404, { error: 'Media not found' });
       return;
     }
-    const alt = req.body?.alt;
-    if (alt !== null && typeof alt !== 'string') {
-      sendJson(res, 400, { error: 'alt must be text or null' });
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    const hasAlt = 'alt' in body;
+    const hasCredit = 'credit' in body;
+    if (!hasAlt && !hasCredit) {
+      sendJson(res, 400, { error: 'Expected { alt?, credit? } with at least one of them' });
       return;
     }
-    db.prepare('UPDATE media SET alt = ? WHERE id = ?').run(alt, row.id);
-    mediaChanged(row.filename, 'alt');
-    sendJson(res, 200, mediaItem({ ...row, alt }, await usageMap()));
+    const changed = { ...row };
+    if (hasAlt) {
+      if (body.alt !== null && typeof body.alt !== 'string') {
+        sendJson(res, 400, { error: 'alt must be text or null' });
+        return;
+      }
+      changed.alt = body.alt;
+    }
+    if (hasCredit) {
+      if (body.credit !== null && !validCredit(body.credit)) {
+        sendJson(res, 400, { error: 'credit must be null or { name?, url?, site?, siteUrl?, license?, licenseUrl?, adapted? }' });
+        return;
+      }
+      changed.credit = storedCredit(body.credit);
+      // A credit written or cleared by hand is manual; an image from a web service keeps its source.
+      if (!isWebSource(row.source)) changed.source = 'manual';
+    }
+    db.prepare('UPDATE media SET alt = @alt, credit = @credit, source = @source WHERE id = @id').run(changed);
+    mediaChanged(row.filename, hasCredit ? 'credit' : 'alt');
+    sendJson(res, 200, mediaItem(changed, await usageMap()));
+  }));
+
+  // Copy a result the app's web image search cached into the library. Only the
+  // source and id come from the client: the URL, bytes and credit are the search's.
+  route.add('POST', '/api/media/import', jsonErrors(async (req, res) => {
+    const { source, id, alt } = req.body || {};
+    if (typeof source !== 'string' || !source || typeof id !== 'string' || !id
+      || (alt !== undefined && alt !== null && typeof alt !== 'string')) {
+      sendJson(res, 400, { error: 'Expected { source, id, alt? }' });
+      return;
+    }
+    if (!options.webImages) {
+      sendJson(res, 503, { error: 'Web image search is not available here' });
+      return;
+    }
+    const item = options.webImages.get(source, id);
+    if (!item) {
+      sendJson(res, 404, { error: 'Search again — this result has expired' });
+      return;
+    }
+    if (item.mode !== 'copy') {
+      sendJson(res, 400, { error: 'This image can only be linked to, not copied into the library' });
+      return;
+    }
+    let data;
+    try {
+      ({ data } = await options.webImages.image(source, id));
+    } catch (err) {
+      if (!err.status) throw err;
+      sendJson(res, err.status, { error: err.message });
+      return;
+    }
+    // The name comes from the source and id only, never from remote text.
+    const name = `${source}-${id}`;
+    if (data.length > MAX_BYTES) {
+      sendJson(res, 413, { error: tooLargeMessage('This image', data.length) });
+      return;
+    }
+    const info = inspectFile(data, name);
+    if (!info || info.kind !== 'image') {
+      sendJson(res, 415, { error: 'The service sent something that is not an image Vanilla Press accepts' });
+      return;
+    }
+    const credit = storedCredit(item.credit);
+    const row = {
+      id: crypto.randomUUID().slice(0, 8),
+      filename: uniqueFilename((sid) => mediaFilename(name, info.ext, sid), nameTaken),
+      original_name: `${slugBase(name)}.${info.ext}`,
+      mime_type: info.mime,
+      size: data.length,
+      width: info.width,
+      height: info.height,
+      // A blank description is no alt yet, not decorative.
+      alt: alt ?? (item.description || null),
+      edited_from: null,
+      created: new Date().toISOString(),
+      source: mediaSource(source) ?? (credit ? 'manual' : null),
+      credit,
+    };
+    storeMedia(row, data);
+    sendJson(res, 201, mediaItem(row, await usageMap()));
   }));
 
   route.add('DELETE', '/api/media/:id', jsonErrors(async (req, res) => {

@@ -10,6 +10,7 @@
 @import "./_meta-panel.css" layer(editor);
 @import "./_doc-browser.css" layer(editor);
 @import "./_media-picker.css" layer(editor);
+@import "./_web-image-search.css" layer(editor);
 @import "./_theme-picker.css" layer(editor);
 @import "./_component-settings.css" layer(editor);
 @import "./_site-mode.css" layer(editor);

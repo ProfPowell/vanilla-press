@@ -1,12 +1,14 @@
 /**
- * The Media detail panel: preview, alt text, URL, where a file is used, delete and
- * Edit image. The page owns the library; this module owns what is shown beside it.
+ * The Media detail panel: preview, alt text, credit, URL, where a file is used, delete
+ * and Edit image. The page owns the library; this module owns what is shown beside it.
  * @module media-detail
  */
 import { api, h } from './app-api.js';
 import {
   ALT_PLACEHOLDER, ALT_HINT, detailModel, altForCheckbox, createAltSaver, deleteDecision, refusedDeleteMessage,
+  CREDIT_FIELDS, CREDIT_NOTE, creditFormValues, creditFromForm,
 } from '../../../src/media/library-view.js';
+import { creditText } from '../../../src/media/credit.js';
 import { exportFormat } from '../../../src/media/types.js';
 import { uploadMedia } from '../../../editor/assets/js/media-upload.js';
 
@@ -111,6 +113,92 @@ export function createMediaDetail({ siteId, base, root, host }) {
       h('label', { for: 'media-alt', class: 'detail-label' }, 'Alt text'),
       alt, hint,
       h('label', { class: 'detail-check' }, deco, 'Decorative (alt="")'));
+  }
+
+  /**
+   * The Credit fieldset: who made the image and under what license. Save sends
+   * `PUT { credit }` (null once every field is empty); posts keep the credit they have.
+   */
+  function creditField(item) {
+    const inputs = {};
+    const errorId = 'media-credit-error';
+    const error = h('p', { id: errorId, class: 'error', role: 'alert', hidden: true });
+    const line = h('p', { class: 'detail-muted', id: 'media-credit-line' });
+    const adapted = h('input', { type: 'checkbox', id: 'media-credit-adapted' });
+    const fill = (values) => {
+      for (const { key } of CREDIT_FIELDS) inputs[key].value = values[key];
+      adapted.checked = values.adapted;
+    };
+    const showLine = (credit) => {
+      const text = creditText(credit);
+      line.textContent = text ? `Shows as: ${text}` : 'No credit.';
+    };
+    const clearInvalid = () => {
+      for (const input of Object.values(inputs)) {
+        input.removeAttribute('aria-invalid');
+        input.removeAttribute('aria-describedby');
+      }
+      error.hidden = true;
+    };
+    const fields = CREDIT_FIELDS.map(({ key, label, link }) => {
+      const id = `media-credit-${key}`;
+      inputs[key] = h('input', {
+        type: link ? 'url' : 'text', id, autocomplete: 'off', spellcheck: link ? 'false' : null,
+        placeholder: link ? 'https://' : null,
+      });
+      return h('div', { class: 'detail-credit-field' }, h('label', { for: id }, label), inputs[key]);
+    });
+    const save = h('button', { type: 'submit', 'data-action': 'save-credit' }, 'Save credit');
+    const form = h('form', { class: 'detail-group detail-credit', novalidate: true },
+      h('fieldset', { 'aria-describedby': 'media-credit-note' },
+        h('legend', { class: 'detail-label' }, 'Credit'),
+        line,
+        ...fields,
+        h('label', { class: 'detail-check' }, adapted, 'Adapted (changed from the original)')),
+      h('p', { id: 'media-credit-note', class: 'detail-muted' }, CREDIT_NOTE),
+      error,
+      h('div', {}, save));
+    fill(creditFormValues(item));
+    showLine(item.credit);
+    form.addEventListener('input', () => { if (!error.hidden) clearInvalid(); });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearInvalid();
+      const values = { adapted: adapted.checked };
+      for (const { key } of CREDIT_FIELDS) values[key] = inputs[key].value;
+      const answer = creditFromForm(values);
+      if (answer.error) {
+        error.textContent = answer.error;
+        error.hidden = false;
+        for (const key of answer.invalid) {
+          inputs[key].setAttribute('aria-invalid', 'true');
+          inputs[key].setAttribute('aria-describedby', errorId);
+        }
+        inputs[answer.invalid[0]]?.focus();
+        return;
+      }
+      save.disabled = true;
+      setStatus('Saving the credit…');
+      try {
+        const fresh = await api(`${base}/media/${encodeURIComponent(item.id)}`, { method: 'PUT', body: { credit: answer.credit } });
+        host.replaceItem(fresh);
+        if (shownId !== item.id || !form.isConnected) return;
+        fill(creditFormValues(fresh));
+        showLine(fresh.credit);
+        setStatus(fresh.credit ? 'Credit saved' : 'Credit removed');
+      } catch (err) {
+        if (shownId !== item.id || !form.isConnected) {
+          host.showError(`Couldn't save the credit for ${item.filename}. ${err.message}`);
+          return;
+        }
+        setStatus('');
+        error.textContent = `Couldn't save the credit. ${err.message}`;
+        error.hidden = false;
+      } finally {
+        save.disabled = false;
+      }
+    });
+    return form;
   }
 
   function urlField(model) {
@@ -261,9 +349,11 @@ export function createMediaDetail({ siteId, base, root, host }) {
       h('div', {},
         h('h2', { id: 'detail-title' }, model.title),
         model.original ? h('p', { class: 'detail-muted' }, `Uploaded as ${model.original}`) : null,
+        model.source ? h('p', { class: 'detail-muted', 'data-source': item.source }, model.source) : null,
         h('p', { class: 'detail-muted' }, model.meta),
         model.dims ? h('p', { class: 'detail-muted' }, model.dims) : null),
       model.showAlt ? altField(item) : null,
+      model.showCredit ? creditField(item) : null,
       urlField(model),
       usedInList(model),
       message,

@@ -1,6 +1,7 @@
 /**
- * The Media section: library grid, filters, search and uploads. Renders and wires events;
- * the rules live in src/media/library-view.js and editor/assets/js/media-upload.js.
+ * The Media section: library grid, filters, search, uploads and Add from web. Renders and
+ * wires events; the rules live in src/media/library-view.js and editor/assets/js/media-upload.js,
+ * and adding from the web is the editor's (components/web-image-search.js, web-image-flow.js).
  * @module media-page
  */
 import { api, h } from './app-api.js';
@@ -291,6 +292,85 @@ export function initMediaSection({ siteId, root }) {
       if (type === 'dragover' && !root.contains(e.target)) e.dataTransfer.dropEffect = 'none';
     });
   }
+
+  // --- Add from web ---
+  // The editor's search and flow, loaded on first use. Their API client finds this
+  // site from the page's own `?site=`, as the editor does.
+  const webDialog = $('media-web-dialog');
+  const webSearch = webDialog.querySelector('web-image-search');
+  const webStatus = $('media-web-status');
+  const webEdit = $('media-web-edit');
+  let webModules = null;
+  let webBusy = false;
+  const loadWeb = () => {
+    webModules ??= Promise.all([
+      import('../../../editor/assets/js/components/web-image-search.js'),
+      import('../../../editor/assets/js/web-image-flow.js'),
+    ]).then(([, flow]) => flow).catch((err) => { webModules = null; throw err; });
+    return webModules;
+  };
+  const webError = (message) => webStatus.replaceChildren(h('p', { class: 'error', role: 'alert' }, message));
+  /** While editing: Cancel the edit (when it can be). Returns whether an edit was open. */
+  const leaveWebEditor = () => {
+    if (webEdit.hidden) return false;
+    webEdit.querySelector('[data-action="cancel-edit"]:not(:disabled)')?.click();
+    return true;
+  };
+
+  $('media-web').addEventListener('click', async () => {
+    if (!webBusy) webStatus.replaceChildren();
+    webDialog.showModal();
+    try {
+      await loadWeb();
+    } catch {
+      webError("Couldn't load the web search. Reload the page to try again.");
+      return;
+    }
+    if (webDialog.open && webEdit.hidden) webSearch.focus();
+  });
+  $('media-web-close').addEventListener('click', () => {
+    leaveWebEditor();
+    webDialog.close();
+  });
+  // Escape in the editor is the editor's (web-image-flow.js); anywhere else it cancels the edit first.
+  webDialog.addEventListener('cancel', (e) => {
+    if (leaveWebEditor()) e.preventDefault();
+  });
+  // A new search clears the last choice's error ("Search again — …")
+  for (const type of ['input', 'submit']) webSearch.addEventListener(type, () => { if (!webBusy) webStatus.replaceChildren(); });
+
+  webDialog.addEventListener('web-image-choose', async (e) => {
+    if (webBusy) return;
+    const { result, edit } = e.detail;
+    webBusy = true;
+    // Editing shows its own progress where the editor goes
+    webStatus.replaceChildren(...(edit ? [] : [h('p', { class: 'detail-muted' }, 'Adding it to your library…')]));
+    if (edit) webSearch.hidden = true;
+    let item;
+    try {
+      const { chooseWebImage } = await loadWeb();
+      item = await chooseWebImage(result, { edit, editIn: webEdit, saveText: 'Save and add' });
+    } catch (err) {
+      webBusy = false;
+      webSearch.hidden = false;
+      webError(err.message);
+      return;
+    }
+    webBusy = false;
+    webSearch.hidden = false;
+    webStatus.replaceChildren();
+    if (!item) { // editing cancelled: back to the results
+      if (webDialog.open) webSearch.focus();
+      return;
+    }
+    webDialog.close();
+    await refresh();
+    select(item.id);
+    const added = $('media-grid').querySelector(`[data-id="${CSS.escape(item.id)}"]`);
+    added?.scrollIntoView({ block: 'nearest' });
+    added?.focus();
+    $('media-detail-status').textContent = `Added ${item.filename} to your library.`;
+  });
 
   // --- Show and hide ---
   // Called by the site page each time the section is shown (including the first) and when it is left.

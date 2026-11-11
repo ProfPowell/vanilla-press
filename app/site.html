@@ -72,6 +72,7 @@
             <p id="media-summary" class="media-summary"><span id="media-count"></span> in <code class="mono">src/media</code><span id="media-missing-alt" class="warn" hidden></span></p>
           </div>
           <div class="actions">
+            <button type="button" id="media-web" aria-haspopup="dialog"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"></path></svg>Add from web</button>
             <button type="button" id="media-upload" class="primary"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"></path><path d="m6 10 6-6 6 6"></path><path d="M4 20h16"></path></svg>Upload</button>
             <input type="file" id="media-file" multiple hidden/>
           </div>
@@ -96,6 +97,16 @@
           <p id="media-detail-status" class="detail-status" role="status"></p>
         </aside>
         </div>
+        <dialog id="media-web-dialog" class="media-web-dialog" aria-labelledby="media-web-title" aria-describedby="media-web-desc">
+          <div class="media-web-head">
+            <h2 id="media-web-title">Add from the web</h2>
+            <button type="button" id="media-web-close">Close</button>
+          </div>
+          <p id="media-web-desc" class="media-web-desc">Add copies the image into <code class="mono">src/media</code> with its credit.</p>
+          <div id="media-web-status" class="media-web-status" role="status"></div>
+          <div id="media-web-edit" class="media-web-edit" hidden></div>
+          <web-image-search for="library"></web-image-search>
+        </dialog>
       </section>
 
       <section id="programs-section" aria-labelledby="programs-title" hidden>

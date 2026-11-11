@@ -107,7 +107,7 @@ async function downsizeAndUpload(result) {
  * Load the result's image into an `<image-editor>` in `slot`. Resolves with
  * the uploaded MediaItem on Save, or null on Cancel. A failed save keeps the edits.
  */
-async function editThenUpload(result, slot) {
+async function editThenUpload(result, slot, saveText) {
   slot.replaceChildren(h('p', { class: 'web-image-edit-loading', role: 'status' }, 'Loading the image…'));
   slot.hidden = false;
   let blob;
@@ -142,7 +142,7 @@ async function editThenUpload(result, slot) {
     if (loads > 1) replacedNote.textContent = REPLACED_NOTE;
   });
   const error = h('p', { class: 'media-picker-error', role: 'alert', hidden: true });
-  const save = h('button', { type: 'button', class: 'primary', 'data-action': 'save-edit' }, 'Save and insert');
+  const save = h('button', { type: 'button', class: 'primary', 'data-action': 'save-edit' }, saveText);
   const cancel = h('button', { type: 'button', 'data-action': 'cancel-edit' }, 'Cancel');
   slot.replaceChildren(editor, replacedNote, error, h('div', { class: 'web-image-edit-actions' }, save, cancel));
   save.focus();
@@ -176,7 +176,7 @@ async function editThenUpload(result, slot) {
       } catch (err) {
         error.textContent = `${err.message || "Couldn't save the image."} Your edits are still here; try again.`;
         error.hidden = false;
-        save.textContent = 'Save and insert';
+        save.textContent = saveText;
         save.disabled = cancel.disabled = false;
       }
     });
@@ -186,19 +186,19 @@ async function editThenUpload(result, slot) {
 /**
  * Use a web image search result.
  * @param {object} result a WebImage from `api.searchWebImages`
- * @param {{ edit?: boolean, editIn?: HTMLElement }} [opts] `editIn`: where
- *   the image editor shows (required for `edit`)
+ * @param {{ edit?: boolean, editIn?: HTMLElement, saveText?: string }} [opts] `editIn`: where
+ *   the image editor shows (required for `edit`); `saveText`: its Save button's words
  * @returns {Promise<object|{ src: string, alt: string|null, credit: object }|null>}
  *   the new MediaItem; the link for an Unsplash photo; null when editing was cancelled
  */
-export async function chooseWebImage(result, { edit = false, editIn } = {}) {
+export async function chooseWebImage(result, { edit = false, editIn, saveText = 'Save and insert' } = {}) {
   switch (importPath(result, { edit })) {
     case 'link':
       await api.pingUnsplash(result.id);
       // No description is no alt yet (the figure's alt field opens), not decorative
       return { src: result.url, alt: result.description || null, credit: result.credit };
     case 'edit':
-      return editThenUpload(result, editIn);
+      return editThenUpload(result, editIn, saveText);
     case 'downsize':
     case 'probe':
       return downsizeAndUpload(result);

@@ -5,6 +5,7 @@
 import { typeLabel, canEditImage } from './types.js';
 import { formatBytes } from './limits.js';
 import { mediaSrc } from './usage.js';
+import { normalizeCredit } from './credit.js';
 
 /** Alt text has three states: `null` never written, `""` decorative, text. */
 export function altState(alt) {
@@ -79,6 +80,56 @@ export const ALT_HINT = 'Screen readers will announce only the file name. Leave 
 /** The Decorative checkbox's stored alt: ticked is `""`, unticked is `null` (never written). */
 export const altForCheckbox = (checked) => (checked ? '' : null);
 
+/** The web image services a library image can come from, by name (a hand-written credit is `manual`). */
+const SOURCE_NAMES = { openverse: 'Openverse', pexels: 'Pexels', pixabay: 'Pixabay' };
+
+/** The Credit fieldset's text fields, in order; `link` fields must be http(s). The Adapted checkbox follows. */
+export const CREDIT_FIELDS = [
+  { key: 'name', label: 'Creator' },
+  { key: 'url', label: 'Creator link', link: true },
+  { key: 'site', label: 'Site' },
+  { key: 'siteUrl', label: 'Site link', link: true },
+  { key: 'license', label: 'License' },
+  { key: 'licenseUrl', label: 'License link', link: true },
+];
+export const CREDIT_NOTE = 'Changes apply to new uses of this image. Posts that already use it keep their credit.';
+export const LINK_ERROR = 'Links must start with http:// or https://';
+const LINKS_ALONE_ERROR = 'Add a creator, site or license for the links to go with.';
+
+/**
+ * The Credit fieldset's values for an item: every field a string, `adapted` a boolean.
+ * @param {{ credit?: object|null }} item MediaItem
+ * @returns {{ name: string, url: string, site: string, siteUrl: string, license: string, licenseUrl: string, adapted: boolean }}
+ */
+export function creditFormValues(item) {
+  const credit = normalizeCredit(item?.credit) || {};
+  const values = {};
+  for (const { key } of CREDIT_FIELDS) values[key] = credit[key] || '';
+  values.adapted = credit.adapted === true;
+  return values;
+}
+
+/**
+ * The credit the fieldset's values say, for `PUT { credit }`: null when every
+ * field is empty. A link that is not http(s), or links with no creator, site or
+ * license to show them on, are refused: `error` says why, `invalid` names the fields.
+ * @param {{ [key: string]: string|boolean }} values
+ * @returns {{ credit: object|null, error: string|null, invalid: string[] }}
+ */
+export function creditFromForm(values) {
+  const text = (key) => (typeof values[key] === 'string' ? values[key].trim() : '');
+  const badLinks = CREDIT_FIELDS.filter((f) => f.link && text(f.key) && !/^https?:\/\//i.test(text(f.key))).map((f) => f.key);
+  if (badLinks.length) return { credit: null, error: LINK_ERROR, invalid: badLinks };
+  const raw = {};
+  for (const { key } of CREDIT_FIELDS) raw[key] = text(key);
+  raw.adapted = values.adapted === true;
+  const credit = normalizeCredit(raw);
+  if (!credit && CREDIT_FIELDS.some((f) => f.link && text(f.key))) {
+    return { credit: null, error: LINKS_ALONE_ERROR, invalid: ['name'] };
+  }
+  return { credit, error: null, invalid: [] };
+}
+
 /**
  * What the detail panel shows for one item.
  * @param {object} item MediaItem
@@ -97,6 +148,8 @@ export function detailModel(item, { siteId, locale } = {}) {
     dims: item.width > 0 && item.height > 0 ? `${item.width} \u00d7 ${item.height} px` : null,
     url: mediaSrc(item.filename),
     showAlt: item.kind === 'image',
+    showCredit: item.kind === 'image',
+    source: SOURCE_NAMES[item.source] ? `From ${SOURCE_NAMES[item.source]}` : null,
     altState: altState(item.alt),
     canEdit: canEditImage(item.mime_type) && !item.missing,
     usedIn: (item.usedIn || []).map((u) => ({

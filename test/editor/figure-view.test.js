@@ -1,5 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { EditorState } from 'prosemirror-state';
 import { schema } from '../../editor/assets/js/schema.js';
 import { FigureView } from '../../editor/assets/js/blocks/figure-view.js';
 import { EmbedView } from '../../editor/assets/js/blocks/embed-view.js';
@@ -49,7 +50,9 @@ class FakeElement {
     for (let n = el; n; n = n.parentNode) if (n === this) return true;
     return false;
   }
-  addEventListener() {}
+  addEventListener(type, fn) { (this.listeners ??= {})[type] = [...(this.listeners[type] || []), fn]; }
+  /** Run this element's listeners for `type`, as the browser would. */
+  fire(type) { for (const fn of this.listeners?.[type] || []) fn({ type, target: this }); }
 }
 
 let savedDocument;
@@ -153,6 +156,39 @@ describe('FigureView credit', () => {
     assert.equal(v.credit.children[0].textContent, 'Jane');
     v.update(figureNode({ src: '/media/a.jpg', alt: 'A' }));
     assert.equal(v.credit.hasAttribute('hidden'), true);
+  });
+
+  /** A figure in a real editor state, with a view whose dispatch applies the transaction. */
+  function liveFigure(start) {
+    const title = schema.node('title', null, [schema.text('T')]);
+    const doc = schema.node('doc', null, [title, figureNode(start)]);
+    const pos = title.nodeSize;
+    const view = {
+      state: EditorState.create({ doc }),
+      // As ProseMirror would: apply the change, and the view follows its node.
+      dispatch(tr) { this.state = this.state.apply(tr); v.node = this.state.doc.child(1); },
+    };
+    const v = new FigureView(doc.child(1), view, () => pos);
+    return { v, attrs: () => view.state.doc.child(1).attrs };
+  }
+
+  it('a src typed into the Src field drops the old picture\'s credit', () => {
+    const { v, attrs } = liveFigure({ src: '/media/a.jpg', alt: 'A', credit });
+    v.srcInput.value = 'https://example.com/other.jpg';
+    v.srcInput.fire('change');
+    assert.equal(attrs().src, 'https://example.com/other.jpg');
+    assert.equal(attrs().credit, null);
+    assert.equal(attrs().alt, 'A');
+  });
+
+  it('the same src, or a new alt, keeps the credit', () => {
+    const { v, attrs } = liveFigure({ src: '/media/a.jpg', alt: 'A', credit });
+    v.srcInput.value = '/media/a.jpg';
+    v.srcInput.fire('change');
+    v.altInput.value = 'A fox';
+    v.altInput.fire('change');
+    assert.deepEqual(attrs().credit, credit);
+    assert.equal(attrs().alt, 'A fox');
   });
 
   it('ignores mutations in the credit', () => {

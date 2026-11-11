@@ -74,7 +74,13 @@ export class FigureView {
     this.srcInput.value = node.attrs.src || '';
     this.altInput.value = node.attrs.alt || '';
 
-    this.srcInput.addEventListener('change', () => this.setAttr('src', this.srcInput.value));
+    // A different src typed or pasted by hand is another picture: the old
+    // picture's credit would be wrong, so it goes.
+    this.srcInput.addEventListener('change', () => {
+      const src = this.srcInput.value;
+      if (src === (this.node.attrs.src || '')) return;
+      this.setAttrs({ src, credit: null });
+    });
     this.altInput.addEventListener('change', () => this.setAttr('alt', this.altInput.value));
 
     // Browse: pick an image from the library (or the web). The figure keeps
@@ -115,10 +121,14 @@ export class FigureView {
   }
 
   setAttr(name, value) {
+    this.setAttrs({ [name]: value });
+  }
+
+  setAttrs(changes) {
     const pos = this.getPos();
     if (pos == null) return;
     this.view.dispatch(
-      this.view.state.tr.setNodeMarkup(pos, null, { ...this.node.attrs, [name]: value })
+      this.view.state.tr.setNodeMarkup(pos, null, { ...this.node.attrs, ...changes })
     );
   }
 

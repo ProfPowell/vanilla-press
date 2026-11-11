@@ -13,10 +13,13 @@ const groupsEl = $('groups');
 const statusEl = $('status');
 const errorEl = $('error');
 
-/** Polite announcement; cleared first so the same words are announced again. */
+/**
+ * Polite announcement. The region always stays rendered; a message that repeats
+ * the last one gets a trailing no-break space, so it is still changed text and
+ * read again.
+ */
 function announce(message) {
-  statusEl.textContent = '';
-  requestAnimationFrame(() => { statusEl.textContent = message; });
+  statusEl.textContent = statusEl.textContent === message ? `${message}\u00a0` : message;
 }
 
 function showError(message) {
@@ -75,63 +78,80 @@ function groupSection(group) {
       : h('div', { class: 'service-list' }, ...group.services.map(serviceCard)));
 }
 
-/** Replace a service's card from the server's answer, keeping focus on the same control. */
-function replaceCard(state, focusControl) {
-  const old = groupsEl.querySelector(`.service-card[data-id="${CSS.escape(state.id)}"]`);
-  if (!old) return;
+/**
+ * Replace a service's card from the server's answer, keeping focus on the same
+ * control. Text in the key field survives (a key pasted but not yet saved),
+ * unless `clearKey` (after that key was saved).
+ */
+function replaceCard(old, state, focusControl, { clearKey = false } = {}) {
+  const typed = old.querySelector('input[data-control="key"]')?.value ?? '';
   const card = serviceCard(serviceRow(state));
+  const input = card.querySelector('input[data-control="key"]');
+  if (input && !clearKey) input.value = typed;
   old.replaceWith(card);
-  const target = card.querySelector(`[data-control="${focusControl}"]`) || card.querySelector('[data-control="key"]');
+  const target = card.querySelector(`[data-control="${focusControl}"]`) || input;
   target?.focus();
 }
 
-async function update(id, change) {
+/** Mark a card busy and disable its controls; returns a function that frees it. */
+function hold(card) {
+  card.setAttribute('aria-busy', 'true');
+  const controls = [...card.querySelectorAll('input, button')].filter((c) => !c.disabled);
+  for (const c of controls) c.disabled = true;
+  return () => {
+    card.removeAttribute('aria-busy');
+    for (const c of controls) c.disabled = false;
+  };
+}
+
+/**
+ * One save for a card at a time: PUT the change, then rebuild the card from the
+ * answer. On failure the card is freed as it was and the error is shown.
+ * @returns {Promise<object|null>} the service's new state, or null
+ */
+async function save(card, change, focusControl, { clearKey = false, onFail } = {}) {
+  if (card.hasAttribute('aria-busy')) return null;
   showError('');
-  return api(`/api/services/${encodeURIComponent(id)}`, { method: 'PUT', body: change });
+  const release = hold(card);
+  try {
+    const state = await api(`/api/services/${encodeURIComponent(card.dataset.id)}`, { method: 'PUT', body: change });
+    replaceCard(card, state, focusControl, { clearKey });
+    return state;
+  } catch (err) {
+    release();
+    onFail?.();
+    card.querySelector(`[data-control="${focusControl}"]`)?.focus();
+    showError(err.message);
+    return null;
+  }
 }
 
 groupsEl.addEventListener('submit', async (e) => {
   const form = e.target.closest('form.service-key');
   if (!form) return;
   e.preventDefault();
-  const input = form.elements.key;
+  const input = form.querySelector('input[data-control="key"]');
   const key = input.value.trim();
-  input.value = '';
-  if (!key) { input.focus(); return; }
-  try {
-    const state = await update(form.dataset.id, { key });
-    replaceCard(state, 'key');
-    announce(`${state.label} key saved. ${serviceRow(state).status}.`);
-  } catch (err) {
-    showError(err.message);
-  }
+  if (!key) { input.value = ''; input.focus(); return; }
+  const state = await save(form.closest('.service-card'), { key }, 'key', { clearKey: true });
+  if (state) announce(`${state.label} key saved. ${serviceRow(state).status}.`);
 });
 
 groupsEl.addEventListener('click', async (e) => {
   const button = e.target.closest('button[data-action="remove"]');
   if (!button) return;
-  const id = button.closest('.service-card').dataset.id;
-  try {
-    const state = await update(id, { key: null });
-    replaceCard(state, 'key');
-    announce(`${state.label} key removed. ${serviceRow(state).status}.`);
-  } catch (err) {
-    showError(err.message);
-  }
+  const state = await save(button.closest('.service-card'), { key: null }, 'key');
+  if (state) announce(`${state.label} key removed. ${serviceRow(state).status}.`);
 });
 
 groupsEl.addEventListener('change', async (e) => {
   const box = e.target.closest('input[data-action="toggle"]');
   if (!box) return;
-  const id = box.closest('.service-card').dataset.id;
-  try {
-    const state = await update(id, { enabled: box.checked });
-    replaceCard(state, 'toggle');
-    announce(state.enabled ? `${state.label} turned on. ${serviceRow(state).status}.` : `${state.label} turned off.`);
-  } catch (err) {
-    box.checked = !box.checked;
-    showError(err.message);
-  }
+  const card = box.closest('.service-card');
+  const wanted = box.checked;
+  if (card.hasAttribute('aria-busy')) { box.checked = !wanted; return; }
+  const state = await save(card, { enabled: wanted }, 'toggle', { onFail: () => { box.checked = !wanted; } });
+  if (state) announce(state.enabled ? `${state.label} turned on. ${serviceRow(state).status}.` : `${state.label} turned off.`);
 });
 
 async function load() {

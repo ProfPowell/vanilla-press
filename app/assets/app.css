@@ -300,8 +300,8 @@ button.danger-text:hover { background: var(--color-error-subtle); }
 
 /* --- Services screen: one section per group, a card per service --- */
 .services-page .back { margin-block-end: 1rem; padding: 0; }
-.services-status:empty { display: none; }
-.services-status { margin-block: -1.5rem 1.5rem; color: var(--color-text-muted); }
+/* The live region is always rendered (never display:none), or its messages may go unread; it keeps a line for them */
+.services-status { min-block-size: 1.5em; margin-block: -1.5rem 1rem; color: var(--color-text-muted); }
 .service-group { margin-block-end: 2.5rem; }
 .service-group h2 { margin-block: 0 1rem; font-size: 1.5rem; }
 .service-later { margin: 0; }

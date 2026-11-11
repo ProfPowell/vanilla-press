@@ -216,6 +216,18 @@ describe('image search', () => {
     assert.equal(out.hasMore, true);
   });
 
+  it('reports how many sources were ready to search', async () => {
+    const fetch = fakeFetch();
+    const search = createImageSearch({ env, fetch, now });
+    assert.equal((await search.search('fox', { page: 1 })).ready, 4);
+    assert.equal((await search.search('fox', { page: 1, for: 'library' })).ready, 3);
+    for (const id of ['pexels', 'pixabay', 'unsplash']) updateService(id, { key: '' }, env);
+    updateService('openverse', { enabled: false }, env);
+    const none = await search.search('fox', { page: 1 });
+    assert.deepEqual(none, { results: [], errors: [], hasMore: false, ready: 0 });
+    assert.equal(fetch.calls.length, 4); // the library search was cached; the last asked no one
+  });
+
   it('a 400 for another reason is not a key error', async () => {
     const fetch = fakeFetch({ pixabay: async () => new Response('[ERROR 400] "q" exceeds the maximum length', { status: 400 }) });
     const search = createImageSearch({ env, fetch, now });

@@ -136,7 +136,7 @@ export const api = {
   },
 
   /**
-   * Search the web image services (app only): { results, errors, hasMore }.
+   * Search the web image services (app only): { results, errors, hasMore, ready } (ready: how many sources were searched).
    * @param {string} q
    * @param {{ page?: number, for?: 'picker'|'library' }} [opts]
    */

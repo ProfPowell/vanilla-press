@@ -129,7 +129,7 @@ export class WebImageSearch extends HTMLElement {
       return;
     }
     if (request !== this.request) return;
-    const { results = [], errors = [], hasMore = false } = answer || {};
+    const { results = [], errors = [], hasMore = false, ready } = answer || {};
     // A result already shown (a source's pages can overlap) shows once
     const seen = new Set(this.results.map((r) => `${r.source}|${r.id}`));
     const fresh = results.filter((r) => !seen.has(`${r.source}|${r.id}`));
@@ -142,7 +142,10 @@ export class WebImageSearch extends HTMLElement {
     this.more.hidden = !hasMore;
     this.more.disabled = false;
     if (moreHadFocus && cards.length) cards[0].querySelector('button')?.focus();
-    if (!this.results.length) this.status.textContent = `No images found for “${query}”.`;
+    if (ready === 0) {
+      this.status.replaceChildren('Turn on an image source in ',
+        el('a', { href: '/app/services.html' }, 'Services'), ' to search the web.');
+    } else if (!this.results.length) this.status.textContent = `No images found for “${query}”.`;
     else this.status.textContent = `${this.results.length} image${this.results.length === 1 ? '' : 's'} found.`;
   }
 

@@ -140,10 +140,11 @@ export function createImageSearch({
 
   /**
    * Search every ready source. A source that fails or times out becomes an
-   * entry in `errors`; it never fails the whole search.
+   * entry in `errors`; it never fails the whole search. `ready` counts the
+   * sources searched, so 0 means no image service is turned on.
    * @param {string} q
    * @param {{ page?: number, for?: 'picker'|'library' }} [options]
-   * @returns {Promise<{ results: WebImage[], errors: SearchError[], hasMore: boolean }>}
+   * @returns {Promise<{ results: WebImage[], errors: SearchError[], hasMore: boolean, ready: number }>}
    */
   async function search(q, { page = 1, for: purpose = 'picker' } = {}) {
     const query = String(q ?? '').trim();
@@ -181,7 +182,7 @@ export function createImageSearch({
     for (let i = 0; i < longest; i++) {
       for (const list of lists) if (i < list.length) results.push(list[i]);
     }
-    return { results, errors, hasMore };
+    return { results, errors, hasMore, ready: sources.length };
   }
 
   /**

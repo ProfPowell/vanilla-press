@@ -80,6 +80,26 @@ describe('<web-image-search>', () => {
     assert.equal(credit.querySelector('b'), null);
   });
 
+  it('with no source ready, it says to turn one on in Services, with a link', async () => {
+    const el = mount();
+    answers.push({ results: [], errors: [], hasMore: false, ready: 0 });
+    await submit(el, 'barn');
+    const status = el.querySelector('.web-image-search-status');
+    assert.equal(status.textContent, 'Turn on an image source in Services to search the web.');
+    const link = status.querySelector('a');
+    assert.equal(link.getAttribute('href'), '/app/services.html');
+    assert.equal(link.textContent, 'Services');
+  });
+
+  it('with sources ready and nothing found, it says no images found', async () => {
+    const el = mount();
+    answers.push({ results: [], errors: [], hasMore: false, ready: 2 });
+    await submit(el, 'barn');
+    const status = el.querySelector('.web-image-search-status');
+    assert.equal(status.textContent, 'No images found for “barn”.');
+    assert.equal(status.querySelector('a'), null);
+  });
+
   it('per-source errors are announced, in a polite live region', async () => {
     const el = mount();
     answers.push({ results: [result('1')], errors: [{ source: 'pixabay', label: 'Pixabay', message: "Pixabay didn't accept the key" }], hasMore: false });

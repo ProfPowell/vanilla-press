@@ -88,6 +88,9 @@ describe('<web-image-search>', () => {
     assert.equal(status.textContent, 'Turn on an image source in Services to search the web.');
     const link = status.querySelector('a');
     assert.equal(link.getAttribute('href'), '/app/services.html');
+    // Opens in a new tab: the editor has no unsaved-changes guard, so navigating away could lose work.
+    assert.equal(link.getAttribute('target'), '_blank');
+    assert.equal(link.getAttribute('rel'), 'noopener');
     assert.equal(link.textContent, 'Services');
   });
 

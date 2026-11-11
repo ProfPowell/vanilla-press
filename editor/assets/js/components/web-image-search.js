@@ -144,7 +144,7 @@ export class WebImageSearch extends HTMLElement {
     if (moreHadFocus && cards.length) cards[0].querySelector('button')?.focus();
     if (ready === 0) {
       this.status.replaceChildren('Turn on an image source in ',
-        el('a', { href: '/app/services.html' }, 'Services'), ' to search the web.');
+        el('a', { href: '/app/services.html', target: '_blank', rel: 'noopener' }, 'Services'), ' to search the web.');
     } else if (!this.results.length) this.status.textContent = `No images found for “${query}”.`;
     else this.status.textContent = `${this.results.length} image${this.results.length === 1 ? '' : 's'} found.`;
   }

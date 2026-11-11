@@ -167,6 +167,15 @@
   vertical-align: super;
 }
 
+/* The block being typed in (block-handles.js): a quiet tint, so the writer
+ * sees at a glance where the cursor is. Only while the editor has focus;
+ * background and radius only, so nothing shifts. */
+.ProseMirror:focus-within .pm-current-block {
+  background: color-mix(in oklab, var(--color-interactive) 7%, transparent);
+  border-radius: var(--radius-m);
+  box-shadow: 0 0 0 0.25rem color-mix(in oklab, var(--color-interactive) 7%, transparent);
+}
+
 /* Node selection ring */
 .ProseMirror .ProseMirror-selectednode {
   outline: 2px solid var(--color-accent);

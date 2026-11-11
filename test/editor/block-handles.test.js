@@ -213,6 +213,46 @@ describe('the empty-line placeholder', () => {
   });
 });
 
+describe('the current block highlight', () => {
+  const current = (state) => {
+    const plugin = state.plugins[0];
+    const set = plugin.props.decorations.call(plugin, state);
+    return (set ? set.find() : [])
+      .filter((d) => /\bpm-current-block\b/.test(d.type.attrs?.class || ''))
+      .map((d) => ({ from: d.from, to: d.to }));
+  };
+
+  it('marks the block the cursor is typing in, and only that one', () => {
+    const doc = docOf(p('One'), p('Two'));
+    const second = doc.child(0).nodeSize + doc.child(1).nodeSize;
+    const state = stateAt(doc, 'Two', 1, [blockHandlesPlugin()]);
+    assert.deepEqual(current(state), [{ from: second, to: second + doc.child(2).nodeSize }]);
+  });
+
+  it('marks the list item, not the whole list', () => {
+    const doc = docOf(p('Intro'), node('bullet_list', null, [li('A'), li('B')]));
+    const state = stateAt(doc, 'B', 0, [blockHandlesPlugin()]);
+    const list = doc.child(0).nodeSize + doc.child(1).nodeSize;
+    const itemB = list + 1 + doc.child(2).child(0).nodeSize;
+    assert.deepEqual(current(state), [{ from: itemB, to: itemB + doc.child(2).child(1).nodeSize }]);
+  });
+
+  it('marks nothing in the title or over a text range', () => {
+    const doc = docOf(p('One'), p('Two'));
+    const inTitle = EditorState.create({ doc, plugins: [blockHandlesPlugin()], selection: TextSelection.create(doc, 1) });
+    assert.deepEqual(current(inTitle), []);
+    const range = EditorState.create({ doc, plugins: [blockHandlesPlugin()],
+      selection: TextSelection.create(doc, posOf(doc, 'One'), posOf(doc, 'Two') + 2) });
+    assert.deepEqual(current(range), []);
+  });
+
+  it('shows only while the editor has focus', () => {
+    const css = readFileSync(new URL('../../editor/assets/css/_prosemirror.css', import.meta.url), 'utf8');
+    assert.match(css, /\.ProseMirror:focus-within \.pm-current-block\s*\{/);
+    assert.doesNotMatch(css.replace(/\.ProseMirror:focus-within \.pm-current-block/g, ''), /\.pm-current-block/);
+  });
+});
+
 describe('block drag css', () => {
   it('hides a selected figure or embed\'s fields while a block is dragged', () => {
     const css = readFileSync(new URL('../../editor/assets/css/_block-controls.css', import.meta.url), 'utf8');

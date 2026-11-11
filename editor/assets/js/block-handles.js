@@ -1,7 +1,8 @@
 /**
  * Moving and adding blocks: the `+` and drag handles in the gutter of the
  * hovered (or cursor) block, the keyboard move (Alt+Shift+↑/↓), and the
- * "Type / for blocks" placeholder on the cursor's empty line.
+ * "Type / for blocks" placeholder on the cursor's empty line, and the
+ * highlight on the block the cursor is typing in.
  *
  * The movable block is a list item, tab or step (always within its parent),
  * or a block that shares its parent with other blocks (a lone child moves
@@ -151,19 +152,29 @@ export function itemDropRefused(doc, pos, slice, item) {
   return !$at.parent.canReplaceWith($at.index(), $at.index(), item.type);
 }
 
+/** The class on the block the cursor is typing in (styled only while the editor has focus). */
+export const CURRENT_BLOCK_CLASS = 'pm-current-block';
+
 /**
- * "Type / for blocks" on the empty paragraph that holds the cursor
- * (a decoration: never part of the document).
+ * Decorations, never part of the document: the cursor's block is marked
+ * (`pm-current-block`) so the writer sees at a glance where they are typing,
+ * and its empty paragraph shows "Type / for blocks".
  * @param {import('prosemirror-state').EditorState} state
  */
-function placeholderDecorations(state) {
+function cursorDecorations(state) {
   const { selection } = state;
   if (!(selection instanceof TextSelection) || !selection.empty) return null;
   const { $from } = selection;
-  if ($from.parent.type.name !== 'paragraph' || $from.parent.content.size !== 0) return null;
-  return DecorationSet.create(state.doc, [
-    Decoration.node($from.before(), $from.after(), { 'data-placeholder': PLACEHOLDER }),
-  ]);
+  const decorations = [];
+  const block = movableBlockAt($from);
+  if (block) {
+    const node = state.doc.nodeAt(block.pos);
+    decorations.push(Decoration.node(block.pos, block.pos + node.nodeSize, { class: CURRENT_BLOCK_CLASS }));
+  }
+  if ($from.parent.type.name === 'paragraph' && $from.parent.content.size === 0) {
+    decorations.push(Decoration.node($from.before(), $from.after(), { 'data-placeholder': PLACEHOLDER }));
+  }
+  return decorations.length ? DecorationSet.create(state.doc, decorations) : null;
 }
 
 const iconButton = (label, path, extra = {}) => {
@@ -342,7 +353,7 @@ export function blockHandlesPlugin({ addAt } = {}) {
   return new Plugin({
     view: (view) => new BlockHandles(view, addAt, drag),
     props: {
-      decorations: placeholderDecorations,
+      decorations: cursorDecorations,
       // A list item, tab or step dragged by the grip stays in its kind of parent
       handleDrop(view, event, slice) {
         const { item } = drag;

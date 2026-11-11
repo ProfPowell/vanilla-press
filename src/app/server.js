@@ -24,6 +24,7 @@ import { migrateVpTheme } from './site-theme.js';
 import { mountThemeRoutes } from './theme-routes.js';
 import { mountProgramRoutes } from './program-routes.js';
 import { mountServiceRoutes } from './service-routes.js';
+import { createImageSearch } from '../services/image-search.js';
 import { clearTmp } from '../programs/import.js';
 import { createLivePrograms } from '../programs/usage.js';
 import { findSiteVb } from '../themes/site-vb.js';
@@ -136,6 +137,8 @@ export async function startApp({
   // Looked up on each use, so a caller can swap a function after start (tests do).
   const git = new Proxy({}, { get: (_, key) => gitOverrides[key] ?? defaultGit[key] });
   const siteProcess = new Proxy({}, { get: (_, key) => siteProcessOverrides[key] ?? defaultSiteProcess[key] });
+  // One web image search for the app: its cache is what imports and the image proxy read from.
+  const imageSearch = createImageSearch({ env, fetch: fetchImpl });
   /** Open sites, cached for the life of the server: id -> { db, router, ws, backup, writes } */
   const open = new Map();
 
@@ -364,7 +367,7 @@ export async function startApp({
 
   const app = createRouter();
 
-  mountServiceRoutes(app, { env });
+  mountServiceRoutes(app, { env, imageSearch });
 
   app.add('GET', '/api/sites', async (req, res) => {
     const sites = await Promise.all(listSites({ env }).map(async (site) => {

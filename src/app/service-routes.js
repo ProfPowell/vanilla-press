@@ -1,7 +1,7 @@
 /**
  * App-level routes for the Services screen: the catalog with each service's
- * state, and a change to one service's key or switch. Responses carry only
- * `hasKey`, never a key.
+ * state, a change to one service's key or switch, and web image search.
+ * Responses carry only `hasKey`, never a key.
  *
  * @module app/service-routes
  */
@@ -9,12 +9,23 @@
 import { sendJson } from '../server/router.js';
 import { SERVICES } from '../services/catalog.js';
 import { servicesState, updateService } from '../services/store.js';
+import { createImageSearch } from '../services/image-search.js';
+
+const PURPOSES = new Set(['picker', 'library']);
 
 /**
  * @param {{ add: Function }} router
- * @param {{ env?: NodeJS.ProcessEnv }} context
+ * @param {{ env?: NodeJS.ProcessEnv, imageSearch?: ReturnType<typeof createImageSearch>,
+ *   fetch?: typeof globalThis.fetch, now?: () => number, timeoutMs?: number }} context
+ *   imageSearch: the app's shared instance; without one, one is made from fetch, now and timeoutMs.
  */
-export function mountServiceRoutes(router, { env = process.env } = {}) {
+export function mountServiceRoutes(router, {
+  env = process.env,
+  fetch,
+  now,
+  timeoutMs,
+  imageSearch = createImageSearch({ env, fetch, now, timeoutMs }),
+} = {}) {
   router.add('GET', '/api/services', (req, res) => sendJson(res, 200, servicesState(env)));
 
   router.add('PUT', '/api/services/:id', (req, res) => {
@@ -27,5 +38,14 @@ export function mountServiceRoutes(router, { env = process.env } = {}) {
       (enabled !== undefined && typeof enabled !== 'boolean');
     if (bad) return sendJson(res, 400, { error: 'Expected { key?: string|null, enabled?: boolean }' });
     sendJson(res, 200, updateService(id, { key, enabled }, env));
+  });
+
+  router.add('GET', '/api/web-images', async (req, res) => {
+    const q = String(req.query.q ?? '').trim();
+    if (!q) return sendJson(res, 400, { error: 'Type something to search for' });
+    const purpose = req.query.for || 'picker';
+    if (!PURPOSES.has(purpose)) return sendJson(res, 400, { error: "for must be 'picker' or 'library'" });
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    sendJson(res, 200, await imageSearch.search(q, { page, for: purpose }));
   });
 }

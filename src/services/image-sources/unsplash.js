@@ -5,16 +5,12 @@
  * @module services/image-sources/unsplash
  */
 
-import { PER_PAGE, compactCredit, fitWithin, text } from './shared.js';
+import { PER_PAGE, appendQuery, compactCredit, fitWithin, text, withUrl } from './shared.js';
 
 const UTM = 'utm_source=vanilla_press&utm_medium=referral';
 
-/** A link with the referral UTM added. */
-function withUtm(url) {
-  const link = text(url);
-  if (!link) return '';
-  return `${link}${link.includes('?') ? '&' : '?'}${UTM}`;
-}
+/** A link with the referral UTM added, or '' for none. */
+const withUtm = (url) => appendQuery(url, UTM);
 
 /**
  * @param {string} query
@@ -33,12 +29,12 @@ export function request(query, { page, key }) {
  * @param {{ page?: number }} [options]
  */
 export function normalize(json, { page = 1 } = {}) {
-  const results = (json?.results || []).map((photo) => ({
+  const results = withUrl((json?.results || []).map((photo) => ({
     source: 'unsplash',
     id: String(photo.id),
     mode: 'link',
     thumb: photo.urls?.small,
-    url: `${photo.urls?.raw}&w=2400&fit=max&q=80&auto=format`,
+    url: appendQuery(photo.urls?.raw, 'w=2400&fit=max&q=80&auto=format'),
     ...fitWithin(photo.width, photo.height, 2400, Infinity),
     description: text(photo.alt_description) || text(photo.description),
     downloadLocation: photo.links?.download_location,
@@ -48,6 +44,6 @@ export function normalize(json, { page = 1 } = {}) {
       site: 'Unsplash',
       siteUrl: withUtm(photo.links?.html),
     }),
-  }));
+  })));
   return { results, hasMore: page < (json?.total_pages || 0) };
 }

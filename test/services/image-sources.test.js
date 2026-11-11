@@ -52,6 +52,12 @@ describe('openverse adapter', () => {
     });
   });
 
+  it('normalize: drops an item with no url', () => {
+    const json = fixture('openverse');
+    json.results[0].url = null;
+    assert.deepEqual(openverse.normalize(json, { page: 1 }).results.map((r) => r.id), ['9f2c1d8e-0000-4a5b-9c7d-112233445566']);
+  });
+
   it('normalize: the last page has no more', () => {
     const json = { ...fixture('openverse'), page: 12 };
     assert.equal(openverse.normalize(json, { page: 12 }).hasMore, false);
@@ -89,6 +95,12 @@ describe('pexels adapter', () => {
     assert.equal(results[1].description, '');
   });
 
+  it('normalize: drops a photo with no large2x', () => {
+    const json = fixture('pexels');
+    delete json.photos[0].src;
+    assert.deepEqual(pexels.normalize(json, { page: 1 }).results.map((r) => r.id), ['3000001']);
+  });
+
   it('normalize: no next_page means no more', () => {
     const { next_page, ...json } = fixture('pexels');
     assert.equal(pexels.normalize(json, { page: 1 }).hasMore, false);
@@ -124,6 +136,16 @@ describe('pixabay adapter', () => {
     // Smaller than 1280: not scaled up.
     assert.equal(results[1].width, 800);
     assert.equal(results[1].height, 1200);
+  });
+
+  it('normalize: no creator URL without both user and user_id', () => {
+    const json = fixture('pixabay');
+    delete json.hits[0].user_id;
+    json.hits[1].user = '';
+    const [first, second] = pixabay.normalize(json, { page: 1 }).results;
+    assert.deepEqual(first.credit, { name: 'Josch13', site: 'Pixabay', siteUrl: 'https://pixabay.com/en/blossom-bloom-flower-195893/' });
+    assert.equal('url' in second.credit, false);
+    assert.equal('name' in second.credit, false);
   });
 
   it('normalize: hasMore stops at totalHits', () => {
@@ -168,6 +190,22 @@ describe('unsplash adapter', () => {
     json.results[0].user.links.html = 'https://unsplash.com/@ugmonk?ref=x';
     const [first] = unsplash.normalize(json, { page: 1 }).results;
     assert.equal(first.credit.url, `https://unsplash.com/@ugmonk?ref=x&${UTM}`);
+  });
+
+  it('normalize: the size suffix joins with ? when raw has no query', () => {
+    const json = fixture('unsplash');
+    json.results[0].urls.raw = 'https://images.unsplash.com/photo-1';
+    const [first] = unsplash.normalize(json, { page: 1 }).results;
+    assert.equal(first.url, 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format');
+  });
+
+  it('normalize: drops a result with no usable raw URL, and a missing link gets no UTM', () => {
+    const json = fixture('unsplash');
+    delete json.results[0].urls.raw;
+    delete json.results[1].user.links;
+    const { results } = unsplash.normalize(json, { page: 1 });
+    assert.deepEqual(results.map((r) => r.id), ['small1']);
+    assert.equal('url' in results[0].credit, false);
   });
 
   it('normalize: the last page has no more', () => {

@@ -12,6 +12,7 @@
 
 import { SERVICES } from './catalog.js';
 import { serviceKey, servicesState } from './store.js';
+import { MAX_BYTES, formatBytes } from '../media/limits.js';
 import * as openverse from './image-sources/openverse.js';
 import * as pexels from './image-sources/pexels.js';
 import * as pixabay from './image-sources/pixabay.js';
@@ -33,20 +34,31 @@ const HOUR = 60 * 60 * 1000;
 const TTL = { pixabay: 24 * HOUR };
 const DEFAULT_TTL = HOUR;
 const DEFAULT_TIMEOUT_MS = 8000;
+/** An image is up to 25 MiB, so its download gets longer than a search. */
+const DEFAULT_IMAGE_TIMEOUT_MS = 30_000;
 
 const ttlOf = (source) => TTL[source] ?? DEFAULT_TTL;
 
-class SourceError extends Error {}
+/** A failure whose message is safe to show: it names only the source's label. */
+class SourceError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /**
  * @param {{ env?: NodeJS.ProcessEnv, fetch?: typeof globalThis.fetch,
- *   now?: () => number, timeoutMs?: number }} [options]
+ *   now?: () => number, timeoutMs?: number, imageTimeoutMs?: number, maxBytes?: number }} [options]
+ *   timeoutMs covers a whole search request, body included; imageTimeoutMs a whole image download.
  */
 export function createImageSearch({
   env = process.env,
   fetch: fetchImpl = globalThis.fetch,
   now = Date.now,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  imageTimeoutMs = DEFAULT_IMAGE_TIMEOUT_MS,
+  maxBytes = MAX_BYTES,
 } = {}) {
   /** `source|query|page` -> { at, value: { results, hasMore } } */
   const searches = new Map();
@@ -60,23 +72,33 @@ export function createImageSearch({
     for (const [key, entry] of items) if (!fresh(entry.item.source, entry.at)) items.delete(key);
   }
 
-  /** Fetch with a deadline; a fetch that never settles still loses the race. */
-  async function fetchWithin(url, init, label) {
+  /**
+   * Fetch and read the body under one deadline: the timer stays armed (and
+   * aborts the request) until `read` has finished with the body.
+   * @template T
+   * @param {string} url
+   * @param {RequestInit} init
+   * @param {string} label
+   * @param {(res: Response) => Promise<T>} read
+   * @param {number} [ms]
+   * @returns {Promise<T>}
+   */
+  async function fetchWithin(url, init, label, read, ms = timeoutMs) {
     const controller = new AbortController();
     let timer;
     const deadline = new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        controller.abort();
-        reject(new SourceError(`${label} didn't answer in time`));
-      }, timeoutMs);
+      timer = setTimeout(() => reject(new SourceError(`${label} didn't answer in time`, 504)), ms);
     });
+    const work = (async () => read(await fetchImpl(url, { ...init, signal: controller.signal })))();
+    work.catch(() => {}); // after the deadline wins, its rejection is expected
     try {
-      return await Promise.race([fetchImpl(url, { ...init, signal: controller.signal }), deadline]);
+      return await Promise.race([work, deadline]);
     } catch (err) {
       if (err instanceof SourceError) throw err;
-      throw new SourceError(`${label} couldn't be reached`);
+      throw new SourceError(`${label} couldn't be reached`, 502);
     } finally {
       clearTimeout(timer);
+      controller.abort();
     }
   }
 
@@ -87,17 +109,26 @@ export function createImageSearch({
 
     const adapter = ADAPTERS[service.id];
     const { url, headers } = adapter.request(query, { page, key: serviceKey(service.id, env) });
-    const res = await fetchWithin(url, { headers }, service.label);
-    if (res.status === 401 || res.status === 403) throw new SourceError(`${service.label} didn't accept the key`);
-    if (res.status === 429) throw new SourceError(`${service.label} has had too many searches; try again later`);
-    if (!res.ok) throw new SourceError(`${service.label} couldn't search right now`);
-    let json;
-    try {
-      json = await res.json();
-    } catch {
-      throw new SourceError(`${service.label} sent an answer that couldn't be read`);
-    }
-    const value = adapter.normalize(json, { page });
+    const { label } = service;
+    const value = await fetchWithin(url, { headers }, label, async (res) => {
+      if (!res.ok) {
+        // The body is read only to classify the failure; it is never echoed.
+        const body = adapter.isKeyError ? await res.text().catch(() => '') : '';
+        if (res.status === 401 || res.status === 403 || adapter.isKeyError?.(res.status, body)) {
+          throw new SourceError(`${label} didn't accept the key`);
+        }
+        if (res.status === 429) throw new SourceError(`${label} has had too many searches; try again later`);
+        throw new SourceError(`${label} couldn't search right now`);
+      }
+      let json;
+      try {
+        json = await res.json();
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err;
+        throw new SourceError(`${label} sent an answer that couldn't be read`);
+      }
+      return adapter.normalize(json, { page });
+    });
     const at = now();
     searches.set(cacheKey, { at, value });
     for (const item of value.results) items.set(`${item.source}|${item.id}`, { at, item });
@@ -156,8 +187,10 @@ export function createImageSearch({
   }
 
   /**
-   * The bytes of a cached result's `url`. Rejects with `status` 404 when the
-   * result is not cached, 502 when the source does not deliver it.
+   * The bytes of a cached result's `url`, streamed and refused past `maxBytes`.
+   * Rejects with `status`: 404 when the result is not cached, 413 when the
+   * image is too large, 504 when it takes too long, 502 when the source does
+   * not deliver it.
    * @param {string} source
    * @param {string} id
    * @returns {Promise<{ data: Buffer, contentType: string }>}
@@ -166,15 +199,26 @@ export function createImageSearch({
     const item = get(source, id);
     if (!item) throw Object.assign(new Error('Search again — this result has expired'), { status: 404 });
     const label = SERVICES.find((s) => s.id === source)?.label || source;
-    let res;
+    const tooLarge = () => new SourceError(`${label} sent an image larger than ${formatBytes(maxBytes)}`, 413);
     try {
-      res = await fetchWithin(item.url, {}, label);
+      return await fetchWithin(item.url, {}, label, async (res) => {
+        if (!res.ok || !res.body) throw new SourceError(`${label} couldn't send the image`, 502);
+        if (Number(res.headers.get('content-length')) > maxBytes) throw tooLarge();
+        const chunks = [];
+        let total = 0;
+        for await (const chunk of res.body) {
+          total += chunk.byteLength;
+          if (total > maxBytes) throw tooLarge();
+          chunks.push(chunk);
+        }
+        return {
+          data: Buffer.concat(chunks, total),
+          contentType: res.headers.get('content-type') || 'application/octet-stream',
+        };
+      }, imageTimeoutMs);
     } catch (err) {
-      throw Object.assign(new Error(err.message), { status: 502 });
+      throw Object.assign(new Error(err.message), { status: err.status || 502 });
     }
-    if (!res.ok) throw Object.assign(new Error(`${label} couldn't send the image`), { status: 502 });
-    const data = Buffer.from(await res.arrayBuffer());
-    return { data, contentType: res.headers.get('content-type') || 'application/octet-stream' };
   }
 
   return { search, get, image };

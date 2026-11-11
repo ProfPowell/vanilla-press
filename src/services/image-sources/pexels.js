@@ -4,7 +4,7 @@
  * @module services/image-sources/pexels
  */
 
-import { PER_PAGE, compactCredit, fitWithin, text } from './shared.js';
+import { PER_PAGE, compactCredit, fitWithin, text, withUrl } from './shared.js';
 
 /**
  * @param {string} query
@@ -22,12 +22,12 @@ export function request(query, { page, key }) {
  * @param {any} json
  */
 export function normalize(json) {
-  const results = (json?.photos || []).map((photo) => ({
+  const results = withUrl((json?.photos || []).map((photo) => ({
     source: 'pexels',
     id: String(photo.id),
     mode: 'copy',
     thumb: photo.src?.medium,
-    url: photo.src?.large2x,
+    url: text(photo.src?.large2x),
     ...fitWithin(photo.width, photo.height, 940 * 2, 650 * 2),
     description: text(photo.alt),
     credit: compactCredit({
@@ -36,6 +36,6 @@ export function normalize(json) {
       site: 'Pexels',
       siteUrl: photo.url,
     }),
-  }));
+  })));
   return { results, hasMore: Boolean(json?.next_page) };
 }

@@ -5,7 +5,7 @@
  * @module services/image-sources/openverse
  */
 
-import { PER_PAGE, compactCredit, text } from './shared.js';
+import { PER_PAGE, compactCredit, text, withUrl } from './shared.js';
 
 /**
  * @param {string} query
@@ -35,12 +35,12 @@ function licenseOf(item) {
  * @param {{ page?: number }} [options]
  */
 export function normalize(json, { page = json?.page ?? 1 } = {}) {
-  const results = (json?.results || []).map((item) => ({
+  const results = withUrl((json?.results || []).map((item) => ({
     source: 'openverse',
     id: String(item.id),
     mode: 'copy',
     thumb: item.thumbnail,
-    url: item.url,
+    url: text(item.url),
     width: item.width || 0,
     height: item.height || 0,
     description: text(item.title),
@@ -51,6 +51,6 @@ export function normalize(json, { page = json?.page ?? 1 } = {}) {
       siteUrl: item.foreign_landing_url,
       ...licenseOf(item),
     }),
-  }));
+  })));
   return { results, hasMore: page < (json?.page_count || 0) };
 }

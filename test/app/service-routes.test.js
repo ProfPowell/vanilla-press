@@ -97,4 +97,11 @@ describe('web image search route', () => {
     assert.equal(data.hasMore, false);
     assert.equal(calls.some((u) => u.includes('unsplash')), false);
   });
+
+  it('a q over 100 characters is 400', async () => {
+    const res = await fetch(`${app.url}/api/web-images?q=${'a'.repeat(101)}`);
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), { error: 'Search for something shorter (100 characters at most)' });
+    assert.equal((await fetch(`${app.url}/api/web-images?q=${'a'.repeat(100)}`)).status, 200);
+  });
 });

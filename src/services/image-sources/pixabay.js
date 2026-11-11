@@ -5,7 +5,7 @@
  * @module services/image-sources/pixabay
  */
 
-import { PER_PAGE, compactCredit, fitWithin, text } from './shared.js';
+import { PER_PAGE, compactCredit, fitWithin, text, withUrl } from './shared.js';
 
 /**
  * @param {string} query
@@ -20,25 +20,43 @@ export function request(query, { page, key }) {
 }
 
 /**
+ * Pixabay answers a wrong or missing key with HTTP 400 and
+ * "[ERROR 400] Invalid or missing API key", not 401.
+ * @param {number} status
+ * @param {string} body
+ */
+export function isKeyError(status, body) {
+  return status === 400 && /api key/i.test(body);
+}
+
+/** The user's profile page, which needs both the name and the numeric id. */
+function profileUrl(hit) {
+  const user = text(hit.user);
+  const userId = hit.user_id;
+  if (!user || userId === undefined || userId === null || userId === '') return '';
+  return `https://pixabay.com/users/${encodeURIComponent(user)}-${encodeURIComponent(userId)}/`;
+}
+
+/**
  * `largeImageURL` is the original scaled to at most 1280px on the long edge.
  * @param {any} json
  * @param {{ page?: number }} [options]
  */
 export function normalize(json, { page = 1 } = {}) {
-  const results = (json?.hits || []).map((hit) => ({
+  const results = withUrl((json?.hits || []).map((hit) => ({
     source: 'pixabay',
     id: String(hit.id),
     mode: 'copy',
     thumb: hit.webformatURL,
-    url: hit.largeImageURL,
+    url: text(hit.largeImageURL),
     ...fitWithin(hit.imageWidth, hit.imageHeight, 1280, 1280),
     description: text(hit.tags),
     credit: compactCredit({
       name: hit.user,
-      url: hit.user ? `https://pixabay.com/users/${text(hit.user)}-${hit.user_id}/` : '',
+      url: profileUrl(hit),
       site: 'Pixabay',
       siteUrl: hit.pageURL,
     }),
-  }));
+  })));
   return { results, hasMore: page * PER_PAGE < (json?.totalHits || 0) };
 }

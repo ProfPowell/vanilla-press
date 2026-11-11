@@ -6,6 +6,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createImageSearch } from '../../src/services/image-search.js';
 import { updateService } from '../../src/services/store.js';
+import { MAX_BYTES } from '../../src/media/limits.js';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '../fixtures/image-sources');
 const fixture = (name) => JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), 'utf8'));
@@ -18,7 +19,8 @@ const HOSTS = {
   'api.unsplash.com': 'unsplash',
 };
 
-/** A fake fetch that answers each API with its fixture, and records every call. */
+/** A fake fetch that answers each API with its fixture and any other URL with image bytes
+ * (override with `image`), and records every call. */
 function fakeFetch(overrides = {}) {
   const calls = [];
   const fn = async (url, init = {}) => {
@@ -26,7 +28,8 @@ function fakeFetch(overrides = {}) {
     const api = HOSTS[hostname];
     const source = api === 'pixabay' && !pathname.startsWith('/api/') ? undefined : api;
     calls.push({ url, source, headers: init.headers || {} });
-    if (overrides[source]) return overrides[source](url, init);
+    const override = overrides[source ?? 'image'];
+    if (override) return override(url, init);
     if (!source) return new Response(Buffer.from('IMAGEBYTES'), { status: 200, headers: { 'Content-Type': 'image/jpeg' } });
     return Response.json(fixture(source));
   };
@@ -164,4 +167,74 @@ describe('image search', () => {
     assert.equal(contentType, 'image/jpeg');
     await assert.rejects(search.image('pixabay', 'nope'), (err) => err.status === 404);
   });
+
+  it('the deadline covers the body: a body that never finishes times out', async () => {
+    const stalled = async () => new Response(new ReadableStream({ start() {} }), { status: 200 });
+    const fetch = fakeFetch({ pexels: stalled });
+    const search = createImageSearch({ env, fetch, now, timeoutMs: 50 });
+    const out = await search.search('fox', { page: 1 });
+    assert.deepEqual(out.errors, [{ source: 'pexels', label: 'Pexels', message: "Pexels didn't answer in time" }]);
+    assert.equal(out.results.length, 6);
+  });
+
+  it('image() rejects when the image body never finishes', async () => {
+    const slow = createImageSearch({ env, now, timeoutMs: 50, imageTimeoutMs: 50,
+      fetch: fakeFetch({ image: async () => new Response(new ReadableStream({ start() {} })) }) });
+    await slow.search('fox', { page: 1 });
+    await assert.rejects(slow.image('pixabay', '195893'), (err) => err.status === 504 && /didn't answer in time/.test(err.message));
+  });
+
+  it("Pixabay's 400 for a bad key reads as a key error", async () => {
+    const fetch = fakeFetch({ pixabay: async () => new Response('[ERROR 400] Invalid or missing API key', { status: 400 }) });
+    const search = createImageSearch({ env, fetch, now });
+    const out = await search.search('fox', { page: 1 });
+    assert.deepEqual(out.errors, [{ source: 'pixabay', label: 'Pixabay', message: "Pixabay didn't accept the key" }]);
+  });
+
+  it('a 400 for another reason is not a key error', async () => {
+    const fetch = fakeFetch({ pixabay: async () => new Response('[ERROR 400] "q" exceeds the maximum length', { status: 400 }) });
+    const search = createImageSearch({ env, fetch, now });
+    const out = await search.search('fox', { page: 1 });
+    assert.deepEqual(out.errors, [{ source: 'pixabay', label: 'Pixabay', message: "Pixabay couldn't search right now" }]);
+  });
+
+  it('403 is a key error for every source', async () => {
+    const forbidden = async () => new Response('', { status: 403 });
+    const fetch = fakeFetch({ pexels: forbidden, pixabay: forbidden, unsplash: forbidden });
+    const search = createImageSearch({ env, fetch, now });
+    const out = await search.search('fox', { page: 1 });
+    assert.deepEqual(out.errors.map((e) => e.message), [
+      "Pexels didn't accept the key", "Pixabay didn't accept the key", "Unsplash didn't accept the key",
+    ]);
+  });
+
+  it('image() stops a streamed body once it passes the cap (413)', async () => {
+    let pulled = 0;
+    const endless = async () => new Response(new ReadableStream({
+      pull(controller) { pulled += 1; controller.enqueue(new Uint8Array(1024)); },
+    }), { headers: { 'Content-Type': 'image/jpeg' } });
+    const search = createImageSearch({ env, now, maxBytes: 4096, fetch: fakeFetch({ image: endless }) });
+    await search.search('fox', { page: 1 });
+    await assert.rejects(search.image('pixabay', '195893'), (err) => err.status === 413);
+    assert.ok(pulled < 20, `read ${pulled} chunks`);
+  });
+
+  it('image() refuses a declared Content-Length over MAX_BYTES (413)', async () => {
+    const huge = async () => new Response(new ReadableStream({ start() {} }), {
+      headers: { 'Content-Type': 'image/jpeg', 'Content-Length': String(MAX_BYTES + 1) },
+    });
+    const search = createImageSearch({ env, now, fetch: fakeFetch({ image: huge }) });
+    await search.search('fox', { page: 1 });
+    await assert.rejects(search.image('pixabay', '195893'), (err) => err.status === 413);
+  });
+
+  it('image() accepts a body exactly at the cap', async () => {
+    const exact = async () => new Response(new Uint8Array(4096), { headers: { 'Content-Type': 'image/png' } });
+    const search = createImageSearch({ env, now, maxBytes: 4096, fetch: fakeFetch({ image: exact }) });
+    await search.search('fox', { page: 1 });
+    const { data, contentType } = await search.image('pixabay', '195893');
+    assert.equal(data.length, 4096);
+    assert.equal(contentType, 'image/png');
+  });
 });
+

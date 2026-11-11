@@ -12,6 +12,7 @@ import { servicesState, updateService } from '../services/store.js';
 import { createImageSearch } from '../services/image-search.js';
 
 const PURPOSES = new Set(['picker', 'library']);
+const MAX_QUERY = 100;
 
 /**
  * @param {{ add: Function }} router
@@ -43,6 +44,8 @@ export function mountServiceRoutes(router, {
   router.add('GET', '/api/web-images', async (req, res) => {
     const q = String(req.query.q ?? '').trim();
     if (!q) return sendJson(res, 400, { error: 'Type something to search for' });
+    // Pixabay refuses a longer query, and each distinct query is a cache entry.
+    if (q.length > MAX_QUERY) return sendJson(res, 400, { error: `Search for something shorter (${MAX_QUERY} characters at most)` });
     const purpose = req.query.for || 'picker';
     if (!PURPOSES.has(purpose)) return sendJson(res, 400, { error: "for must be 'picker' or 'library'" });
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);

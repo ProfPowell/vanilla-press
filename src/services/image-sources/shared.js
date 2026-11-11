@@ -26,6 +26,29 @@ export function compactCredit(fields) {
   return credit;
 }
 
+/**
+ * A URL with `params` appended (joined with `?` or `&` as it needs), or '' when
+ * `base` is missing or not an absolute URL. The base's own query is kept as is.
+ * @param {unknown} base
+ * @param {string} params - already encoded, without a leading `?` or `&`
+ */
+export function appendQuery(base, params) {
+  const link = text(base);
+  let url;
+  try {
+    url = new URL(link);
+  } catch {
+    return '';
+  }
+  const joiner = url.search.length > 1 ? '&' : (link.endsWith('?') ? '' : '?');
+  return `${link}${joiner}${params}`;
+}
+
+/** Results with a usable `url` (a source item missing one is dropped). */
+export function withUrl(results) {
+  return results.filter((item) => item.url);
+}
+
 /** A trimmed string, or '' for anything else. */
 export function text(value) {
   return typeof value === 'string' ? value.trim() : '';

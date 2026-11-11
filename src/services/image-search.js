@@ -118,6 +118,9 @@ export function createImageSearch({
           throw new SourceError(`${label} didn't accept the key`);
         }
         if (res.status === 429) throw new SourceError(`${label} has had too many searches; try again later`);
+        // Past the first page, a refused page means the source has run out
+        // (Pixabay and Openverse both answer a page past the end with a 4xx).
+        if (page > 1 && res.status >= 400 && res.status < 500) return { results: [], hasMore: false };
         throw new SourceError(`${label} couldn't search right now`);
       }
       let json;
@@ -149,7 +152,14 @@ export function createImageSearch({
     const sources = SERVICES.filter((s) => ADAPTERS[s.id] && ready.has(s.id))
       .filter((s) => purpose !== 'library' || s.mode !== 'link');
 
-    const settled = await Promise.allSettled(sources.map((s) => searchSource(s, query, page)));
+    // A source whose previous page said there is no more is not asked again.
+    const exhausted = (s) => {
+      const previous = searches.get(`${s.id}|${query}|${page - 1}`);
+      return page > 1 && previous && fresh(s.id, previous.at) && !previous.value.hasMore;
+    };
+    const settled = await Promise.allSettled(sources.map((s) => (exhausted(s)
+      ? { results: [], hasMore: false }
+      : searchSource(s, query, page))));
     const lists = [];
     const errors = [];
     let hasMore = false;

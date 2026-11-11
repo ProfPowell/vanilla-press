@@ -191,6 +191,31 @@ describe('image search', () => {
     assert.deepEqual(out.errors, [{ source: 'pixabay', label: 'Pixabay', message: "Pixabay didn't accept the key" }]);
   });
 
+  it('Load more skips a source whose last page said there is no more', async () => {
+    const lastPage = { ...fixture('openverse'), page_count: 1 };
+    const fetch = fakeFetch({
+      openverse: async (url) => (new URL(url).searchParams.get('page') === '1'
+        ? Response.json(lastPage)
+        : new Response('{"detail":"Invalid page"}', { status: 400 })),
+    });
+    const search = createImageSearch({ env, fetch, now });
+    assert.equal((await search.search('fox', { page: 1 })).hasMore, true);
+    const out = await search.search('fox', { page: 2 });
+    assert.deepEqual(out.errors, []);
+    assert.equal(fetch.callsTo('openverse').length, 1);
+    assert.equal(out.results.some((r) => r.source === 'openverse'), false);
+    assert.equal(out.results.some((r) => r.source === 'pexels'), true);
+  });
+
+  it('a 400 past the first page reads as no more results, not an error', async () => {
+    const fetch = fakeFetch({ pixabay: async () => new Response('[ERROR 400] "page" is out of valid range.', { status: 400 }) });
+    const search = createImageSearch({ env, fetch, now });
+    const out = await search.search('fox', { page: 3 });
+    assert.deepEqual(out.errors, []);
+    assert.equal(out.results.some((r) => r.source === 'pixabay'), false);
+    assert.equal(out.hasMore, true);
+  });
+
   it('a 400 for another reason is not a key error', async () => {
     const fetch = fakeFetch({ pixabay: async () => new Response('[ERROR 400] "q" exceeds the maximum length', { status: 400 }) });
     const search = createImageSearch({ env, fetch, now });

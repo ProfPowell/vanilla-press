@@ -98,7 +98,7 @@ describe('reading a credit back from rendered HTML', () => {
   const link = (t, href) => ({ nodeType: 1, nodeName: 'A', textContent: t, getAttribute: (k) => (k === 'href' ? href : null) });
 
   it('readCredit reads the rendered text and links', () => {
-    const small = { childNodes: [text('Photo by '), link('Jane', 'u1'), text(' on '), link('Pexels', 'u2')] };
+    const small = { getAttribute: () => null, childNodes: [text('Photo by '), link('Jane', 'u1'), text(' on '), link('Pexels', 'u2')] };
     assert.deepEqual(readCredit(small), { name: 'Jane', url: 'u1', site: 'Pexels', siteUrl: 'u2' });
   });
 

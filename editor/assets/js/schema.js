@@ -11,7 +11,7 @@
 import { Schema } from 'prosemirror-model';
 import { blockTypes, inlineTypes } from '../../../src/schema/content-schema.js';
 import { SITE, displayMediaUrl, storedMediaUrl } from './site-context.js';
-import { creditFromParts, creditParts } from '../../../src/media/credit.js';
+import { creditFromParts, creditParts, normalizeCredit } from '../../../src/media/credit.js';
 
 // Pull attr defs from content-schema for reference
 const codeAttrs = blockTypes.code_block.attrs;
@@ -331,20 +331,24 @@ const figure = {
         src: img ? storedMediaUrl(img.getAttribute('src') || '', SITE) : '',
         alt: img ? img.getAttribute('alt') || '' : '',
         variant,
-        credit: readCredit(dom.querySelector('small.credit')),
+        credit: readCredit(creditElement(dom)),
       };
     },
     // Content is an optional figcaption node, so hand the parser only the
     // <figcaption> element (skipping the <img>, which lives in attrs). The
-    // credit lives in attrs too, so its words never join the caption text.
+    // credit lives in attrs too, so its words never join the caption text,
+    // and a caption that held only the credit is no caption.
     contentElement(dom) {
       const wrapper = document.createElement('div');
       const caption = dom.querySelector('figcaption');
-      if (caption) {
-        const copy = caption.cloneNode(true);
-        copy.querySelectorAll('small.credit').forEach((el) => el.remove());
-        wrapper.appendChild(copy);
+      if (!caption) return wrapper;
+      const copy = caption.cloneNode(true);
+      const credit = trailingCredit(copy);
+      if (credit) {
+        credit.remove();
+        if (!copy.textContent.trim() && !copy.firstElementChild) return wrapper;
       }
+      wrapper.appendChild(copy);
       return wrapper;
     },
   }],
@@ -363,14 +367,46 @@ const figure = {
   },
 };
 
+const isCredit = (el) => el.nodeName === 'SMALL' && el.classList.contains('credit');
+
 /**
- * A figure's credit read from its `small.credit` element (text and links),
- * or null.
- * @param {{ childNodes: ArrayLike<Node> }|null} small
+ * A `small.credit` where a figure's credit renders: the last element of the
+ * figcaption, with only spaces after it (published HTML). One anywhere else
+ * in the caption is the writer's own text.
+ * @param {Element} caption
+ * @returns {Element|null}
+ */
+function trailingCredit(caption) {
+  const el = caption.lastElementChild;
+  if (!el || !isCredit(el)) return null;
+  for (let n = el.nextSibling; n; n = n.nextSibling) if (n.textContent.trim()) return null;
+  return el;
+}
+
+/**
+ * A figure's credit element: a `small.credit` child of the figure (the
+ * editor's own copy), or one closing its figcaption (published HTML).
+ * @param {Element} figure
+ * @returns {Element|null}
+ */
+function creditElement(figure) {
+  const child = Array.from(figure.children).find(isCredit);
+  if (child) return child;
+  const caption = figure.querySelector('figcaption');
+  return caption ? trailingCredit(caption) : null;
+}
+
+/**
+ * A figure's credit read from its `small.credit` element, or null. The
+ * editor's copy carries the credit itself in `data-credit`; published HTML
+ * has only text and links, which are read back as a credit line.
+ * @param {Element|null} small
  * @returns {import('../../../src/media/credit.js').Credit|null}
  */
 export function readCredit(small) {
   if (!small) return null;
+  const json = small.getAttribute('data-credit');
+  if (json != null) return normalizeCredit(json);
   const parts = Array.from(small.childNodes, (child) => {
     const href = child.nodeType === 1 && child.nodeName === 'A' ? child.getAttribute('href') : null;
     return href ? { text: child.textContent, href } : { text: child.textContent };
@@ -378,11 +414,12 @@ export function readCredit(small) {
   return creditFromParts(parts);
 }
 
-/** The credit as a DOM spec (after the caption), so a copied figure keeps it. */
+/** The credit as a DOM spec (after the caption), so a copied figure keeps it exactly. */
 function creditSpec(credit) {
   const parts = creditParts(credit);
   if (!parts.length) return [];
-  return [['small', { class: 'credit' },
+  // data-credit: the exact credit, for a paste (the text alone is ambiguous)
+  return [['small', { class: 'credit', 'data-credit': JSON.stringify(normalizeCredit(credit)) },
     ...parts.map((p) => (p.href ? ['a', { href: p.href, rel: 'noopener' }, p.text] : p.text))]];
 }
 

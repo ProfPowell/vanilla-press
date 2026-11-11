@@ -27,6 +27,49 @@ export function mediaSrc(filename) {
 }
 
 /**
+ * A linked item's remote URL, parsed: https on images.unsplash.com, with no
+ * user, password or port. Null for anything else.
+ * @param {unknown} url
+ * @returns {URL|null}
+ */
+export function linkedUrl(url) {
+  if (typeof url !== 'string' || url === '') return null;
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'https:' || u.hostname !== 'images.unsplash.com' || u.username || u.password || u.port) return null;
+  return u;
+}
+
+/**
+ * What identifies a linked photo: its origin and path. The query (Unsplash's
+ * `ixid`, size and format) differs between searches of the same photo.
+ * @param {unknown} url
+ * @returns {string|null}
+ */
+export function linkedKey(url) {
+  const u = linkedUrl(url);
+  return u ? u.origin + u.pathname : null;
+}
+
+/**
+ * Linked items for `mediaRefs`/`mediaUsage`: linkedKey -> filename.
+ * @param {Iterable<[string, string]>} pairs [remote URL, filename]
+ * @returns {Map<string, string>}
+ */
+export function linkedIndex(pairs) {
+  const index = new Map();
+  for (const [url, filename] of pairs) {
+    const key = linkedKey(url);
+    if (key && !index.has(key)) index.set(key, filename);
+  }
+  return index;
+}
+
+/**
  * The URL a post uses for a library item: a linked item's remote URL (an
  * Unsplash photo has no file), else its `/media/<file>` URL.
  * @param {{ filename: string, linked?: boolean, src?: string }} item MediaItem
@@ -48,15 +91,15 @@ const URL_ATTRS = {
 /**
  * Every media file a document refers to: figure and component sources, embed
  * URLs, links, and the featured image. A linked library item (a remote image,
- * no file) counts where its exact URL is used, by its filename.
+ * no file) counts where the same photo is used (same `linkedKey`), by its filename.
  * @param {{ meta?: Object, blocks?: Array }} doc
- * @param {{ linked?: Map<string, string> }} [options] linked items: remote URL -> filename
+ * @param {{ linked?: Map<string, string> }} [options] linked items, from `linkedIndex`
  * @returns {Set<string>}
  */
 export function mediaRefs(doc, { linked } = {}) {
   const found = new Set();
   const add = (url) => {
-    const file = mediaFileOf(url) ?? (typeof url === 'string' ? linked?.get(url) : null);
+    const file = mediaFileOf(url) ?? (linked ? linked.get(linkedKey(url)) : null);
     if (file) found.add(file);
   };
   const walk = (node) => {
@@ -75,7 +118,7 @@ export function mediaRefs(doc, { linked } = {}) {
 
 /**
  * @param {Array<{ id: string, meta: Object, blocks: Array }>} docs
- * @param {{ linked?: Map<string, string> }} [options] linked items: remote URL -> filename
+ * @param {{ linked?: Map<string, string> }} [options] linked items, from `linkedIndex`
  * @returns {Map<string, Array<{ id: string, title: string, status: string }>>}
  */
 export function mediaUsage(docs, options) {

@@ -11,6 +11,7 @@ import { randomBytes } from 'node:crypto';
 import { inspectFile } from '../media/inspect.js';
 import { writeMediaJson, MEDIA_FIELDS } from './site-files.js';
 import { storedCredit, mediaSource } from '../media/credit.js';
+import { linkedUrl } from '../media/usage.js';
 
 export { MEDIA_FIELDS };
 
@@ -18,19 +19,11 @@ const nonEmpty = (v) => typeof v === 'string' && v !== '';
 
 /**
  * Whether `url` is a remote image a linked item may point at: https on
- * images.unsplash.com (Unsplash photos are used by link only).
+ * images.unsplash.com, no user, password or port (Unsplash photos are used by link only).
  * @param {unknown} url
  * @returns {boolean}
  */
-export function isLinkedUrl(url) {
-  if (!nonEmpty(url)) return false;
-  try {
-    const u = new URL(url);
-    return u.protocol === 'https:' && u.hostname === 'images.unsplash.com';
-  } catch {
-    return false;
-  }
-}
+export const isLinkedUrl = (url) => linkedUrl(url) !== null;
 
 /**
  * A media.json entry as a store row, or null (with a warning) when unusable.
@@ -49,8 +42,14 @@ export function normalizeEntry(entry) {
     return null;
   }
   const hasUrl = entry.url !== undefined && entry.url !== null && entry.url !== '';
-  if (hasUrl && !isLinkedUrl(entry.url)) {
+  const remote = hasUrl ? linkedUrl(entry.url) : null;
+  if (hasUrl && !remote) {
     console.warn(`media.json: skipping ${entry.filename}: its url is not an https://images.unsplash.com/ image`);
+    return null;
+  }
+  // An Unsplash photo is used by link only: a file claiming to be one is not kept.
+  if (!remote && entry.source === 'unsplash') {
+    console.warn(`media.json: skipping ${entry.filename}: an Unsplash entry needs its url (Unsplash photos are linked, never copied)`);
     return null;
   }
   const legacy = !('original_name' in entry);
@@ -70,7 +69,7 @@ export function normalizeEntry(entry) {
     created: entry.created,
     source: mediaSource(entry.source),
     credit: storedCredit(entry.credit),
-    url: hasUrl ? entry.url : null,
+    url: remote ? remote.href : null,
   };
 }
 

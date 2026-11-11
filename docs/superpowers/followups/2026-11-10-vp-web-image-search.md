@@ -51,14 +51,26 @@ Each ruling ends with its cost if it's wrong.
 - Choosing an Unsplash result (any picker, or Add from web on the Media
   screen) adds a **linked** library item: a row with the photo's
   `images.unsplash.com` URL (`url` column, in `media.json`) and credit,
-  named `unsplash-<id>`, with no file. The server pings Unsplash's
-  `download_location` once per choice (`imageSearch.pingDownload`, shared
-  with the old ping route); choosing the same photo again pings and
-  reuses the item.
+  named `unsplash-<id>` (with a suffix if two ids clean to one name),
+  with no file. The server pings Unsplash's `download_location` once per
+  choice (`imageSearch.pingDownload`, shared with the ping route, which
+  the editor no longer calls). Choosing the same photo again pings and
+  reuses the item; the picker then says "Already in your library as …".
+- One photo is recognised by `linkedKey` (`src/media/usage.js`): its
+  `images.unsplash.com` origin and path, ignoring the query (`ixid`
+  differs between searches). "Used in", the alt check and import
+  dedupe all use it. URLs with a user, password or port are refused.
 - It shows in the Media screen as "Linked from Unsplash", previews from
-  Unsplash, can't be edited, and keeps alt and credit editing. Delete
-  removes only the row. "Used in" matches its exact URL.
+  Unsplash, can't be edited, and keeps alt and credit editing. It can't
+  be the original of an edited upload (400). Removing it deletes only
+  the row and is never blocked: the uses (published or draft) are named
+  in the confirmation, and the live site isn't checked.
+- A `media.json` entry with `source: 'unsplash'` and no `url` is dropped
+  with a warning.
 - The library search now includes Unsplash (its cards offer "Add" only).
+- *Not done:* "Used in" doesn't list a linked photo's live-only uses (a
+  committed page whose post no longer has it); `liveMediaRefs` reads
+  `/media/` links only. Removing the row can't break that page.
 
 ## Deferred
 

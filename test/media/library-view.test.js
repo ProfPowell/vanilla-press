@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   altState, needsAlt, FILTERS, TYPES, filterMedia, headerCounts, tileModel, emptyText, DROP_TEXT,
   detailModel, ALT_PLACEHOLDER, ALT_HINT, altForCheckbox, createAltSaver, deleteDecision, refusedDeleteMessage,
-  LINKED_BADGE, LINKED_MARKER, LINKED_NOTE, displaySrc,
+  LINKED_BADGE, LINKED_MARKER, LINKED_NOTE, displaySrc, addedLead, addedMessage,
 } from '../../src/media/library-view.js';
 
 const item = (o) => ({
@@ -306,6 +306,16 @@ test('deleting a linked item removes it from the library, not a file', () => {
   assert.match(d.body, /library/);
   assert.equal(d.confirm, 'Remove from library');
   const drafts = deleteDecision(linkedItem({ usedIn: [{ id: 'd', title: 'Hills', status: 'draft' }] }));
-  assert.match(drafts.body, /^Used in drafts: Hills\./);
-  assert.equal(deleteDecision(linkedItem({ usedIn: [{ id: 'p', title: 'Live', status: 'published' }] })).allowed, false);
+  assert.match(drafts.body, /^Used in: Hills\. They keep linking to it\./);
+  // A published use is a note, not a block: the posts keep the photo's URL
+  const live = deleteDecision(linkedItem({ usedIn: [{ id: 'p', title: 'Live', status: 'published' }, { id: 'd', title: 'Hills', status: 'draft' }] }));
+  assert.equal(live.allowed, true);
+  assert.match(live.body, /^Used in: Live, Hills\. They keep linking to it\./);
+});
+
+test('a web image already in the library says so, not "Added"', () => {
+  assert.equal(addedLead({ filename: 'a.jpg' }), 'Added to your library as ');
+  assert.equal(addedLead({ filename: 'unsplash-u1', existing: true }), 'Already in your library as ');
+  assert.equal(addedMessage({ filename: 'a.jpg' }), 'Added a.jpg to your library.');
+  assert.equal(addedMessage({ filename: 'unsplash-u1', existing: true }), 'unsplash-u1 is already in your library.');
 });

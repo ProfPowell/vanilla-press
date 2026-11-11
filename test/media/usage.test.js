@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mediaFileOf, mediaRefs, mediaUsage, liveMediaRefs, mediaSrc, mediaItemSrc } from '../../src/media/usage.js';
+import { mediaFileOf, mediaRefs, mediaUsage, liveMediaRefs, mediaSrc, mediaItemSrc, linkedKey, linkedIndex } from '../../src/media/usage.js';
 
 const p = (...children) => ({ type: 'paragraph', children });
 
@@ -99,7 +99,7 @@ test('liveMediaRefs on text with no refs, or not a string, is empty', () => {
 
 test('a linked item counts where its exact URL is used, keyed by its filename', () => {
   const U = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';
-  const linked = new Map([[U, 'unsplash-u1']]);
+  const linked = linkedIndex([[U, 'unsplash-u1']]);
   const doc = {
     id: 'd1',
     meta: { title: 'Hills', status: 'published', image: U },
@@ -124,4 +124,22 @@ test('mediaItemSrc: a linked item is its remote URL, a file its /media/ URL', ()
   assert.equal(mediaItemSrc({ filename: 'unsplash-u1', linked: true, src: U }), U);
   assert.equal(mediaItemSrc({ filename: 'a#1.jpg', linked: false, src: '/media/a%231.jpg' }), '/media/a%231.jpg');
   assert.equal(mediaItemSrc({ filename: 'a#1.jpg' }), '/media/a%231.jpg');
+});
+
+test('linkedKey: an images.unsplash.com photo by origin and path; anything else null', () => {
+  assert.equal(linkedKey('https://images.unsplash.com/photo-123?ixid=A&w=2400#x'), 'https://images.unsplash.com/photo-123');
+  assert.equal(linkedKey('https://images.unsplash.com/photo-123?ixid=B'), 'https://images.unsplash.com/photo-123');
+  for (const bad of ['http://images.unsplash.com/p', 'https://evil.example/p', 'https://images.unsplash.com.evil.example/p',
+    'https://u:p@images.unsplash.com/p', 'https://images.unsplash.com:444/p', 'nope', '', null, 5, '/media/a.jpg']) {
+    assert.equal(linkedKey(bad), null, String(bad));
+  }
+});
+
+test('a linked item counts when a post uses the same photo with another ixid or size', () => {
+  const linked = linkedIndex([['https://images.unsplash.com/photo-123?ixid=B&w=2400&fit=max', 'unsplash-u1']]);
+  const doc = { id: 'd', meta: { title: 'T', image: 'https://images.unsplash.com/photo-123?ixid=A&w=1080' }, blocks: [
+    { type: 'figure', attrs: { src: 'https://images.unsplash.com/photo-123?ixid=C' } },
+    { type: 'figure', attrs: { src: 'https://images.unsplash.com/photo-999?ixid=B' } },
+  ] };
+  assert.deepEqual([...mediaRefs(doc, { linked })], ['unsplash-u1']);
 });

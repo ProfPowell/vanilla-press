@@ -186,13 +186,29 @@ describe('linked (Unsplash) entries', () => {
       linked({ id: 'bad00003', filename: 'unsplash-c', url: 'https://images.unsplash.com.evil.example/x' }),
       linked({ id: 'bad00004', filename: 'unsplash-d', url: 'not a url' }),
       linked({ id: 'bad00005', filename: 'unsplash-e', url: 5 }),
+      linked({ id: 'bad00006', filename: 'unsplash-f', url: 'https://u:p@images.unsplash.com/x' }),
+      linked({ id: 'bad00007', filename: 'unsplash-g', url: 'https://images.unsplash.com:8443/x' }),
       linked(),
       entry({ id: 'cccc3333', filename: 'c.png', url: '' }),
     ]);
     assert.deepEqual(loadMediaJson(ws, db), { loaded: 2 });
     assert.deepEqual(rows().map((r) => r.id).sort(), ['cccc3333', 'llll0001']);
     assert.equal(rows().find((r) => r.id === 'cccc3333').url, null);
-    assert.equal(console.warn.mock.callCount(), 5);
+    assert.equal(console.warn.mock.callCount(), 7);
+  });
+
+  it('the url is stored as parsed (normalized)', () => {
+    writeJson([linked({ url: 'HTTPS://Images.Unsplash.com/photo-1?w=1' })]);
+    loadMediaJson(ws, db);
+    assert.equal(rows()[0].url, 'https://images.unsplash.com/photo-1?w=1');
+  });
+
+  it('an unsplash entry with no url (a file) is dropped with a warning', () => {
+    writeJson([linked({ url: null }), entry({ id: 'cccc3333', filename: 'c.png' })]);
+    assert.deepEqual(loadMediaJson(ws, db), { loaded: 1 });
+    assert.deepEqual(rows().map((r) => r.id), ['cccc3333']);
+    assert.equal(console.warn.mock.callCount(), 1);
+    assert.match(console.warn.mock.calls[0].arguments[0], /unsplash-u1/);
   });
 
   it('a linked entry is never missing, and is not touched by stray adoption', () => {

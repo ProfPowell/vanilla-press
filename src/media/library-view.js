@@ -34,6 +34,19 @@ export function displaySrc(item, siteId) {
   return `/sites/${encodeURIComponent(siteId)}/media/${encodeURIComponent(item.filename)}`;
 }
 
+/**
+ * The words before a web image's file name once it is in the library (the
+ * picker): one the server already had (`existing`, the same Unsplash photo
+ * chosen again) is not "Added".
+ * @param {{ existing?: boolean }} item MediaItem from POST /media/import or an upload
+ */
+export const addedLead = (item) => (item.existing ? 'Already in your library as ' : 'Added to your library as ');
+
+/** The Media screen's announcement once a web image is in the library. */
+export const addedMessage = (item) => (item.existing
+  ? `${item.filename} is already in your library.`
+  : `Added ${item.filename} to your library.`);
+
 export const DROP_TEXT = 'Drop files here, or paste from the clipboard. Files go to src/media and back up with your next save.';
 
 const newestFirst = (a, b) =>
@@ -270,21 +283,22 @@ export function refusedDeleteMessage(posts) {
  */
 export function deleteDecision(item) {
   const users = item.usedIn || [];
+  if (item.linked) {
+    // No file: only the library entry goes, and every post keeps showing the photo from
+    // Unsplash, so no use (published or draft) blocks it; the uses are only named.
+    const tail = 'It leaves your library only; the picture stays on Unsplash.';
+    return {
+      allowed: true,
+      heading: `Remove "${item.filename}" from the library?`,
+      body: users.length ? `Used in: ${titles(users)}. They keep linking to it. ${tail}` : tail,
+      confirm: 'Remove from library',
+    };
+  }
   const published = users.filter((u) => u.status === 'published');
   if (published.length) {
     return { allowed: false, message: refusedDeleteMessage(published) };
   }
   const drafts = users.filter((u) => u.status !== 'published');
-  if (item.linked) {
-    // No file: only the library entry goes, and posts keep showing the photo from Unsplash.
-    const tail = 'It leaves your library only; the picture stays on Unsplash.';
-    return {
-      allowed: true,
-      heading: `Remove "${item.filename}" from the library?`,
-      body: drafts.length ? `Used in drafts: ${titles(drafts)}. They keep linking to it. ${tail}` : tail,
-      confirm: 'Remove from library',
-    };
-  }
   const tail = 'The file is removed from src/media; git history keeps a copy.';
   return {
     allowed: true,

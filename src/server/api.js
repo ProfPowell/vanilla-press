@@ -28,12 +28,12 @@ import {
   getCollectionsConfig, preflightSave, writeMediaJson, syncAll,
 } from '../sync/site-files.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
-import { isMissing, isLinkedUrl, MEDIA_FIELDS } from '../sync/media-library.js';
+import { isMissing, MEDIA_FIELDS } from '../sync/media-library.js';
 import { inspectFile } from '../media/inspect.js';
 import { mediaFilename, editedFilename, uniqueFilename, slugBase } from '../media/names.js';
 import { normalizeCredit, storedCredit, validCredit, mediaSource } from '../media/credit.js';
 import { MAX_BYTES, LARGE_BYTES, tooLargeMessage, unsupportedMessage } from '../media/limits.js';
-import { mediaUsage, mediaSrc } from '../media/usage.js';
+import { mediaUsage, mediaSrc, linkedIndex, linkedKey, linkedUrl } from '../media/usage.js';
 import { kindOf } from '../media/types.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
 import { listThemes } from '../themes/list-themes.js';
@@ -373,7 +373,7 @@ export function mountApi(router, db, options) {
    */
   async function usageMap({ strict = false } = {}) {
     const docs = getAllDocuments(db);
-    const linked = new Map(db.prepare('SELECT url, filename FROM media WHERE url IS NOT NULL').all().map((r) => [r.url, r.filename]));
+    const linked = linkedIndex(db.prepare('SELECT url, filename FROM media WHERE url IS NOT NULL').all().map((r) => [r.url, r.filename]));
     const usage = mediaUsage(docs, { linked });
     if (!options.liveMedia) return usage;
     let live;
@@ -514,6 +514,11 @@ export function mountApi(router, db, options) {
         sendJson(res, 400, { error: 'The image being edited is no longer in the library.' });
         return;
       }
+      // Unsplash photos are linked only: a copy of one may not be stored.
+      if (original.url) {
+        sendJson(res, 400, { error: "A linked Unsplash picture can't be edited or copied" });
+        return;
+      }
     }
 
     // credit: a JSON Credit; source: where it came from (a credit alone is written by hand).
@@ -604,11 +609,13 @@ export function mountApi(router, db, options) {
   /**
    * A link-mode (Unsplash) result becomes a linked library item: a row with the
    * photo's URL and credit, never a file (Unsplash's terms ask for hotlinking).
-   * Unsplash is pinged once per use, so the same photo again is pinged and its
-   * existing item answered (200).
+   * Unsplash is pinged once per use, so the same photo again (same `linkedKey`:
+   * another search's `ixid` doesn't matter) is pinged and its existing item
+   * answered (200, with `existing: true`, which is never stored).
    */
   async function importLinked(res, item, alt) {
-    if (item.source !== 'unsplash' || !isLinkedUrl(item.url)) {
+    const remote = item.source === 'unsplash' ? linkedUrl(item.url) : null;
+    if (!remote) {
       sendJson(res, 502, { error: 'The service sent an image address Vanilla Press does not link to' });
       return;
     }
@@ -619,13 +626,16 @@ export function mountApi(router, db, options) {
       sendJson(res, err.status, { error: err.message });
       return;
     }
-    // The name comes from the id only (Unsplash ids are letters, digits, - and _).
-    const filename = `unsplash-${item.id.replace(/[^\w-]/g, '-')}`;
-    const existing = db.prepare('SELECT * FROM media WHERE filename = ?').get(filename);
+    const key = linkedKey(remote.href);
+    const existing = db.prepare('SELECT * FROM media WHERE url IS NOT NULL').all().find((r) => linkedKey(r.url) === key);
     if (existing) {
-      sendJson(res, 200, mediaItem(existing, await usageMap()));
+      sendJson(res, 200, { ...mediaItem(existing, await usageMap()), existing: true });
       return;
     }
+    // The name comes from the id only (Unsplash ids are letters, digits, - and _). Two ids
+    // that read the same once cleaned (or a file of that name) get a suffix.
+    const base = `unsplash-${item.id.replace(/[^\w-]/g, '-')}`;
+    const filename = nameTaken(base) ? uniqueFilename((sid) => `${base}-${sid}`, nameTaken) : base;
     const row = {
       id: crypto.randomUUID().slice(0, 8),
       filename,
@@ -640,7 +650,7 @@ export function mountApi(router, db, options) {
       created: new Date().toISOString(),
       source: 'unsplash',
       credit: storedCredit(item.credit),
-      url: item.url,
+      url: remote.href,
     };
     db.prepare(`INSERT INTO media (${MEDIA_FIELDS.join(', ')}) VALUES (${MEDIA_FIELDS.map((f) => `@${f}`).join(', ')})`).run(row);
     mediaChanged(row.filename, 'upload');
@@ -718,6 +728,15 @@ export function mountApi(router, db, options) {
       sendJson(res, 404, { error: 'Media not found' });
       return;
     }
+    // A linked item has no file: removing its row can't break any page (posts keep
+    // the remote URL), so no use blocks it and the live site needn't be checked.
+    if (row.url) {
+      const users = (await usageMap()).get(row.filename) || [];
+      db.prepare('DELETE FROM media WHERE id = ?').run(row.id);
+      mediaChanged(row.filename, 'delete');
+      sendJson(res, 200, { ok: true, drafts: users.filter((u) => u.id && u.status !== 'published').map(({ id, title }) => ({ id, title })) });
+      return;
+    }
     // Published uses: a published post's saved body, or any page committed in HEAD (the live site).
     let usage;
     try {
@@ -734,8 +753,7 @@ export function mountApi(router, db, options) {
       sendJson(res, 409, { error: 'Used by published posts. Remove it from them and Update first.', posts: published });
       return;
     }
-    // A linked item has no file: only its row goes.
-    if (!row.url) rmSync(join(mediaDir, row.filename), { force: true });
+    rmSync(join(mediaDir, row.filename), { force: true });
     db.prepare('DELETE FROM media WHERE id = ?').run(row.id);
     mediaChanged(row.filename, 'delete');
     sendJson(res, 200, { ok: true, drafts: users.map(({ id, title }) => ({ id, title })) });

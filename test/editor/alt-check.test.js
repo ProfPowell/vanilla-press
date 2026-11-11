@@ -36,6 +36,9 @@ describe('altWarnings', () => {
     const linked = (alt) => ({ id: 'u', filename: 'unsplash-u1', src: U, linked: true, kind: 'image', alt });
     assert.deepEqual(altWarnings([fig(U, '')], [linked('')]), []);
     assert.deepEqual(altWarnings([fig(U, '')], [linked(null)]), [{ src: U, name: 'unsplash-u1' }]);
+    // The same photo from another search (another ixid) is the same item
+    const other = 'https://images.unsplash.com/photo-1?ixid=Z&w=1080';
+    assert.deepEqual(altWarnings([fig(other, '')], [linked('')]), []);
   });
 
   it('a file not in the library warns', () => {

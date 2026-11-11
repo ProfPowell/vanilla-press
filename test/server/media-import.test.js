@@ -183,8 +183,50 @@ describe('media import and credits', () => {
         const again = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
         assert.equal(again.status, 200);
         assert.equal(again.data.id, first.data.id);
+        assert.equal(again.data.existing, true);
+        assert.equal(first.data.existing, undefined);
         assert.deepEqual(webImages.pings, ['u1', 'u1']);
         assert.equal(db.prepare("SELECT COUNT(*) AS n FROM media WHERE filename = 'unsplash-u1'").get().n, 1);
+        assert.equal((await call('GET', '/api/media')).data.find((m) => m.id === first.data.id).existing, undefined);
+      });
+
+      it('the same photo from another search (another ixid) is the same item', async () => {
+        offer(unsplash());
+        const first = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        offer(unsplash({ url: 'https://images.unsplash.com/photo-u1?ixid=OTHER&w=2400' }));
+        const again = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        assert.equal(again.status, 200);
+        assert.equal(again.data.id, first.data.id);
+      });
+
+      it('two ids that slug to one name stay two items', async () => {
+        offer(unsplash({ id: 'a.b', url: 'https://images.unsplash.com/photo-ab1' }));
+        offer(unsplash({ id: 'a/b', url: 'https://images.unsplash.com/photo-ab2' }));
+        const one = await call('POST', '/api/media/import', { source: 'unsplash', id: 'a.b' });
+        const two = await call('POST', '/api/media/import', { source: 'unsplash', id: 'a/b' });
+        assert.equal(one.status, 201);
+        assert.equal(two.status, 201);
+        assert.notEqual(two.data.id, one.data.id);
+        assert.notEqual(two.data.filename, one.data.filename);
+        assert.equal(two.data.src, 'https://images.unsplash.com/photo-ab2');
+        // and each is found again by its own photo
+        const again = await call('POST', '/api/media/import', { source: 'unsplash', id: 'a/b' });
+        assert.equal(again.status, 200);
+        assert.equal(again.data.id, two.data.id);
+      });
+
+      it('a linked item cannot be the original of an edited upload', async () => {
+        offer(unsplash());
+        const { data } = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        const before = files();
+        const form = new FormData();
+        form.append('file', new Blob([jpeg(2, 2)]), 'x.jpg');
+        form.append('edited_from', data.filename);
+        const res = await call('POST', '/api/media', form);
+        assert.equal(res.status, 400);
+        assert.equal(res.data.error, "A linked Unsplash picture can't be edited or copied");
+        assert.deepEqual(files(), before);
+        assert.equal(db.prepare("SELECT COUNT(*) AS n FROM media WHERE source = 'unsplash'").get().n, 1);
       });
 
       it('a failed ping stores nothing and answers its status', async () => {
@@ -227,19 +269,22 @@ describe('media import and credits', () => {
         assert.deepEqual(files(), before);
       });
 
-      it('Used in finds posts that use its URL; a published one blocks delete', async () => {
+      it('Used in finds posts that use the photo; a published use does not block removing it', async () => {
         offer(unsplash());
         const { data } = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
         const doc = {
           meta: { title: 'Hills post', slug: 'hills-post', collection: 'posts', status: 'published', image: U_URL },
-          blocks: [{ type: 'figure', attrs: { src: U_URL, alt: 'A hill' }, children: [] }],
+          // written from another search: another ixid
+          blocks: [{ type: 'figure', attrs: { src: 'https://images.unsplash.com/photo-u1?ixid=OLD', alt: 'A hill' }, children: [] }],
         };
         const created = await call('POST', '/api/documents', doc);
         assert.equal(created.status, 201, JSON.stringify(created.data));
         try {
           const listed = (await call('GET', '/api/media')).data.find((m) => m.id === data.id);
           assert.deepEqual(listed.usedIn.map((u) => u.title), ['Hills post']);
-          assert.equal((await call('DELETE', `/api/media/${data.id}`)).status, 409);
+          const del = await call('DELETE', `/api/media/${data.id}`);
+          assert.equal(del.status, 200);
+          assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media WHERE id = ?').get(data.id).n, 0);
         } finally {
           await call('DELETE', `/api/documents/${created.data.id}`);
         }
@@ -403,6 +448,38 @@ describe('media import without web images', () => {
       });
       assert.equal(res.status, 503);
     } finally {
+      server.close();
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('removing a linked item when the live site cannot be checked', () => {
+  it('still removes it: no page can break', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-media-linked-live-'));
+    const db = new Database(':memory:');
+    migrate(db);
+    db.prepare(`INSERT INTO media (id, filename, original_name, mime_type, size, created, source, url)
+      VALUES ('l1', 'unsplash-u1', 'unsplash-u1', 'image/jpeg', 0, '2026-11-11T00:00:00Z', 'unsplash', 'https://images.unsplash.com/photo-u1')`).run();
+    db.prepare(`INSERT INTO media (id, filename, original_name, mime_type, size, created)
+      VALUES ('f1', 'a.jpg', 'a.jpg', 'image/jpeg', 1, '2026-11-11T00:00:00Z')`).run();
+    const router = createRouter();
+    mountApi(router, db, { rootDir: root, mediaDir: join(root, 'media'), liveMedia: async () => { throw new Error('git broke'); } });
+    const server = createServer(async (req, res) => {
+      if (!(await router.handle(req, res))) sendJson(res, 404, { error: 'Not found' });
+    });
+    await new Promise((resolve) => server.listen(0, resolve));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const errLog = console.error;
+    console.error = () => {};
+    try {
+      assert.equal((await fetch(`${base}/api/media/f1`, { method: 'DELETE' })).status, 503); // a file still waits
+      const res = await fetch(`${base}/api/media/l1`, { method: 'DELETE' });
+      assert.equal(res.status, 200);
+      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM media WHERE id = 'l1'").get().n, 0);
+    } finally {
+      console.error = errLog;
       server.close();
       db.close();
       rmSync(root, { recursive: true, force: true });

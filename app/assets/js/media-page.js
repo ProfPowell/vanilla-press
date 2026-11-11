@@ -6,7 +6,7 @@
  */
 import { api, h } from './app-api.js';
 import {
-  FILTERS, TYPES, DROP_TEXT, filterMedia, headerCounts, tileModel, emptyText, needsAlt, displaySrc,
+  FILTERS, TYPES, DROP_TEXT, filterMedia, headerCounts, tileModel, emptyText, needsAlt, displaySrc, addedMessage,
 } from '../../../src/media/library-view.js';
 import { createMediaDetail } from './media-detail.js';
 import { ACCEPT_ATTR } from '../../../src/media/limits.js';
@@ -371,7 +371,7 @@ export function initMediaSection({ siteId, root }) {
     const added = $('media-grid').querySelector(`[data-id="${CSS.escape(item.id)}"]`);
     added?.scrollIntoView({ block: 'nearest' });
     added?.focus();
-    detail.announce(`Added ${item.filename} to your library.`);
+    detail.announce(addedMessage(item));
   });
 
   // --- Show and hide ---

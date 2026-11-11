@@ -35,18 +35,17 @@ describe('editor api client', () => {
     ]);
   });
 
-  it('web images: search, import and the Unsplash ping', async () => {
+  it('web images: search and import (the server pings Unsplash; the client has no ping)', async () => {
     globalThis.fetch = async (url, opts) => {
       calls.push({ url, method: opts.method, body: opts.body });
       return new Response(url.endsWith('/download') ? null : '{}', { status: url.endsWith('/download') ? 204 : 200 });
     };
     await api.searchWebImages('red barn', { page: 2, for: 'library' });
     await api.importWebImage({ source: 'pexels', id: '12', alt: 'A barn' });
-    await api.pingUnsplash('a/b');
+    assert.equal('pingUnsplash' in api, false);
     assert.deepEqual(calls, [
       { url: '/api/web-images?q=red+barn&page=2&for=library', method: 'GET', body: undefined },
       { url: '/api/media/import', method: 'POST', body: '{"source":"pexels","id":"12","alt":"A barn"}' },
-      { url: '/api/web-images/unsplash/a%2Fb/download', method: 'POST', body: undefined },
     ]);
   });
 

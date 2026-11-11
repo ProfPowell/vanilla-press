@@ -18,7 +18,7 @@ import { api } from '../api-client.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
 import { createUploadQueue } from '../media-upload.js';
 import {
-  filterMedia, tileModel, altForCheckbox, emptyText, ALT_PLACEHOLDER, LINKED_BADGE, LINKED_MARKER,
+  filterMedia, tileModel, altForCheckbox, emptyText, ALT_PLACEHOLDER, LINKED_BADGE, LINKED_MARKER, addedLead,
 } from '../../../../src/media/library-view.js';
 import { ACCEPTED } from '../../../../src/media/types.js';
 import { ACCEPT_ATTR } from '../../../../src/media/limits.js';
@@ -342,7 +342,7 @@ function createPicker({ kind, heading, resolve }) {
     } }, 'Use this file');
 
     selected.replaceChildren(
-      el('p', { class: 'media-picker-selected-name' }, added ? 'Added to your library as ' : 'Uploaded ', el('span', { class: 'media-picker-file' }, item.filename)),
+      el('p', { class: 'media-picker-selected-name' }, added ? addedLead(item) : 'Uploaded ', el('span', { class: 'media-picker-file' }, item.filename)),
       isImage ? el('div', { class: 'media-picker-preview' }, el('img', { src: displayMediaUrl(item.src, SITE), alt: '' })) : null,
       isImage ? el('div', { class: 'field' }, el('label', { for: altId }, 'Alt text'), altArea) : null,
       isImage ? el('div', { class: 'field field-check' }, decorative, el('label', { for: 'media-picker-decorative' }, 'Decorative (no alt text needed)')) : null,

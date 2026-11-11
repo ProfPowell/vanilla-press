@@ -149,14 +149,13 @@ export const api = {
     return `${APP_BASE}/web-images/${encodeURIComponent(source)}/${encodeURIComponent(id)}/image`;
   },
 
-  /** Copy a search result into the library: the new MediaItem, with the search's credit. */
+  /**
+   * Add a search result to the library: a copy with the search's credit, or for an
+   * Unsplash photo a linked item (the server pings Unsplash). `existing: true` when
+   * the library already had that photo.
+   */
   importWebImage({ source, id, alt }) {
     return request('/media/import', { method: 'POST', body: { source, id, alt } });
-  },
-
-  /** Tell Unsplash a photo is being used (its download_location), as its guidelines ask. */
-  pingUnsplash(id) {
-    return request(`/web-images/unsplash/${encodeURIComponent(id)}/download`, { base: APP_BASE, method: 'POST' });
   },
 
   /** List the media library: MediaItem[]. */

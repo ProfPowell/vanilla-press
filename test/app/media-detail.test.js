@@ -40,35 +40,46 @@ test('the form model of an item with no credit is empty', () => {
 test('the form gives back the credit, trimmed', () => {
   const answer = creditFromForm({ ...empty, name: '  Jane Doe ', site: 'Pexels', siteUrl: ' https://www.pexels.com ', adapted: true });
   assert.deepEqual(answer, {
-    credit: { name: 'Jane Doe', site: 'Pexels', siteUrl: 'https://www.pexels.com', adapted: true }, error: null, invalid: [],
+    credit: { name: 'Jane Doe', site: 'Pexels', siteUrl: 'https://www.pexels.com', adapted: true }, errors: {}, skip: false,
   });
 });
 
 test('clearing every field gives credit: null', () => {
-  assert.deepEqual(creditFromForm(empty), { credit: null, error: null, invalid: [] });
-  assert.deepEqual(creditFromForm({ ...empty, name: '   ' }), { credit: null, error: null, invalid: [] });
+  assert.deepEqual(creditFromForm(empty), { credit: null, errors: {}, skip: false });
+  assert.deepEqual(creditFromForm({ ...empty, name: '   ' }), { credit: null, errors: {}, skip: false });
   // Adapted alone says nothing about who made it: still no credit
-  assert.deepEqual(creditFromForm({ ...empty, adapted: true }), { credit: null, error: null, invalid: [] });
+  assert.deepEqual(creditFromForm({ ...empty, adapted: true }), { credit: null, errors: {}, skip: false });
 });
 
-test('a javascript: link is refused', () => {
-  const answer = creditFromForm({ ...empty, name: 'Jane', url: 'javascript:alert(1)' });
+test('a javascript: link is refused beside its field; the other fields still save', () => {
+  const answer = creditFromForm({ ...empty, name: 'Jane', site: 'Pexels', url: 'javascript:alert(1)' });
   assert.equal(LINK_ERROR, 'Links must start with http:// or https://');
-  assert.deepEqual(answer, { credit: null, error: 'Links must start with http:// or https://', invalid: ['url'] });
+  assert.deepEqual(answer, { credit: { name: 'Jane', site: 'Pexels' }, errors: { url: 'Links must start with http:// or https://' }, skip: false });
 });
 
-test('every link that is not http(s) is named, including one with no scheme', () => {
-  const answer = creditFromForm({ ...empty, name: 'Jane', url: ' JaVaScRiPt:x', siteUrl: 'www.pexels.com', licenseUrl: 'https://ok.example' });
-  assert.equal(answer.error, LINK_ERROR);
-  assert.deepEqual(answer.invalid, ['url', 'siteUrl']);
-  assert.equal(creditFromForm({ ...empty, name: 'Jane', url: 'HTTP://example.com' }).error, null);
+test('a refused link keeps the link already stored', () => {
+  const stored = { name: 'Jane', url: 'https://www.pexels.com/@jane' };
+  const answer = creditFromForm({ ...empty, name: 'Jane Doe', url: 'javascript:x' }, stored);
+  assert.deepEqual(answer.credit, { name: 'Jane Doe', url: 'https://www.pexels.com/@jane' });
+  assert.deepEqual(Object.keys(answer.errors), ['url']);
 });
 
-test('links with nothing to show them on are refused, not dropped', () => {
+test('a link must be a whole http(s) URL with a host and no spaces', () => {
+  const refused = (link) => creditFromForm({ ...empty, name: 'Jane', url: link }).errors.url;
+  for (const bad of [' JaVaScRiPt:x', 'www.pexels.com', 'https://', 'http://', 'https://exa mple.com', 'ftp://example.com', 'mailto:a@b.c', '//example.com']) {
+    assert.equal(refused(bad), LINK_ERROR, bad);
+  }
+  for (const good of ['HTTP://example.com', 'https://www.pexels.com/@jane', ' https://example.com/a?b=c ']) {
+    assert.equal(refused(good), undefined, good);
+  }
+  const answer = creditFromForm({ ...empty, name: 'Jane', url: 'nope', siteUrl: 'also nope', licenseUrl: 'https://ok.example' });
+  assert.deepEqual(Object.keys(answer.errors), ['url', 'siteUrl']);
+  assert.deepEqual(answer.credit, { name: 'Jane', licenseUrl: 'https://ok.example' });
+});
+
+test('links with nothing to show them on are refused, and nothing is saved', () => {
   const answer = creditFromForm({ ...empty, url: 'https://www.pexels.com/@jane' });
-  assert.equal(answer.credit, null);
-  assert.equal(answer.error, 'Add a creator, site or license for the links to go with.');
-  assert.deepEqual(answer.invalid, ['name']);
+  assert.deepEqual(answer, { credit: null, errors: { name: 'Add a creator, site or license for the links to go with.' }, skip: true });
 });
 
 test('a web image shows where it came from; a credit written by hand does not', () => {

@@ -83,7 +83,7 @@ export const altForCheckbox = (checked) => (checked ? '' : null);
 /** The web image services a library image can come from, by name (a hand-written credit is `manual`). */
 const SOURCE_NAMES = { openverse: 'Openverse', pexels: 'Pexels', pixabay: 'Pixabay' };
 
-/** The Credit fieldset's text fields, in order; `link` fields must be http(s). The Adapted checkbox follows. */
+/** The Credit fieldset's text fields, in order; `link` fields must be whole http(s) URLs. The Adapted checkbox follows. */
 export const CREDIT_FIELDS = [
   { key: 'name', label: 'Creator' },
   { key: 'url', label: 'Creator link', link: true },
@@ -110,24 +110,48 @@ export function creditFormValues(item) {
 }
 
 /**
- * The credit the fieldset's values say, for `PUT { credit }`: null when every
- * field is empty. A link that is not http(s), or links with no creator, site or
- * license to show them on, are refused: `error` says why, `invalid` names the fields.
- * @param {{ [key: string]: string|boolean }} values
- * @returns {{ credit: object|null, error: string|null, invalid: string[] }}
+ * Whether `text` is a link a credit may keep: a whole http(s) URL with a host and no spaces.
+ * @param {string} text trimmed
  */
-export function creditFromForm(values) {
+function isWebLink(text) {
+  if (/\s/.test(text)) return false;
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return false;
+  }
+  return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname !== '';
+}
+
+/**
+ * The credit the fieldset's values say, for `PUT { credit }`: null when every
+ * field is empty. A link that isn't a whole http(s) URL is refused (`errors`
+ * names it) and the link already stored in `stored` is kept in its place; the
+ * other fields still save. Links with no creator, site or license to show them
+ * on are refused too, and then nothing is saved (`skip`).
+ * @param {{ [key: string]: string|boolean }} values
+ * @param {object|null} [stored] the credit stored now
+ * @returns {{ credit: object|null, errors: { [key: string]: string }, skip: boolean }}
+ */
+export function creditFromForm(values, stored = null) {
   const text = (key) => (typeof values[key] === 'string' ? values[key].trim() : '');
-  const badLinks = CREDIT_FIELDS.filter((f) => f.link && text(f.key) && !/^https?:\/\//i.test(text(f.key))).map((f) => f.key);
-  if (badLinks.length) return { credit: null, error: LINK_ERROR, invalid: badLinks };
+  const kept = normalizeCredit(stored) || {};
+  const errors = {};
   const raw = {};
-  for (const { key } of CREDIT_FIELDS) raw[key] = text(key);
+  for (const { key, link } of CREDIT_FIELDS) {
+    raw[key] = text(key);
+    if (link && raw[key] && !isWebLink(raw[key])) {
+      errors[key] = LINK_ERROR;
+      raw[key] = kept[key] || '';
+    }
+  }
   raw.adapted = values.adapted === true;
   const credit = normalizeCredit(raw);
   if (!credit && CREDIT_FIELDS.some((f) => f.link && text(f.key))) {
-    return { credit: null, error: LINKS_ALONE_ERROR, invalid: ['name'] };
+    return { credit: null, errors: { ...errors, name: LINKS_ALONE_ERROR }, skip: true };
   }
-  return { credit, error: null, invalid: [] };
+  return { credit, errors, skip: false };
 }
 
 /**
@@ -162,8 +186,8 @@ export function detailModel(item, { siteId, locale } = {}) {
 }
 
 /**
- * Saves alt text after typing pauses. One item is pending at a time: changing another item
- * saves the first right away, and `flush()` saves whatever is pending.
+ * Saves alt text (or any one value per item, such as a credit) after typing pauses. One item
+ * is pending at a time: changing another item saves the first right away, and `flush()` saves whatever is pending.
  * @param {{ save: (id: string, alt: string|null) => Promise<any>, delay?: number, setTimer?: Function, clearTimer?: Function }} opts
  */
 export function createAltSaver({ save, delay = 600, setTimer = setTimeout, clearTimer = clearTimeout }) {

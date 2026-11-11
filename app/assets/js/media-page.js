@@ -134,11 +134,11 @@ export function initMediaSection({ siteId, root }) {
       },
     },
   });
-  const { flushAlt } = detail;
+  const { flush } = detail;
 
   /** @param {string|null} id @param {{ focusAlt?: boolean }} [opts] */
   function select(id, { focusAlt = false } = {}) {
-    if (id !== detail.shownId()) flushAlt(); // the pending alt is saved to the item it was typed for
+    if (id !== detail.shownId()) flush(); // pending alt text and credit are saved to the item they were typed for
     selectedId = id;
     for (const btn of $('media-grid').querySelectorAll('.media-tile')) {
       btn.setAttribute('aria-pressed', String(btn.dataset.id === id));
@@ -353,7 +353,9 @@ export function initMediaSection({ siteId, root }) {
     } catch (err) {
       webBusy = false;
       webSearch.hidden = false;
-      webError(err.message);
+      // Closed while it was adding: the dialog's status is out of sight (and cleared on reopen)
+      if (webDialog.open) webError(err.message);
+      else showError(`Couldn't add the image from the web. ${err.message}`);
       return;
     }
     webBusy = false;
@@ -369,7 +371,7 @@ export function initMediaSection({ siteId, root }) {
     const added = $('media-grid').querySelector(`[data-id="${CSS.escape(item.id)}"]`);
     added?.scrollIntoView({ block: 'nearest' });
     added?.focus();
-    $('media-detail-status').textContent = `Added ${item.filename} to your library.`;
+    detail.announce(`Added ${item.filename} to your library.`);
   });
 
   // --- Show and hide ---
@@ -378,7 +380,7 @@ export function initMediaSection({ siteId, root }) {
     await refresh();
     selectByFilename(new URLSearchParams(location.search).get('file'));
   }
-  const hide = () => flushAlt();
+  const hide = () => flush();
   detail.show(null);
 
   return { refresh, select, selectByFilename, show, hide };

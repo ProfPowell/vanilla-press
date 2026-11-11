@@ -17,7 +17,8 @@ import { uploadMedia } from '../../../editor/assets/js/media-upload.js';
  *   host: { getItem: (id: string) => Object|undefined, replaceItem: (item: Object) => void,
  *     showError: (message: string) => void, deleted: (item: Object) => void,
  *     copySaved: (copy: Object) => Promise<void>, refresh: () => Promise<void> } }} opts
- * @returns {{ show: (item: Object|null) => void, flushAlt: () => Promise<void>, shownId: () => string|null, focusAlt: () => void }}
+ * @returns {{ show: (item: Object|null) => void, flush: () => Promise<void>, shownId: () => string|null,
+ *   focusAlt: () => void, announce: (text: string) => void }}
  */
 export function createMediaDetail({ siteId, base, root, host }) {
   const $ = (id) => root.querySelector(`#${id}`);
@@ -43,13 +44,38 @@ export function createMediaDetail({ siteId, base, root, host }) {
   });
   const flushAlt = () => saver.flush().catch(() => {}); // save() has already shown its error
 
+  // The credit saves the same way: after a pause, and before the panel shows another file.
+  let creditUi = null; // the shown Credit fieldset: { id, saved(fresh) }
+  const creditSaver = createAltSaver({
+    save: async (id, credit) => {
+      try {
+        const fresh = await api(`${base}/media/${encodeURIComponent(id)}`, { method: 'PUT', body: { credit } });
+        host.replaceItem(fresh);
+        if (shownId === id) {
+          if (creditUi?.id === id) creditUi.saved(fresh);
+          setStatus(fresh.credit ? 'Credit saved' : 'Credit removed');
+        }
+      } catch (err) {
+        const name = host.getItem(id)?.filename || 'a file';
+        host.showError(`Couldn't save the credit for ${name}. ${err.message} Select the file and try again.`);
+        if (shownId === id) setStatus('');
+        throw err;
+      }
+    },
+  });
+  const flushCredit = () => creditSaver.flush().catch(() => {}); // save() has already shown its error
+  /** Save whatever alt text or credit is pending. */
+  const flush = () => Promise.all([flushAlt(), flushCredit()]).then(() => {});
+
   // The page is going away: a normal save may not finish, a keepalive request does.
   function saveAltBeforeLeaving() {
-    const pending = saver.take();
-    if (!pending) return;
-    fetch(`${base}/media/${encodeURIComponent(pending.id)}`, {
-      method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: pending.alt }),
+    const keep = (id, body) => fetch(`${base}/media/${encodeURIComponent(id)}`, {
+      method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }).catch(() => {});
+    const alt = saver.take();
+    if (alt) keep(alt.id, { alt: alt.alt });
+    const credit = creditSaver.take();
+    if (credit) keep(credit.id, { credit: credit.alt }); // the saver calls its value `alt`
   }
   window.addEventListener('pagehide', saveAltBeforeLeaving);
   // Links that leave the page (Used in, All sites) save first; the request outlives the navigation.
@@ -116,29 +142,20 @@ export function createMediaDetail({ siteId, base, root, host }) {
   }
 
   /**
-   * The Credit fieldset: who made the image and under what license. Save sends
-   * `PUT { credit }` (null once every field is empty); posts keep the credit they have.
+   * The Credit fieldset: who made the image and under what license. It saves
+   * itself as alt text does (`PUT { credit }`, null once every field is empty);
+   * a refused link shows its message beside the field and isn't saved, the
+   * rest is. Posts keep the credit they have.
    */
   function creditField(item) {
     const inputs = {};
-    const errorId = 'media-credit-error';
-    const error = h('p', { id: errorId, class: 'error', role: 'alert', hidden: true });
+    const messages = {};
+    let stored = item.credit ?? null; // what the server has now: a refused link keeps its stored value
     const line = h('p', { class: 'detail-muted', id: 'media-credit-line' });
     const adapted = h('input', { type: 'checkbox', id: 'media-credit-adapted' });
-    const fill = (values) => {
-      for (const { key } of CREDIT_FIELDS) inputs[key].value = values[key];
-      adapted.checked = values.adapted;
-    };
     const showLine = (credit) => {
       const text = creditText(credit);
       line.textContent = text ? `Shows as: ${text}` : 'No credit.';
-    };
-    const clearInvalid = () => {
-      for (const input of Object.values(inputs)) {
-        input.removeAttribute('aria-invalid');
-        input.removeAttribute('aria-describedby');
-      }
-      error.hidden = true;
     };
     const fields = CREDIT_FIELDS.map(({ key, label, link }) => {
       const id = `media-credit-${key}`;
@@ -146,58 +163,54 @@ export function createMediaDetail({ siteId, base, root, host }) {
         type: link ? 'url' : 'text', id, autocomplete: 'off', spellcheck: link ? 'false' : null,
         placeholder: link ? 'https://' : null,
       });
-      return h('div', { class: 'detail-credit-field' }, h('label', { for: id }, label), inputs[key]);
+      messages[key] = h('p', { id: `${id}-error`, class: 'error detail-field-error', hidden: true });
+      return h('div', { class: 'detail-credit-field' }, h('label', { for: id }, label), inputs[key], messages[key]);
     });
-    const save = h('button', { type: 'submit', 'data-action': 'save-credit' }, 'Save credit');
+    const values = creditFormValues(item);
+    for (const { key } of CREDIT_FIELDS) inputs[key].value = values[key];
+    adapted.checked = values.adapted;
+    showLine(item.credit);
+
+    /** Show each field's refusal beside it; the rest goes to the saver. */
+    function changed({ now = false } = {}) {
+      setStatus('');
+      const form = { adapted: adapted.checked };
+      for (const { key } of CREDIT_FIELDS) form[key] = inputs[key].value;
+      const answer = creditFromForm(form, stored);
+      for (const { key } of CREDIT_FIELDS) {
+        const message = answer.errors[key];
+        messages[key].textContent = message || '';
+        messages[key].hidden = !message;
+        if (message) {
+          inputs[key].setAttribute('aria-invalid', 'true');
+          inputs[key].setAttribute('aria-describedby', messages[key].id);
+        } else {
+          inputs[key].removeAttribute('aria-invalid');
+          inputs[key].removeAttribute('aria-describedby');
+        }
+      }
+      if (answer.skip) return;
+      creditSaver.change(item.id, answer.credit);
+      if (now) flushCredit();
+    }
+
+    creditUi = {
+      id: item.id,
+      saved(fresh) {
+        stored = fresh.credit ?? null;
+        showLine(fresh.credit);
+      },
+    };
     const form = h('form', { class: 'detail-group detail-credit', novalidate: true },
       h('fieldset', { 'aria-describedby': 'media-credit-note' },
         h('legend', { class: 'detail-label' }, 'Credit'),
         line,
         ...fields,
         h('label', { class: 'detail-check' }, adapted, 'Adapted (changed from the original)')),
-      h('p', { id: 'media-credit-note', class: 'detail-muted' }, CREDIT_NOTE),
-      error,
-      h('div', {}, save));
-    fill(creditFormValues(item));
-    showLine(item.credit);
-    form.addEventListener('input', () => { if (!error.hidden) clearInvalid(); });
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      clearInvalid();
-      const values = { adapted: adapted.checked };
-      for (const { key } of CREDIT_FIELDS) values[key] = inputs[key].value;
-      const answer = creditFromForm(values);
-      if (answer.error) {
-        error.textContent = answer.error;
-        error.hidden = false;
-        for (const key of answer.invalid) {
-          inputs[key].setAttribute('aria-invalid', 'true');
-          inputs[key].setAttribute('aria-describedby', errorId);
-        }
-        inputs[answer.invalid[0]]?.focus();
-        return;
-      }
-      save.disabled = true;
-      setStatus('Saving the credit…');
-      try {
-        const fresh = await api(`${base}/media/${encodeURIComponent(item.id)}`, { method: 'PUT', body: { credit: answer.credit } });
-        host.replaceItem(fresh);
-        if (shownId !== item.id || !form.isConnected) return;
-        fill(creditFormValues(fresh));
-        showLine(fresh.credit);
-        setStatus(fresh.credit ? 'Credit saved' : 'Credit removed');
-      } catch (err) {
-        if (shownId !== item.id || !form.isConnected) {
-          host.showError(`Couldn't save the credit for ${item.filename}. ${err.message}`);
-          return;
-        }
-        setStatus('');
-        error.textContent = `Couldn't save the credit. ${err.message}`;
-        error.hidden = false;
-      } finally {
-        save.disabled = false;
-      }
-    });
+      h('p', { id: 'media-credit-note', class: 'detail-muted' }, CREDIT_NOTE));
+    form.addEventListener('input', (e) => { if (e.target !== adapted) changed(); });
+    adapted.addEventListener('change', () => changed({ now: true }));
+    form.addEventListener('submit', (e) => { e.preventDefault(); changed({ now: true }); }); // Enter saves now
     return form;
   }
 
@@ -238,7 +251,7 @@ export function createMediaDetail({ siteId, base, root, host }) {
   }
 
   async function deleteItem(id, message) {
-    await flushAlt();
+    await flush();
     const item = host.getItem(id); // the current row, not the one the panel was built from
     if (!item) return;
     const decision = deleteDecision(item);
@@ -320,6 +333,7 @@ export function createMediaDetail({ siteId, base, root, host }) {
   function show(item, { notice = '' } = {}) {
     const token = ++paintToken;
     shownId = item ? item.id : null;
+    creditUi = null;
     setStatus('');
     const aside = $('media-detail');
     if (!item) {
@@ -363,8 +377,10 @@ export function createMediaDetail({ siteId, base, root, host }) {
 
   return {
     show,
-    flushAlt,
+    flush,
     shownId: () => shownId,
+    /** Say something in the panel's status line (it is cleared when another file is shown). */
+    announce: (text) => setStatus(text),
     focusAlt: () => detailBody.querySelector('#media-alt')?.focus(),
   };
 }

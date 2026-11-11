@@ -53,7 +53,8 @@ export class WebImageSearch extends HTMLElement {
     if (this.input) return;
     const inputId = `${this.uid}-q`;
     this.input = el('input', {
-      type: 'search', id: inputId, class: 'web-image-search-input', maxlength: MAX_QUERY,
+      // Not type=search: its first Escape clears the box (and the results) instead of closing the dialog
+      type: 'text', role: 'searchbox', id: inputId, class: 'web-image-search-input', maxlength: MAX_QUERY,
       placeholder: 'A red barn in snow', autocomplete: 'off',
       oninput: () => this.schedule(),
     });

@@ -49,6 +49,15 @@ async function submit(el, q) {
 const names = (el) => [...el.querySelectorAll('.web-image-card button')].map((b) => b.getAttribute('aria-label'));
 
 describe('<web-image-search>', () => {
+  it('Escape in a filled box is left to the dialog: the box is a text input with the searchbox role', () => {
+    // A type=search input clears itself on the first Escape (and the results with it) instead of closing the dialog
+    const input = mount().querySelector('input');
+    assert.equal(input.getAttribute('type'), 'text');
+    assert.equal(input.getAttribute('role'), 'searchbox');
+    assert.equal(input.closest('form').getAttribute('role'), 'search');
+    assert.equal(input.labels?.[0]?.textContent ?? input.closest('form').querySelector(`label[for="${input.id}"]`).textContent, 'Search the web for images');
+  });
+
   it('each card\'s buttons have their own accessible names', async () => {
     const el = mount();
     answers.push({ results: [result('1'), result('2', { description: '' }), result('3', { source: 'unsplash', mode: 'link', description: 'Hill' })], errors: [], hasMore: false });

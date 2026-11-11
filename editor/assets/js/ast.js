@@ -12,6 +12,7 @@
  */
 
 import { schema } from './schema.js';
+import { normalizeCredit } from '../../../src/media/credit.js';
 
 // Mark name mapping: PM schema name → VP AST name
 const PM_TO_VP_MARK = {
@@ -211,6 +212,7 @@ function nodeToBlock(node) {
         src: node.attrs.src,
         alt: node.attrs.alt,
         variant: node.attrs.variant && node.attrs.variant !== 'default' ? node.attrs.variant : undefined,
+        credit: normalizeCredit(node.attrs.credit) ?? undefined,
       });
       const result = {
         type: 'figure',
@@ -470,6 +472,7 @@ function blockToNode(block, s) {
         src: block.attrs?.src || '',
         alt: block.attrs?.alt || '',
         variant: block.attrs?.variant || 'default',
+        credit: normalizeCredit(block.attrs?.credit),
       }, captionNodes);
     }
 

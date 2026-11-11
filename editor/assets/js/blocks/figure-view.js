@@ -7,6 +7,7 @@
  *   Browse opens the media picker. The media display is not editable, and a
  *   press on it selects the figure. An "Alt: Missing" badge shows when alt is empty
  * - Optional figcaption child (PM handles via content model)
+ * - The image credit after the caption: not editable, never caption text
  * - Matches HTML renderer: <figure><img src alt/><figcaption>...</figcaption></figure>
  *
  * @module editor/blocks/figure-view
@@ -15,6 +16,7 @@
 import { NodeSelection } from 'prosemirror-state';
 import { openMediaPicker } from '../components/media-picker.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
+import { creditParts } from '../../../../src/media/credit.js';
 
 export class FigureView {
   constructor(node, view, getPos) {
@@ -99,6 +101,15 @@ export class FigureView {
     this.contentDOM = document.createElement('div');
     this.contentDOM.className = 'figure-caption-wrapper';
     this.dom.appendChild(this.contentDOM);
+
+    // The credit: after the caption, outside its content hole, so typing in
+    // the caption never reaches it
+    this.credit = document.createElement('small');
+    this.credit.className = 'credit';
+    this.credit.setAttribute('contenteditable', 'false');
+    this.dom.appendChild(this.credit);
+    this.shownCredit = undefined;
+    this.showCredit(node);
   }
 
   setAttr(name, value) {
@@ -131,6 +142,24 @@ export class FigureView {
     this.placeholder.style.display = '';
   }
 
+  /** Show the node's credit as text and links; hidden when it has none. */
+  showCredit(node) {
+    const key = JSON.stringify(node.attrs.credit ?? null);
+    if (key === this.shownCredit) return;
+    this.shownCredit = key;
+    const parts = creditParts(node.attrs.credit);
+    this.credit.replaceChildren(...parts.map((part) => {
+      if (!part.href) return part.text;
+      const a = document.createElement('a');
+      a.setAttribute('href', part.href);
+      a.setAttribute('target', '_blank'); // never leave the editor
+      a.setAttribute('rel', 'noopener noreferrer');
+      a.textContent = part.text;
+      return a;
+    }));
+    this.credit.toggleAttribute('hidden', parts.length === 0);
+  }
+
   showBadge(node) {
     this.badge.toggleAttribute('hidden', Boolean(node.attrs.alt));
   }
@@ -141,6 +170,7 @@ export class FigureView {
 
     this.showImage(node);
     this.showBadge(node);
+    this.showCredit(node);
 
     // Sync fields
     if (this.srcInput.value !== (node.attrs.src || '')) {
@@ -167,6 +197,7 @@ export class FigureView {
     return this.fields.contains(mutation.target) ||
       this.display.contains(mutation.target) ||
       this.badge.contains(mutation.target) ||
+      this.credit.contains(mutation.target) ||
       mutation.target === this.dom && mutation.type === 'attributes';
   }
 }

@@ -40,6 +40,11 @@ class FakeElement {
       else this.appendChild(c);
     }
   }
+  replaceChildren(...cs) {
+    this.children = [];
+    this.textContent = '';
+    this.append(...cs);
+  }
   contains(el) {
     for (let n = el; n; n = n.parentNode) if (n === this) return true;
     return false;
@@ -113,6 +118,47 @@ describe('FigureView DOM contract', () => {
       assert.equal(v.ignoreMutation({ target: el }), true);
     }
     assert.equal(v.ignoreMutation({ target: v.contentDOM }), false);
+  });
+});
+
+describe('FigureView credit', () => {
+  const credit = { name: 'Jane', url: 'https://p.example/jane', site: 'Pexels' };
+
+  it('shows the credit after the caption, not editable', () => {
+    const v = figureView({ src: '/media/a.jpg', alt: 'A', credit });
+    const i = v.dom.children.indexOf(v.contentDOM);
+    assert.ok(i >= 0);
+    assert.equal(v.dom.children.indexOf(v.credit), i + 1);
+    assert.equal(v.credit.getAttribute('contenteditable'), 'false');
+    assert.ok(v.credit.classList.contains('credit'));
+    assert.ok(!v.contentDOM.contains(v.credit));
+    assert.equal(v.credit.hasAttribute('hidden'), false);
+  });
+
+  it('renders the credit parts as text and links', () => {
+    const v = figureView({ src: '/media/a.jpg', alt: 'A', credit });
+    const [link] = v.credit.children;
+    assert.equal(link.tagName, 'A');
+    assert.equal(link.getAttribute('href'), 'https://p.example/jane');
+    assert.equal(link.textContent, 'Jane');
+    assert.ok(v.credit.textContent.includes('Photo by '));
+    assert.ok(v.credit.textContent.includes(' on Pexels'));
+  });
+
+  it('is hidden with no credit, and follows the node on update', () => {
+    const v = figureView({ src: '/media/a.jpg', alt: 'A' });
+    assert.equal(v.credit.hasAttribute('hidden'), true);
+    v.update(figureNode({ src: '/media/a.jpg', alt: 'A', credit }));
+    assert.equal(v.credit.hasAttribute('hidden'), false);
+    assert.equal(v.credit.children[0].textContent, 'Jane');
+    v.update(figureNode({ src: '/media/a.jpg', alt: 'A' }));
+    assert.equal(v.credit.hasAttribute('hidden'), true);
+  });
+
+  it('ignores mutations in the credit', () => {
+    const v = figureView({ src: '/media/a.jpg', alt: 'A', credit });
+    assert.equal(v.ignoreMutation({ target: v.credit }), true);
+    assert.equal(v.ignoreMutation({ target: v.credit.children[0] }), true);
   });
 });
 

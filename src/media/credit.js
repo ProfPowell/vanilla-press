@@ -147,3 +147,47 @@ export function creditParts(credit) {
 export function creditText(credit) {
   return creditParts(credit).map((part) => part.text).join('');
 }
+
+/** The credit line's grammar, with each link stood in for by one character. */
+const CREDIT_LINE = /^(?:Photo by (.+?)(?: on (.+?))?|Photo from (.+?))?(?:(?:^|, )(?!adapted$)(.+?))?(, adapted)?$/;
+const LINK_MARK = 0xe000; // private use: never in a credit's own text
+
+/**
+ * The credit a credit line shows: the inverse of `creditParts`, for reading a
+ * published credit back in. A linked part keeps its words whole; plain text
+ * is split at the first " on " or ", ". Null when nothing is left.
+ * @param {Array<{ text: string, href?: string }>} parts
+ * @returns {Credit|null}
+ */
+export function creditFromParts(parts) {
+  const links = [];
+  let line = '';
+  for (const part of parts || []) {
+    const text = typeof part?.text === 'string' ? part.text : '';
+    if (part?.href) {
+      line += String.fromCharCode(LINK_MARK + links.length);
+      links.push({ text, href: part.href });
+    } else {
+      line += text;
+    }
+  }
+  const match = CREDIT_LINE.exec(line.replace(/\s+/g, ' ').trim());
+  if (!match) return null;
+  const [, name, site, siteOnly, license, adapted] = match;
+  /** A field's text, and its link when the field is exactly one link. */
+  const field = (value) => {
+    if (!value) return {};
+    const link = value.length === 1 ? links[value.charCodeAt(0) - LINK_MARK] : null;
+    if (link) return { text: link.text, href: link.href };
+    return { text: value.replace(/[\ue000-\uf8ff]/g, (c) => links[c.charCodeAt(0) - LINK_MARK]?.text ?? '') };
+  };
+  const n = field(name);
+  const s = field(site || siteOnly);
+  const l = field(license);
+  return normalizeCredit({
+    name: n.text, url: n.href,
+    site: s.text, siteUrl: s.href,
+    license: l.text, licenseUrl: l.href,
+    adapted: Boolean(adapted),
+  });
+}

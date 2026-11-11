@@ -11,6 +11,7 @@
 import { Schema } from 'prosemirror-model';
 import { blockTypes, inlineTypes } from '../../../src/schema/content-schema.js';
 import { SITE, displayMediaUrl, storedMediaUrl } from './site-context.js';
+import { creditFromParts, creditParts } from '../../../src/media/credit.js';
 
 // Pull attr defs from content-schema for reference
 const codeAttrs = blockTypes.code_block.attrs;
@@ -317,6 +318,7 @@ const figure = {
     src: { default: '' },
     alt: { default: '' },
     variant: { default: 'default' },
+    credit: { default: null },
   },
   parseDOM: [{
     tag: 'figure',
@@ -329,14 +331,20 @@ const figure = {
         src: img ? storedMediaUrl(img.getAttribute('src') || '', SITE) : '',
         alt: img ? img.getAttribute('alt') || '' : '',
         variant,
+        credit: readCredit(dom.querySelector('small.credit')),
       };
     },
     // Content is an optional figcaption node, so hand the parser only the
-    // <figcaption> element (skipping the <img>, which lives in attrs)
+    // <figcaption> element (skipping the <img>, which lives in attrs). The
+    // credit lives in attrs too, so its words never join the caption text.
     contentElement(dom) {
       const wrapper = document.createElement('div');
       const caption = dom.querySelector('figcaption');
-      if (caption) wrapper.appendChild(caption.cloneNode(true));
+      if (caption) {
+        const copy = caption.cloneNode(true);
+        copy.querySelectorAll('small.credit').forEach((el) => el.remove());
+        wrapper.appendChild(copy);
+      }
       return wrapper;
     },
   }],
@@ -350,9 +358,33 @@ const figure = {
     return ['figure', attrs,
       ['img', { src: displayMediaUrl(node.attrs.src, SITE), alt: node.attrs.alt }],
       ['div', { 'data-figure-caption': '' }, 0],
+      ...creditSpec(node.attrs.credit),
     ];
   },
 };
+
+/**
+ * A figure's credit read from its `small.credit` element (text and links),
+ * or null.
+ * @param {{ childNodes: ArrayLike<Node> }|null} small
+ * @returns {import('../../../src/media/credit.js').Credit|null}
+ */
+export function readCredit(small) {
+  if (!small) return null;
+  const parts = Array.from(small.childNodes, (child) => {
+    const href = child.nodeType === 1 && child.nodeName === 'A' ? child.getAttribute('href') : null;
+    return href ? { text: child.textContent, href } : { text: child.textContent };
+  });
+  return creditFromParts(parts);
+}
+
+/** The credit as a DOM spec (after the caption), so a copied figure keeps it. */
+function creditSpec(credit) {
+  const parts = creditParts(credit);
+  if (!parts.length) return [];
+  return [['small', { class: 'credit' },
+    ...parts.map((p) => (p.href ? ['a', { href: p.href, rel: 'noopener' }, p.text] : p.text))]];
+}
 
 const figcaption = {
   content: 'inline*',

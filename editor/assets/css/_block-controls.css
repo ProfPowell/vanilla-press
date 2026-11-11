@@ -264,3 +264,15 @@
 .pm-figure[data-selected] > .figure-alt-missing {
   display: none;
 }
+
+/* The image credit, after the caption: shown, not edited */
+.pm-figure > .credit {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-s);
+  user-select: none;
+}
+
+.pm-figure > .credit[hidden] {
+  display: none;
+}

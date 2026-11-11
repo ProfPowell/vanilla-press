@@ -10,6 +10,7 @@
 import { createHash } from 'node:crypto';
 import { isSafeComponentTag, isSafeAttrName } from '../schema/component-names.js';
 import { escapeHtml, escapeAttr, formatDate } from './shared.js';
+import { creditParts } from '../media/credit.js';
 
 /**
  * Render a document (or array of docs) to HTML.
@@ -217,11 +218,32 @@ function renderHr(block) {
 }
 
 function renderFigure(block) {
-  const { src, alt, variant } = block.attrs || {};
-  const caption = (block.children || []).map(renderBlock).join('');
+  const { src, alt, variant, credit } = block.attrs || {};
+  const creditHtml = renderCredit(credit);
+  let caption = (block.children || []).map(renderBlock).join('');
+  if (creditHtml) {
+    // The credit follows the writer's caption, inside the same figcaption
+    const text = (block.children || []).map((c) => renderInline(c.children)).join('');
+    caption = `<figcaption>${text ? `${text} ` : ''}${creditHtml}</figcaption>`;
+  }
   const captionLine = caption ? `${caption}\n` : '';
   const cls = variant && variant !== 'default' ? ` class="${escapeAttr(variant)}"` : '';
   return `<figure${cls}>\n<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"/>\n${captionLine}</figure>`;
+}
+
+/**
+ * A figure's credit line: `<small class="credit">` with its text and links,
+ * or '' when there's no credit to show.
+ * @param {unknown} credit
+ * @returns {string}
+ */
+export function renderCredit(credit) {
+  const parts = creditParts(credit);
+  if (!parts.length) return '';
+  const inner = parts.map((part) => (part.href
+    ? `<a href="${escapeAttr(part.href)}" rel="noopener">${escapeHtml(part.text)}</a>`
+    : escapeHtml(part.text))).join('');
+  return `<small class="credit">${inner}</small>`;
 }
 
 function renderFigcaption(block) {

@@ -7,7 +7,7 @@
  * @module renderers/markdown
  */
 
-import { renderComponentBlock, renderComponentInline } from './html.js';
+import { renderComponentBlock, renderComponentInline, renderCredit } from './html.js';
 
 /**
  * Render a document to markdown with YAML frontmatter.
@@ -124,10 +124,11 @@ function renderFigure(block) {
   const { src, alt } = block.attrs || {};
   let out = `![${alt || ''}](${src || ''})`;
   const captions = (block.children || []).filter(c => c.type === 'figcaption');
-  if (captions.length) {
-    const captionText = renderInline(captions[0].children);
-    out += `\n\n*${captionText}*`;
-  }
+  const captionText = captions.length ? renderInline(captions[0].children) : '';
+  if (captionText) out += `\n\n*${captionText}*`;
+  // The credit as HTML, on its own line after the caption (or the image)
+  const credit = renderCredit(block.attrs?.credit);
+  if (credit) out += `\n${credit}`;
   return out;
 }
 

@@ -48,7 +48,7 @@ export const blockTypes = {
   definition_desc: { category: 'prose',  children: 'block' },
 
   // --- Media ---
-  figure:       { category: 'media',     children: ['figcaption'], optionalChildren: true, attrs: { src: { type: 'string', required: true }, alt: { type: 'string', required: true }, variant: { type: 'string', enum: ['default', 'full', 'bordered', 'float-start', 'float-end', 'centered'] } } },
+  figure:       { category: 'media',     children: ['figcaption'], optionalChildren: true, attrs: { src: { type: 'string', required: true }, alt: { type: 'string', required: true }, variant: { type: 'string', enum: ['default', 'full', 'bordered', 'float-start', 'float-end', 'centered'] }, credit: { type: 'credit' } } },
   figcaption:   { category: 'media',     children: 'inline' },
   embed:        { category: 'media',     leaf: true,             attrs: { url: { type: 'string', required: true }, type: { type: 'string', enum: ['video', 'audio', 'codepen', 'observable'] } } },
 

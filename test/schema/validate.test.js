@@ -132,6 +132,29 @@ describe('validate', () => {
       assert.equal(result.valid, true, result.errors.join('; '));
     });
 
+    it('a figure with a valid credit is valid', () => {
+      const credit = { name: 'Jane', url: 'https://p.example/jane', site: 'Pexels', siteUrl: 'https://p.example' };
+      const result = validate(validDoc([{ type: 'figure', attrs: { src: '/media/a.jpg', alt: 'x', credit } }]));
+      assert.equal(result.valid, true, result.errors.join('; '));
+    });
+
+    it('a figure credit with a wrong-typed field is invalid', () => {
+      const result = validate(validDoc([{ type: 'figure', attrs: { src: '/media/a.jpg', alt: 'x', credit: { name: 5 } } }]));
+      assert.equal(result.valid, false);
+      assert.ok(result.errors.some(e => e.includes('"credit"')), result.errors.join('; '));
+    });
+
+    it('a figure credit that is not an object is invalid', () => {
+      const result = validate(validDoc([{ type: 'figure', attrs: { src: '/media/a.jpg', alt: 'x', credit: 'Jane' } }]));
+      assert.equal(result.valid, false);
+    });
+
+    it('a figure credit with a javascript: link is invalid', () => {
+      const credit = { name: 'Jane', url: 'javascript:alert(1)' };
+      const result = validate(validDoc([{ type: 'figure', attrs: { src: '/media/a.jpg', alt: 'x', credit } }]));
+      assert.equal(result.valid, false);
+    });
+
     it('embed type audio is valid', () => {
       const result = validate(validDoc([{ type: 'embed', attrs: { url: '/media/a.mp3', type: 'audio' } }]));
       assert.equal(result.valid, true, result.errors.join('; '));

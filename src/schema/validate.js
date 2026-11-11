@@ -10,6 +10,7 @@
 import { SAFE_ID } from '../themes/theme-setting.js';
 import { isSafeComponentTag, isSafeAttrName } from './component-names.js';
 import { blockTypes, inlineTypes, validMarks, requiredMeta, validStatuses } from './content-schema.js';
+import { validCredit } from '../media/credit.js';
 
 const WRAPS = ['text', 'template', 'script'];
 
@@ -256,6 +257,8 @@ function validateAttrs(attrs, attrDefs, path, errors) {
       errors.push(`${path}: attr "${name}" must be a boolean`);
     } else if (def.type === 'string' && typeof value !== 'string') {
       errors.push(`${path}: attr "${name}" must be a string`);
+    } else if (def.type === 'credit' && !validCredit(value)) {
+      errors.push(`${path}: attr "${name}" must be a credit (name, site or license; http(s) links)`);
     }
 
     // Enum check

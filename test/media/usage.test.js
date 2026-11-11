@@ -96,3 +96,25 @@ test('liveMediaRefs on text with no refs, or not a string, is empty', () => {
   assert.equal(liveMediaRefs('<h1>Home</h1>').size, 0);
   assert.equal(liveMediaRefs(null).size, 0);
 });
+
+test('a linked item counts where its exact URL is used, keyed by its filename', () => {
+  const U = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';
+  const linked = new Map([[U, 'unsplash-u1']]);
+  const doc = {
+    id: 'd1',
+    meta: { title: 'Hills', status: 'published', image: U },
+    blocks: [
+      { type: 'figure', attrs: { src: U } },
+      { type: 'component', attrs: { tag: 'x-hero', src: U } },
+      { type: 'figure', attrs: { src: 'https://images.unsplash.com/photo-2' } },
+      { type: 'figure', attrs: { src: '/media/a-aaaaaa.jpg' } },
+    ],
+  };
+  assert.deepEqual([...mediaRefs(doc, { linked })].sort(), ['a-aaaaaa.jpg', 'unsplash-u1']);
+  assert.deepEqual([...mediaRefs(doc)], ['a-aaaaaa.jpg']);
+  const usage = mediaUsage([doc, { id: 'd2', meta: { title: 'Other' }, blocks: [{ type: 'figure', attrs: { src: U } }] }], { linked });
+  assert.deepEqual(usage.get('unsplash-u1'), [
+    { id: 'd1', title: 'Hills', status: 'published' },
+    { id: 'd2', title: 'Other', status: 'draft' },
+  ]);
+});

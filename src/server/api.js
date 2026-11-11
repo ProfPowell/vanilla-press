@@ -28,7 +28,7 @@ import {
   getCollectionsConfig, preflightSave, writeMediaJson, syncAll,
 } from '../sync/site-files.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
-import { isMissing } from '../sync/media-library.js';
+import { isMissing, isLinkedUrl, MEDIA_FIELDS } from '../sync/media-library.js';
 import { inspectFile } from '../media/inspect.js';
 import { mediaFilename, editedFilename, uniqueFilename, slugBase } from '../media/names.js';
 import { normalizeCredit, storedCredit, validCredit, mediaSource } from '../media/credit.js';
@@ -71,9 +71,11 @@ function generateId() {
  * @param {(e: { filename: string, action: 'upload'|'alt'|'credit'|'delete' }) => void} [options.onMediaChanged] - Called after
  *   every media write (upload or import, alt or credit edit, delete); a throwing listener never breaks the response.
  * @param {{ get: (source: string, id: string) => Object|null,
- *   image: (source: string, id: string) => Promise<{ data: Buffer, contentType: string }> }} [options.webImages] - The
+ *   image: (source: string, id: string) => Promise<{ data: Buffer, contentType: string }>,
+ *   pingDownload: (id: string) => Promise<void> }} [options.webImages] - The
  *   app's web image search (services/image-search.js): POST /api/media/import copies one of its cached
- *   results into the library. Absent: import answers 503.
+ *   results into the library, or, for a link-mode (Unsplash) result, pings Unsplash and adds a
+ *   linked item (its URL, no file). Absent: import answers 503.
  * @param {boolean} [options.statusByActions=false] - The app (Ruling P): a document save never
  *   changes `status` or `published` (PUT keeps the stored values; POST create stores a draft, or
  *   keeps an existing document's values); only Publish/Update/Unpublish change them. `vp serve`
@@ -371,7 +373,8 @@ export function mountApi(router, db, options) {
    */
   async function usageMap({ strict = false } = {}) {
     const docs = getAllDocuments(db);
-    const usage = mediaUsage(docs);
+    const linked = new Map(db.prepare('SELECT url, filename FROM media WHERE url IS NOT NULL').all().map((r) => [r.url, r.filename]));
+    const usage = mediaUsage(docs, { linked });
     if (!options.liveMedia) return usage;
     let live;
     try {
@@ -415,8 +418,10 @@ export function mountApi(router, db, options) {
       created: row.created,
       source: row.source ?? null,
       credit: normalizeCredit(row.credit),
-      src: mediaSrc(row.filename),
-      missing: isMissing(mediaDir, row.filename),
+      // A linked item (an Unsplash photo) is its remote URL: no file, so never missing.
+      src: row.url || mediaSrc(row.filename),
+      missing: isMissing(mediaDir, row.filename, row.url),
+      linked: Boolean(row.url),
       usedIn: usage.get(row.filename) || [],
     };
   }
@@ -525,7 +530,8 @@ export function mountApi(router, db, options) {
     let source = null;
     if (fields.source) {
       source = mediaSource(fields.source);
-      if (!source) {
+      // An Unsplash photo is linked, never a file (POST /api/media/import makes it).
+      if (!source || source === 'unsplash') {
         sendJson(res, 400, { error: 'source must be openverse, pexels, pixabay or manual' });
         return;
       }
@@ -595,6 +601,52 @@ export function mountApi(router, db, options) {
     sendJson(res, 200, mediaItem(changed, await usageMap()));
   }));
 
+  /**
+   * A link-mode (Unsplash) result becomes a linked library item: a row with the
+   * photo's URL and credit, never a file (Unsplash's terms ask for hotlinking).
+   * Unsplash is pinged once per use, so the same photo again is pinged and its
+   * existing item answered (200).
+   */
+  async function importLinked(res, item, alt) {
+    if (item.source !== 'unsplash' || !isLinkedUrl(item.url)) {
+      sendJson(res, 502, { error: 'The service sent an image address Vanilla Press does not link to' });
+      return;
+    }
+    try {
+      await options.webImages.pingDownload(item.id);
+    } catch (err) {
+      if (!err.status) throw err;
+      sendJson(res, err.status, { error: err.message });
+      return;
+    }
+    // The name comes from the id only (Unsplash ids are letters, digits, - and _).
+    const filename = `unsplash-${item.id.replace(/[^\w-]/g, '-')}`;
+    const existing = db.prepare('SELECT * FROM media WHERE filename = ?').get(filename);
+    if (existing) {
+      sendJson(res, 200, mediaItem(existing, await usageMap()));
+      return;
+    }
+    const row = {
+      id: crypto.randomUUID().slice(0, 8),
+      filename,
+      original_name: filename,
+      mime_type: 'image/jpeg',
+      size: 0,
+      width: Number.isInteger(item.width) && item.width > 0 ? item.width : null,
+      height: Number.isInteger(item.height) && item.height > 0 ? item.height : null,
+      // A blank description is no alt yet, not decorative.
+      alt: alt ?? (item.description || null),
+      edited_from: null,
+      created: new Date().toISOString(),
+      source: 'unsplash',
+      credit: storedCredit(item.credit),
+      url: item.url,
+    };
+    db.prepare(`INSERT INTO media (${MEDIA_FIELDS.join(', ')}) VALUES (${MEDIA_FIELDS.map((f) => `@${f}`).join(', ')})`).run(row);
+    mediaChanged(row.filename, 'upload');
+    sendJson(res, 201, mediaItem(row, await usageMap()));
+  }
+
   // Copy a result the app's web image search cached into the library. Only the
   // source and id come from the client: the URL, bytes and credit are the search's.
   route.add('POST', '/api/media/import', jsonErrors(async (req, res) => {
@@ -611,6 +663,10 @@ export function mountApi(router, db, options) {
     const item = options.webImages.get(source, id);
     if (!item) {
       sendJson(res, 404, { error: 'Search again — this result has expired' });
+      return;
+    }
+    if (item.mode === 'link') {
+      await importLinked(res, item, alt);
       return;
     }
     if (item.mode !== 'copy') {
@@ -678,7 +734,8 @@ export function mountApi(router, db, options) {
       sendJson(res, 409, { error: 'Used by published posts. Remove it from them and Update first.', posts: published });
       return;
     }
-    rmSync(join(mediaDir, row.filename), { force: true });
+    // A linked item has no file: only its row goes.
+    if (!row.url) rmSync(join(mediaDir, row.filename), { force: true });
     db.prepare('DELETE FROM media WHERE id = ?').run(row.id);
     mediaChanged(row.filename, 'delete');
     sendJson(res, 200, { ok: true, drafts: users.map(({ id, title }) => ({ id, title })) });

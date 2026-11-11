@@ -19,8 +19,11 @@ const TEXT_KEYS = ['name', 'site', 'license'];
 const LINK_KEYS = ['url', 'siteUrl', 'licenseUrl'];
 const KEYS = new Set([...STRING_KEYS, 'adapted']);
 
-/** Where a library image's credit came from: a web image service, or written by hand. */
-export const MEDIA_SOURCES = ['openverse', 'pexels', 'pixabay', 'manual'];
+/**
+ * Where a library image's credit came from: a web image service, or written by hand.
+ * An `unsplash` item is linked, never a file (its row has a `url`).
+ */
+export const MEDIA_SOURCES = ['openverse', 'pexels', 'pixabay', 'unsplash', 'manual'];
 
 /**
  * The media source `x` names, or null.

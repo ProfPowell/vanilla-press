@@ -45,7 +45,7 @@ export function migrate(db) {
 
   // Columns added after the first release go here, so existing databases get them.
   const mediaAdded = addMissingColumns(db, 'media', {
-    original_name: 'TEXT', width: 'INTEGER', height: 'INTEGER', edited_from: 'TEXT', source: 'TEXT', credit: 'TEXT',
+    original_name: 'TEXT', width: 'INTEGER', height: 'INTEGER', edited_from: 'TEXT', source: 'TEXT', credit: 'TEXT', url: 'TEXT',
   });
   addMissingColumns(db, 'documents', { image: 'TEXT', theme: 'TEXT', theme_scope: 'TEXT' });
   // Before these columns, uploads without alt text stored '' (M2): that means "never written".

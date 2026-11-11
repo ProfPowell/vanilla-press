@@ -149,12 +149,43 @@ describe('image search', () => {
     assert.equal((await search.search('fox', { page: 1 })).errors.length, 0);
   });
 
-  it("for: 'library' drops Unsplash", async () => {
+  it("for: 'library' includes Unsplash (it becomes a linked library item)", async () => {
     const fetch = fakeFetch();
     const search = createImageSearch({ env, fetch, now });
     const { results } = await search.search('fox', { page: 1, for: 'library' });
-    assert.equal(results.some((r) => r.source === 'unsplash'), false);
-    assert.equal(fetch.callsTo('unsplash').length, 0);
+    assert.equal(results.some((r) => r.source === 'unsplash' && r.mode === 'link'), true);
+    assert.equal(fetch.callsTo('unsplash').length, 1);
+  });
+
+  describe('pingDownload', () => {
+    const unsplashId = async (search) => (await search.search('fox', { page: 1 })).results.find((r) => r.source === 'unsplash');
+
+    it('sends the key only to the cached download_location on api.unsplash.com', async () => {
+      const fetch = fakeFetch({ unsplash: (url) => (new URL(url).pathname === '/search/photos'
+        ? Response.json(fixture('unsplash')) : new Response('{}', { status: 200 })) });
+      const search = createImageSearch({ env, fetch, now });
+      const item = await unsplashId(search);
+      fetch.calls.length = 0;
+      await search.pingDownload(item.id);
+      assert.equal(fetch.calls.length, 1);
+      assert.equal(fetch.calls[0].url, item.downloadLocation);
+      assert.equal(fetch.calls[0].headers.Authorization, 'Client-ID US-SECRET');
+    });
+
+    it('an unknown result is 404; no key is 409; a failed ping is 502 without the key', async () => {
+      let answer = () => new Response('{}', { status: 200 });
+      const fetch = fakeFetch({ unsplash: (url) => (new URL(url).pathname === '/search/photos'
+        ? Response.json(fixture('unsplash')) : answer()) });
+      const search = createImageSearch({ env, fetch, now });
+      const item = await unsplashId(search);
+      await assert.rejects(search.pingDownload('nope'), { status: 404, message: 'Search again — this result has expired' });
+      answer = () => new Response('bad US-SECRET', { status: 401 });
+      await assert.rejects(search.pingDownload(item.id), (err) => err.status === 502 && !err.message.includes('US-SECRET'));
+      answer = () => { throw new Error('down US-SECRET'); };
+      await assert.rejects(search.pingDownload(item.id), (err) => err.status === 502 && !err.message.includes('US-SECRET'));
+      updateService('unsplash', { key: '' }, env);
+      await assert.rejects(search.pingDownload(item.id), { status: 409 });
+    });
   });
 
   it('get returns an earlier result, null for an unknown or expired one', async () => {
@@ -234,7 +265,7 @@ describe('image search', () => {
     const fetch = fakeFetch();
     const search = createImageSearch({ env, fetch, now });
     assert.equal((await search.search('fox', { page: 1 })).ready, 4);
-    assert.equal((await search.search('fox', { page: 1, for: 'library' })).ready, 3);
+    assert.equal((await search.search('fox', { page: 1, for: 'library' })).ready, 4);
     for (const id of ['pexels', 'pixabay', 'unsplash']) updateService(id, { key: '' }, env);
     updateService('openverse', { enabled: false }, env);
     const none = await search.search('fox', { page: 1 });

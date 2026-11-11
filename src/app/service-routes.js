@@ -10,15 +10,13 @@
 
 import { sendJson } from '../server/router.js';
 import { SERVICES } from '../services/catalog.js';
-import { servicesState, updateService, serviceKey } from '../services/store.js';
+import { servicesState, updateService } from '../services/store.js';
 import { createImageSearch } from '../services/image-search.js';
 import { inspectFile } from '../media/inspect.js';
 
 const PURPOSES = new Set(['picker', 'library']);
 const MAX_QUERY = 100;
 const EXPIRED = 'Search again — this result has expired';
-/** Unsplash asks for the ping; it should not hold up inserting the photo. */
-const PING_TIMEOUT_MS = 5000;
 /**
  * The image proxy never stores what it serves, so it takes a larger original
  * (60 MiB, 60 seconds) than an import (MAX_BYTES): the editor downsizes it to
@@ -32,7 +30,7 @@ const PROXY_TIMEOUT_MS = 60_000;
  * @param {{ env?: NodeJS.ProcessEnv, imageSearch?: ReturnType<typeof createImageSearch>,
  *   fetch?: typeof globalThis.fetch, now?: () => number, timeoutMs?: number }} context
  *   imageSearch: the app's shared instance; without one, one is made from fetch, now and timeoutMs.
- *   fetch also sends the Unsplash download ping.
+ *   The search sends the Unsplash download ping (`pingDownload`), with its own fetch.
  */
 export function mountServiceRoutes(router, {
   env = process.env,
@@ -93,30 +91,14 @@ export function mountServiceRoutes(router, {
   });
 
   // Unsplash's guidelines: inserting a photo pings its download_location, with the key.
-  // The key is sent only to api.unsplash.com and never appears in a response or a log.
+  // The key is sent only to api.unsplash.com and never appears in a response or a log
+  // (imageSearch.pingDownload; the library's import of a linked photo pings the same way).
   router.add('POST', '/api/web-images/unsplash/:id/download', async (req, res) => {
-    const item = imageSearch.get('unsplash', req.params.id);
-    if (!item || !item.downloadLocation) return sendJson(res, 404, { error: EXPIRED });
-    let target;
     try {
-      target = new URL(item.downloadLocation);
-    } catch {
-      return sendJson(res, 404, { error: EXPIRED });
+      await imageSearch.pingDownload(req.params.id);
+    } catch (err) {
+      return sendJson(res, err.status || 502, { error: err.status ? err.message : "Unsplash couldn't be told about the download" });
     }
-    if (target.protocol !== 'https:' || target.hostname !== 'api.unsplash.com') {
-      return sendJson(res, 404, { error: EXPIRED });
-    }
-    const key = serviceKey('unsplash', env);
-    if (!key) return sendJson(res, 409, { error: 'Unsplash has no key; add it under Services' });
-    let ok = false;
-    try {
-      const answer = await fetch(target.href, {
-        headers: { Authorization: `Client-ID ${key}` },
-        signal: AbortSignal.timeout(PING_TIMEOUT_MS),
-      });
-      ok = answer.ok;
-    } catch { /* reported below, without the error: it could carry the request */ }
-    if (!ok) return sendJson(res, 502, { error: "Unsplash couldn't be told about the download" });
     res.writeHead(204);
     res.end();
   });

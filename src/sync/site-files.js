@@ -19,7 +19,7 @@ import { normalizeCredit } from '../media/credit.js';
 /** The media.json / media-table columns, in the order they are written. */
 export const MEDIA_FIELDS = [
   'id', 'filename', 'original_name', 'mime_type', 'size', 'width', 'height', 'alt', 'edited_from', 'created',
-  'source', 'credit',
+  'source', 'credit', 'url',
 ];
 
 let warnedCollections = false;

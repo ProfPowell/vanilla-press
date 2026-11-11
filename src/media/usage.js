@@ -37,14 +37,16 @@ const URL_ATTRS = {
 
 /**
  * Every media file a document refers to: figure and component sources, embed
- * URLs, links, and the featured image.
+ * URLs, links, and the featured image. A linked library item (a remote image,
+ * no file) counts where its exact URL is used, by its filename.
  * @param {{ meta?: Object, blocks?: Array }} doc
+ * @param {{ linked?: Map<string, string> }} [options] linked items: remote URL -> filename
  * @returns {Set<string>}
  */
-export function mediaRefs(doc) {
+export function mediaRefs(doc, { linked } = {}) {
   const found = new Set();
   const add = (url) => {
-    const file = mediaFileOf(url);
+    const file = mediaFileOf(url) ?? (typeof url === 'string' ? linked?.get(url) : null);
     if (file) found.add(file);
   };
   const walk = (node) => {
@@ -63,12 +65,13 @@ export function mediaRefs(doc) {
 
 /**
  * @param {Array<{ id: string, meta: Object, blocks: Array }>} docs
+ * @param {{ linked?: Map<string, string> }} [options] linked items: remote URL -> filename
  * @returns {Map<string, Array<{ id: string, title: string, status: string }>>}
  */
-export function mediaUsage(docs) {
+export function mediaUsage(docs, options) {
   const usage = new Map();
   for (const doc of docs) {
-    for (const file of mediaRefs(doc)) {
+    for (const file of mediaRefs(doc, options)) {
       if (!usage.has(file)) usage.set(file, []);
       usage.get(file).push({ id: doc.id, title: doc.meta?.title ?? '', status: doc.meta?.status ?? 'draft' });
     }

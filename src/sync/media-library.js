@@ -17,6 +17,22 @@ export { MEDIA_FIELDS };
 const nonEmpty = (v) => typeof v === 'string' && v !== '';
 
 /**
+ * Whether `url` is a remote image a linked item may point at: https on
+ * images.unsplash.com (Unsplash photos are used by link only).
+ * @param {unknown} url
+ * @returns {boolean}
+ */
+export function isLinkedUrl(url) {
+  if (!nonEmpty(url)) return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.hostname === 'images.unsplash.com';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * A media.json entry as a store row, or null (with a warning) when unusable.
  * An entry with no `original_name` key predates 3b: its `alt: ''` meant "never
  * written", not decorative (M2).
@@ -30,6 +46,11 @@ export function normalizeEntry(entry) {
   }
   if (!nonEmpty(entry.mime_type) || !Number.isFinite(entry.size) || entry.size < 0 || !nonEmpty(entry.created)) {
     console.warn(`media.json: skipping ${entry.filename}: it needs a mime_type, a size and a created date`);
+    return null;
+  }
+  const hasUrl = entry.url !== undefined && entry.url !== null && entry.url !== '';
+  if (hasUrl && !isLinkedUrl(entry.url)) {
+    console.warn(`media.json: skipping ${entry.filename}: its url is not an https://images.unsplash.com/ image`);
     return null;
   }
   const legacy = !('original_name' in entry);
@@ -49,6 +70,7 @@ export function normalizeEntry(entry) {
     created: entry.created,
     source: mediaSource(entry.source),
     credit: storedCredit(entry.credit),
+    url: hasUrl ? entry.url : null,
   };
 }
 
@@ -148,6 +170,7 @@ export function adoptStrayFiles(db, mediaDir) {
       created: statSync(path).mtime.toISOString(),
       source: null,
       credit: null,
+      url: null,
     });
     adopted.push(name);
   }
@@ -172,11 +195,14 @@ export function syncMediaFromSite(ws, db) {
 }
 
 /**
- * Whether a library entry's file is gone from the media folder.
+ * Whether a library entry's file is gone from the media folder. A linked
+ * entry (one with a `url`) has no file, so it is never missing.
  * @param {string} mediaDir
  * @param {string} filename
+ * @param {string|null} [url] the entry's remote image, for a linked entry
  * @returns {boolean}
  */
-export function isMissing(mediaDir, filename) {
+export function isMissing(mediaDir, filename, url = null) {
+  if (url) return false;
   return !existsSync(join(mediaDir, filename));
 }

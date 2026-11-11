@@ -31,7 +31,7 @@ afterEach(() => {
 
 const entry = (o = {}) => ({
   id: 'aaaa1111', filename: 'a-aaaa11.png', original_name: 'a.png', mime_type: 'image/png',
-  size: 10, width: 3, height: 2, alt: 'An a', edited_from: null, created: '2026-01-01T00:00:00.000Z', source: null, credit: null, ...o,
+  size: 10, width: 3, height: 2, alt: 'An a', edited_from: null, created: '2026-01-01T00:00:00.000Z', source: null, credit: null, url: null, ...o,
 });
 const writeJson = (entries) => {
   mkdirSync(ws.contentDir, { recursive: true });
@@ -158,6 +158,48 @@ describe('malformed media.json entries', () => {
     assert.deepEqual(rows().map((r) => r.id), ['aaaa1111', 'cccc3333']);
     assert.equal(console.warn.mock.callCount(), 1);
     assert.match(console.warn.mock.calls[0].arguments[0], /aaaa1111[\s\S]*a-aaaa11\.png/);
+  });
+});
+
+describe('linked (Unsplash) entries', () => {
+  const URL_U = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';
+  const linked = (o = {}) => entry({
+    id: 'llll0001', filename: 'unsplash-u1', original_name: 'unsplash-u1', mime_type: 'image/jpeg', size: 0,
+    width: 2400, height: 1600, source: 'unsplash', credit: { name: 'Sam', site: 'Unsplash' }, url: URL_U, ...o,
+  });
+
+  it('a linked entry round-trips with its url', () => {
+    writeJson([linked()]);
+    assert.deepEqual(loadMediaJson(ws, db), { loaded: 1 });
+    assert.equal(rows()[0].url, URL_U);
+    assert.equal(rows()[0].source, 'unsplash');
+    writeMediaJson(ws, db);
+    const [written] = JSON.parse(readFileSync(join(ws.contentDir, 'media.json'), 'utf8'));
+    assert.equal(written.url, URL_U);
+    assert.deepEqual(Object.keys(written), MEDIA_FIELDS);
+  });
+
+  it('a url that is not https on images.unsplash.com drops the entry with a warning', () => {
+    writeJson([
+      linked({ id: 'bad00001', filename: 'unsplash-a', url: 'http://images.unsplash.com/x' }),
+      linked({ id: 'bad00002', filename: 'unsplash-b', url: 'https://evil.example/x.jpg' }),
+      linked({ id: 'bad00003', filename: 'unsplash-c', url: 'https://images.unsplash.com.evil.example/x' }),
+      linked({ id: 'bad00004', filename: 'unsplash-d', url: 'not a url' }),
+      linked({ id: 'bad00005', filename: 'unsplash-e', url: 5 }),
+      linked(),
+      entry({ id: 'cccc3333', filename: 'c.png', url: '' }),
+    ]);
+    assert.deepEqual(loadMediaJson(ws, db), { loaded: 2 });
+    assert.deepEqual(rows().map((r) => r.id).sort(), ['cccc3333', 'llll0001']);
+    assert.equal(rows().find((r) => r.id === 'cccc3333').url, null);
+    assert.equal(console.warn.mock.callCount(), 5);
+  });
+
+  it('a linked entry is never missing, and is not touched by stray adoption', () => {
+    writeJson([linked()]);
+    assert.deepEqual(syncMediaFromSite(ws, db), { adopted: [] });
+    assert.equal(isMissing(ws.mediaDir, 'unsplash-u1', URL_U), false);
+    assert.equal(isMissing(ws.mediaDir, 'unsplash-u1'), true);
   });
 });
 

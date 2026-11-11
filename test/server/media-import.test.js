@@ -26,9 +26,16 @@ const PEXELS_CREDIT = { name: 'Jane', url: 'https://www.pexels.com/@jane', site:
 function fakeWebImages() {
   const results = new Map();
   const images = new Map();
+  const pings = [];
   return {
     results,
     images,
+    pings,
+    pingAnswer: null,
+    async pingDownload(id) {
+      pings.push(id);
+      if (this.pingAnswer) throw this.pingAnswer;
+    },
     get: (source, id) => results.get(`${source}|${id}`) ?? null,
     async image(source, id) {
       const answer = images.get(`${source}|${id}`);
@@ -66,6 +73,8 @@ describe('media import and credits', () => {
   beforeEach(() => {
     webImages.results.clear();
     webImages.images.clear();
+    webImages.pings.length = 0;
+    webImages.pingAnswer = null;
   });
 
   const call = async (method, path, body) => {
@@ -125,12 +134,122 @@ describe('media import and credits', () => {
       assert.deepEqual(files(), before);
     });
 
-    it('a link-only source is 400', async () => {
-      offer({ ...pexels(), source: 'unsplash', id: 'u1', mode: 'link' }, { data: jpeg(2, 2), contentType: 'image/jpeg' });
-      const before = files();
-      const { status } = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
-      assert.equal(status, 400);
-      assert.deepEqual(files(), before);
+    describe('a link-mode (Unsplash) result', () => {
+      const UNSPLASH_CREDIT = { name: 'Sam', url: 'https://unsplash.com/@sam', site: 'Unsplash', siteUrl: 'https://unsplash.com/photos/u1' };
+      const U_URL = 'https://images.unsplash.com/photo-u1?w=2400&fit=max&q=80&auto=format';
+      const unsplash = (o = {}) => ({
+        source: 'unsplash', id: 'u1', mode: 'link', thumb: 'https://images.unsplash.com/s', url: U_URL,
+        width: 2400, height: 1600, description: 'A hill', credit: UNSPLASH_CREDIT,
+        downloadLocation: 'https://api.unsplash.com/photos/u1/download', ...o,
+      });
+      beforeEach(() => db.prepare("DELETE FROM media WHERE source = 'unsplash'").run());
+
+      it('becomes a linked library item: no file, pinged once, 201', async () => {
+        offer(unsplash());
+        const before = files();
+        const { status, data } = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        assert.equal(status, 201);
+        assert.deepEqual(webImages.pings, ['u1']);
+        assert.deepEqual(files(), before);
+        assert.equal(data.filename, 'unsplash-u1');
+        assert.equal(data.mime_type, 'image/jpeg');
+        assert.equal(data.kind, 'image');
+        assert.equal(data.size, 0);
+        assert.equal(data.width, 2400);
+        assert.equal(data.height, 1600);
+        assert.equal(data.alt, 'A hill');
+        assert.equal(data.source, 'unsplash');
+        assert.deepEqual(data.credit, UNSPLASH_CREDIT);
+        assert.equal(data.src, U_URL);
+        assert.equal(data.missing, false);
+        assert.equal(data.linked, true);
+        assert.equal(db.prepare('SELECT url FROM media WHERE id = ?').get(data.id).url, U_URL);
+        const listed = (await call('GET', '/api/media')).data.find((m) => m.id === data.id);
+        assert.equal(listed.src, U_URL);
+        assert.equal(listed.linked, true);
+        assert.equal(listed.missing, false);
+      });
+
+      it('a given alt wins; no description is no alt yet', async () => {
+        offer(unsplash({ description: '' }));
+        assert.equal((await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' })).data.alt, null);
+        db.prepare("DELETE FROM media WHERE source = 'unsplash'").run();
+        assert.equal((await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1', alt: 'Mine' })).data.alt, 'Mine');
+      });
+
+      it('the same photo again pings again and answers the existing item (200)', async () => {
+        offer(unsplash());
+        const first = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        const again = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        assert.equal(again.status, 200);
+        assert.equal(again.data.id, first.data.id);
+        assert.deepEqual(webImages.pings, ['u1', 'u1']);
+        assert.equal(db.prepare("SELECT COUNT(*) AS n FROM media WHERE filename = 'unsplash-u1'").get().n, 1);
+      });
+
+      it('a failed ping stores nothing and answers its status', async () => {
+        offer(unsplash());
+        webImages.pingAnswer = Object.assign(new Error("Unsplash couldn't be told about the download"), { status: 502 });
+        const { status, data } = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        assert.equal(status, 502);
+        assert.equal(data.error, "Unsplash couldn't be told about the download");
+        assert.equal(db.prepare("SELECT COUNT(*) AS n FROM media WHERE filename = 'unsplash-u1'").get().n, 0);
+      });
+
+      it('a result whose url is not on images.unsplash.com is refused, unpinged', async () => {
+        offer(unsplash({ url: 'https://evil.example/x.jpg' }));
+        const { status } = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        assert.equal(status, 502);
+        assert.deepEqual(webImages.pings, []);
+        assert.equal(db.prepare("SELECT COUNT(*) AS n FROM media WHERE source = 'unsplash'").get().n, 0);
+      });
+
+      it('remote text never shapes the name: an odd id is slugged', async () => {
+        offer(unsplash({ id: '../x y' }));
+        const { status, data } = await call('POST', '/api/media/import', { source: 'unsplash', id: '../x y' });
+        assert.equal(status, 201);
+        assert.match(data.filename, /^unsplash-[\w-]+$/);
+      });
+
+      it('alt and credit edits work; delete removes only the row', async () => {
+        offer(unsplash());
+        const { data } = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        const edited = await call('PUT', `/api/media/${data.id}`, { alt: 'Hills', credit: { name: 'S. Am' } });
+        assert.equal(edited.status, 200);
+        assert.equal(edited.data.alt, 'Hills');
+        assert.deepEqual(edited.data.credit, { name: 'S. Am' });
+        assert.equal(edited.data.source, 'unsplash');
+        assert.equal(edited.data.src, U_URL);
+        const before = files();
+        const del = await call('DELETE', `/api/media/${data.id}`);
+        assert.equal(del.status, 200);
+        assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media WHERE id = ?').get(data.id).n, 0);
+        assert.deepEqual(files(), before);
+      });
+
+      it('Used in finds posts that use its URL; a published one blocks delete', async () => {
+        offer(unsplash());
+        const { data } = await call('POST', '/api/media/import', { source: 'unsplash', id: 'u1' });
+        const doc = {
+          meta: { title: 'Hills post', slug: 'hills-post', collection: 'posts', status: 'published', image: U_URL },
+          blocks: [{ type: 'figure', attrs: { src: U_URL, alt: 'A hill' }, children: [] }],
+        };
+        const created = await call('POST', '/api/documents', doc);
+        assert.equal(created.status, 201, JSON.stringify(created.data));
+        try {
+          const listed = (await call('GET', '/api/media')).data.find((m) => m.id === data.id);
+          assert.deepEqual(listed.usedIn.map((u) => u.title), ['Hills post']);
+          assert.equal((await call('DELETE', `/api/media/${data.id}`)).status, 409);
+        } finally {
+          await call('DELETE', `/api/documents/${created.data.id}`);
+        }
+      });
+
+      it('an ordinary file is linked: false', async () => {
+        offer(pexels(), { data: jpeg(2, 2), contentType: 'image/jpeg' });
+        const { data } = await call('POST', '/api/media/import', { source: 'pexels', id: '123' });
+        assert.equal(data.linked, false);
+      });
     });
 
     it('an image the search refuses as too large is 413, and nothing is stored', async () => {

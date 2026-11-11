@@ -41,6 +41,9 @@ const DEFAULT_TIMEOUT_MS = 8000;
 export const SOURCE_TIMEOUT_MS = Object.freeze({ openverse: 20_000 });
 /** An image is up to 25 MiB, so its download gets longer than a search. */
 const DEFAULT_IMAGE_TIMEOUT_MS = 30_000;
+/** Unsplash asks for the download ping; it should not hold up using the photo. */
+const PING_TIMEOUT_MS = 5000;
+const EXPIRED = 'Search again — this result has expired';
 
 const ttlOf = (source) => TTL[source] ?? DEFAULT_TTL;
 
@@ -151,15 +154,15 @@ export function createImageSearch({
    * entry in `errors`; it never fails the whole search. `ready` counts the
    * sources searched, so 0 means no image service is turned on.
    * @param {string} q
-   * @param {{ page?: number, for?: 'picker'|'library' }} [options]
+   * @param {{ page?: number, for?: 'picker'|'library' }} [options] every ready source is searched for
+   *   both: a link-mode (Unsplash) result added to the library becomes a linked item
    * @returns {Promise<{ results: WebImage[], errors: SearchError[], hasMore: boolean, ready: number }>}
    */
-  async function search(q, { page = 1, for: purpose = 'picker' } = {}) {
+  async function search(q, { page = 1 } = {}) {
     const query = String(q ?? '').trim();
     prune();
     const ready = new Set(servicesState(env).groups.flatMap((g) => g.services).filter((s) => s.ready).map((s) => s.id));
-    const sources = SERVICES.filter((s) => ADAPTERS[s.id] && ready.has(s.id))
-      .filter((s) => purpose !== 'library' || s.mode !== 'link');
+    const sources = SERVICES.filter((s) => ADAPTERS[s.id] && ready.has(s.id));
 
     // A source whose previous page said there is no more is not asked again.
     const exhausted = (s) => {
@@ -219,7 +222,7 @@ export function createImageSearch({
    */
   async function image(source, id, { maxBytes: cap = maxBytes, timeoutMs: deadline = imageTimeoutMs } = {}) {
     const item = get(source, id);
-    if (!item) throw Object.assign(new Error('Search again — this result has expired'), { status: 404 });
+    if (!item) throw Object.assign(new Error(EXPIRED), { status: 404 });
     const label = SERVICES.find((s) => s.id === source)?.label || source;
     const tooLarge = () => new SourceError(`${label} sent an image larger than ${formatBytes(cap)}`, 413);
     try {
@@ -243,5 +246,38 @@ export function createImageSearch({
     }
   }
 
-  return { search, get, image };
+  /**
+   * Tell Unsplash a cached photo is being used: its guidelines ask for a ping of the
+   * result's `download_location`, with the key. The key goes only to api.unsplash.com
+   * and never into an error message or a log. Rejects with `status`: 404 when the
+   * result is not cached (or its download_location is not Unsplash's API), 409 when
+   * Unsplash has no key, 502 when the ping fails.
+   * @param {string} id an Unsplash result's id
+   * @returns {Promise<void>}
+   */
+  async function pingDownload(id) {
+    const fail = (message, status) => Object.assign(new Error(message), { status });
+    const item = get('unsplash', id);
+    if (!item || !item.downloadLocation) throw fail(EXPIRED, 404);
+    let target;
+    try {
+      target = new URL(item.downloadLocation);
+    } catch {
+      throw fail(EXPIRED, 404);
+    }
+    if (target.protocol !== 'https:' || target.hostname !== 'api.unsplash.com') throw fail(EXPIRED, 404);
+    const key = serviceKey('unsplash', env);
+    if (!key) throw fail('Unsplash has no key; add it under Services', 409);
+    let ok = false;
+    try {
+      const answer = await fetchImpl(target.href, {
+        headers: { Authorization: `Client-ID ${key}` },
+        signal: AbortSignal.timeout(PING_TIMEOUT_MS),
+      });
+      ok = answer.ok;
+    } catch { /* reported below, without the error: it could carry the request */ }
+    if (!ok) throw fail("Unsplash couldn't be told about the download", 502);
+  }
+
+  return { search, get, image, pingDownload };
 }

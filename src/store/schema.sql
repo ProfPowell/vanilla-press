@@ -66,8 +66,9 @@ CREATE TABLE IF NOT EXISTS media (
   alt         TEXT, -- NULL: never written, '': decorative
   edited_from TEXT,
   created     TEXT NOT NULL,
-  source      TEXT, -- 'openverse' | 'pexels' | 'pixabay' | 'manual' | NULL
-  credit      TEXT  -- JSON Credit (media/credit.js), or NULL
+  source      TEXT, -- 'openverse' | 'pexels' | 'pixabay' | 'unsplash' | 'manual' | NULL
+  credit      TEXT, -- JSON Credit (media/credit.js), or NULL
+  url         TEXT  -- a linked item's remote image (https://images.unsplash.com/...): no file; NULL for a file
 );
 
 -- Authors table

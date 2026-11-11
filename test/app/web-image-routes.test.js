@@ -181,6 +181,40 @@ describe('web image routes', () => {
     });
   });
 
+  describe('POST /api/media/import of an Unsplash result', () => {
+    const importU1 = () => fetch(`${base}/api/media/import`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'unsplash', id: 'u1' }),
+    });
+
+    it('pings the download location exactly once and adds a linked item; the key never shows', async () => {
+      const res = await importU1();
+      assert.equal(res.status, 201);
+      const text = await res.text();
+      assert.equal(text.includes(KEY), false);
+      const item = JSON.parse(text);
+      assert.equal(item.linked, true);
+      assert.equal(item.filename, 'unsplash-u1');
+      assert.match(item.src, /^https:\/\/images\.unsplash\.com\/raw\?/);
+      assert.deepEqual(calls.map((c) => c.url), [DOWNLOAD]);
+      assert.equal(calls[0].headers.Authorization, `Client-ID ${KEY}`);
+      calls = [];
+      const again = await importU1();
+      assert.equal(again.status, 200);
+      assert.equal((await again.json()).id, item.id);
+      assert.deepEqual(calls.map((c) => c.url), [DOWNLOAD]);
+      db.prepare('DELETE FROM media').run();
+    });
+
+    it('a failed ping is 502, adds nothing and never shows the key', async () => {
+      pingAnswer = () => new Response(`bad key ${KEY}`, { status: 401 });
+      const res = await importU1();
+      assert.equal(res.status, 502);
+      assert.equal((await res.text()).includes(KEY), false);
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM media').get().n, 0);
+    });
+  });
+
   it('no route takes a URL', () => {
     const router = createRouter();
     mountServiceRoutes(router, { env, fetch: fakeFetch });

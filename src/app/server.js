@@ -23,6 +23,7 @@ import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git
 import { migrateVpTheme } from './site-theme.js';
 import { mountThemeRoutes } from './theme-routes.js';
 import { mountProgramRoutes } from './program-routes.js';
+import { mountServiceRoutes } from './service-routes.js';
 import { clearTmp } from '../programs/import.js';
 import { createLivePrograms } from '../programs/usage.js';
 import { findSiteVb } from '../themes/site-vb.js';
@@ -362,6 +363,8 @@ export async function startApp({
   }
 
   const app = createRouter();
+
+  mountServiceRoutes(app, { env });
 
   app.add('GET', '/api/sites', async (req, res) => {
     const sites = await Promise.all(listSites({ env }).map(async (site) => {

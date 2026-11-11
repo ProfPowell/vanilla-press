@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createImageSearch } from '../../src/services/image-search.js';
+import { createImageSearch, SOURCE_TIMEOUT_MS } from '../../src/services/image-search.js';
 import { updateService } from '../../src/services/store.js';
 import { MAX_BYTES } from '../../src/media/limits.js';
 
@@ -89,8 +89,22 @@ describe('image search', () => {
     const fetch = fakeFetch({ pexels: () => new Promise(() => {}) });
     const search = createImageSearch({ env, fetch, now, timeoutMs: 20 });
     const out = await search.search('fox', { page: 1 });
-    assert.deepEqual(out.errors, [{ source: 'pexels', label: 'Pexels', message: "Pexels didn't answer in time" }]);
+    assert.deepEqual(out.errors, [{ source: 'pexels', label: 'Pexels', message: "Pexels didn't answer in time. Try again in a moment." }]);
     assert.equal(out.results.filter((r) => r.source === 'openverse').length, 2);
+  });
+
+  it('Openverse, slow without a key, gets its own longer deadline', async () => {
+    const late = (file) => () => new Promise((resolve) => setTimeout(() => resolve(new Response(readFileSync(join(FIXTURES, file)))), 60));
+    const fetch = fakeFetch({ openverse: late('openverse.json'), pexels: () => new Promise(() => {}) });
+    const search = createImageSearch({ env, fetch, now, timeoutMs: 20, sourceTimeoutMs: { openverse: 500 } });
+    const out = await search.search('fox', { page: 1 });
+    assert.equal(out.results.filter((r) => r.source === 'openverse').length, 2);
+    assert.deepEqual(out.errors.map((e) => e.source), ['pexels']);
+  });
+
+  it('by default Openverse waits 20 seconds, the others 8', () => {
+    assert.equal(SOURCE_TIMEOUT_MS.openverse, 20_000);
+    assert.equal(SOURCE_TIMEOUT_MS.pexels, undefined);
   });
 
   it('a network failure never leaks the key', async () => {
@@ -173,7 +187,7 @@ describe('image search', () => {
     const fetch = fakeFetch({ pexels: stalled });
     const search = createImageSearch({ env, fetch, now, timeoutMs: 50 });
     const out = await search.search('fox', { page: 1 });
-    assert.deepEqual(out.errors, [{ source: 'pexels', label: 'Pexels', message: "Pexels didn't answer in time" }]);
+    assert.deepEqual(out.errors, [{ source: 'pexels', label: 'Pexels', message: "Pexels didn't answer in time. Try again in a moment." }]);
     assert.equal(out.results.length, 6);
   });
 

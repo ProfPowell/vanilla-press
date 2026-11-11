@@ -34,6 +34,11 @@ const HOUR = 60 * 60 * 1000;
 const TTL = { pixabay: 24 * HOUR };
 const DEFAULT_TTL = HOUR;
 const DEFAULT_TIMEOUT_MS = 8000;
+/**
+ * Sources that need longer than the default to answer a search. Openverse,
+ * used without a key, often takes 10-13 seconds on a query it hasn't cached.
+ */
+export const SOURCE_TIMEOUT_MS = Object.freeze({ openverse: 20_000 });
 /** An image is up to 25 MiB, so its download gets longer than a search. */
 const DEFAULT_IMAGE_TIMEOUT_MS = 30_000;
 
@@ -49,14 +54,17 @@ class SourceError extends Error {
 
 /**
  * @param {{ env?: NodeJS.ProcessEnv, fetch?: typeof globalThis.fetch,
- *   now?: () => number, timeoutMs?: number, imageTimeoutMs?: number, maxBytes?: number }} [options]
- *   timeoutMs covers a whole search request, body included; imageTimeoutMs a whole image download.
+ *   now?: () => number, timeoutMs?: number, sourceTimeoutMs?: Record<string, number>,
+ *   imageTimeoutMs?: number, maxBytes?: number }} [options]
+ *   timeoutMs covers a whole search request, body included; sourceTimeoutMs overrides it
+ *   per source; imageTimeoutMs covers a whole image download.
  */
 export function createImageSearch({
   env = process.env,
   fetch: fetchImpl = globalThis.fetch,
   now = Date.now,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  sourceTimeoutMs = SOURCE_TIMEOUT_MS,
   imageTimeoutMs = DEFAULT_IMAGE_TIMEOUT_MS,
   maxBytes = MAX_BYTES,
 } = {}) {
@@ -87,7 +95,7 @@ export function createImageSearch({
     const controller = new AbortController();
     let timer;
     const deadline = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new SourceError(`${label} didn't answer in time`, 504)), ms);
+      timer = setTimeout(() => reject(new SourceError(`${label} didn't answer in time. Try again in a moment.`, 504)), ms);
     });
     const work = (async () => read(await fetchImpl(url, { ...init, signal: controller.signal })))();
     work.catch(() => {}); // after the deadline wins, its rejection is expected
@@ -131,7 +139,7 @@ export function createImageSearch({
         throw new SourceError(`${label} sent an answer that couldn't be read`);
       }
       return adapter.normalize(json, { page });
-    });
+    }, sourceTimeoutMs[service.id] ?? timeoutMs);
     const at = now();
     searches.set(cacheKey, { at, value });
     for (const item of value.results) items.set(`${item.source}|${item.id}`, { at, item });

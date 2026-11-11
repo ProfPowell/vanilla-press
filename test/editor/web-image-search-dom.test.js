@@ -103,6 +103,14 @@ describe('<web-image-search>', () => {
     assert.equal(status.querySelector('a'), null);
   });
 
+  it('when every source failed, it does not claim nothing was found', async () => {
+    const el = mount();
+    answers.push({ results: [], errors: [{ source: 'openverse', label: 'Openverse', message: "Openverse didn't answer in time. Try again in a moment." }], hasMore: false, ready: 1 });
+    await submit(el, 'cat');
+    const status = el.querySelector('.web-image-search-status');
+    assert.equal(status.textContent, 'No images came back this time.');
+  });
+
   it('per-source errors are announced, in a polite live region', async () => {
     const el = mount();
     answers.push({ results: [result('1')], errors: [{ source: 'pixabay', label: 'Pixabay', message: "Pixabay didn't accept the key" }], hasMore: false });

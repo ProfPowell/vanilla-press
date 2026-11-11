@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync, existsSync, readdirSync, readFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateService, serviceKey, servicesState, readServices } from '../../src/services/store.js';
@@ -72,5 +72,39 @@ describe('services store', () => {
   it('reads an unreadable file as empty', () => {
     writeFileSync(join(dir, 'services.json'), '{not json');
     assert.deepEqual(readServices(env), {});
+  });
+
+  it('the temp file is 0600 before it is renamed, on create and on rewrite', () => {
+    const seen = [];
+    const hooks = { beforeRename: (tmp) => seen.push(statSync(tmp).mode & 0o777) };
+    updateService('pexels', { key: 'abc' }, env, hooks);
+    updateService('pexels', { key: 'def' }, env, hooks);
+    assert.deepEqual(seen, [0o600, 0o600]);
+    assert.equal(statSync(join(dir, 'services.json')).mode & 0o777, 0o600);
+  });
+
+  it('creates a missing config dir as 0700 and leaves an existing one alone', () => {
+    const fresh = join(dir, 'new', 'cfg');
+    updateService('pexels', { key: 'abc' }, { VP_CONFIG_DIR: fresh });
+    assert.equal(statSync(fresh).mode & 0o777, 0o700);
+    chmodSync(dir, 0o755);
+    updateService('pexels', { key: 'abc' }, env);
+    assert.equal(statSync(dir).mode & 0o777, 0o755);
+  });
+
+  it('a corrupt file is set aside, not overwritten, on the next save', (t) => {
+    const warn = t.mock.method(console, 'warn', () => {});
+    writeFileSync(join(dir, 'services.json'), '{"pexels":{"key":"OLD-SECRET"} oops');
+    assert.deepEqual(readServices(env), {});
+    updateService('pixabay', { key: 'new' }, env);
+    const kept = readdirSync(dir).filter((f) => f.startsWith('services.json.corrupt-'));
+    assert.equal(kept.length, 1);
+    assert.match(readFileSync(join(dir, kept[0]), 'utf8'), /OLD-SECRET/);
+    assert.equal(statSync(join(dir, kept[0])).mode & 0o777, 0o600);
+    assert.deepEqual(readServices(env), { pixabay: { key: 'new' } });
+    assert.equal(warn.mock.callCount(), 1);
+    const msg = warn.mock.calls[0].arguments.join(' ');
+    assert.match(msg, /services\.json/);
+    assert.equal(msg.includes('OLD-SECRET'), false);
   });
 });

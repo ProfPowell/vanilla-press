@@ -7,10 +7,9 @@
  * @module services/store
  */
 
-import { existsSync, readFileSync, chmodSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync, chmodSync, renameSync, mkdirSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { configDir } from '../app/registry.js';
-import { writeFileAtomic } from '../sync/atomic-write.js';
 import { SERVICES, SERVICE_GROUPS } from './catalog.js';
 
 /**
@@ -38,10 +37,33 @@ export function readServices(env = process.env) {
   }
 }
 
-function writeServices(data, env) {
+/** Set a file that cannot be parsed aside, so a save does not destroy what it held. */
+function setCorruptAside(file) {
+  if (!existsSync(file)) return;
+  try {
+    JSON.parse(readFileSync(file, 'utf8'));
+    return;
+  } catch { /* unreadable: set aside below */ }
+  const aside = `${file}.corrupt-${Date.now()}`;
+  renameSync(file, aside);
+  chmodSync(aside, 0o600);
+  console.warn(`Vanilla Press: ${file} could not be read; kept as ${aside} and starting fresh.`);
+}
+
+/** Write with the key never readable by others: 0600 from creation, 0700 for a new dir. */
+function writeServices(data, env, { beforeRename } = {}) {
   const file = servicesFile(env);
-  writeFileAtomic(file, `${JSON.stringify(data, null, 2)}\n`);
-  chmodSync(file, 0o600);
+  mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+  const tmp = `${file}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+    chmodSync(tmp, 0o600); // a leftover temp file keeps its old mode through writeFileSync
+    beforeRename?.(tmp);
+    renameSync(tmp, file);
+  } catch (err) {
+    rmSync(tmp, { force: true });
+    throw err;
+  }
 }
 
 function stateOf(service, stored) {
@@ -63,11 +85,13 @@ function stateOf(service, stored) {
  * @param {string} id
  * @param {{ key?: string|null, enabled?: boolean }} change
  * @param {NodeJS.ProcessEnv} [env]
+ * @param {{ beforeRename?: (tmp: string) => void }} [hooks] - for tests
  * @returns {ServiceState}
  */
-export function updateService(id, { key, enabled } = {}, env = process.env) {
+export function updateService(id, { key, enabled } = {}, env = process.env, hooks = {}) {
   const service = SERVICES.find((s) => s.id === id);
   if (!service) throw new Error(`Unknown service: ${id}`);
+  setCorruptAside(servicesFile(env));
   const all = readServices(env);
   const entry = { ...all[id] };
   if (key !== undefined) {
@@ -76,7 +100,7 @@ export function updateService(id, { key, enabled } = {}, env = process.env) {
   }
   if (enabled !== undefined) entry.enabled = Boolean(enabled);
   if (Object.keys(entry).length) all[id] = entry; else delete all[id];
-  writeServices(all, env);
+  writeServices(all, env, hooks);
   return stateOf(service, entry);
 }
 

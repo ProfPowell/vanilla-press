@@ -24,6 +24,9 @@ function titleCase(id) {
     .map((word) => word[0].toUpperCase() + word.slice(1)).join(' ');
 }
 
+/** The licenses a credit line covers; the API's own filter is not trusted alone. */
+const ALLOWED = new Set(['by', 'cc0', 'pdm']);
+
 /** CC BY carries a license line; CC0 and the public-domain mark need none. */
 function licenseOf(item) {
   if (item.license !== 'by') return { license: '', licenseUrl: '' };
@@ -35,7 +38,7 @@ function licenseOf(item) {
  * @param {{ page?: number }} [options]
  */
 export function normalize(json, { page = json?.page ?? 1 } = {}) {
-  const results = withUrl((json?.results || []).map((item) => ({
+  const results = withUrl((json?.results || []).filter((item) => ALLOWED.has(item?.license)).map((item) => ({
     source: 'openverse',
     id: String(item.id),
     mode: 'copy',

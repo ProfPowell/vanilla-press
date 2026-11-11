@@ -58,6 +58,14 @@ describe('openverse adapter', () => {
     assert.deepEqual(openverse.normalize(json, { page: 1 }).results.map((r) => r.id), ['9f2c1d8e-0000-4a5b-9c7d-112233445566']);
   });
 
+  it('normalize: drops any result whose license is not by, cc0 or pdm', () => {
+    const json = fixture('openverse');
+    const base = json.results[0];
+    json.results = ['by', 'cc0', 'pdm', 'by-sa', 'by-nc', 'by-nd', 'by-nc-sa', 'sampling+', undefined]
+      .map((license, i) => ({ ...base, id: `id-${i}`, license }));
+    assert.deepEqual(openverse.normalize(json, { page: 1 }).results.map((r) => r.id), ['id-0', 'id-1', 'id-2']);
+  });
+
   it('normalize: the last page has no more', () => {
     const json = { ...fixture('openverse'), page: 12 };
     assert.equal(openverse.normalize(json, { page: 12 }).hasMore, false);

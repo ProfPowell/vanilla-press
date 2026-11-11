@@ -37,9 +37,23 @@
   color: var(--color-text);
 }
 
-.block-palette .palette-item:hover,
+/* One highlight only: the selected option (what Enter picks). Typing and the
+ * arrow keys move it, and so does a moving pointer (block-palette.js), so
+ * there is no separate :hover tint for a resting pointer to leave behind. */
 .block-palette .palette-item.selected {
-  background: var(--color-background);
+  background: color-mix(in oklab, var(--color-interactive) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-interactive);
+}
+
+.block-palette .palette-item.selected .palette-label {
+  font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  .block-palette .palette-item.selected {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }
 
 .block-palette .palette-item .palette-icon {

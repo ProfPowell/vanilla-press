@@ -196,6 +196,11 @@ export class BlockPalette {
   constructor() {
     this.el = document.createElement('div');
     this.el.className = 'block-palette';
+    // Options are announced as a listbox; the editor keeps focus, and the
+    // selected option is marked with aria-selected (and shown by .selected).
+    this.el.setAttribute('role', 'listbox');
+    this.el.setAttribute('aria-label', 'Blocks');
+    this.el.id = `block-palette-${Math.random().toString(36).slice(2, 8)}`;
     document.body.appendChild(this.el);
 
     this.items = [];
@@ -499,9 +504,11 @@ export class BlockPalette {
       for (const entry of entries) {
         const item = document.createElement('div');
         item.className = 'palette-item';
-        if (this.items.length === this.selected) {
-          item.classList.add('selected');
-        }
+        item.setAttribute('role', 'option');
+        item.id = `${this.el.id}-${this.items.length}`;
+        const isSelected = this.items.length === this.selected;
+        item.classList.toggle('selected', isSelected);
+        item.setAttribute('aria-selected', String(isSelected));
         // textContent: component labels/descriptions come from package manifests
         const icon = document.createElement('span');
         icon.className = 'palette-icon';
@@ -525,7 +532,10 @@ export class BlockPalette {
           }
         });
         const idx = this.items.length;
-        item.addEventListener('mouseenter', () => {
+        // mousemove, not mouseenter: a resting pointer that the menu opens or
+        // scrolls under must not take the selection from the arrow keys.
+        item.addEventListener('mousemove', () => {
+          if (this.selected === idx) return;
           this.selected = idx;
           this.highlightSelected();
         });
@@ -544,7 +554,9 @@ export class BlockPalette {
 
   highlightSelected() {
     for (let i = 0; i < this.items.length; i++) {
-      this.items[i].el.classList.toggle('selected', i === this.selected);
+      const isSelected = i === this.selected;
+      this.items[i].el.classList.toggle('selected', isSelected);
+      this.items[i].el.setAttribute('aria-selected', String(isSelected));
     }
   }
 }

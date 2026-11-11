@@ -28,6 +28,16 @@ describe('app static pages', () => {
     assert.match(await res.text(), /<title>Site/);
   });
 
+  it('/app/services.html serves the Services page; Sites and the site rail link to it', async () => {
+    const res = await fetch(`${app.url}/app/services.html`);
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /<title>Services/);
+    for (const page of ['/', '/app/site.html']) {
+      const html = await (await fetch(`${app.url}${page}`)).text();
+      assert.match(html, /<a href="\/app\/services\.html"[^>]*>Services<\/a>/, page);
+    }
+  });
+
   it('both pages load Vanilla Breeze as a module', async () => {
     for (const page of ['/', '/app/site.html']) {
       const html = await (await fetch(`${app.url}${page}`)).text();
@@ -36,7 +46,7 @@ describe('app static pages', () => {
   });
 
   it('serves the page scripts and styles', async () => {
-    for (const p of ['app.css', 'js/app-api.js', 'js/sites-page.js', 'js/site-page.js']) {
+    for (const p of ['app.css', 'js/app-api.js', 'js/sites-page.js', 'js/site-page.js', 'js/services-page.js', 'js/services-view.js']) {
       const res = await fetch(`${app.url}/app/assets/${p}`);
       assert.equal(res.status, 200, p);
     }

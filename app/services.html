@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Services - Vanilla Press</title>
+<link rel="icon" href="/brand/favicon.ico" sizes="any"/>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml"/>
+<link rel="apple-touch-icon" href="/brand/png/apple-touch-icon.png"/>
+<link rel="manifest" href="/brand/site.webmanifest"/>
+<meta name="theme-color" content="#23314F"/>
+<link rel="stylesheet" href="/assets/vb/vanilla-breeze.css"/>
+<link rel="stylesheet" href="/brand/tokens.css"/>
+<link rel="stylesheet" href="/app/assets/brand-ui.css"/>
+<link rel="stylesheet" href="/app/assets/app.css"/>
+<script type="module" src="/assets/vb/vanilla-breeze.js"></script>
+<script type="module" src="/app/assets/js/services-page.js"></script>
+</head>
+<body>
+<header class="topbar on-ink">
+  <p class="wordmark"><img src="/brand/svg/seal-vanilla-medium.svg" alt="" width="28" height="28"/>Vanilla Press</p>
+  <nav aria-label="App" class="topbar-nav">
+    <a href="/">Sites</a>
+    <a href="/app/services.html" aria-current="page">Services</a>
+  </nav>
+</header>
+<main class="app-page services-page">
+  <a href="/" class="rail-back back"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>All sites</a>
+  <header class="page-head">
+    <div>
+      <h1>Services</h1>
+      <p class="lede">Outside services every site on this machine can use. Keys stay on this machine: they are never sent to the browser or put in a site.</p>
+    </div>
+  </header>
+  <p id="error" class="error" role="alert" hidden></p>
+  <p id="status" class="services-status" role="status"></p>
+  <div id="groups" class="service-groups"><p class="muted">Loading services...</p></div>
+</main>
+</body>
+</html>

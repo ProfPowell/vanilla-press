@@ -85,7 +85,15 @@ const KEEP_EMPTY = ['alt'];
 export const COMPONENT_TAG_MESSAGE = 'A component name needs a hyphen, like site-search';
 const COMPONENT_TAG = /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/;
 const SLOT_NAME = /^[A-Za-z][A-Za-z0-9_-]*$/;
-const ALIAS = /^[A-Za-z_$][\w$]*$/;
+/** Cook's repeat grammar: alias and index are `\w+` (and a name starts with a letter or _). */
+const ALIAS = /^[A-Za-z_]\w*$/;
+/** Cook's field keys (cook-ssg check.js PLAIN_KEY, SLOT_KEY). */
+const PLAIN_KEY = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
+const SLOT_KEY = /^slot:([\w-]+)$/;
+/** Attribute names a raw pair can't use: event handlers, and those with their own control or that are structural. */
+const RESERVED_ATTRS = ['data-if', 'data-unless', 'data-repeat', 'data-include', 'data-layout-info', 'data-template'];
+const reservedAttr = (name) => /^on/i.test(name) || RESERVED_ATTRS.includes(String(name).toLowerCase());
+export const COMPONENT_NAME_MESSAGE = 'This component needs a name, like site-search';
 const COUNT = /^\d+$/;
 
 // HELPERS
@@ -268,7 +276,7 @@ function showFields(node, ctx) {
   const { key, mode } = conditionOf(node);
   const options = keyOptions(ctx, { slots: true });
   return [
-    { key: 'show.key', label: 'Show only when', type: 'combo', value: key, options, group: 'show' },
+    { key: 'show.key', label: 'Show only when', type: 'combo', value: key, options, group: 'show', error: keyError(key, ctx, { condition: true }) },
     {
       key: 'show.mode', label: 'Show it when that is', type: 'select', value: mode, group: 'show', disabled: key === '',
       options: [opt('if', 'set'), opt('unless', 'not set')],
@@ -302,7 +310,7 @@ function componentFields(node, ctx, pairs) {
   const def = ctx.components[tag];
   const fields = [{
     key: 'tag', label: 'Component', type: 'combo', value: tag, options: known.map(t => opt(t)),
-    group: 'block', required: true, error: tag && !COMPONENT_TAG.test(tag) ? COMPONENT_TAG_MESSAGE : null,
+    group: 'block', required: true, error: !tag ? COMPONENT_NAME_MESSAGE : !COMPONENT_TAG.test(tag) ? COMPONENT_TAG_MESSAGE : null,
   }];
   const defs = (def?.attributes || []).filter(a => a && a.name && !COMMON_ATTRS.includes(a.name)
     && !['data-if', 'data-unless', 'data-repeat'].includes(a.name));
@@ -383,7 +391,10 @@ export function inspectorFields(node, context = {}) {
       own.push({ key: 'name', label: 'Fills region', type: 'text', value: node.attrs.name, group: 'block' });
       break;
     case 'field':
-      own.push({ key: 'name', label: 'Field', type: 'combo', value: node.attrs.name, options: keyOptions(ctx), group: 'block' });
+      own.push({
+        key: 'name', label: 'Field', type: 'combo', value: node.attrs.name, options: keyOptions(ctx), group: 'block',
+        error: keyError(node.attrs.name, ctx, { condition: false }),
+      });
       break;
     case 'comment':
       own.push({ key: 'text', label: 'Comment', type: 'textarea', value: node.attrs.text, group: 'block' });
@@ -397,17 +408,47 @@ export function inspectorFields(node, context = {}) {
 // APPLY
 // -----------------------------
 /**
+ * Why a field key (a field atom's, or Show only when's) isn't one Cook
+ * accepts, or null. Shapes as Cook's checker: a plain key (`title`,
+ * `post.title`) or, for a condition, `slot:<name>`. With a context, the
+ * key's root must be a document, site or declared field or an alias in
+ * scope, and a slot one the layout declares (as Cook's `unknown field`).
+ * @param {string} key
+ * @param {Object|null} context - null: the shape only
+ * @param {{ condition: boolean }} opts
+ */
+export function keyError(key, context, { condition }) {
+  const k = String(key ?? '').trim();
+  if (condition && k === '') return null;
+  const slot = condition ? k.match(SLOT_KEY) : null;
+  if (!slot && !PLAIN_KEY.test(k)) {
+    return condition ? `"${k}" must name one field, slot:name or item.field` : `"${k}" isn't a field name (like title or post.title)`;
+  }
+  if (!context) return null;
+  const ctx = normalizeContext(context);
+  if (slot) return ctx.slots.includes(slot[1]) ? null : `slot "${slot[1]}" isn't a region this layout declares`;
+  const root = k.split('.')[0];
+  const aliases = ctx.repeats.flatMap(r => [r.alias, r.index].filter(Boolean));
+  const known = [...ctx.documentFields, ...ctx.siteFields, ...ctx.declaredFields, ...aliases];
+  return known.includes(root) ? null : `unknown field "${k}"`;
+}
+
+/**
  * Why a value can't be set, or null.
  * @param {Object} node
  * @param {string|{ key: string }} field
  * @param {*} value
+ * @param {Object|null} [context] - as inspectorFields (with `repeats` and `slots`); without it only shapes are checked
  * @returns {string|null}
  */
-export function fieldError(node, field, value) {
+export function fieldError(node, field, value, context = null) {
   const key = typeof field === 'string' ? field : field.key;
   const type = typeOf(node);
   const v = typeof value === 'string' ? value.trim() : value;
+  if (key === 'show.key') return keyError(v, context, { condition: true });
+  if (key.startsWith('attr:') && reservedAttr(key.slice(5))) return `${key.slice(5)} can't be set here`;
   if (key === 'tag' && (type === 'component' || type === 'inline_component')) {
+    if (!v) return COMPONENT_NAME_MESSAGE;
     if (!COMPONENT_TAG.test(v)) return COMPONENT_TAG_MESSAGE;
     if (LAYOUT_ELEMENTS.includes(v)) return `${v} is a layout element: add it as a container`;
   }
@@ -415,13 +456,18 @@ export function fieldError(node, field, value) {
     if (!SLOT_NAME.test(v)) return 'A region name starts with a letter and uses letters, digits, - and _';
     if (v === 'head' && type === 'slot_ref') return '"head" is kept for head items';
   }
-  if (key === 'name' && type === 'field' && !/^[A-Za-z_$][\w$]*(\.[\w$]+)*$/.test(v)) return 'A field is a name like title or post.title';
+  if (key === 'name' && type === 'field') {
+    const error = keyError(v, context, { condition: false });
+    if (error) return error;
+  }
   if ((key === 'repeat.limit' || key === 'repeat.offset') && v !== '' && !COUNT.test(String(v))) return 'Use a whole number';
   if (key === 'repeat.alias' && !ALIAS.test(v)) return 'Use a single word, like post';
   if (key === 'repeat.index' && v !== '' && !ALIAS.test(v)) return 'Use a single word, like i';
   if (key === 'attrs' && Array.isArray(value)) {
     const bad = value.find(([k]) => !/^[A-Za-z_:][-\w.:]*$/.test(k));
     if (bad) return `"${bad[0]}" isn't an attribute name`;
+    const reserved = value.find(([k]) => reservedAttr(String(k).trim()));
+    if (reserved) return `${reserved[0]} can't be set here`;
   }
   return null;
 }
@@ -516,6 +562,31 @@ export function applyField(node, field, value) {
     default:
       return attrs;
   }
+}
+
+/**
+ * Attrs (a node's, or a mark's) with every `slot:<from>` condition renamed
+ * to `slot:<to>`: the `if`/`unless` node attrs and `data-if`/`data-unless`
+ * pairs. Null when nothing names the slot.
+ * @param {Object} attrs
+ * @param {string} from
+ * @param {string} to
+ * @returns {Object|null}
+ */
+export function renameSlotConditions(attrs, from, to) {
+  const old = `slot:${from}`;
+  let changed = false;
+  const out = { ...attrs };
+  for (const k of ['if', 'unless']) {
+    if (typeof out[k] === 'string' && out[k].trim() === old) { out[k] = `slot:${to}`; changed = true; }
+  }
+  if (Array.isArray(out.attrs)) {
+    out.attrs = out.attrs.map(([k, v]) => {
+      if ((k === 'data-if' || k === 'data-unless') && String(v).trim() === old) { changed = true; return [k, `slot:${to}`]; }
+      return [k, v];
+    });
+  }
+  return changed ? out : null;
 }
 
 // MARKS

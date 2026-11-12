@@ -21,7 +21,7 @@
 
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import {
-  inspectorFields, applyField, fieldError, repeatsAt, markRange, linkWouldNest, setPair, MARK_ATTRS,
+  inspectorFields, applyField, fieldError, repeatsAt, markRange, linkWouldNest, setPair, renameSlotConditions, MARK_ATTRS,
 } from './inspector-model.js';
 import { setSlotLabel } from './convert.js';
 import { layoutViolations, addsViolation } from './palette.js';
@@ -85,6 +85,8 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
   const prefix = `le-insp-${++ids}`;
   let signature = null;
   let message = '';
+  /** The context the fields were drawn with (fields, lists, repeats and slots in scope). */
+  let drawnContext = null;
 
   // WHAT IS SELECTED
   // -----------------------------
@@ -153,7 +155,7 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
       render(view.state, true);
       return;
     }
-    const error = fieldError(node, field, value);
+    const error = fieldError(node, field, value, drawnContext);
     if (error) {
       say(error);
       return;
@@ -165,9 +167,33 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
       tr.setSelection(NodeSelection.create(tr.doc, pos));
     }
     const renamed = node.type.name === 'slot_ref' && field.key === 'name' && attrs.name !== node.attrs.name;
+    if (renamed) renameConditions(tr, node.attrs.name, attrs.name);
     if (renamed && !commitRename(view, tr, node.attrs.name, attrs.name)) return;
     if (!renamed && !commit(view, tr)) return;
     render(view.state, true);
+  }
+
+  /** In `tr`: every `slot:<from>` condition (node attrs, pairs, inline elements) becomes `slot:<to>`. */
+  function renameConditions(tr, from, to) {
+    const edits = [];
+    tr.doc.descendants((node, pos) => {
+      const attrs = renameSlotConditions(node.attrs, from, to);
+      if (attrs) edits.push({ pos, attrs, node });
+      for (const mark of node.marks) {
+        const markAttrs = renameSlotConditions(mark.attrs, from, to);
+        if (markAttrs) edits.push({ pos, mark, markAttrs, node });
+      }
+    });
+    // Attrs only: positions don't move
+    for (const e of edits) {
+      if (e.mark) {
+        tr.removeMark(e.pos, e.pos + e.node.nodeSize, e.mark).addMark(e.pos, e.pos + e.node.nodeSize, e.mark.type.create(e.markAttrs));
+      } else {
+        const sel = tr.selection;
+        tr.setNodeMarkup(e.pos, null, e.attrs);
+        if (sel instanceof NodeSelection && sel.from === e.pos) tr.setSelection(NodeSelection.create(tr.doc, e.pos));
+      }
+    }
   }
 
   /** Rename a slot: its info entry moves to the new name (unless that name has one). */
@@ -383,6 +409,7 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
     const slotLabels = Object.fromEntries(Object.entries(meta.info?.slots || {})
       .map(([k, v]) => [k, v && typeof v === 'object' && typeof v.label === 'string' ? v.label : '']));
     const context = { ...(getContext() || {}), repeats: repeatsAt(state.doc, t.pos), slots: slotNames(state), slotLabels };
+    drawnContext = context;
     const fields = inspectorFields(t.node, context);
     for (const [group, heading] of GROUPS) {
       const own = fields.filter(f => f.group === group);

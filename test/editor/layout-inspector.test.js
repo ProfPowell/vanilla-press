@@ -182,6 +182,56 @@ describe('applyField', () => {
   });
 });
 
+describe('validation (fix round 1)', () => {
+  const p = s.nodes.text_block.create();
+  it('Show only when takes one plain key or slot:<name>, and a known one', () => {
+    assert.match(fieldError(p, 'show.key', 'foo bar', CONTEXT), /must name one field/);
+    assert.match(fieldError(p, 'show.key', 'nope', CONTEXT), /unknown field "nope"/);
+    assert.match(fieldError(p, 'show.key', 'slot:nowhere', CONTEXT), /slot "nowhere"/);
+    assert.match(fieldError(p, 'show.key', 'slot:a b', CONTEXT), /must name one field/);
+    assert.equal(fieldError(p, 'show.key', 'slot:aside', CONTEXT), null);
+    assert.equal(fieldError(p, 'show.key', 'siteTitle', CONTEXT), null);
+    assert.equal(fieldError(p, 'show.key', 'title', CONTEXT), null);
+    assert.equal(fieldError(p, 'show.key', '', CONTEXT), null);
+    assert.equal(fieldError(p, 'show.key', 'post.title', { ...CONTEXT, repeats: [{ source: 'collections.posts', alias: 'post', pipes: [] }] }), null);
+    // An unknown current value shows inline
+    const shown = field(inspectorFields(s.nodes.text_block.create({ if: 'nope' }), CONTEXT), 'show.key');
+    assert.match(shown.error, /unknown field "nope"/);
+  });
+
+  it('a field atom takes a Cook plain key that is known', () => {
+    const f = s.nodes.field.create({ name: 'title' });
+    assert.match(fieldError(f, 'name', 'foo bar', CONTEXT), /isn't a field name|one field/);
+    assert.match(fieldError(f, 'name', 'nope', CONTEXT), /unknown field "nope"/);
+    assert.match(fieldError(f, 'name', 'x.1', CONTEXT), /field/);
+    assert.equal(fieldError(f, 'name', 'subtitle', CONTEXT), null);
+    assert.equal(fieldError(f, 'name', 'siteTitle.x', CONTEXT), null);
+  });
+
+  it('raw attribute pairs refuse event handlers and reserved names', () => {
+    const c = s.nodes.component.create({ tag: 'my-thing' });
+    for (const name of ['onclick', 'ONLOAD', 'data-if', 'data-unless', 'data-repeat', 'data-include', 'data-layout-info', 'data-template']) {
+      assert.ok(fieldError(c, 'attrs', [[name, 'x']]), name);
+      assert.deepEqual(applyField(c, 'attrs', [[name, 'x']]).attrs, [], name);
+    }
+    assert.equal(fieldError(c, 'attrs', [['data-mode', 'x']]), null);
+    assert.ok(fieldError(c, 'attr:onclick', 'x'));
+  });
+
+  it('alias and index are one \\w word (Cook\'s repeat grammar)', () => {
+    const li = s.nodes.menu_item.create({ repeat: { source: 'programs', pipes: [], alias: 'program' } });
+    assert.ok(fieldError(li, 'repeat.alias', '$x'));
+    assert.ok(fieldError(li, 'repeat.index', '$i'));
+    assert.equal(fieldError(li, 'repeat.alias', '_x1'), null);
+  });
+
+  it('an unnamed component shows that it needs a name', () => {
+    const tag = field(inspectorFields(s.nodes.component.create({ tag: '' }), CONTEXT), 'tag');
+    assert.match(tag.error, /needs a name/);
+    assert.match(field(inspectorFields(s.nodes.inline_component.create({ tag: '' }), CONTEXT), 'tag').error, /needs a name/);
+  });
+});
+
 describe('marks', () => {
   /** A doc with "one <a>two</a> three <a>four</a>" (two links with equal attrs). */
   function linked() {
@@ -306,6 +356,27 @@ describe('inspector panel', () => {
     // Renaming keeps the entry under the new name
     change(h.el.querySelector('[data-field="name"]'), 'extras');
     assert.deepEqual(docToTree(h.doc(), h.meta).info.slots, { extras: { label: 'Extras', hint: 'x' } });
+    h.inspector.destroy();
+  });
+
+  it('renaming the starter base\'s aside slot rewrites slot:aside conditions; Cook accepts the result', async () => {
+    const cook = await import('/Users/tpowell/src/cook/scripts/layouts.js');
+    const src = readFileSync('/Users/tpowell/src/cook/starters/vanilla-breeze/src/layouts/base.html', 'utf8');
+    const opts = { fields: ['siteTitle', 'siteTagline', 'navItems'], lists: ['programs', 'programAreas', 'navItems'] };
+    const parsed = cook.parseLayout(src, opts);
+    assert.ok(parsed.ok, JSON.stringify(parsed.problems));
+    const h = harness(parsed.tree, (doc) => {
+      let at = null;
+      doc.descendants((node, pos) => { if (at === null && node.type.name === 'slot_ref' && node.attrs.name === 'aside') at = pos; });
+      return NodeSelection.create(doc, at);
+    });
+    change(h.el.querySelector('[data-field="name"]'), 'side');
+    const out = cook.serializeLayout(docToTree(h.doc(), h.meta));
+    assert.match(out, /data-if="slot:side"/);
+    assert.doesNotMatch(out, /slot:aside/);
+    const checked = cook.checkLayout(out, opts);
+    assert.ok(checked.ok, JSON.stringify(checked.problems));
+    assert.equal(h.view.dispatched, 1);
     h.inspector.destroy();
   });
 

@@ -247,6 +247,9 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
   function control(field, pos) {
     const id = `${prefix}-${field.key.replace(/[^\w-]/g, '_')}`;
     const wrap = el('div', { class: `le-insp-field le-insp-${field.type}` });
+    // A disabled field depends on one before it (a repeat's list, a condition's
+    // value): hidden until that is set, so the panel shows no dead boxes
+    wrap.hidden = Boolean(field.disabled);
     const label = el('label', { for: id }, field.label);
     let input;
     switch (field.type) {
@@ -306,7 +309,7 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
       n.value = name;
       const v = el('input', { type: 'text', 'data-pair-value': '', 'aria-label': 'Value', autocomplete: 'off' });
       v.value = value;
-      const x = el('button', { type: 'button', class: 'quiet', 'data-pair-remove': '', 'aria-label': `Remove ${name || 'attribute'}` }, '×');
+      const x = el('button', { type: 'button', class: 'ghost small', 'data-pair-remove': '', 'aria-label': `Remove ${name || 'attribute'}` }, '×');
       n.addEventListener('change', () => applyNodeField(pos, field, collect()));
       v.addEventListener('change', () => applyNodeField(pos, field, collect()));
       x.addEventListener('click', () => { r.remove(); applyNodeField(pos, field, collect()); });
@@ -314,7 +317,7 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
       return r;
     };
     for (const pair of field.value) rows.append(row(pair));
-    const add = el('button', { type: 'button', class: 'quiet', 'data-pair-add': '' }, 'Add attribute');
+    const add = el('button', { type: 'button', class: 'secondary small', 'data-pair-add': '' }, 'Add attribute');
     add.addEventListener('click', () => {
       const r = row();
       rows.append(r);
@@ -333,7 +336,7 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
       if (!node.type.name.endsWith('_body')) steps.push({ node, pos: $pos.before(d) });
     }
     for (const step of steps) {
-      const b = el('button', { type: 'button', class: 'quiet' }, nodeName(step.node));
+      const b = el('button', { type: 'button', class: 'le-crumb' }, nodeName(step.node));
       b.addEventListener('click', () => selectNode(step.pos));
       nav.append(b, el('span', { 'aria-hidden': 'true' }, ' › '));
     }
@@ -366,7 +369,7 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
         input.addEventListener('change', () => setMarkAttr(mark, attr, input.value));
         box.append(el('label', { for: id }, attr), input);
       }
-      const remove = el('button', { type: 'button', class: 'quiet', 'data-mark-remove': mark.type.name }, 'Remove');
+      const remove = el('button', { type: 'button', class: 'secondary small', 'data-mark-remove': mark.type.name }, 'Remove');
       remove.addEventListener('click', () => removeMark(mark));
       box.append(remove);
       section.append(box);

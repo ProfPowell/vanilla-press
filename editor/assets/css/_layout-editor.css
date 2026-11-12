@@ -19,6 +19,19 @@
   background: var(--color-background);
   border-block-end: 1px solid var(--color-border-subtle);
   font-family: var(--font-sans);
+  /* Compact fields: the bar is chrome, not a form */
+  --input-height: 2.25rem;
+}
+
+.le-page .le-bar :is(input, select) {
+  min-block-size: var(--input-height);
+  padding-block: 0;
+  font-size: 0.875rem;
+}
+
+.le-page .le-bar .le-actions button {
+  min-block-size: var(--input-height);
+  padding-block: 0;
 }
 
 .le-page .le-back {
@@ -250,9 +263,32 @@
   color: var(--color-text-muted);
 }
 
-.le-inspector .le-insp-path button {
-  padding: 0;
-  font-size: inherit;
+.le-inspector .le-insp-path .le-crumb {
+  all: unset;
+  color: var(--color-interactive);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.le-inspector .le-insp-path .le-crumb:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.le-inspector {
+  --input-height: 2.25rem;
+}
+
+.le-inspector :is(input:not([type="checkbox"]), select) {
+  min-block-size: var(--input-height);
+  padding-block: 0;
+  font-size: 0.875rem;
+}
+
+.le-inspector .le-insp-field[hidden] {
+  display: none;
 }
 
 .le-inspector .le-insp-path strong {

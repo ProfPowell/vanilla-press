@@ -388,6 +388,17 @@ describe('inspector panel', () => {
     h.inspector.destroy();
   });
 
+  it('hides the repeat details until a list is chosen', () => {
+    const h = harness(fragment([{ type: 'menu', tag: 'ul', attrs: [], items: [{ attrs: [], inline: [{ text: 'Home' }] }] }]), nodeSel('menu_item'));
+    const wrapOf = (key) => h.el.querySelector(`[data-field="${key}"]`).closest('.le-insp-field');
+    assert.equal(wrapOf('repeat.source').hidden, false);
+    assert.equal(wrapOf('repeat.limit').hidden, true);
+    assert.equal(wrapOf('show.mode').hidden, true);
+    change(h.el.querySelector('[data-field="repeat.source"]'), 'collections.posts');
+    assert.equal(wrapOf('repeat.limit').hidden, false);
+    h.inspector.destroy();
+  });
+
   it('a refused change (a second main) shows why and changes nothing', () => {
     const base = {
       kind: 'base', info: { format: 1, label: 'B', slots: {} }, parent: null, vars: [], pageLayout: null, htmlAttrs: [], head: [],

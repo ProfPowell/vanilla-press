@@ -325,3 +325,13 @@
 .ProseMirror [data-region][data-region-hidden] .pm-region-label {
   font-style: italic;
 }
+
+/* ProseMirror's own stylesheet (not loaded): the separator image it puts after
+ * an inline atom must stay an invisible inline box. VB's img rules otherwise
+ * give it a block box and a 100px minimum height. */
+.ProseMirror img.ProseMirror-separator {
+  display: inline !important;
+  min-block-size: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+}

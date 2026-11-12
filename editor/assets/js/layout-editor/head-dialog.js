@@ -212,11 +212,11 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
       const li = el('li', { 'data-head-item': String(i), 'aria-current': item === editing ? 'true' : null });
       const summary = el(isRegion(item) ? 'span' : 'code', { class: 'le-head-summary' }, headItemSummary(item, meta));
       const actions = el('span', { class: 'le-head-actions' });
-      if (!isRegion(item)) actions.append(el('button', { type: 'button', class: 'quiet', 'data-head-edit': true }, 'Edit'));
+      if (!isRegion(item)) actions.append(el('button', { type: 'button', class: 'ghost small', 'data-head-edit': true }, 'Edit'));
       actions.append(
-        el('button', { type: 'button', class: 'quiet', 'data-head-up': true, 'aria-label': 'Move up', disabled: !canMoveHeadItem(meta, i, -1) }, '↑'),
-        el('button', { type: 'button', class: 'quiet', 'data-head-down': true, 'aria-label': 'Move down', disabled: !canMoveHeadItem(meta, i, 1) }, '↓'),
-        el('button', { type: 'button', class: 'quiet', 'data-head-remove': true }, 'Remove'),
+        el('button', { type: 'button', class: 'ghost small', 'data-head-up': true, 'aria-label': 'Move up', disabled: !canMoveHeadItem(meta, i, -1) }, '↑'),
+        el('button', { type: 'button', class: 'ghost small', 'data-head-down': true, 'aria-label': 'Move down', disabled: !canMoveHeadItem(meta, i, 1) }, '↓'),
+        el('button', { type: 'button', class: 'ghost small', 'data-head-remove': true }, 'Remove'),
       );
       li.append(summary, actions);
       return li;
@@ -239,7 +239,7 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
     const v = el('input', { type: 'text', 'data-head-attr-value': true, 'aria-label': 'Value', placeholder: 'value', spellcheck: 'false' });
     n.value = name;
     v.value = value;
-    const rm = el('button', { type: 'button', class: 'quiet', 'data-head-attr-remove': true, 'aria-label': 'Remove attribute' }, 'Remove');
+    const rm = el('button', { type: 'button', class: 'ghost small', 'data-head-attr-remove': true, 'aria-label': 'Remove attribute' }, 'Remove');
     row.append(n, v, rm);
     return row;
   }
@@ -261,7 +261,7 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
     form.append(el('legend', {}, `Edit <${editing.tag}>`));
     const attrs = el('div', { class: 'le-head-attrs', 'data-head-attrs': true });
     for (const [k, v] of editing.attrs || []) attrs.append(attrRow(k, v));
-    form.append(attrs, el('button', { type: 'button', class: 'quiet', 'data-head-attr-add': true }, 'Add attribute'));
+    form.append(attrs, el('button', { type: 'button', class: 'secondary small', 'data-head-attr-add': true }, 'Add attribute'));
     if (!VOID.has(editing.tag)) {
       const id = `${prefix}-text`;
       const body = BODY_TAGS.has(editing.tag)

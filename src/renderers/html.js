@@ -39,6 +39,21 @@ export function render(doc, options = {}) {
   }
 }
 
+/**
+ * The document's regions as slot templates for Cook's layouts: one
+ * `<template slot="name">` per non-empty region (sorted by name), holding the
+ * bare content render of its blocks, joined by newlines. '' without regions.
+ * @param {Object} doc
+ * @returns {string}
+ */
+export function renderRegions(doc) {
+  const regions = doc && doc.regions && typeof doc.regions === 'object' && !Array.isArray(doc.regions) ? doc.regions : {};
+  return Object.keys(regions).sort()
+    .filter((name) => Array.isArray(regions[name]) && regions[name].length > 0)
+    .map((name) => `<template slot="${escapeAttr(name)}">${renderContent({ ...doc, blocks: regions[name] }, { bare: true })}</template>`)
+    .join('\n');
+}
+
 // --- Scope renderers ---
 
 /**

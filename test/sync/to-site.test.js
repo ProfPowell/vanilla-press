@@ -447,3 +447,42 @@ describe('merge fixes', () => {
     assert.ok(readManifest(ws).documents[doc.id]);
   });
 });
+
+describe('syncDocument layouts, regions, imageAlt', () => {
+  const para = (t) => ({ type: 'paragraph', children: [{ type: 'text', value: t }] });
+  const read = () => readFileSync(p('src/posts/hello.html'), 'utf8');
+
+  it('meta.layout overrides the collection layout; absent uses the collection', () => {
+    syncDocument(ws, mk(simple(), { layout: 'docs' }), {});
+    assert.ok(read().includes('layout: "docs"'));
+    syncDocument(ws, simple(), {});
+    assert.ok(read().includes('layout: "post"'));
+  });
+
+  it('writes imageAlt from mediaAlt; omits it when null', () => {
+    const doc = mk(simple(), { image: '/media/a.jpg' });
+    syncDocument(ws, doc, { mediaAlt: (src) => (src === '/media/a.jpg' ? 'A barn' : null) });
+    assert.ok(read().includes('imageAlt: "A barn"'));
+    syncDocument(ws, doc, { mediaAlt: () => null });
+    assert.ok(!read().includes('imageAlt'));
+    syncDocument(ws, doc, {});
+    assert.ok(!read().includes('imageAlt'));
+  });
+
+  it('writes regions as templates in sorted order before the body; skips empty', () => {
+    const doc = { ...simple(), regions: { sidebar: [para('side')], aside: [para('asd')], empty: [] } };
+    syncDocument(ws, doc, {});
+    const body = read().split('\n---\n')[1];
+    assert.ok(body.startsWith('<template slot="aside">'));
+    assert.ok(body.indexOf('slot="aside"') < body.indexOf('slot="sidebar"'));
+    assert.ok(body.indexOf('</template>') < body.indexOf('<p>CSS layers'));
+    assert.ok(!body.includes('slot="empty"'));
+  });
+
+  it('protects ${ inside a region', () => {
+    const doc = { ...simple(), regions: { aside: [para('cost ${x}')] } };
+    syncDocument(ws, doc, {});
+    assert.ok(!read().includes('${'));
+    assert.ok(read().includes('$<!---->{x}'));
+  });
+});

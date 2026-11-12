@@ -22,10 +22,10 @@ export function localDay(iso) {
  * `vp_id`, marks the page as written by Vanilla Press for that document (see
  * readVpId).
  * @param {{ id: string, meta: Object }} doc
- * @param {{ layout: string }} options
+ * @param {{ layout: string, imageAlt?: string|null }} options
  * @returns {string} `---\n...\n---\n`
  */
-export function frontMatter(doc, { layout }) {
+export function frontMatter(doc, { layout, imageAlt }) {
   const m = doc.meta;
   const dateSrc = m.published || m.created;
   const tags = Array.isArray(m.tags) ? m.tags.filter(Boolean) : [];
@@ -38,6 +38,7 @@ export function frontMatter(doc, { layout }) {
     ['author', m.author_id],
     ['tags', tags.length ? `[${tags.map((t) => JSON.stringify(t)).join(',')}]` : ''],
     ['image', m.image],
+    ['imageAlt', imageAlt],
     ['theme', m.theme],
     ['themeScope', m.theme ? (m.themeScope || 'page') : ''],
     ['layout', layout],

@@ -4,6 +4,7 @@
  * @module cli/run
  */
 
+import { mediaAltLookup } from '../media/alt-lookup.js';
 import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync } from 'node:fs';
 import { join, dirname, resolve, extname } from 'node:path';
@@ -104,7 +105,7 @@ function trySaveAndSync(db, doc) {
   const saved = saveDocument(db, doc);
   if (ws.syncEnabled) {
     try {
-      syncDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
+      syncDocument(ws, saved, { mediaAlt: mediaAltLookup(db), collectionsConfig: getCollectionsConfig(db), previousDoc });
     } catch (err) {
       return { problem: `saved, but not synced: ${err.message}` };
     }

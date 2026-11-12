@@ -7,6 +7,7 @@
  * @module server/api
  */
 
+import { mediaAltLookup } from '../media/alt-lookup.js';
 import crypto from 'node:crypto';
 import { join } from 'node:path';
 import { rmSync, existsSync } from 'node:fs';
@@ -155,7 +156,7 @@ export function mountApi(router, db, options) {
   function syncSaved(res, saved, previousDoc) {
     if (!ws) return true;
     try {
-      syncDocument(ws, saved, { collectionsConfig: getCollectionsConfig(db), previousDoc });
+      syncDocument(ws, saved, { mediaAlt: mediaAltLookup(db), collectionsConfig: getCollectionsConfig(db), previousDoc });
       synced(saved.id, saved.meta);
       return true;
     } catch (err) {

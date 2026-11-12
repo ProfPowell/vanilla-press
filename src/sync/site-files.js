@@ -6,6 +6,7 @@
  * @module sync/site-files
  */
 
+import { mediaAltLookup } from '../media/alt-lookup.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { getConfig } from '../store/config.js';
@@ -109,7 +110,7 @@ export function syncAll(ws, db) {
   for (const id of ids) {
     const doc = getDocument(db, id);
     try {
-      syncDocument(ws, doc, { collectionsConfig, previousDoc: doc });
+      syncDocument(ws, doc, { mediaAlt: mediaAltLookup(db), collectionsConfig, previousDoc: doc });
       synced++;
     } catch (err) {
       conflicts.push(err instanceof SyncConflictError ? err.path : `${id}: ${err.message}`);

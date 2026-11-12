@@ -14,7 +14,7 @@
 
 import { existsSync, readFileSync, readdirSync, rmSync, rmdirSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
-import { render } from '../renderers/html.js';
+import { render, renderRegions } from '../renderers/html.js';
 import { frontMatter, readVpId } from './front-matter.js';
 import { collectionOutput, outputPaths } from './paths.js';
 import { writeFileAtomic } from './atomic-write.js';
@@ -209,6 +209,9 @@ export function checkSync(ws, doc, { collectionsConfig, previousDoc } = {}) {
   }
 }
 
+/** Region templates, then the body (a newline between when both exist). */
+const joinRegions = (regions, body) => (regions ? `${regions}\n${body}` : body);
+
 /**
  * Sync a document. Writes the JSON; if published, the HTML page; removes
  * this document's own files at its old paths; records the local manifest
@@ -219,21 +222,22 @@ export function checkSync(ws, doc, { collectionsConfig, previousDoc } = {}) {
  * (see protectBody); the front matter is left as is.
  * @param {import('../workspace/workspace.js').Workspace} ws
  * @param {Object} doc
- * @param {{ collectionsConfig?: Object, previousDoc?: Object, render?: Function }} [options] - previousDoc: the stored version before this save; `render` overrides the renderer (tests)
+ * @param {{ collectionsConfig?: Object, previousDoc?: Object, render?: Function, mediaAlt?: (src: string) => string|null }} [options] - previousDoc: the stored version before this save; `render` overrides the renderer (tests)
  * @returns {{ written: string[], removed: string[] }}
  * @throws {SyncConflictError} when the target JSON (or the JSON a rename would delete) changed on disk
  */
-export function syncDocument(ws, doc, { collectionsConfig, previousDoc, render: renderFn = render } = {}) {
+export function syncDocument(ws, doc, { collectionsConfig, previousDoc, render: renderFn = render, mediaAlt } = {}) {
   checkSync(ws, doc, { collectionsConfig, previousDoc });
-  const { layout } = collectionOutput(doc.meta.collection, collectionsConfig);
+  const layout = doc.meta.layout || collectionOutput(doc.meta.collection, collectionsConfig).layout;
+  const imageAlt = mediaAlt && doc.meta.image ? mediaAlt(doc.meta.image) : null;
   const paths = outputPaths(doc, collectionsConfig);
   const manifest = readManifest(ws);
   const previous = previousPaths(manifest, doc.id, previousDoc, collectionsConfig);
 
   const jsonText = JSON.stringify(doc, null, 2) + '\n';
   const htmlText = paths.html
-    ? frontMatter(doc, { layout }) +
-      protectBody(renderFn(doc, { scope: 'content', bare: true })) + '\n'
+    ? frontMatter(doc, { layout, imageAlt }) +
+      protectBody(joinRegions(renderRegions(doc), renderFn(doc, { scope: 'content', bare: true }))) + '\n'
     : null;
 
   const written = [];

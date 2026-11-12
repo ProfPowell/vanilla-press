@@ -7,6 +7,7 @@
  * @module app/publish
  */
 
+import { mediaAltLookup } from '../media/alt-lookup.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -198,7 +199,7 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
     throw new PublishRejectedError(status, body);
   }
   const saved = saveDocument(db, candidate);
-  syncDocument(ws, saved, { collectionsConfig, previousDoc: previous });
+  syncDocument(ws, saved, { mediaAlt: mediaAltLookup(db), collectionsConfig, previousDoc: previous });
 
   // The theme goes live with the post (R3): refresh theme.json's files from the site as it
   // is (a post with its own theme opts the site in, R4). A failed build puts it back.
@@ -246,7 +247,7 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
       updated: current.meta.updated === saved.meta.updated ? previous.meta.updated : current.meta.updated,
     };
     const restored = saveDocument(db, { ...current, meta: revert });
-    syncDocument(ws, restored, { collectionsConfig, previousDoc: current });
+    syncDocument(ws, restored, { mediaAlt: mediaAltLookup(db), collectionsConfig, previousDoc: current });
   };
   if (!build.ok) {
     revertStatus();

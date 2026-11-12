@@ -57,3 +57,16 @@ describe('frontMatter', () => {
     assert.doesNotMatch(frontMatter({ id: 'd', meta: { title: 'T' } }, { layout: 'post' }), /theme/);
   });
 });
+
+describe('frontMatter imageAlt', () => {
+  const doc = { id: 'd1', meta: { title: 'T', image: '/media/a.jpg' } };
+  it('writes imageAlt right after image', () => {
+    const fm = frontMatter(doc, { layout: 'post', imageAlt: 'A barn' });
+    assert.ok(fm.includes('image: "/media/a.jpg"\nimageAlt: "A barn"\n'));
+  });
+  it('omits it when null or empty', () => {
+    assert.ok(!frontMatter(doc, { layout: 'post', imageAlt: null }).includes('imageAlt'));
+    assert.ok(!frontMatter(doc, { layout: 'post', imageAlt: '' }).includes('imageAlt'));
+    assert.ok(!frontMatter(doc, { layout: 'post' }).includes('imageAlt'));
+  });
+});

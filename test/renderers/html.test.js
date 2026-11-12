@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { render } from '../../src/renderers/html.js';
+import { render, renderRegions } from '../../src/renderers/html.js';
 
 const fixture = (name) => JSON.parse(readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8'));
 
@@ -448,5 +448,17 @@ describe('html renderer', () => {
       const html = render(block, { scope: 'block' });
       assert.ok(html.includes('<sup>2</sup>'));
     });
+  });
+});
+
+describe('renderRegions', () => {
+  const para = (t) => ({ type: 'paragraph', children: [{ type: 'text', value: t }] });
+  it('is empty without regions', () => {
+    assert.equal(renderRegions({ id: 'd', meta: {}, blocks: [] }), '');
+    assert.equal(renderRegions({ id: 'd', meta: {}, blocks: [], regions: { a: [] } }), '');
+  });
+  it('wraps each non-empty region in a slot template, sorted, joined by newline', () => {
+    const out = renderRegions({ id: 'd', meta: {}, blocks: [], regions: { b: [para('B')], a: [para('A')] } });
+    assert.equal(out, '<template slot="a"><p>A</p></template>\n<template slot="b"><p>B</p></template>');
   });
 });

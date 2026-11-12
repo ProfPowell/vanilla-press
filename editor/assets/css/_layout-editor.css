@@ -1,0 +1,240 @@
+/* The layout editor page (editor/layout.html): the bar, three panes
+ * (canvas, inspector, preview) and the canvas's labelled boxes
+ * (layout-editor/views.js). Everything is scoped under .le-page. */
+
+.le-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+/* THE BAR */
+.le-page .le-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-xs) var(--size-m);
+  padding: var(--size-xs) var(--size-m);
+  background: var(--color-background);
+  border-block-end: 1px solid var(--color-border-subtle);
+  font-family: var(--font-sans);
+}
+
+.le-page .le-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2xs, 0.25rem);
+  color: inherit;
+  text-decoration: none;
+}
+
+.le-page .le-file {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.le-page .le-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-xs) var(--size-s);
+  flex: 1;
+}
+
+.le-page .le-fields[hidden],
+.le-page [hidden] {
+  display: none;
+}
+
+.le-page .le-field-input {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-xs);
+  font-size: 0.85rem;
+}
+
+.le-page .le-description input {
+  min-width: 16rem;
+}
+
+.le-page .le-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2xs, 0.25rem);
+  font-size: 0.85rem;
+}
+
+.le-page .le-actions {
+  display: flex;
+  gap: var(--size-xs);
+  margin-inline-start: auto;
+}
+
+.le-page .le-status {
+  flex-basis: 100%;
+  font-size: 0.85rem;
+}
+
+.le-page .le-status:empty {
+  display: none;
+}
+
+.le-page .le-status p {
+  margin: 0;
+  display: inline;
+}
+
+.le-page .le-status button {
+  margin-inline-start: var(--size-s);
+}
+
+.le-page .le-status .le-problems {
+  margin: var(--size-2xs, 0.25rem) 0 0;
+}
+
+/* THE PANES */
+.le-page .le-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(14rem, 0.6fr) minmax(0, 1fr);
+  min-height: 0;
+  margin: 0;
+}
+
+.le-page .le-canvas,
+.le-page .le-inspector,
+.le-page .le-preview {
+  overflow: auto;
+  min-height: 0;
+  padding: var(--size-m);
+}
+
+.le-page .le-inspector,
+.le-page .le-preview {
+  border-inline-start: 1px solid var(--color-border-subtle);
+}
+
+@media (max-width: 60rem) {
+  .le-page .le-panes {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+  }
+  .le-page .le-inspector,
+  .le-page .le-preview {
+    border-inline-start: none;
+    border-block-start: 1px solid var(--color-border-subtle);
+  }
+}
+
+/* THE CANVAS: labelled boxes */
+.le-canvas .ProseMirror {
+  outline: none;
+  font-family: var(--font-sans);
+}
+
+.le-canvas .le-block {
+  margin-block: var(--size-xs);
+  padding: var(--size-xs) var(--size-s);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface);
+}
+
+.le-canvas .le-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-xs);
+  align-items: baseline;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  user-select: none;
+  cursor: grab;
+}
+
+.le-canvas .le-name {
+  font-weight: 700;
+  text-transform: none;
+}
+
+.le-canvas .le-repeat,
+.le-canvas .le-cond {
+  padding-inline: var(--size-2xs, 0.25rem);
+  border-radius: var(--radius-s, 4px);
+  background: color-mix(in oklab, var(--color-interactive) 12%, transparent);
+  color: var(--color-text);
+}
+
+.le-canvas .le-region {
+  border-width: 2px;
+  background: color-mix(in oklab, var(--color-interactive) 4%, var(--color-surface));
+}
+
+.le-canvas .le-region > .le-label .le-name {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.le-canvas .le-container {
+  border-style: dashed;
+}
+
+.le-canvas .le-text {
+  display: flex;
+  gap: var(--size-s);
+  align-items: baseline;
+  border-color: transparent;
+  background: transparent;
+}
+
+.le-canvas .le-text > .le-label {
+  flex: none;
+  min-width: 2.5rem;
+}
+
+.le-canvas .le-text > .le-children {
+  flex: 1;
+  min-height: 1.4em;
+}
+
+.le-canvas .le-text[data-tag^="h"] > .le-children {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.le-canvas .le-content,
+.le-canvas .le-slot-ref {
+  padding: var(--size-m);
+  text-align: center;
+  border-style: dashed;
+  border-width: 2px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.le-canvas .le-content {
+  background: color-mix(in oklab, var(--color-interactive) 10%, var(--color-surface));
+}
+
+.le-canvas .le-tile .le-detail {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.le-canvas .le-field,
+.le-canvas .le-inline-component,
+.le-canvas .le-inline-image,
+.le-canvas .le-empty-inline {
+  display: inline-block;
+  padding: 0 var(--size-2xs, 0.25rem);
+  border-radius: var(--radius-s, 4px);
+  background: color-mix(in oklab, var(--color-interactive) 18%, transparent);
+  font-size: 0.9em;
+}
+
+.le-canvas .ProseMirror-selectednode {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 1px;
+}

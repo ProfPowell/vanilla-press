@@ -17,6 +17,7 @@
 @import "./_confirm-panel.css" layer(editor);
 @import "./_format-toolbar.css" layer(editor);
 @import "./_block-handles.css" layer(editor);
+@import "./_layout-editor.css" layer(editor);
 
 /*
  * A theme on a nested element (the writing area, the Appearance cards'

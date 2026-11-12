@@ -203,25 +203,37 @@ describe('layout-store', () => {
   });
 
   it('include usage: files directly in a program area count, program folders do not', async () => {
-    for (const area of ['demos', '/demos/']) {
+    const tag = '<div data-include="/includes/footer.html"></div>';
+    const usedWith = async (areas, mainJs) => {
       const dir = mk();
-      writeFileSync(join(dir, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: area, title: 'Demos' }], programs: [] }));
-      const tag = '<div data-include="/includes/footer.html"></div>';
+      writeFileSync(join(dir, 'config', 'programs.json'), JSON.stringify({ areas, programs: [] }));
+      if (mainJs) writeFileSync(join(dir, 'config', 'main.js'), mainJs);
       mkdirSync(join(dir, 'src/demos/plasma'), { recursive: true });
       writeFileSync(join(dir, 'src/demos/list.html'), tag);
       writeFileSync(join(dir, 'src/demos/plasma/index.html'), tag);
-      const r = await listLayoutFiles(dir);
-      const used = r.includes.find((e) => e.name === 'footer').usedBy;
-      assert.ok(used.includes('src/demos/list.html'), area);
-      assert.ok(!used.includes('src/demos/plasma/index.html'), area);
-    }
-    const dir = mk();
-    writeFileSync(join(dir, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: 'demos', title: 'Demos' }], programs: [] }));
-    mkdirSync(join(dir, 'src/demos/plasma'), { recursive: true });
+      return { dir, used: (await listLayoutFiles(dir)).includes.find((e) => e.name === 'footer').usedBy };
+    };
+    let { dir, used } = await usedWith([{ path: 'demos' }]);
+    assert.ok(used.includes('src/demos/list.html'));
+    assert.ok(!used.includes('src/demos/plasma/index.html'));
     writeFileSync(join(dir, 'src/demos/plasma/index.html'), '<div data-include="/includes/spare.html"></div>');
     await createLayoutFile(dir, { kind: 'include', name: 'spare', label: 'Spare', start: { type: 'blank' } });
     await deleteLayoutFile(dir, 'include', 'spare');
     assert.equal(existsSync(join(dir, 'src/includes/spare.html')), false);
+
+    // Not slugs, reserved names and buildOnlyPaths entries are not areas (Cook ignores them)
+    for (const path of ['/demos/', 'src/demos', 'Demos']) {
+      ({ used } = await usedWith([{ path }]));
+      assert.ok(used.includes('src/demos/plasma/index.html'), path);
+    }
+    ({ used } = await usedWith([{ path: 'demos' }], "export default { buildOnlyPaths: ['demos'] };\n"));
+    assert.ok(used.includes('src/demos/plasma/index.html'), 'buildOnlyPaths');
+    // a reserved name is no area: src/media/x/y.html is a page there
+    const r = mk();
+    writeFileSync(join(r, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: 'media' }], programs: [] }));
+    mkdirSync(join(r, 'src/media/x'), { recursive: true });
+    writeFileSync(join(r, 'src/media/x/index.html'), tag);
+    assert.ok((await listLayoutFiles(r)).includes.find((e) => e.name === 'footer').usedBy.includes('src/media/x/index.html'));
   });
 
   it('refuses a save that makes a parent cycle', async () => {

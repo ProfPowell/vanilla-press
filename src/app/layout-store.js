@@ -9,9 +9,10 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, rmdirSync, readdirSync } from 'node:fs';
+import { existsSync, statSync, readFileSync, rmSync, rmdirSync, readdirSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { LAYOUT_NAME } from '../schema/validate.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
 import { changedFiles } from '../git/git.js';
@@ -74,15 +75,43 @@ function problemsOf(entry, isInclude) {
 const INCLUDE_ATTR = /\binclude="([^"]+)"/gi;
 const INCLUDE_FILE = /<include-file\b[^>]*\bsrc="([^"]+)"/gi;
 
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const RESERVED_AREAS = ['media', 'assets', 'layouts', 'includes'];
+
+/** `buildOnlyPaths` from config/main.js, as usage.js in Cook reads it; [] when absent or broken. */
+async function buildOnlyPaths(siteDir) {
+  const file = join(siteDir, 'config', 'main.js');
+  if (!existsSync(file)) return [];
+  try {
+    const mod = await import(`${pathToFileURL(file).href}?t=${statSync(file).mtimeMs}`);
+    let value = mod.default ?? mod;
+    if (typeof value === 'function') value = await value();
+    return Array.isArray(value?.buildOnlyPaths) ? value.buildOnlyPaths.map((p) => String(p).replace(/^\/+|\/+$/g, '')) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Program area paths as Cook's normalizePrograms accepts them: a slug, not reserved and
+ * not a buildOnlyPaths entry. An area that collides with a page folder is kept.
+ */
+async function programAreas(siteDir) {
+  let raw;
+  try { raw = JSON.parse(await readFile(join(siteDir, 'config', 'programs.json'), 'utf8')); } catch { return []; }
+  const buildOnly = new Set(await buildOnlyPaths(siteDir));
+  const areas = [];
+  for (const a of Array.isArray(raw?.areas) ? raw.areas : []) {
+    const p = a && typeof a === 'object' ? a.path : undefined;
+    if (typeof p === 'string' && SLUG.test(p) && !RESERVED_AREAS.includes(p) && !buildOnly.has(p)) areas.push(p);
+  }
+  return areas;
+}
+
 /** Site-relative paths of the .html/.md files that may hold includes: pages, layouts and includes. */
 async function includeScanFiles(siteDir) {
   const src = join(siteDir, 'src');
-  let areas = [];
-  try {
-    const raw = JSON.parse(await readFile(join(siteDir, 'config', 'programs.json'), 'utf8'));
-    areas = (raw.areas || []).map((a) => a?.path).filter((p) => typeof p === 'string')
-      .map((p) => p.replace(/^\/+|\/+$/g, '')); // as Cook's normalizePrograms reads them (slugs, slashes trimmed)
-  } catch { /* no programs */ }
+  const areas = await programAreas(siteDir);
   const found = [];
   const walk = async (rel) => {
     let entries;

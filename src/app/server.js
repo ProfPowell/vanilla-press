@@ -24,6 +24,7 @@ import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git
 import { migrateVpTheme } from './site-theme.js';
 import { mountThemeRoutes } from './theme-routes.js';
 import { mountLayoutRoutes } from './layout-routes.js';
+import { layoutWritesPath } from './layout-writes.js';
 import { mountProgramRoutes } from './program-routes.js';
 import { mountServiceRoutes } from './service-routes.js';
 import { createImageSearch } from '../services/image-search.js';
@@ -238,6 +239,7 @@ export async function startApp({
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
       mountLayoutRoutes(router, prefix, {
         ws, writes, backup, deps: git, db, preview: layoutPreview(site), components: () => layoutComponents(roots),
+        writesLog: layoutWritesPath(configDir(env), site.id),
       });
       mountThemeRoutes(router, prefix, {
         site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,

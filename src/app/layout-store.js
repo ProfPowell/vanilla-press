@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, statSync, readFileSync, rmSync, rmdirSync, readdirSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LAYOUT_NAME } from '../schema/validate.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
@@ -19,6 +19,7 @@ import { changedFiles, GitNotConnectedError, GitConflictError, GitStashConflictE
 import { layoutMessage, THEME_PATHS } from './site-git.js';
 import { themeConflictResolver } from './site-theme.js';
 import { importCook as defaultImportCook, siteLayouts } from './site-layouts.js';
+import { readLayoutWrites, recordLayoutWrite, clearLayoutWrites } from './layout-writes.js';
 
 export const OLD_COOK_EDIT_MESSAGE = "This site's Cook is too old to edit layouts; update cook-ssg";
 export const CHANGED_ON_DISK = 'This layout changed on disk since you opened it';
@@ -34,6 +35,20 @@ export class LayoutError extends Error {
 }
 
 const sha1 = (text) => createHash('sha1').update(text).digest('hex');
+
+/** A site-relative path with forward slashes. */
+const siteRel = (siteDir, file) => relative(siteDir, file).split(sep).join('/');
+
+/**
+ * Whether the file at a site-relative path is still what VP last wrote there
+ * (or, for a recorded deletion, still missing). Anything else was changed outside VP.
+ */
+function vpWroteFile(siteDir, writes, path) {
+  if (!Object.hasOwn(writes, path)) return false;
+  const file = join(siteDir, path);
+  if (writes[path] === null) return !existsSync(file);
+  try { return sha1(readFileSync(file, 'utf8')) === writes[path]; } catch { return false; }
+}
 
 function check(kind, name) {
   if (kind !== 'layout' && kind !== 'include') throw new LayoutError(400, 'kind must be layout or include');
@@ -237,9 +252,10 @@ async function plainListing(siteDir) {
 
 /**
  * @param {string} siteDir
- * @param {{ importCook?: Function }} [opts]
+ * @param {{ importCook?: Function, writesLog?: string }} [opts] - writesLog: the record of what VP
+ *   wrote (layout-writes.js); an unpublished entry is `vpWrote` when its file still matches it
  */
-export async function listLayoutFiles(siteDir, { importCook = defaultImportCook } = {}) {
+export async function listLayoutFiles(siteDir, { importCook = defaultImportCook, writesLog } = {}) {
   let cook;
   try {
     cook = await loadCook(siteDir, importCook);
@@ -251,23 +267,26 @@ export async function listLayoutFiles(siteDir, { importCook = defaultImportCook 
   const usage = await cook.layoutUsage(siteDir);
   const dirty = await unpublishedFiles(siteDir);
   const incUsage = await includeUsage(siteDir);
-  const unpublished = (kind, file) => dirty.has(`src/${kind === 'layout' ? 'layouts' : 'includes'}/${file}`);
+  const writes = readLayoutWrites(writesLog);
+  const pathOf = (kind, file) => `src/${kind === 'layout' ? 'layouts' : 'includes'}/${file}`;
+  const unpublished = (kind, file) => dirty.has(pathOf(kind, file));
+  const vpWrote = (kind, file) => unpublished(kind, file) && vpWroteFile(siteDir, writes, pathOf(kind, file));
 
   return {
     supported: true,
     message: null,
-    deleted: deletedEntries(siteDir, dirty).map(({ kind, name }) => ({ kind, name })),
+    deleted: deletedEntries(siteDir, dirty).map(({ kind, name, path }) => ({ kind, name, vpWrote: vpWroteFile(siteDir, writes, path) })),
     layouts: layouts.map((e) => ({
       name: e.name, kind: 'layout', label: e.label || e.name, abstract: e.abstract === true, status: statusOf(e, false),
       problems: problemsOf(e, false), parent: e.parent ?? null,
       baseFor: usage.layouts[e.name] ?? [], usedBy: usage.pages[e.name] ?? [],
-      unpublished: unpublished('layout', e.file),
+      unpublished: unpublished('layout', e.file), vpWrote: vpWrote('layout', e.file),
     })),
     // An include in a sub-folder has a name with a slash: not addressable, so not listed.
     includes: includes.filter((e) => LAYOUT_NAME.test(e.name)).map((e) => ({
       name: e.name, kind: 'include', label: e.name, status: statusOf(e, true),
       problems: problemsOf(e, true), parent: null, baseFor: [], usedBy: incUsage[e.name] ?? [],
-      unpublished: unpublished('include', e.file),
+      unpublished: unpublished('include', e.file), vpWrote: vpWrote('include', e.file),
     })),
   };
 }
@@ -336,8 +355,9 @@ async function serializeChecked(cook, siteDir, kind, tree, names, parents, { nam
  * @param {'layout'|'include'} kind
  * @param {string} name
  * @param {{ tree: object, hash: string|null }} input - hash null: the file must not exist yet
+ * @param {{ importCook?: Function, writesLog?: string }} [opts] - writesLog: where VP records what it wrote
  */
-export async function saveLayoutFile(siteDir, kind, name, input, { importCook = defaultImportCook } = {}) {
+export async function saveLayoutFile(siteDir, kind, name, input, { importCook = defaultImportCook, writesLog } = {}) {
   check(kind, name);
   const { tree, hash } = input || {};
   if (!tree || typeof tree !== 'object' || Array.isArray(tree)) throw new LayoutError(400, 'tree is required');
@@ -363,6 +383,7 @@ export async function saveLayoutFile(siteDir, kind, name, input, { importCook = 
     if (sha1(current) !== hash) throw new LayoutError(409, CHANGED_ON_DISK);
   }
   writeFileAtomic(target, source);
+  recordLayoutWrite(writesLog, siteRel(siteDir, target), sha1(source));
   return { hash: sha1(source) };
 }
 
@@ -417,7 +438,7 @@ function blankBase(label) {
  * @param {{ kind: string, name: string, label: string, start: { type: 'child'|'copy'|'blank', from?: string } }} input
  * @returns {Promise<{ name: string, hash: string }>}
  */
-export async function createLayoutFile(siteDir, input, { importCook = defaultImportCook } = {}) {
+export async function createLayoutFile(siteDir, input, { importCook = defaultImportCook, writesLog } = {}) {
   const { kind, name, label, start } = input || {};
   check(kind, name);
   if (!text(label)) throw new LayoutError(400, 'label is required');
@@ -464,10 +485,11 @@ export async function createLayoutFile(siteDir, input, { importCook = defaultImp
 
   const source = await serializeChecked(cook, siteDir, kind, tree, all.names, all.layouts.map((e) => e.name));
   writeFileAtomic(target, source);
+  recordLayoutWrite(writesLog, siteRel(siteDir, target), sha1(source));
   return { name, hash: sha1(source) };
 }
 
-export async function deleteLayoutFile(siteDir, kind, name, { importCook = defaultImportCook } = {}) {
+export async function deleteLayoutFile(siteDir, kind, name, { importCook = defaultImportCook, writesLog } = {}) {
   check(kind, name);
   const cook = await loadCook(siteDir, importCook);
   const { entry } = await findEntry(siteDir, cook, kind, name);
@@ -482,6 +504,7 @@ export async function deleteLayoutFile(siteDir, kind, name, { importCook = defau
   }
   const file = fileOf(siteDir, kind, entry);
   rmSync(file);
+  recordLayoutWrite(writesLog, siteRel(siteDir, file), null);
   const dir = join(file, '..');
   if (kind === 'layout' && entry.file.includes('/') && readdirSync(dir).length === 0) rmdirSync(dir);
 }
@@ -495,9 +518,10 @@ export async function deleteLayoutFile(siteDir, kind, name, { importCook = defau
  * and `pushError` (the commit is kept and counted as unpushed). A rebase conflict throws.
  * @param {{ siteDir: string }} ws
  * @param {{ backup: object, deps: { gitStatus: Function, commitPaths: Function, push: Function },
- *   names?: Array<{ kind: string, name: string }>, writes?: Function, importCook?: Function }} options
+ *   names?: Array<{ kind: string, name: string }>, writes?: Function, importCook?: Function,
+ *   writesLog?: string }} options - writesLog: the record of what VP wrote; the published files' records are cleared
  */
-export async function publishLayouts(ws, { backup, deps, names = [], writes = (fn) => fn(), importCook = defaultImportCook }) {
+export async function publishLayouts(ws, { backup, deps, names = [], writes = (fn) => fn(), importCook = defaultImportCook, writesLog }) {
   if (!Array.isArray(names)) throw new LayoutError(400, 'files must be a list');
   for (const n of names) check(n?.kind, n?.name);
   const siteDir = ws.siteDir;
@@ -537,6 +561,8 @@ export async function publishLayouts(ws, { backup, deps, names = [], writes = (f
     }
 
     const sha = await deps.commitPaths(siteDir, chosen.map((e) => e.path), layoutMessage(chosen.map((e) => e.label)));
+    // Committed: these files match HEAD now, so what VP wrote to them is no longer pending.
+    clearLayoutWrites(writesLog, chosen.map((e) => e.path));
     if (!status.hasRemote || !status.hasUpstream) return { status: 'saved', sha, files: chosen.map((e) => e.path), ...(sha ? { unpushedCommit: true, pushError: null } : {}) };
     try {
       const pushed = await deps.push(siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });

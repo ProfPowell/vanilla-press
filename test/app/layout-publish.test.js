@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { listLayoutFiles, readLayoutFile, saveLayoutFile, deleteLayoutFile, publishLayouts, LayoutError } from '../../src/app/layout-store.js';
+import { readLayoutWrites } from '../../src/app/layout-writes.js';
 import { createBackup } from '../../src/app/site-git.js';
 import { startApp } from '../../src/app/server.js';
 import * as gitMod from '../../src/git/git.js';
@@ -36,10 +37,10 @@ function makeSite({ remote = true } = {}) {
   return { root, dir, bare };
 }
 
-async function saveEdit(dir, name, label) {
+async function saveEdit(dir, name, label, opts) {
   const { tree, hash } = await readLayoutFile(dir, 'layout', name);
   tree.info = { ...tree.info, label };
-  await saveLayoutFile(dir, 'layout', name, { tree, hash });
+  await saveLayoutFile(dir, 'layout', name, { tree, hash }, opts);
 }
 
 describe('publishLayouts', () => {
@@ -61,6 +62,16 @@ describe('publishLayouts', () => {
     assert.deepEqual(git(s.dir, 'show', '--name-only', '--format=', 'HEAD').trim().split('\n'), ['src/layouts/page.html']);
     assert.equal(git(s.dir, 'rev-parse', 'HEAD'), git(s.bare, 'rev-parse', 'main'));
     assert.equal((await listLayoutFiles(s.dir)).layouts.find((e) => e.name === 'page').unpublished, false);
+  });
+
+  it('forgets what VP wrote for the published files only (I1)', async () => {
+    const s = mk(); const { ws, backup, deps } = setup(s);
+    const writesLog = join(s.root, 'config', 'layout-writes', 'site.json');
+    await saveEdit(s.dir, 'page', 'Plain Page', { writesLog });
+    await saveEdit(s.dir, 'post', 'Post 2', { writesLog });
+    assert.deepEqual(Object.keys(readLayoutWrites(writesLog)).sort(), ['src/layouts/page.html', 'src/layouts/post.html']);
+    await publishLayouts(ws, { backup, deps, names: [{ kind: 'layout', name: 'page' }], writesLog });
+    assert.deepEqual(Object.keys(readLayoutWrites(writesLog)), ['src/layouts/post.html']);
   });
 
   it('leaves a hand-edited layout and a dirty page unstaged (Review Focus 3)', async () => {
@@ -141,7 +152,7 @@ describe('publishLayouts', () => {
     writeFileSync(join(s.dir, 'src/layouts/extra.html'), readFileSync(join(s.dir, 'src/layouts/page.html'), 'utf8'));
     git(s.dir, 'add', 'src/layouts/extra.html'); git(s.dir, 'commit', '-qm', 'extra'); git(s.dir, 'push', '-q');
     await deleteLayoutFile(s.dir, 'layout', 'extra');
-    assert.deepEqual((await listLayoutFiles(s.dir)).deleted, [{ kind: 'layout', name: 'extra' }]);
+    assert.deepEqual((await listLayoutFiles(s.dir)).deleted, [{ kind: 'layout', name: 'extra', vpWrote: false }]);
     const out = await publishLayouts(ws, { backup, deps, names: [] });
     assert.equal(out.status, 'pushed');
     assert.match(git(s.dir, 'show', '--name-status', '--format=', 'HEAD'), /^D\tsrc\/layouts\/extra\.html/);
@@ -180,10 +191,18 @@ describe('POST /layout-files/publish', () => {
         const res = await fetch(`${app.url}/api/sites/${id}/layout-files/publish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         return { status: res.status, data: await res.json() };
       };
+      // A save through the route is recorded under VP's config dir, so the listing says VP wrote it
+      const read = await (await fetch(`${app.url}/api/sites/${id}/layout-files/layout/post`)).json();
+      read.tree.info.label = 'Post Route';
+      const put = await fetch(`${app.url}/api/sites/${id}/layout-files/layout/post`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tree: read.tree, hash: read.hash }) });
+      assert.equal(put.status, 200);
+      const listed = await (await fetch(`${app.url}/api/sites/${id}/layout-files`)).json();
+      assert.equal(listed.layouts.find((e) => e.name === 'post').vpWrote, true);
+      assert.ok(Object.keys(readLayoutWrites(join(s.root, 'config', 'layout-writes', `${id}.json`))).includes('src/layouts/post.html'));
       await saveEdit(s.dir, 'page', 'Via Route');
       const bad = await post({ files: [{ kind: 'layout', name: '../x' }] });
       assert.equal(bad.status, 400);
-      const ok = await post({ files: [{ kind: 'layout', name: 'page' }] });
+      const ok = await post({ files: [{ kind: 'layout', name: 'page' }, { kind: 'layout', name: 'post' }] });
       assert.equal(ok.status, 200);
       assert.equal(ok.data.status, 'pushed');
       assert.equal(git(s.dir, 'rev-parse', 'HEAD'), git(s.bare, 'rev-parse', 'main'));

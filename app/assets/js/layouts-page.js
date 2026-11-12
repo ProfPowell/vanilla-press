@@ -8,7 +8,7 @@ import { h, listLayoutFiles, createLayoutFile, deleteLayoutFile, publishLayoutFi
 import { openDialog } from './theme-dialogs.js';
 import {
   layoutRows, deletedRows, publishFiles, publishSummary, nameFromLabel, startOptions, startFromValue,
-  newLayoutProblem, blockedText, OLD_COOK_TEXT,
+  newLayoutProblem, blockedText, OLD_COOK_TEXT, CHANGED_OUTSIDE,
 } from './layouts-view.js';
 
 /**
@@ -92,14 +92,15 @@ export function initLayoutsSection({ siteId, root }) {
 
   // --- Dialogs ---
   /** One yes/no question with an optional list; `submit` returns an error text to stay open. */
-  function confirmDialog({ opener, title, description, items = [], ok, busyText, submit }) {
+  function confirmDialog({ opener, title, description, items = [], ok, busyText, submit, focusCancel = false }) {
     $('layouts-confirm-title').textContent = title;
     $('layouts-confirm-desc').textContent = description;
     $('layouts-confirm-list').replaceChildren(...items.map((i) =>
       h('li', {}, h('strong', {}, i.label), i.text ? ` ${i.text}` : '')));
     $('layouts-confirm-ok').textContent = ok;
     openDialog($('layouts-confirm-dialog'), {
-      opener, fallback: $('layouts-new'), first: $('layouts-confirm-ok'),
+      opener, fallback: $('layouts-new'),
+      first: focusCancel ? $('layouts-confirm-dialog').querySelector('[data-dialog-cancel]') : $('layouts-confirm-ok'),
       error: $('layouts-confirm-error'), ok: $('layouts-confirm-ok'), busyText, submit,
     });
   }
@@ -111,6 +112,7 @@ export function initLayoutsSection({ siteId, root }) {
       description: `This removes ${r.fileName} from the site. Publish layout makes the deletion final.`,
       ok: 'Delete',
       busyText: 'Deleting…',
+      focusCancel: true, // a destructive question starts on the safe answer
       submit: async () => {
         try {
           await deleteLayoutFile(siteId, r.kind, r.name);
@@ -127,19 +129,38 @@ export function initLayoutsSection({ siteId, root }) {
     });
   }
 
+  /** The Publish dialog's list: a checkbox per file, ticked when VP wrote it. */
+  function publishChecklist(items) {
+    const ok = $('layouts-confirm-ok');
+    const boxes = [];
+    const lis = items.map((i, n) => {
+      const id = `layouts-publish-file-${n}`;
+      const box = h('input', { type: 'checkbox', id, checked: i.vpWrote });
+      box.checked = i.vpWrote;
+      box.addEventListener('change', () => { ok.disabled = !boxes.some((b) => b.checked); });
+      boxes.push(box);
+      const label = h('label', { for: id }, h('strong', {}, i.label), i.text ? ` ${i.text}` : '');
+      if (!i.vpWrote) label.append(' ', h('span', { class: 'layouts-outside' }, CHANGED_OUTSIDE));
+      return h('li', {}, box, ' ', label);
+    });
+    $('layouts-confirm-list').replaceChildren(...lis);
+    ok.disabled = !boxes.some((b) => b.checked);
+    return () => items.filter((_, n) => boxes[n].checked).map((i) => ({ kind: i.kind, name: i.name }));
+  }
+
   function askPublish(opener) {
     const { items, needsConfirm } = publishSummary(listing);
-    const files = publishFiles(listing);
     confirmDialog({
       opener,
       title: 'Publish layout',
       description: needsConfirm
         ? 'Some of these are in use, so publishing changes pages on the live site. Publish them?'
         : 'These files will be committed and pushed. Nothing uses them yet.',
-      items,
       ok: 'Publish',
       busyText: 'Publishing…',
       submit: async () => {
+        const files = ticked();
+        if (!files.length) return 'Tick at least one file to publish.';
         let out;
         try {
           out = await publishLayoutFiles(siteId, files);
@@ -161,6 +182,8 @@ export function initLayoutsSection({ siteId, root }) {
         await refresh();
       },
     });
+    // After the dialog opens: its list is the checklist, and Publish waits for a tick.
+    const ticked = publishChecklist(items);
   }
 
   let nameTouched = false;

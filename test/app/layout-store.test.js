@@ -73,6 +73,34 @@ describe('layout-store', () => {
     assert.equal(r.layouts.find((e) => e.name === 'post').label, 'Post 2');
   });
 
+  it('marks unpublished files VP wrote (vpWrote), not files changed by hand on top (I1)', async () => {
+    const dir = mk({ repo: true });
+    const cfg = mkdtempSync(join(tmpdir(), 'vp-layout-writes-'));
+    dirs.push(cfg);
+    const writesLog = join(cfg, 'layout-writes', 'site.json');
+    const read = await readLayoutFile(dir, 'layout', 'post');
+    await saveLayoutFile(dir, 'layout', 'post', { tree: { ...read.tree, info: { ...read.tree.info, label: 'Post 2' } }, hash: read.hash }, { writesLog });
+    await createLayoutFile(dir, { kind: 'layout', name: 'fresh', label: 'Fresh', start: { type: 'blank' } }, { writesLog });
+    await deleteLayoutFile(dir, 'layout', 'docs', { writesLog });
+    writeFileSync(join(dir, 'src/layouts/page.html'), `${readFileSync(join(dir, 'src/layouts/page.html'), 'utf8')}\n`);
+    rmSync(join(dir, 'src/layouts/landing.html'));
+    assert.ok(existsSync(writesLog), 'the record lives under the config dir');
+    assert.equal(existsSync(join(dir, '.vp', 'layout-writes')), false);
+    let r = await listLayoutFiles(dir, { writesLog });
+    const by = () => Object.fromEntries(r.layouts.map((e) => [e.name, e]));
+    assert.equal(by().post.vpWrote, true);
+    assert.equal(by().fresh.vpWrote, true);
+    assert.equal(by().page.unpublished, true);
+    assert.equal(by().page.vpWrote, false);
+    assert.equal(r.deleted.find((d) => d.name === 'docs').vpWrote, true);
+    assert.equal(r.deleted.find((d) => d.name === 'landing').vpWrote, false);
+    // A hand edit on top of VP's save: no longer VP's
+    writeFileSync(join(dir, 'src/layouts/post.html'), `${readFileSync(join(dir, 'src/layouts/post.html'), 'utf8')}\n`);
+    r = await listLayoutFiles(dir, { writesLog });
+    assert.equal(by().post.vpWrote, false);
+    assert.equal(by().fresh.vpWrote, true);
+  });
+
   it('layoutContext: fields, lists with collections and program areas; an old Cook is a 409', async () => {
     const dir = mk();
     writeFileSync(join(dir, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: 'courses' }, { path: 'media' }] }));

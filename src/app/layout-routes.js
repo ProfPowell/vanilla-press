@@ -26,11 +26,12 @@ const isRecord = (v) => v == null || (typeof v === 'object' && !Array.isArray(v)
  * @param {string} prefix - `/api/sites/<id>`
  * @param {{ ws: { siteDir: string }, writes: (fn: Function) => Promise<any>, backup?: object, deps?: object,
  *   db?: object, preview?: () => ReturnType<typeof import('./layout-preview.js').createLayoutPreview>,
- *   components?: () => { components: object, layoutElements: object } }} context -
+ *   components?: () => { components: object, layoutElements: object }, writesLog?: string }} context -
  *   preview: the site's layout preview, created on first use; components: what the inspector knows
- *   about components and VB's layout elements (components.js layoutComponents)
+ *   about components and VB's layout elements (components.js layoutComponents); writesLog: where VP
+ *   records what it wrote to layout files (layout-writes.js), under its config directory
  */
-export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db, preview, components }) {
+export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db, preview, components, writesLog }) {
   const body = (req) => (req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {});
 
   const handle = (fn, { write = false } = {}) => async (req, res) => {
@@ -49,7 +50,7 @@ export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db
   };
 
   router.add('GET', `${prefix}/layout-files`, handle(async (req, res) => {
-    sendJson(res, 200, await listLayoutFiles(ws.siteDir));
+    sendJson(res, 200, await listLayoutFiles(ws.siteDir, { writesLog }));
   }));
 
   // The inspector's context: fields, lists, document fields, components and layout elements
@@ -71,16 +72,16 @@ export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db
 
   router.add('PUT', `${prefix}/layout-files/:kind/:name`, handle(async (req, res) => {
     const { tree, hash = null } = body(req);
-    sendJson(res, 200, await saveLayoutFile(ws.siteDir, req.params.kind, req.params.name, { tree, hash }));
+    sendJson(res, 200, await saveLayoutFile(ws.siteDir, req.params.kind, req.params.name, { tree, hash }, { writesLog }));
   }, { write: true }));
 
   router.add('POST', `${prefix}/layout-files`, handle(async (req, res) => {
     const { kind, name, label, start } = body(req);
-    sendJson(res, 201, await createLayoutFile(ws.siteDir, { kind, name, label, start }));
+    sendJson(res, 201, await createLayoutFile(ws.siteDir, { kind, name, label, start }, { writesLog }));
   }, { write: true }));
 
   router.add('DELETE', `${prefix}/layout-files/:kind/:name`, handle(async (req, res) => {
-    await deleteLayoutFile(ws.siteDir, req.params.kind, req.params.name);
+    await deleteLayoutFile(ws.siteDir, req.params.kind, req.params.name, { writesLog });
     sendJson(res, 200, { deleted: true });
   }, { write: true }));
 
@@ -88,7 +89,7 @@ export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db
   // Lock order as Theme Apply: the backup's git queue, then the write lock (inside publishLayouts).
   router.add('POST', `${prefix}/layout-files/publish`, handle(async (req, res) => {
     const { files = [] } = body(req);
-    const out = await publishLayouts(ws, { backup, deps, names: files, writes });
+    const out = await publishLayouts(ws, { backup, deps, names: files, writes, writesLog });
     if (out.pushError) return sendJson(res, 502, { error: out.pushError, committed: true, sha: out.sha });
     sendJson(res, 200, { status: out.status, sha: out.sha, files: out.files });
   }));

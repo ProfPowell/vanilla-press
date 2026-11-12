@@ -76,9 +76,13 @@ export function publishFiles(listing) {
   ];
 }
 
+/** The Publish dialog's note on a file VP didn't write (its last change was made elsewhere). */
+export const CHANGED_OUTSIDE = 'Changed outside Vanilla Press';
+
 /**
  * What the Publish dialog lists: each file with its usage, and whether to ask for confirmation.
- * @returns {{ items: Array<{ kind: string, name: string, label: string, text: string }>, needsConfirm: boolean }}
+ * `vpWrote`: the file is as VP last wrote it, so it starts ticked; the others start unticked.
+ * @returns {{ items: Array<{ kind: string, name: string, label: string, text: string, vpWrote: boolean }>, needsConfirm: boolean }}
  */
 export function publishSummary(listing) {
   const items = [];
@@ -91,9 +95,9 @@ export function publishSummary(listing) {
     const bits = [];
     if (usedBy.length) bits.push(usedByText(usedBy.length));
     if (baseFor.length) bits.push(baseForText(baseFor));
-    items.push({ kind: e.kind, name: e.name, label: e.label || e.name, text: bits.join(' · ') });
+    items.push({ kind: e.kind, name: e.name, label: e.label || e.name, text: bits.join(' · '), vpWrote: !!e.vpWrote });
   }
-  for (const d of listing?.deleted || []) items.push({ kind: d.kind, name: d.name, label: d.name, text: 'Deleted' });
+  for (const d of listing?.deleted || []) items.push({ kind: d.kind, name: d.name, label: d.name, text: 'Deleted', vpWrote: !!d.vpWrote });
   return { items, needsConfirm };
 }
 

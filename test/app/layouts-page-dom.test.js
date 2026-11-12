@@ -108,6 +108,23 @@ describe('Layouts section', () => {
     assert.equal($('layouts-confirm-dialog').open, true);
   });
 
+  it('the Delete question focuses Cancel first (T6)', async () => {
+    listing.layouts = [entry({})];
+    await section.refresh();
+    const proto = Object.getPrototypeOf(win.document.createElement('button'));
+    const focus = proto.focus;
+    let focused = null;
+    proto.focus = function f() { focused = this; };
+    try {
+      button(rows()[0], 'Delete').click();
+    } finally {
+      proto.focus = focus;
+    }
+    assert.equal(focused?.hasAttribute('data-dialog-cancel'), true);
+    assert.equal(text(focused), 'Cancel');
+    $('layouts-confirm-dialog').close();
+  });
+
   it('deletes after the dialog confirms', async () => {
     listing.layouts = [entry({})];
     await section.refresh();
@@ -158,8 +175,8 @@ describe('Layouts section', () => {
   });
 
   it('publishes with explicit names after the dialog lists each file', async () => {
-    listing.layouts[1].unpublished = true;
-    listing.deleted = [{ kind: 'include', name: 'old' }];
+    listing.layouts[1].unpublished = true; listing.layouts[1].vpWrote = true;
+    listing.deleted = [{ kind: 'include', name: 'old', vpWrote: true }];
     await section.refresh();
     responders['POST /publish'] = () => Response.json({ status: 'pushed', sha: 'abc' });
     $('layouts-publish').click();
@@ -174,8 +191,47 @@ describe('Layouts section', () => {
     assert.equal($('layouts-confirm-dialog').open, false);
   });
 
+  it('ticks only files VP wrote; a file changed outside VP is unticked, labelled and not sent (I1)', async () => {
+    listing.layouts[0].unpublished = true; // base: changed by hand
+    listing.layouts[1].unpublished = true; listing.layouts[1].vpWrote = true;
+    listing.deleted = [{ kind: 'include', name: 'old', vpWrote: true }];
+    await section.refresh();
+    responders['POST /publish'] = () => Response.json({ status: 'pushed', sha: 'abc' });
+    $('layouts-publish').click();
+    const items = [...$('layouts-confirm-list').querySelectorAll('li')];
+    const box = (li) => li.querySelector('input[type="checkbox"]');
+    const base = items.find((li) => /Base/.test(text(li)));
+    const post = items.find((li) => /Post/.test(text(li)));
+    assert.equal(box(base).checked, false);
+    assert.match(text(base), /Changed outside Vanilla Press/);
+    assert.equal(box(post).checked, true);
+    assert.doesNotMatch(text(post), /Changed outside Vanilla Press/);
+    assert.equal(box(items.find((li) => /old/.test(text(li)))).checked, true);
+    $('layouts-confirm-form').onsubmit(new win.Event('submit'));
+    await settle();
+    const pub = calls.find((c) => c.url.endsWith('/publish'));
+    assert.deepEqual(pub.body, { files: [{ kind: 'layout', name: 'post' }, { kind: 'include', name: 'old' }] });
+  });
+
+  it('sends a file changed outside VP once ticked, and disables Publish with nothing ticked (I1)', async () => {
+    listing.layouts[0].unpublished = true;
+    await section.refresh();
+    responders['POST /publish'] = () => Response.json({ status: 'pushed', sha: 'abc' });
+    $('layouts-publish').click();
+    const cb = $('layouts-confirm-list').querySelector('input[type="checkbox"]');
+    assert.equal(cb.checked, false);
+    assert.equal($('layouts-confirm-ok').disabled, true);
+    cb.checked = true;
+    cb.dispatchEvent(new win.Event('change'));
+    assert.equal($('layouts-confirm-ok').disabled, false);
+    $('layouts-confirm-form').onsubmit(new win.Event('submit'));
+    await settle();
+    const pub = calls.find((c) => c.url.endsWith('/publish'));
+    assert.deepEqual(pub.body, { files: [{ kind: 'layout', name: 'base' }] });
+  });
+
   it('says the layout was committed when the push fails', async () => {
-    listing.layouts[1].unpublished = true;
+    listing.layouts[1].unpublished = true; listing.layouts[1].vpWrote = true;
     await section.refresh();
     responders['POST /publish'] = () => Response.json({ committed: true, error: 'offline', sha: 'abc' }, { status: 502 });
     $('layouts-publish').click();
@@ -186,7 +242,7 @@ describe('Layouts section', () => {
   });
 
   it('keeps the dialog open with the problems when publish is refused', async () => {
-    listing.layouts[1].unpublished = true;
+    listing.layouts[1].unpublished = true; listing.layouts[1].vpWrote = true;
     await section.refresh();
     responders['POST /publish'] = () => Response.json({ error: 'Fix these layouts before publishing', problems: [{ name: 'post', message: 'bad slot' }] }, { status: 409 });
     $('layouts-publish').click();
@@ -228,7 +284,7 @@ describe('Layouts section', () => {
   });
 
   it('does not print undefined when a failed push has no error text', async () => {
-    listing.layouts[1].unpublished = true;
+    listing.layouts[1].unpublished = true; listing.layouts[1].vpWrote = true;
     await section.refresh();
     responders['POST /publish'] = () => Response.json({ committed: true }, { status: 502 });
     $('layouts-publish').click();

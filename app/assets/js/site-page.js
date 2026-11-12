@@ -282,6 +282,16 @@ function showSection(section) {
   else programsPage?.then((programs) => programs?.hide());
   if (section === 'theme') startTheme();
   else themePage?.then((theme) => theme?.hide());
+  if (section === 'layouts') startLayouts();
+}
+
+// Layouts is set up on first view, only once; every view refreshes the list.
+let layoutsPage = null;
+function startLayouts() {
+  layoutsPage ||= import('./layouts-page.js')
+    .then((m) => m.initLayoutsSection({ siteId, root: $('layouts-section') }))
+    .catch((err) => showError(err.message));
+  layoutsPage.then((layouts) => layouts?.show());
 }
 
 // Theme is set up on first view, only once (its draft lives until reload); every view refreshes it.

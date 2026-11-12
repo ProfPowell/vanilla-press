@@ -107,3 +107,12 @@ export function createLayoutFile(siteId, { kind, name, label, start }) {
 export function deleteLayoutFile(siteId, kind, name) {
   return api(layoutPath(siteId, kind, name), { method: 'DELETE' });
 }
+
+/**
+ * Publish layout files: commit and push the named ones (always explicit names).
+ * Resolves `{ status: 'pushed'|'saved', sha }`; a refusal carries `status` and `data`
+ * (409 `{ problems }`, 502 `{ committed: true }`).
+ */
+export function publishLayoutFiles(siteId, files) {
+  return api(`/api/sites/${encodeURIComponent(siteId)}/layout-files/publish`, { method: 'POST', body: { files } });
+}

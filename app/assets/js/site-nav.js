@@ -6,7 +6,7 @@
  */
 
 /** Sections that work today, in rail order. */
-export const SECTIONS = ['posts', 'media', 'programs', 'components', 'theme'];
+export const SECTIONS = ['posts', 'media', 'programs', 'components', 'theme', 'layouts'];
 
 /** Sections shown disabled under "Coming later". */
 export const LATER = ['Analytics', 'Social'];

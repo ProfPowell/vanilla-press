@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SECTIONS, LATER, sectionFromSearch, sectionHref } from '../../app/assets/js/site-nav.js';
 
 test('sections and later items', () => {
-  assert.deepEqual(SECTIONS, ['posts', 'media', 'programs', 'components', 'theme']);
+  assert.deepEqual(SECTIONS, ['posts', 'media', 'programs', 'components', 'theme', 'layouts']);
   assert.deepEqual(LATER, ['Analytics', 'Social']);
 });
 

@@ -32,6 +32,7 @@
       <li><a href="#" data-section="programs">Programs</a></li>
       <li><a href="#" data-section="components">Components</a></li>
       <li><a href="#" data-section="theme">Theme</a></li>
+      <li><a href="#" data-section="layouts">Layouts</a></li>
     </ul>
     <ul class="rail-list rail-app" aria-label="App">
       <li><a href="/app/services.html">Services</a></li>
@@ -210,6 +211,59 @@
         <p id="components-notice" class="notice" role="status" hidden></p>
         <div id="components-error" class="error" role="alert" hidden></div>
         <ul id="components" class="component-list" aria-labelledby="components-title"></ul>
+      </section>
+
+      <section id="layouts-section" aria-labelledby="layouts-title" hidden>
+        <div class="section-head">
+          <div>
+            <h1 id="layouts-title">Layouts</h1>
+            <p id="layouts-summary" class="media-summary"></p>
+          </div>
+          <div class="actions">
+            <button type="button" id="layouts-publish" hidden>Publish layout</button>
+            <button type="button" id="layouts-new" class="primary" aria-haspopup="dialog">New layout</button>
+          </div>
+        </div>
+        <p id="layouts-error" class="error" role="alert" hidden></p>
+        <p id="layouts-result" class="layouts-result" role="status" hidden></p>
+        <p id="layouts-old" class="layouts-old" hidden></p>
+        <ul id="layouts-list" class="layouts-list" aria-labelledby="layouts-title"></ul>
+
+        <dialog id="layouts-new-dialog" class="theme-dialog" aria-labelledby="layouts-new-title">
+          <form id="layouts-new-form" method="dialog" novalidate>
+            <h2 id="layouts-new-title">New layout</h2>
+            <div class="theme-field">
+              <label for="layouts-new-label">Label</label>
+              <input type="text" id="layouts-new-label" maxlength="80" autocomplete="off" required/>
+            </div>
+            <div class="theme-field">
+              <label for="layouts-new-name">Name</label>
+              <input type="text" id="layouts-new-name" maxlength="80" autocomplete="off" required pattern="[A-Za-z0-9_][A-Za-z0-9_.\-]*"/>
+            </div>
+            <div class="theme-field">
+              <label for="layouts-new-start">Start from</label>
+              <select id="layouts-new-start"></select>
+            </div>
+            <p id="layouts-new-error" class="error" role="alert"></p>
+            <div class="theme-dialog-actions">
+              <button type="button" data-dialog-cancel>Cancel</button>
+              <button type="submit" id="layouts-new-ok" class="primary">Create</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog id="layouts-confirm-dialog" class="theme-dialog" aria-labelledby="layouts-confirm-title" aria-describedby="layouts-confirm-desc">
+          <form id="layouts-confirm-form" method="dialog" novalidate>
+            <h2 id="layouts-confirm-title"></h2>
+            <p id="layouts-confirm-desc" class="theme-note"></p>
+            <ul id="layouts-confirm-list" class="layouts-confirm-list"></ul>
+            <p id="layouts-confirm-error" class="error" role="alert"></p>
+            <div class="theme-dialog-actions">
+              <button type="button" data-dialog-cancel>Cancel</button>
+              <button type="submit" id="layouts-confirm-ok" class="primary">OK</button>
+            </div>
+          </form>
+        </dialog>
       </section>
 
       <section id="theme-section" aria-labelledby="theme-title" hidden>

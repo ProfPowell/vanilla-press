@@ -70,6 +70,8 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   let meta = null;
   let hash = null;
   let dirty = false;
+  /** Bumped by every edit (canvas or bar): a save clears `dirty` only when nothing changed while it ran. */
+  let edits = 0;
   let saving = false;
   const palette = new LayoutPalette();
 
@@ -103,6 +105,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   }
 
   function setDirty(value) {
+    if (value) edits++;
     dirty = value;
     root.toggleAttribute?.('data-le-dirty', value);
     // An error (Cook's problems, changed on disk) stays up until the next save or reload
@@ -260,6 +263,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     saving = true;
     els.save.disabled = true;
     showStatus('Saving…');
+    const sent = edits;
     try {
       let tree;
       try {
@@ -280,7 +284,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         showStatus(`Couldn't save: ${err.message}`, { tone: 'error' });
         return false;
       }
-      if (res.status === 409) {
+      if (res.status === 409 && (!data.error || data.error === CHANGED_ON_DISK)) {
         showStatus(CHANGED_ON_DISK, { tone: 'error', reload: true });
         return false;
       }
@@ -293,6 +297,11 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         return false;
       }
       hash = data.hash;
+      if (edits !== sent) {
+        // Edited while the save ran: those edits are not in the file yet
+        showStatus('Unsaved changes');
+        return true;
+      }
       dirty = false;
       root.toggleAttribute?.('data-le-dirty', false);
       showStatus('Saved · Not published', { tone: 'done' });

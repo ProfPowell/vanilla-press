@@ -9,7 +9,7 @@ import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { layoutSchema } from '../../editor/assets/js/layout-editor/schema.js';
 import { treeToDoc } from '../../editor/assets/js/layout-editor/convert.js';
 import {
-  paletteItems, insertEntry, layoutViolations, layoutRulesPlugin,
+  paletteItems, insertEntry, layoutViolations, layoutRulesPlugin, addsViolation,
 } from '../../editor/assets/js/layout-editor/palette.js';
 
 const text = (tag, inline, extra = {}) => ({ type: 'text', tag, attrs: [], inline, ...extra });
@@ -145,5 +145,30 @@ describe('layout rules guard', () => {
     const main = layoutSchema.nodes.region.create({ tag: 'main' });
     const after = state.apply(state.tr.insert(state.selection.to, main));
     assert.equal(after.doc.eq(state.doc), true);
+  });
+
+  it('a comment beside a slot is allowed (as Cook allows <aside><!-- n -->${slot:a}</aside>)', () => {
+    const s = layoutSchema;
+    const doc = s.nodes.doc.create(null, s.nodes.fragment_body.create(null, [
+      s.nodes.container.create({ tag: 'section' }, [s.nodes.comment.create({ text: ' n ' }), s.nodes.slot_ref.create({ name: 'a' })]),
+    ]));
+    assert.deepEqual(layoutViolations(doc), []);
+  });
+
+  it('refuses a change that swaps one breach for another', () => {
+    assert.equal(addsViolation(['a'], ['b']), true);
+    assert.equal(addsViolation(['a', 'a'], ['a']), false);
+    assert.equal(addsViolation(['a'], ['a', 'a']), true);
+    // A doc with a second content block: deleting it while adding a third nav is refused
+    const tree = baseTree([{ type: 'content', attrs: [] }, { type: 'content', attrs: [] }], [region('nav', []), region('nav', [])]);
+    const state = stateSelecting(tree, 'include');
+    const before = layoutViolations(state.doc);
+    assert.equal(before.length, 1);
+    let contentPos = null;
+    state.doc.descendants((node, pos) => { if (contentPos === null && node.type.name === 'content') contentPos = pos; });
+    const tr = state.tr.insert(state.selection.to, layoutSchema.nodes.region.create({ tag: 'nav' }));
+    tr.delete(tr.mapping.map(contentPos), tr.mapping.map(contentPos) + 1);
+    assert.equal(layoutViolations(tr.doc).length, 1);
+    assert.equal(state.apply(tr).doc.eq(state.doc), true);
   });
 });

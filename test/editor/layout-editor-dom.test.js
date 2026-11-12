@@ -195,6 +195,49 @@ describe('layout editor page', { skip: !HAVE_COOK && 'needs the linked Cook' }, 
   });
 });
 
+describe('layout editor save edge cases', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
+  it('an edit made while the save runs keeps the layout unsaved (new hash stored)', async () => {
+    const root = freshRoot();
+    let release;
+    const held = new Promise(r => { release = r; });
+    const calls = [];
+    const fetch = async (url, opts = {}) => {
+      calls.push(opts.method || 'GET');
+      const reply = (status, data) => ({ ok: status < 400, status, json: async () => data });
+      if ((opts.method || 'GET') === 'GET') return reply(200, { tree: starterTree('post'), hash: 'h1', problems: [] });
+      await held;
+      return reply(200, { hash: 'h2' });
+    };
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch });
+    const label = root.querySelector('[data-le-label]');
+    label.value = 'First';
+    label.dispatchEvent(new win.Event('input', { bubbles: true }));
+    const saving = ed.save();
+    await tick();
+    label.value = 'Second';
+    label.dispatchEvent(new win.Event('input', { bubbles: true }));
+    release();
+    await saving;
+    assert.equal(ed.hash(), 'h2');
+    assert.equal(ed.isDirty(), true);
+    assert.match(root.querySelector('[data-le-status]').textContent, /Unsaved changes/);
+    ed.destroy();
+  });
+
+  it('a 409 that is not a hand edit shows its own message, without Reload', async () => {
+    const root = freshRoot();
+    const msg = "This site's Cook is too old to edit layouts; update cook-ssg";
+    const fetch = stubFetch(starterTree('post'), [409, { error: msg }]);
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch });
+    await ed.save();
+    const status = root.querySelector('[data-le-status]');
+    assert.match(status.textContent, /too old to edit layouts/);
+    assert.doesNotMatch(status.textContent, /changed on disk/);
+    assert.equal([...status.querySelectorAll('button')].some(b => b.textContent === 'Reload'), false);
+    ed.destroy();
+  });
+});
+
 describe('canvas labels', () => {
   it('fields: document fields in Title Case, others as written', async () => {
     const { fieldLabel } = await import('../../editor/assets/js/layout-editor/views.js');

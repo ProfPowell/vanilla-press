@@ -93,6 +93,13 @@ export const CATEGORY_LABELS = {
 
 // RULES
 // -----------------------------
+/** A slot stands alone in its element: comments beside it are allowed (Cook's check). */
+const slotAlone = (parent) => {
+  let others = 0;
+  parent.forEach((child) => { if (child.type.name !== 'comment') others++; });
+  return others === 1;
+};
+
 /**
  * The rules a layout-schema doc breaks that its content expressions can't
  * prevent, one string per breach (so a count compares).
@@ -117,7 +124,7 @@ export function layoutViolations(doc) {
       if (kind === 'base' && !above.some(n => n.type.name === 'region' && n.attrs.tag === 'main')) out.push('${content} must be inside <main>');
       if (kind === 'child' && above.some(n => n.type.name === 'slot_piece')) out.push("${content} can't be inside a slot template");
     }
-    if (name === 'slot_ref' && parent.childCount !== 1) out.push(`\${slot:${node.attrs.name}} must be alone inside its element`);
+    if (name === 'slot_ref' && !slotAlone(parent)) out.push(`\${slot:${node.attrs.name}} must be alone inside its element`);
     if (node.isInline && node.marks.filter(m => m.type.name === 'a').length > 1) out.push('a link inside a link');
     return true;
   });
@@ -140,12 +147,29 @@ export function layoutViolations(doc) {
   return out;
 }
 
+/**
+ * Whether `after` breaks a rule `before` didn't: some breach shows up more
+ * often (so removing one breach never pays for adding another).
+ * @param {string[]} before
+ * @param {string[]} after
+ */
+export function addsViolation(before, after) {
+  const count = new Map();
+  for (const v of before) count.set(v, (count.get(v) || 0) + 1);
+  for (const v of after) {
+    const left = count.get(v) || 0;
+    if (left === 0) return true;
+    count.set(v, left - 1);
+  }
+  return false;
+}
+
 /** Refuses a change that adds a rule breach (a drag, a paste, a palette entry). */
 export function layoutRulesPlugin() {
   return new Plugin({
     filterTransaction(tr, state) {
       if (!tr.docChanged) return true;
-      return layoutViolations(tr.doc).length <= layoutViolations(state.doc).length;
+      return !addsViolation(layoutViolations(state.doc), layoutViolations(tr.doc));
     },
   });
 }
@@ -199,10 +223,10 @@ function placeNode(state, target, node) {
  */
 export function paletteItems(state) {
   const target = insertionTarget(state);
-  const before = layoutViolations(state.doc).length;
+  const before = layoutViolations(state.doc);
   return ENTRIES.filter((entry) => {
     const tr = placeNode(state, target, entry.create(state.schema, state.doc));
-    return tr !== null && layoutViolations(tr.doc).length <= before;
+    return tr !== null && !addsViolation(before, layoutViolations(tr.doc));
   });
 }
 

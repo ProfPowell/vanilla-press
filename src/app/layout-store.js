@@ -350,16 +350,55 @@ async function serializeChecked(cook, siteDir, kind, tree, names, parents, { nam
   return source;
 }
 
+/** Region names a tree declares: its slot blocks (anywhere) and `${slot:…}` head items. */
+export function declaredRegions(tree) {
+  const out = new Set();
+  const walk = (v) => {
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (!v || typeof v !== 'object') return;
+    if (v.type === 'slot' && typeof v.name === 'string') out.add(v.name);
+    else if (!v.type && typeof v.slot === 'string') out.add(v.slot);
+    for (const [k, child] of Object.entries(v)) if (k !== 'info' && k !== 'attrs') walk(child);
+  };
+  walk({ ...tree, info: undefined });
+  return out;
+}
+
+const TEMPLATE_SLOT = /<template\b[^>]*?\bslot="([^"]+)"/gi;
+
+/**
+ * Children of `name` that fill regions the new tree no longer declares (it declared
+ * them before): `[{ layout, regions: [{ name, label }] }]`. Labels come from the old info block.
+ */
+function droppedFills(siteDir, layouts, name, oldTree, newTree) {
+  if (!oldTree) return [];
+  const had = declaredRegions(oldTree);
+  const has = declaredRegions(newTree);
+  const gone = [...had].filter((r) => !has.has(r));
+  if (!gone.length) return [];
+  const labels = oldTree.info?.slots || {};
+  const out = [];
+  for (const child of layouts.filter((e) => e.parent === name)) {
+    let source;
+    try { source = readFileSync(join(dirOf(siteDir, 'layout'), child.file), 'utf8'); } catch { continue; }
+    const fills = new Set([...source.matchAll(TEMPLATE_SLOT)].map((m) => m[1]));
+    const regions = gone.filter((r) => fills.has(r)).map((r) => ({ name: r, label: labels[r]?.label || r }));
+    if (regions.length) out.push({ layout: child.name, regions });
+  }
+  return out;
+}
+
 /**
  * @param {string} siteDir
  * @param {'layout'|'include'} kind
  * @param {string} name
- * @param {{ tree: object, hash: string|null }} input - hash null: the file must not exist yet
+ * @param {{ tree: object, hash: string|null, confirmDropped?: boolean }} input - hash null: the file must
+ *   not exist yet; confirmDropped: save even though layouts built on this one fill regions it removes
  * @param {{ importCook?: Function, writesLog?: string }} [opts] - writesLog: where VP records what it wrote
  */
 export async function saveLayoutFile(siteDir, kind, name, input, { importCook = defaultImportCook, writesLog } = {}) {
   check(kind, name);
-  const { tree, hash } = input || {};
+  const { tree, hash, confirmDropped = false } = input || {};
   if (!tree || typeof tree !== 'object' || Array.isArray(tree)) throw new LayoutError(400, 'tree is required');
   if (hash !== null && typeof hash !== 'string') throw new LayoutError(400, 'hash must be a string or null');
   const cook = await loadCook(siteDir, importCook);
@@ -381,6 +420,11 @@ export async function saveLayoutFile(siteDir, kind, name, input, { importCook = 
     let current;
     try { current = readFileSync(target, 'utf8'); } catch { throw new LayoutError(409, CHANGED_ON_DISK); }
     if (sha1(current) !== hash) throw new LayoutError(409, CHANGED_ON_DISK);
+    if (kind === 'layout' && !confirmDropped) {
+      const before = cook.parseLayout(current, { fields: all.names.fields, lists: all.names.lists });
+      const dropped = droppedFills(siteDir, all.layouts, name, before.ok ? before.tree : null, tree);
+      if (dropped.length) throw new LayoutError(409, 'Regions in use', { dropped });
+    }
   }
   writeFileAtomic(target, source);
   recordLayoutWrite(writesLog, siteRel(siteDir, target), sha1(source));

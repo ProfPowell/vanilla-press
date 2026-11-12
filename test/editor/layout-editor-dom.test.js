@@ -317,6 +317,91 @@ describe('layout editor save edge cases', { skip: !HAVE_COOK && 'needs the linke
     ed.destroy();
   });
 
+  it('a base change that drops regions children fill asks in the panel, and Save anyway resends (I2)', async () => {
+    const root = freshRoot();
+    const puts = [];
+    const fetch = async (url, opts = {}) => {
+      const reply = (status, data) => ({ ok: status < 400, status, json: async () => data });
+      if ((opts.method || 'GET') === 'GET') return reply(200, { tree: starterTree('base', { fields: ['siteTitle'] }), hash: 'h1', problems: [] });
+      if (opts.method !== 'PUT') return reply(200, { ok: false, log: '', html: '' });
+      const body = JSON.parse(opts.body);
+      puts.push(body);
+      if (!body.confirmDropped) {
+        return reply(409, { error: 'Regions in use', dropped: [
+          { layout: 'post', regions: [{ name: 'aside', label: 'Sidebar' }] },
+          { layout: 'essay', regions: [{ name: 'aside', label: '' }] },
+        ] });
+      }
+      return reply(200, { hash: 'h2' });
+    };
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'base', fetch });
+    const label = root.querySelector('[data-le-label]');
+    label.value = 'Base 2';
+    label.dispatchEvent(new win.Event('input', { bubbles: true }));
+    const saving = ed.save();
+    await tick(); await tick(); await tick();
+    const panel = root.querySelector('confirm-panel');
+    assert.equal(panel.hidden, false);
+    assert.match(panel.textContent, /These layouts fill regions this change removes: post \(Sidebar\), essay \(aside\)/);
+    assert.equal(panel.confirmBtn.textContent, 'Save anyway');
+    assert.equal(panel.cancelBtn.textContent, 'Cancel');
+    panel.confirmBtn.click();
+    assert.equal(await saving, true);
+    assert.equal(puts.length, 2);
+    assert.equal(puts[1].confirmDropped, true);
+    assert.equal(puts[1].hash, 'h1');
+    assert.equal(ed.hash(), 'h2');
+    assert.equal(ed.isDirty(), false);
+    ed.destroy();
+  });
+
+  it('Cancel on the regions question writes nothing and keeps the edits (I2)', async () => {
+    const root = freshRoot();
+    const fetch = stubFetch(starterTree('base', { fields: ['siteTitle'] }), [409, { error: 'Regions in use', dropped: [{ layout: 'post', regions: [{ name: 'aside', label: 'Sidebar' }] }] }]);
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'base', fetch });
+    const label = root.querySelector('[data-le-label]');
+    label.value = 'Base 2';
+    label.dispatchEvent(new win.Event('input', { bubbles: true }));
+    const saving = ed.save();
+    await tick(); await tick(); await tick();
+    root.querySelector('confirm-panel').cancelBtn.click();
+    assert.equal(await saving, false);
+    assert.equal(fetch.calls.filter(c => c.method === 'PUT').length, 1);
+    assert.equal(ed.isDirty(), true);
+    assert.equal(ed.hash(), 'h1');
+    ed.destroy();
+  });
+
+  it('Reload with unsaved edits asks first in the panel (M4)', async () => {
+    const root = freshRoot();
+    const fetch = stubFetch(starterTree('post'), [409, { error: 'This layout changed on disk since you opened it' }]);
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch });
+    const label = root.querySelector('[data-le-label]');
+    label.value = 'Mine';
+    label.dispatchEvent(new win.Event('input', { bubbles: true }));
+    await ed.save();
+    const gets = () => fetch.calls.filter(c => c.method === 'GET' && c.url === '/api/sites/s1/layout-files/layout/post').length;
+    const before = gets();
+    const reload = () => [...root.querySelector('[data-le-status]').querySelectorAll('button')].find(b => b.textContent === 'Reload');
+    reload().click();
+    await tick();
+    const panel = root.querySelector('confirm-panel');
+    assert.equal(panel.hidden, false);
+    assert.match(panel.textContent, /Discard your changes and reload\?/);
+    panel.cancelBtn.click();
+    await tick(); await tick();
+    assert.equal(gets(), before, 'Cancel keeps the edits');
+    assert.equal(root.querySelector('[data-le-label]').value, 'Mine');
+    reload().click();
+    await tick();
+    panel.confirmBtn.click();
+    for (let i = 0; i < 6; i++) await tick();
+    assert.equal(gets(), before + 1);
+    assert.equal(root.querySelector('[data-le-label]').value, 'Blog post');
+    assert.equal(ed.isDirty(), false);
+    ed.destroy();
+  });
+
   it('a 409 that is not a hand edit shows its own message, without Reload', async () => {
     const root = freshRoot();
     const msg = "This site's Cook is too old to edit layouts; update cook-ssg";

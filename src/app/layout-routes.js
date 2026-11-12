@@ -71,8 +71,9 @@ export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db
   }));
 
   router.add('PUT', `${prefix}/layout-files/:kind/:name`, handle(async (req, res) => {
-    const { tree, hash = null } = body(req);
-    sendJson(res, 200, await saveLayoutFile(ws.siteDir, req.params.kind, req.params.name, { tree, hash }, { writesLog }));
+    const { tree, hash = null, confirmDropped = false } = body(req);
+    sendJson(res, 200, await saveLayoutFile(ws.siteDir, req.params.kind, req.params.name,
+      { tree, hash, confirmDropped: confirmDropped === true }, { writesLog }));
   }, { write: true }));
 
   router.add('POST', `${prefix}/layout-files`, handle(async (req, res) => {

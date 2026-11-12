@@ -138,9 +138,22 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = 'Reload';
-      btn.addEventListener('click', () => load());
+      btn.addEventListener('click', () => reloadAsking());
       els.status.append(btn);
     }
+  }
+
+  /** Reload from disk; with unsaved edits, ask first in the page's panel. */
+  async function reloadAsking() {
+    if (dirty) {
+      const discard = await els.confirm?.ask({
+        heading: 'Discard your changes and reload?',
+        body: 'Your changes to this layout are not saved. Reloading replaces them with the file on disk.',
+        confirm: 'Reload',
+      });
+      if (!discard) return;
+    }
+    await load();
   }
 
   function setDirty(value) {
@@ -332,13 +345,29 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         return false;
       }
       let res, data;
-      try {
+      const put = async (extra = {}) => {
         res = await fetch(url, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tree, hash }),
+          body: JSON.stringify({ tree, hash, ...extra }),
         });
         data = await res.json().catch(() => ({}));
+      };
+      try {
+        await put();
+        if (res.status === 409 && Array.isArray(data.dropped) && data.dropped.length) {
+          // Layouts built on this one fill regions this change removes: their content would go
+          const go = await els.confirm?.ask({
+            heading: 'Regions in use',
+            body: droppedText(data.dropped),
+            confirm: 'Save anyway',
+          });
+          if (!go) {
+            showStatus('Not saved', { tone: 'error' });
+            return false;
+          }
+          await put({ confirmDropped: true });
+        }
       } catch (err) {
         showStatus(`Couldn't save: ${err.message}`, { tone: 'error' });
         return false;
@@ -454,6 +483,17 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       globalThis.removeEventListener?.('beforeunload', onBeforeUnload);
     },
   };
+}
+
+/**
+ * The Save question when a base change removes regions its children fill:
+ * `These layouts fill regions this change removes: post (Sidebar), essay (Sidebar)`.
+ * @param {Array<{ layout: string, regions: Array<{ name: string, label?: string }|string> }>} dropped
+ */
+export function droppedText(dropped) {
+  const regionText = (r) => (typeof r === 'string' ? r : r?.label || r?.name);
+  const parts = dropped.map((d) => `${d.layout} (${(d.regions || []).map(regionText).join(', ')})`);
+  return `These layouts fill regions this change removes: ${parts.join(', ')}`;
 }
 
 /** A select's chosen value (the selected option's, so it works where `.value` is read-only). */

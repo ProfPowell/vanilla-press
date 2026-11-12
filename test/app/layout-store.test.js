@@ -101,6 +101,28 @@ describe('layout-store', () => {
     assert.equal(by().fresh.vpWrote, true);
   });
 
+  it('refuses a base change that drops a region a child fills, unless confirmed (I2)', async () => {
+    const dir = mk();
+    const read = await readLayoutFile(dir, 'layout', 'base');
+    const before = readFileSync(join(dir, 'src/layouts/base.html'), 'utf8');
+    // Rename the aside region to sidebar: post fills aside
+    const tree = JSON.parse(JSON.stringify(read.tree).replaceAll('"aside"', '"sidebar"').replaceAll('slot:aside', 'slot:sidebar')
+      .replace('"tag":"sidebar"', '"tag":"aside"'));
+    assert.ok(tree.info.slots.sidebar);
+    await assert.rejects(saveLayoutFile(dir, 'layout', 'base', { tree, hash: read.hash }), (err) => {
+      assert.equal(err.status, 409);
+      assert.equal(err.message, 'Regions in use');
+      assert.deepEqual(err.body.dropped, [{ layout: 'post', regions: [{ name: 'aside', label: 'Sidebar' }] }]);
+      return true;
+    });
+    assert.equal(readFileSync(join(dir, 'src/layouts/base.html'), 'utf8'), before, 'nothing written');
+    // Keeping every region saves without asking
+    const same = await saveLayoutFile(dir, 'layout', 'base', { tree: read.tree, hash: read.hash });
+    const saved = await saveLayoutFile(dir, 'layout', 'base', { tree, hash: same.hash, confirmDropped: true });
+    assert.ok(saved.hash);
+    assert.match(readFileSync(join(dir, 'src/layouts/base.html'), 'utf8'), /slot:sidebar/);
+  });
+
   it('layoutContext: fields, lists with collections and program areas; an old Cook is a 409', async () => {
     const dir = mk();
     writeFileSync(join(dir, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: 'courses' }, { path: 'media' }] }));

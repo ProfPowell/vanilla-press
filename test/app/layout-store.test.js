@@ -145,7 +145,7 @@ describe('layout-store', () => {
     assert.equal(kid.tree.parent, 'base');
     assert.equal(kid.tree.info.label, 'Kid');
     assert.deepEqual(kid.tree.body, [{ type: 'content', attrs: [] }]);
-    assert.equal(kid.tree.pageLayout, '${pageLayout}');
+    assert.equal(kid.tree.pageLayout, 'stack');
 
     await createLayoutFile(dir, { kind: 'layout', name: 'page2', label: 'Page two', start: { type: 'copy', from: 'page' } });
     const copy = await readLayoutFile(dir, 'layout', 'page2');
@@ -182,6 +182,42 @@ describe('layout-store', () => {
     assert.ok(existsSync(join(dir, 'src/layouts/post.html')));
     await deleteLayoutFile(dir, 'layout', 'docs');
     assert.equal(existsSync(join(dir, 'src/layouts/docs.html')), false);
+  });
+
+  it('lists include users and refuses to delete a used include', async () => {
+    const dir = mk();
+    const r = await listLayoutFiles(dir);
+    const header = r.includes.find((e) => e.name === 'header');
+    assert.ok(header.usedBy.includes('src/layouts/base.html'), JSON.stringify(header.usedBy));
+    await assert.rejects(deleteLayoutFile(dir, 'include', 'header'), (err) => {
+      assert.equal(err.status, 409);
+      assert.equal(err.message, 'in use');
+      assert.ok(err.body.usedBy.includes('src/layouts/base.html'));
+      assert.deepEqual(err.body.baseFor, []);
+      return true;
+    });
+    assert.ok(existsSync(join(dir, 'src/includes/header.html')));
+    await createLayoutFile(dir, { kind: 'include', name: 'spare', label: 'Spare', start: { type: 'blank' } });
+    await deleteLayoutFile(dir, 'include', 'spare');
+    assert.equal(existsSync(join(dir, 'src/includes/spare.html')), false);
+  });
+
+  it('refuses a save that makes a parent cycle', async () => {
+    const dir = mk();
+    await createLayoutFile(dir, { kind: 'layout', name: 'a', label: 'A', start: { type: 'child', from: 'base' } });
+    await createLayoutFile(dir, { kind: 'layout', name: 'b', label: 'B', start: { type: 'child', from: 'a' } });
+    const a = await readLayoutFile(dir, 'layout', 'a');
+    const before = readFileSync(join(dir, 'src/layouts/a.html'), 'utf8');
+    const cyc = async (parent, msg) => {
+      await assert.rejects(saveLayoutFile(dir, 'layout', 'a', { tree: { ...a.tree, parent }, hash: a.hash }), (err) => {
+        assert.equal(err.status, 422);
+        assert.ok(err.body.problems.some((p) => p.message === msg), JSON.stringify(err.body));
+        return true;
+      });
+    };
+    await cyc('a', 'Layout cycle: a → a');
+    await cyc('b', 'Layout cycle: a → b → a');
+    assert.equal(readFileSync(join(dir, 'src/layouts/a.html'), 'utf8'), before);
   });
 
   it('refuses bad names and kinds with a 400', async () => {

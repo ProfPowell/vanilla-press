@@ -10,6 +10,7 @@
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, rmdirSync, readdirSync } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { LAYOUT_NAME } from '../schema/validate.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
@@ -69,6 +70,54 @@ function problemsOf(entry, isInclude) {
   return [{ line: 1, message: `a layout it is built on can't be edited here (${entry.chain.slice(1).join(' → ')})` }];
 }
 
+// The forms Cook's replace-include.js accepts: include="…", data-include="…" and <include-file src="…">
+const INCLUDE_ATTR = /\binclude="([^"]+)"/gi;
+const INCLUDE_FILE = /<include-file\b[^>]*\bsrc="([^"]+)"/gi;
+
+/** Site-relative paths of the .html/.md files that may hold includes: pages, layouts and includes. */
+async function includeScanFiles(siteDir) {
+  const src = join(siteDir, 'src');
+  let areas = [];
+  try {
+    const raw = JSON.parse(await readFile(join(siteDir, 'config', 'programs.json'), 'utf8'));
+    areas = (raw.areas || []).map((a) => a?.path).filter((p) => typeof p === 'string');
+  } catch { /* no programs */ }
+  const found = [];
+  const walk = async (rel, inside) => {
+    let entries;
+    try { entries = await readdir(join(src, rel), { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        if (!rel && e.name === 'components') continue;
+        if (rel && !rel.includes('/') && areas.includes(rel)) continue; // a program folder
+        await walk(childRel);
+      } else if (e.isFile() && /\.(html|md)$/.test(e.name)) found.push(`src/${childRel}`);
+    }
+  };
+  await walk('', false);
+  return found.sort();
+}
+
+/** Which files include each include: `{ name: [site-relative paths] }`. */
+async function includeUsage(siteDir) {
+  const usage = {};
+  for (const file of await includeScanFiles(siteDir)) {
+    let source;
+    try { source = await readFile(join(siteDir, file), 'utf8'); } catch { continue; }
+    for (const re of [INCLUDE_ATTR, INCLUDE_FILE]) {
+      re.lastIndex = 0;
+      for (const [, target] of source.matchAll(re)) {
+        const m = /^\/?includes\/(.+)\.html$/.exec(target.trim());
+        if (!m || file === `src/includes/${m[1]}.html`) continue;
+        const list = (usage[m[1]] ??= []);
+        if (!list.includes(file)) list.push(file);
+      }
+    }
+  }
+  return usage;
+}
+
 async function unpublishedFiles(siteDir) {
   try {
     return new Set(await changedFiles(siteDir, ['src/layouts', 'src/includes']));
@@ -92,6 +141,7 @@ export async function listLayoutFiles(siteDir, { importCook = defaultImportCook 
   const { layouts, includes } = await inspect(siteDir, cook);
   const usage = await cook.layoutUsage(siteDir);
   const dirty = await unpublishedFiles(siteDir);
+  const incUsage = await includeUsage(siteDir);
   const unpublished = (kind, file) => dirty.has(`src/${kind === 'layout' ? 'layouts' : 'includes'}/${file}`);
 
   return {
@@ -106,7 +156,7 @@ export async function listLayoutFiles(siteDir, { importCook = defaultImportCook 
     // An include in a sub-folder has a name with a slash: not addressable, so not listed.
     includes: includes.filter((e) => LAYOUT_NAME.test(e.name)).map((e) => ({
       name: e.name, kind: 'include', label: e.name, status: statusOf(e, true),
-      problems: problemsOf(e, true), parent: null, baseFor: [], usedBy: [],
+      problems: problemsOf(e, true), parent: null, baseFor: [], usedBy: incUsage[e.name] ?? [],
       unpublished: unpublished('include', e.file),
     })),
   };
@@ -144,7 +194,7 @@ export async function readLayoutFile(siteDir, kind, name, { importCook = default
 }
 
 /** Serialize a tree and check it as the site's Cook would; the source or a 422. */
-async function serializeChecked(cook, siteDir, kind, tree, names, parents) {
+async function serializeChecked(cook, siteDir, kind, tree, names, parents, { name, parentOf = {} } = {}) {
   let source, result;
   try {
     source = cook.serializeLayout(tree);
@@ -156,6 +206,16 @@ async function serializeChecked(cook, siteDir, kind, tree, names, parents) {
   const problems = [...result.problems];
   if (kind === 'layout' && tree.parent && !parents.includes(tree.parent)) {
     problems.push({ line: 1, message: `parent layout "${tree.parent}" not found` });
+  }
+  if (kind === 'layout' && name && tree.parent) {
+    const chain = [name];
+    for (let at = tree.parent; at; at = at === name ? null : parentOf[at]) {
+      chain.push(at);
+      if (at === name || chain.length > 100) {
+        problems.push({ line: 1, message: `Layout cycle: ${chain.join(' → ')}` });
+        break;
+      }
+    }
   }
   if (!result.ok || problems.length) throw new LayoutError(422, "This layout can't be saved", { problems });
   return source;
@@ -177,7 +237,8 @@ export async function saveLayoutFile(siteDir, kind, name, input, { importCook = 
   const list = kind === 'layout' ? all.layouts : all.includes;
   const entry = list.find((e) => e.name === name);
 
-  const source = await serializeChecked(cook, siteDir, kind, tree, all.names, all.layouts.map((e) => e.name));
+  const parentOf = Object.fromEntries(all.layouts.map((e) => [e.name, e.parent]));
+  const source = await serializeChecked(cook, siteDir, kind, tree, all.names, all.layouts.map((e) => e.name), { name, parentOf });
 
   // Re-read now, as late as possible: a hand edit since the file was opened wins.
   let target;
@@ -260,7 +321,7 @@ export async function createLayoutFile(siteDir, input, { importCook = defaultImp
         info: { format: 1, label: label.trim(), slots: {} },
         parent: start.from,
         vars: [],
-        pageLayout: parentTree.pageLayout === '${pageLayout}' ? '${pageLayout}' : null,
+        pageLayout: parentTree.pageLayout === '${pageLayout}' ? 'stack' : null,
         htmlAttrs: [],
         head: [],
         body: [{ type: 'content', attrs: [] }],
@@ -278,7 +339,10 @@ export async function deleteLayoutFile(siteDir, kind, name, { importCook = defau
   check(kind, name);
   const cook = await loadCook(siteDir, importCook);
   const { entry } = await findEntry(siteDir, cook, kind, name);
-  if (kind === 'layout') {
+  if (kind === 'include') {
+    const usedBy = (await includeUsage(siteDir))[name] ?? [];
+    if (usedBy.length) throw new LayoutError(409, 'in use', { usedBy, baseFor: [] });
+  } else {
     const usage = await cook.layoutUsage(siteDir);
     const usedBy = usage.pages[name] ?? [];
     const baseFor = usage.layouts[name] ?? [];

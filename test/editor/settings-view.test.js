@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { statusBox, collectionOptions, urlPrefix, publishedDay, featuredModel, appearanceModel, pageThemeChoices } from '../../editor/assets/js/settings-view.js';
+import { statusBox, collectionOptions, urlPrefix, publishedDay, featuredModel, appearanceModel, pageThemeChoices, layoutChoices } from '../../editor/assets/js/settings-view.js';
 
 const NOT_LIVE = "Your saved edits aren't on the live site yet. Update builds the site and pushes them.";
 
@@ -186,5 +186,37 @@ describe('pageThemeChoices', () => {
     const T = [{ id: 'a' }, { id: 'b', custom: true }, { id: 'vp-site' }, { id: 'c' }, { id: 'adj' }];
     assert.deepEqual(pageThemeChoices({ setting: { adjust: 'adj' }, themes: T }, 'c').map((t) => t.id), ['c', 'b', 'a']);
     assert.deepEqual(pageThemeChoices({ setting: null, themes: T }).map((t) => t.id), ['b', 'a', 'c', 'adj']);
+  });
+});
+
+describe('layoutChoices', () => {
+  const listing = { layouts: [
+    { name: 'base', label: 'Base', abstract: true, usable: true },
+    { name: 'wide', label: 'Wide', usable: true },
+    { name: 'article', label: 'Article', usable: true },
+    { name: 'kid', label: 'Child', usable: false },
+  ] };
+  it('the collection default first, then non-abstract layouts by label, unusable ones disabled', () => {
+    assert.deepEqual(layoutChoices(listing, { collectionLayout: 'stack' }), [
+      { value: '', label: 'Collection default (stack)' },
+      { value: 'article', label: 'Article' },
+      { value: 'kid', label: 'Child', disabled: true },
+      { value: 'wide', label: 'Wide' },
+    ]);
+  });
+  it('a current layout the listing lacks is appended as (missing)', () => {
+    const out = layoutChoices(listing, { collectionLayout: 'stack', current: 'gone' });
+    assert.deepEqual(out.at(-1), { value: 'gone', label: 'gone (missing)' });
+  });
+  it('a listed current layout is not duplicated; an abstract one counts as listed', () => {
+    assert.equal(layoutChoices(listing, { current: 'wide' }).length, 4);
+    assert.equal(layoutChoices(listing, { current: 'base' }).length, 4);
+  });
+  it('no listing (the fetch failed): the default plus the current value as missing', () => {
+    assert.deepEqual(layoutChoices(null, { collectionLayout: 'stack', current: 'wide' }), [
+      { value: '', label: 'Collection default (stack)' },
+      { value: 'wide', label: 'wide (missing)' },
+    ]);
+    assert.equal(layoutChoices(null, {}).length, 1);
   });
 });

@@ -60,9 +60,13 @@ export function clearPageTheme() {
 /**
  * The meta a save sends. The server merges it over the stored meta, so a page
  * theme the post no longer has (`clearPageTheme`) is sent as null to drop it.
+ * Likewise a `layout` of '' (the collection default).
  * @param {Object} meta
  * @returns {Object}
  */
 export function metaToSave(meta) {
-  return { ...meta, theme: meta.theme ?? null, themeScope: meta.themeScope ?? null };
+  const out = { ...meta, theme: meta.theme ?? null, themeScope: meta.themeScope ?? null };
+  // The layout choice: '' (the collection default) is sent as null, so the merge drops a stored one
+  if ('layout' in meta) out.layout = meta.layout || null;
+  return out;
 }

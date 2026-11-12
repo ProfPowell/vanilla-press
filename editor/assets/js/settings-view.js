@@ -57,6 +57,28 @@ export function collectionOptions(collectionsConfig, current) {
 }
 
 /**
+ * The Layout select's options: the collection default first, then the
+ * non-abstract layouts by label (unusable ones disabled), then the
+ * document's own layout when the listing doesn't have it (its file was
+ * deleted or the listing failed): kept, shown as "<name> (missing)".
+ * @param {{ layouts?: Array<{ name: string, label?: string, abstract?: boolean, usable?: boolean }> }|null} listing
+ * @param {{ collectionLayout?: string, current?: string }} [options]
+ * @returns {Array<{ value: string, label: string, disabled?: boolean }>}
+ */
+export function layoutChoices(listing, { collectionLayout = '', current = '' } = {}) {
+  const all = Array.isArray(listing?.layouts) ? listing.layouts : [];
+  const options = [{ value: '', label: `Collection default (${collectionLayout || 'none'})` }];
+  const shown = all.filter((l) => !l.abstract)
+    .map((l) => ({ value: l.name, label: l.label || l.name, usable: l.usable !== false }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  for (const l of shown) {
+    options.push(l.usable ? { value: l.value, label: l.label } : { value: l.value, label: l.label, disabled: true });
+  }
+  if (current && !all.some((l) => l.name === current)) options.push({ value: current, label: `${current} (missing)` });
+  return options;
+}
+
+/**
  * The URL before the slug: `/<collection>/`, the collection's configured
  * `path` when it sets one, `/` for pages (postUrlPath's rule).
  * @param {string} collection

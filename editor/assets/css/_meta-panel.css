@@ -50,7 +50,8 @@
   border-color: transparent;
 }
 
-.meta-panel .hint {
+.meta-panel .hint,
+.meta-panel .meta-note {
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
@@ -537,5 +538,9 @@ appearance-section {
 }
 
 .conflict-notice[hidden] {
+  display: none;
+}
+
+.meta-panel .meta-note[hidden] {
   display: none;
 }

@@ -17,12 +17,12 @@
 import { validStatuses } from '../../../../src/schema/content-schema.js';
 import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.js';
 import { api } from '../api-client.js';
-import { postUrlPath } from '../../../../src/sync/paths.js';
+import { postUrlPath, collectionOutput } from '../../../../src/sync/paths.js';
 import {
   saveDocument, loadDocument, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine, metaEdited,
 } from '../editor.js';
 import { onMetaUpdate as onSiteMetaUpdate, isSiteMode, altCheckPasses } from '../site-mode.js';
-import { statusBox, collectionOptions, urlPrefix, featuredModel } from '../settings-view.js';
+import { statusBox, collectionOptions, layoutChoices, urlPrefix, featuredModel } from '../settings-view.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
 import { openMediaPicker } from './media-picker.js';
 import './appearance-section.js';
@@ -33,8 +33,11 @@ export class MetaPanel extends HTMLElement {
     this._collections = {};
     /** The open published post has saved edits that are not live (site-mode.js sets it). */
     this._liveOutOfDate = false;
+    /** The site's layouts listing (GET /api/layouts), for the Layout select; null until fetched or when the fetch failed. */
+    this.layoutsListing = null;
     this.render();
     this.loadCollections();
+    this.loadLayouts();
 
     // Listen for meta updates (e.g. from doc loading)
     window.__onMetaUpdate = (meta) => {
@@ -51,6 +54,14 @@ export class MetaPanel extends HTMLElement {
       const parsed = value ? JSON.parse(value) : {};
       this._collections = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     } catch { /* defaults */ }
+    this.syncFromMeta(getCurrentMeta());
+  }
+
+  /** Fetch the layouts listing once; a failure leaves the select with the default and the current value only. */
+  async loadLayouts() {
+    try {
+      this.layoutsListing = await api.getLayouts();
+    } catch { this.layoutsListing = null; }
     this.syncFromMeta(getCurrentMeta());
   }
 
@@ -136,6 +147,12 @@ export class MetaPanel extends HTMLElement {
         <select id="meta-collection"></select>
       </div>
 
+      <div class="field">
+        <label for="meta-layout">Layout</label>
+        <select id="meta-layout"></select>
+        <p class="meta-note" data-layout-note hidden></p>
+      </div>
+
       <appearance-section></appearance-section>
 
       <div class="actions">
@@ -168,7 +185,17 @@ export class MetaPanel extends HTMLElement {
     collectionSelect.addEventListener('change', () => {
       setCurrentMeta({ collection: collectionSelect.value });
       this.renderUrlPrefix(getCurrentMeta());
+      this.renderLayouts(getCurrentMeta()); // the collection default's name follows
       refreshMetaLine();
+      metaEdited();
+    });
+
+    this.querySelector('#meta-layout').addEventListener('change', (e) => {
+      const layout = e.target.value;
+      setCurrentMeta({ layout });
+      this.dispatchEvent(new CustomEvent('vp-layout-change', {
+        bubbles: true, detail: { layout, listing: this.layoutsListing },
+      }));
       metaEdited();
     });
 
@@ -376,6 +403,7 @@ export class MetaPanel extends HTMLElement {
 
     this.renderStatus(meta);
     this.renderCollections(meta);
+    this.renderLayouts(meta);
     this.renderUrlPrefix(meta);
     this.renderTags(meta.tags || []);
     this.renderFeatured(meta);
@@ -438,6 +466,32 @@ export class MetaPanel extends HTMLElement {
       }));
     }
     select.value = current;
+  }
+
+  /** The Layout select: the collection default, the site's layouts, the post's own when missing; and the listing's warning. */
+  renderLayouts(meta) {
+    const select = this.querySelector('#meta-layout');
+    if (!select) return;
+    const current = meta.layout || '';
+    const collectionLayout = collectionOutput(meta.collection || 'posts', this._collections).layout || '';
+    const choices = layoutChoices(this.layoutsListing, { collectionLayout, current });
+    const same = choices.length === select.options.length
+      && choices.every((c, i) => select.options[i].value === c.value && select.options[i].textContent === c.label
+        && select.options[i].disabled === !!c.disabled);
+    if (!same) {
+      select.replaceChildren(...choices.map((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.value;
+        opt.textContent = c.label;
+        if (c.disabled) opt.disabled = true;
+        return opt;
+      }));
+    }
+    select.value = current;
+    const note = this.querySelector('[data-layout-note]');
+    const message = this.layoutsListing?.message || '';
+    note.textContent = message;
+    note.hidden = !message;
   }
 
   renderUrlPrefix(meta) {

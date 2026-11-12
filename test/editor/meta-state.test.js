@@ -31,4 +31,8 @@ describe('metaToSave', () => {
   it('a page theme is sent as it is', () => {
     assert.deepEqual(metaToSave({ title: 'T', theme: '8bit', themeScope: 'article' }), { title: 'T', theme: '8bit', themeScope: 'article' });
   });
+  it('a layout is kept, and the collection default (\'\') is sent as null', () => {
+    assert.equal(metaToSave({ layout: 'wide' }).layout, 'wide');
+    assert.equal(metaToSave({ layout: '' }).layout, null);
+  });
 });

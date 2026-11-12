@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  mkdtempSync, rmSync, mkdirSync, symlinkSync, cpSync, readdirSync, lstatSync, existsSync, readFileSync, writeFileSync,
+  mkdtempSync, rmSync, mkdirSync, symlinkSync, cpSync, readdirSync, lstatSync, existsSync, readFileSync, writeFileSync, utimesSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -187,6 +187,83 @@ describe('createLayoutPreview', () => {
     assert.equal(after.mtimeMs, before.mtimeMs);
     assert.notEqual(lstatSync(edit).ino, editBefore.ino);
     assert.equal(readFileSync(edit, 'utf8'), readFileSync(join(site.path, 'src', 'index.html'), 'utf8'));
+  });
+
+  describe('the copy manifest (I4)', () => {
+    /** A build that succeeds at once: these tests are about the copy. */
+    const fastSpawn = () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = () => {};
+      setImmediate(() => child.emit('close', 0));
+      return child;
+    };
+    /** Copy-relative path -> inode, for every regular file the mirror owns. */
+    const inodes = (dir) => {
+      const out = {};
+      const walk = (d) => {
+        for (const name of readdirSync(d)) {
+          if (name === 'node_modules' || name === 'dist') continue;
+          const abs = join(d, name);
+          const st = lstatSync(abs);
+          if (st.isDirectory()) walk(abs);
+          else if (st.isFile()) out[relative(dir, abs)] = st.ino;
+        }
+      };
+      walk(dir);
+      return out;
+    };
+
+    it('recopies no unchanged file across 20 renders', async () => {
+      const cfg = join(root, 'config-manifest');
+      const p = createLayoutPreview({ site, configDir: cfg, spawn: fastSpawn });
+      try {
+        assert.equal((await p.render({ layout: 'page' })).ok, true);
+        const copy = join(cfg, 'layout-preview', 'site1');
+        const first = inodes(copy);
+        for (let i = 0; i < 20; i++) {
+          assert.equal((await p.render({ layout: 'page' })).ok, true);
+          const now = inodes(copy);
+          const recopied = Object.keys(first).filter((k) => k.startsWith('src/') || k.startsWith('config') || k === 'package.json')
+            .filter((k) => !k.includes('vp-layout-preview') && now[k] !== first[k]);
+          assert.deepEqual(recopied, [], `render ${i + 2} recopied unchanged files`);
+        }
+      } finally {
+        await p.close();
+      }
+    });
+
+    it('recopies an equal-size edit with a different mtime, and forgets deleted files', async () => {
+      const cfg = join(root, 'config-manifest-2');
+      const p = createLayoutPreview({ site, configDir: cfg, spawn: fastSpawn });
+      const src = join(site.path, 'src', 'about.html');
+      const original = readFileSync(src, 'utf8');
+      try {
+        await p.render({ layout: 'page' });
+        const copy = join(cfg, 'layout-preview', 'site1');
+        const swapped = original.replace(/[a-z]/, (c) => (c === 'a' ? 'b' : 'a'));
+        assert.equal(swapped.length, original.length);
+        writeFileSync(src, swapped);
+        const later = new Date(Date.now() + 5000);
+        utimesSync(src, later, later);
+        await p.render({ layout: 'page' });
+        assert.equal(readFileSync(join(copy, 'src', 'about.html'), 'utf8'), swapped);
+        const extra = join(site.path, 'src', 'manifest-extra.html');
+        writeFileSync(extra, '<p>x</p>');
+        await p.render({ layout: 'page' });
+        rmSync(extra);
+        await p.render({ layout: 'page' });
+        const manifest = readdirSync(copy).find((n) => /manifest/.test(n));
+        assert.ok(manifest, 'the manifest lives in the copy dir');
+        const entries = JSON.parse(readFileSync(join(copy, manifest), 'utf8'));
+        assert.ok(entries['src/about.html']);
+        assert.equal(entries['src/manifest-extra.html'], undefined);
+      } finally {
+        writeFileSync(src, original);
+        await p.close();
+      }
+    });
   });
 
   it('refuses a Host header other than 127.0.0.1 or localhost on its port', async () => {

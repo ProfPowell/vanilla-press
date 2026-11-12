@@ -5,8 +5,9 @@
  * own Cook, and a small static server for the copy's `dist/`.
  *
  * Each render mirrors the site's `src/`, `config/`, `plugins/` and
- * `package.json` into the copy (unchanged files skipped by size and mtime,
- * files gone from the site deleted), links `node_modules` to the site's,
+ * `package.json` into the copy (a file is skipped when its source's size and
+ * mtime equal those recorded in the copy's manifest when it was last copied;
+ * files gone from the site are deleted), links `node_modules` to the site's,
  * writes the unsaved layout and include sources over the copy, writes the
  * draft as `src/vp-layout-preview.html` and runs `cook build` there. Nothing
  * is ever written under the site directory (Review Focus 4): the copy holds
@@ -16,10 +17,10 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import {
-  existsSync, lstatSync, statSync, readdirSync, mkdirSync, rmSync, copyFileSync, utimesSync,
-  writeFileSync, symlinkSync, readlinkSync, createReadStream, realpathSync,
+  existsSync, lstatSync, statSync, readdirSync, mkdirSync, rmSync, copyFileSync,
+  writeFileSync, readFileSync, symlinkSync, readlinkSync, createReadStream, realpathSync,
 } from 'node:fs';
-import { join, extname, sep, dirname } from 'node:path';
+import { join, extname, sep, dirname, relative } from 'node:path';
 import { collectLog, durationText } from './site-process.js';
 import { MIME_TYPES } from '../server/static.js';
 import { pageHtml } from '../sync/to-site.js';
@@ -73,24 +74,44 @@ function sourceStat(abs) {
   }
 }
 
-/**
- * Same mtime at whole-millisecond precision: utimes stamps millisecond Dates,
- * while APFS keeps sub-millisecond source mtimes.
- */
-const sameMtime = (a, b) => Math.floor(a.mtimeMs) === Math.floor(b.mtimeMs);
+/** The copy's manifest: copy-relative path -> the source's `{ size, mtimeMs }` when it was copied. */
+const MANIFEST = '.vp-preview-manifest.json';
 
-/** Copy one file when its size or mtime differs (or `force`); the copy keeps the source's mtime. */
-function mirrorFile(from, to, st, force) {
+function readManifest(copyDir) {
+  try {
+    const data = JSON.parse(readFileSync(join(copyDir, MANIFEST), 'utf8'));
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * One mirror pass: `before` is the manifest read at the start, `after` the one
+ * written at the end (only files still in the site, so deleted ones drop out).
+ */
+function mirrorState(copyDir, forced) {
+  return { copyDir, forced, before: readManifest(copyDir), after: {} };
+}
+
+/**
+ * Copy one file unless the manifest says the source is unchanged since it was
+ * copied (same size and mtimeMs, compared exactly) and the copy is still a
+ * regular file. A `forced` path is always recopied.
+ */
+function mirrorFile(from, to, st, state) {
+  const key = relative(state.copyDir, to).split(sep).join('/');
+  const was = state.before[key];
   const have = lstatOrNull(to);
-  if (have && !have.isFile()) remove(to);
-  else if (have && !force && have.size === st.size && sameMtime(have, st)) return;
-  if (have?.isFile()) rmSync(to);
+  const record = { size: st.size, mtimeMs: st.mtimeMs };
+  state.after[key] = record;
+  if (have?.isFile() && !state.forced.has(to) && was && was.size === st.size && was.mtimeMs === st.mtimeMs) return;
+  if (have) remove(to);
   copyFileSync(from, to);
-  utimesSync(to, st.atime, st.mtime);
 }
 
 /** Mirror a directory tree. node_modules is never entered; `forced` paths are recopied. */
-function mirrorDir(from, to, forced) {
+function mirrorDir(from, to, state) {
   const have = lstatOrNull(to);
   if (have && !have.isDirectory()) remove(to);
   if (!have || !have.isDirectory()) mkdirSync(to, { recursive: true });
@@ -101,8 +122,8 @@ function mirrorDir(from, to, forced) {
     const st = sourceStat(src);
     if (!st) continue;
     const dest = join(to, name);
-    if (st.isDirectory()) mirrorDir(src, dest, forced);
-    else if (st.isFile()) mirrorFile(src, dest, st, forced.has(dest));
+    if (st.isDirectory()) mirrorDir(src, dest, state);
+    else if (st.isFile()) mirrorFile(src, dest, st, state);
     else continue;
     keep.add(name);
   }
@@ -117,18 +138,20 @@ function mirrorDir(from, to, forced) {
  */
 function mirrorSite(siteDir, copyDir, forced) {
   mkdirSync(copyDir, { recursive: true });
+  const state = mirrorState(copyDir, forced);
   for (const dir of MIRROR_DIRS) {
     const src = join(siteDir, dir);
     const st = sourceStat(src);
-    if (st?.isDirectory()) mirrorDir(src, join(copyDir, dir), forced);
+    if (st?.isDirectory()) mirrorDir(src, join(copyDir, dir), state);
     else remove(join(copyDir, dir));
   }
   for (const file of MIRROR_FILES) {
     const src = join(siteDir, file);
     const st = sourceStat(src);
-    if (st?.isFile()) mirrorFile(src, join(copyDir, file), st, forced.has(join(copyDir, file)));
+    if (st?.isFile()) mirrorFile(src, join(copyDir, file), st, state);
     else remove(join(copyDir, file));
   }
+  writeFileSync(join(copyDir, MANIFEST), JSON.stringify(state.after));
   // node_modules: a link to the site's, never a copy.
   const link = join(copyDir, 'node_modules');
   const target = join(siteDir, 'node_modules');

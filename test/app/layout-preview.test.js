@@ -266,6 +266,14 @@ describe('createLayoutPreview', () => {
     });
   });
 
+  it('refuses a request whose Origin is another site; a null Origin and none are served (M2)', async () => {
+    const r = await preview.render({ layout: 'page' });
+    assert.equal((await rawGet(r.url, '/', { Origin: 'https://evil.example' })).status, 403);
+    assert.equal((await rawGet(r.url, '/', { Origin: 'http://127.0.0.1:3007' })).status, 403);
+    assert.equal((await rawGet(r.url, '/', { Origin: 'null' })).status, 200);
+    assert.equal((await rawGet(r.url, '/')).status, 200);
+  });
+
   it('refuses a Host header other than 127.0.0.1 or localhost on its port', async () => {
     const r = await preview.render({ layout: 'page' });
     const { port } = new URL(r.url);

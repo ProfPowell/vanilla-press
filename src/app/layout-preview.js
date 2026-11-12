@@ -178,7 +178,7 @@ function killGroup(child) {
 /**
  * The static server for a copy's dist/: GET and HEAD only, 127.0.0.1,
  * `Access-Control-Allow-Origin: *` (the sandboxed iframe has a null origin and
- * loads module scripts), `Cache-Control: no-store`, a directory serves its
+ * loads module scripts) while any `Origin` other than `null` is refused, `Cache-Control: no-store`, a directory serves its
  * index.html, `..` and anything resolving outside dist/ are refused.
  * @param {string} distDir
  * @param {number} port - 0 for any free port
@@ -196,6 +196,9 @@ function startStaticServer(distDir, port) {
     if (![`127.0.0.1:${bound}`, `localhost:${bound}`].includes(String(req.headers.host).toLowerCase())) {
       return send(res, 403, 'Forbidden');
     }
+    // Only the sandboxed preview frame (origin "null") or no page at all: another site open
+    // in the browser must not read draft previews through the open CORS header.
+    if (req.headers.origin !== undefined && req.headers.origin !== 'null') return send(res, 403, 'Forbidden');
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
     let pathname;
     try {

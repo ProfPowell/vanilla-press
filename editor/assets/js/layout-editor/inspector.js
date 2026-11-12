@@ -408,7 +408,9 @@ export function createInspector({ el: root, getView, getMeta, getContext, onMeta
     const meta = getMeta() || {};
     const slotLabels = Object.fromEntries(Object.entries(meta.info?.slots || {})
       .map(([k, v]) => [k, v && typeof v === 'object' && typeof v.label === 'string' ? v.label : '']));
-    const context = { ...(getContext() || {}), repeats: repeatsAt(state.doc, t.pos), slots: slotNames(state), slotLabels };
+    const filledSlots = [];
+    state.doc.descendants((node) => { if (node.type.name === 'slot_piece') filledSlots.push(node.attrs.name); });
+    const context = { ...(getContext() || {}), repeats: repeatsAt(state.doc, t.pos), slots: slotNames(state), slotLabels, filledSlots };
     drawnContext = context;
     const fields = inspectorFields(t.node, context);
     for (const [group, heading] of GROUPS) {

@@ -34,6 +34,66 @@ const CONTEXT = {
 
 const fragment = (body) => ({ kind: 'fragment', info: null, parent: null, vars: [], pageLayout: null, htmlAttrs: [], head: [], body, slots: [] });
 
+describe('a child\'s Fills region (M6)', () => {
+  const PARENT = [{ name: 'nav', label: 'Section menu' }, { name: 'aside', label: 'Sidebar' }, { name: 'head', label: 'Head' }];
+
+  it('is a select of the parent\'s regions (by label) not filled by another piece', () => {
+    const node = s.nodes.slot_piece.create({ name: 'aside' });
+    const f = field(inspectorFields(node, { ...CONTEXT, parentSlots: PARENT, filledSlots: ['aside', 'nav'] }), 'name');
+    assert.equal(f.type, 'select');
+    assert.equal(f.label, 'Fills region');
+    assert.deepEqual(f.options.map(o => [o.value, o.label]), [['aside', 'Sidebar']]);
+    assert.equal(f.error ?? null, null);
+    const g = field(inspectorFields(node, { ...CONTEXT, parentSlots: PARENT, filledSlots: ['aside'] }), 'name');
+    assert.deepEqual(g.options.map(o => [o.value, o.label]), [['nav', 'Section menu'], ['aside', 'Sidebar']]);
+  });
+
+  it('a stored name the parent doesn\'t declare shows an inline error', () => {
+    const node = s.nodes.slot_piece.create({ name: 'sidebar' });
+    const f = field(inspectorFields(node, { ...CONTEXT, parentSlots: PARENT, filledSlots: ['sidebar'] }), 'name');
+    assert.equal(f.type, 'select');
+    assert.equal(f.value, 'sidebar');
+    assert.ok(f.options.some(o => o.value === 'sidebar'));
+    assert.equal(f.error, 'The layout this is built on has no region "sidebar"');
+    assert.equal(fieldError(node, 'name', 'gone', { ...CONTEXT, parentSlots: PARENT }), 'The layout this is built on has no region "gone"');
+    assert.equal(fieldError(node, 'name', 'nav', { ...CONTEXT, parentSlots: PARENT }), null);
+  });
+});
+
+describe('removing a region drops conditions on it (M6)', () => {
+  it('deleting a base slot removes data-if/data-unless="slot:<name>" in the same transaction', async () => {
+    const { slotConditionsPlugin } = await import('../../editor/assets/js/layout-editor/palette.js');
+    const tree = {
+      kind: 'base', info: { format: 1, label: 'B', slots: { aside: { label: 'Sidebar' }, nav: { label: 'Menu' } } },
+      parent: null, vars: [], pageLayout: 'stack', htmlAttrs: [], head: [],
+      body: [
+        { type: 'container', tag: 'nav', attrs: [], body: [{ type: 'slot', name: 'nav', attrs: [] }] },
+        { type: 'container', tag: 'main', attrs: [], body: [
+          { type: 'text', tag: 'p', attrs: [], unless: 'slot:aside', inline: [{ text: 'wide' }] },
+          { type: 'text', tag: 'p', attrs: [], if: 'slot:nav', inline: [{ text: 'menu' }] },
+          { type: 'content', attrs: [] },
+        ] },
+        { type: 'container', tag: 'aside', attrs: [], if: 'slot:aside', body: [
+          { type: 'slot', name: 'aside', attrs: [] },
+          { type: 'text', tag: 'p', attrs: [], inline: [{ text: 'extra' }] },
+        ] },
+      ],
+      slots: [],
+    };
+    const { doc, meta } = treeToDoc(tree, s);
+    const state = EditorState.create({ doc, plugins: [slotConditionsPlugin()] });
+    let at = null;
+    doc.descendants((node, pos) => { if (node.type.name === 'slot_ref' && node.attrs.name === 'aside') at = pos; });
+    const { state: next, transactions } = state.applyTransaction(state.tr.delete(at, at + 1));
+    assert.equal(transactions.length, 2, 'the cleanup is appended to the deletion');
+    const out = docToTree(next.doc, meta);
+    const main = out.body.find(b => b.tag === 'main');
+    assert.equal(main.body[0].unless, undefined);
+    assert.equal(main.body[1].if, 'slot:nav', 'other regions keep theirs');
+    assert.equal(out.body.find(b => b.tag === 'aside').if, undefined);
+  });
+});
+
 describe('inspectorFields', () => {
   it('a text block: its tag, the repeat, Show only when and id/class/aria-label', () => {
     const node = s.nodes.text_block.create({ tag: 'h2' });

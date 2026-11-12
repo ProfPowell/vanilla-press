@@ -303,6 +303,31 @@ const select = (key, label, value, values) => {
   return { key, label, type: 'select', value, options, group: 'block' };
 };
 
+/** The message for a child's piece that fills a region its parent doesn't have. */
+export const noParentRegion = (name) => `The layout this is built on has no region "${name}"`;
+
+/** The parent's regions a piece can fill, when they are known (`context.parentSlots`), else null. */
+function parentRegions(context) {
+  if (!Array.isArray(context?.parentSlots)) return null;
+  return context.parentSlots.filter(r => r && typeof r.name === 'string' && r.name && r.name !== 'head');
+}
+
+/**
+ * A child's piece's region: a select of the parent's regions (by label) that no
+ * other piece fills, with an error when the stored name isn't one of the parent's.
+ * Free text when the parent's regions aren't known.
+ */
+function fillsField(node, context) {
+  const name = node.attrs.name;
+  const regions = parentRegions(context);
+  if (!regions) return { key: 'name', label: 'Fills region', type: 'text', value: name, group: 'block' };
+  const filled = Array.isArray(context.filledSlots) ? context.filledSlots : [];
+  const options = regions.filter(r => r.name === name || !filled.includes(r.name)).map(r => opt(r.name, r.label || r.name));
+  const known = regions.some(r => r.name === name);
+  if (!known) options.push(opt(name));
+  return { key: 'name', label: 'Fills region', type: 'select', value: name, options, group: 'block', error: known ? null : noParentRegion(name) };
+}
+
 /** Component fields: tag, then the manifest's attributes (or raw pairs) less the common ones. */
 function componentFields(node, ctx, pairs) {
   const tag = node.attrs.tag;
@@ -388,7 +413,7 @@ export function inspectorFields(node, context = {}) {
       break;
     }
     case 'slot_piece':
-      own.push({ key: 'name', label: 'Fills region', type: 'text', value: node.attrs.name, group: 'block' });
+      own.push(fillsField(node, context));
       break;
     case 'field':
       own.push({
@@ -455,6 +480,8 @@ export function fieldError(node, field, value, context = null) {
   if (key === 'name' && (type === 'slot_ref' || type === 'slot_piece')) {
     if (!SLOT_NAME.test(v)) return 'A region name starts with a letter and uses letters, digits, - and _';
     if (v === 'head' && type === 'slot_ref') return '"head" is kept for head items';
+    const regions = type === 'slot_piece' ? parentRegions(context) : null;
+    if (regions && !regions.some(r => r.name === v)) return noParentRegion(v);
   }
   if (key === 'name' && type === 'field') {
     const error = keyError(v, context, { condition: false });
@@ -562,6 +589,28 @@ export function applyField(node, field, value) {
     default:
       return attrs;
   }
+}
+
+/**
+ * Attrs (a node's, or a mark's) without any `slot:<name>` condition: the
+ * `if`/`unless` node attrs cleared and `data-if`/`data-unless` pairs
+ * dropped. Null when nothing names the slot.
+ * @param {Object} attrs
+ * @param {string} name
+ * @returns {Object|null}
+ */
+export function dropSlotConditions(attrs, name) {
+  const old = `slot:${name}`;
+  let changed = false;
+  const out = { ...attrs };
+  for (const k of ['if', 'unless']) {
+    if (typeof out[k] === 'string' && out[k].trim() === old) { out[k] = null; changed = true; }
+  }
+  if (Array.isArray(out.attrs)) {
+    const kept = out.attrs.filter(([k, v]) => !((k === 'data-if' || k === 'data-unless') && String(v).trim() === old));
+    if (kept.length !== out.attrs.length) { out.attrs = kept; changed = true; }
+  }
+  return changed ? out : null;
 }
 
 /**

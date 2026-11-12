@@ -347,6 +347,20 @@ describe('layout editor: a child\'s head (I3)', { skip: !HAVE_COOK && 'needs the
     ed.destroy();
   });
 
+  it('the inspector picks a piece\'s region from the parent\'s regions, by label (M6)', async () => {
+    const { NodeSelection } = await import('prosemirror-state');
+    const root = freshRoot();
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch: withParent(starterTree('post'), SLOTS) });
+    let at = null;
+    ed.view.state.doc.descendants((node, pos) => { if (node.type.name === 'slot_piece' && at === null) at = pos; });
+    ed.view.dispatch(ed.view.state.tr.setSelection(NodeSelection.create(ed.view.state.doc, at)));
+    const pick = root.querySelector('[data-le-inspector] [data-field="name"]');
+    assert.equal(pick.tagName, 'SELECT');
+    assert.deepEqual([...pick.querySelectorAll('option')].map(o => o.textContent), ['Section menu', 'Sidebar']);
+    assert.equal(root.querySelector('[data-le-inspector] .le-insp-error'), null);
+    ed.destroy();
+  });
+
   it('a child whose parent has no head region shows no Head', async () => {
     const root = freshRoot();
     const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'docs', fetch: withParent(starterTree('docs'), SLOTS.slice(0, 2)) });

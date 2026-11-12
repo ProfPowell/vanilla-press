@@ -31,7 +31,7 @@ import { layoutSchema } from './schema.js';
 import { treeToDoc, docToTree } from './convert.js';
 import { nodeViews, refreshSlotLabels, DOCUMENT_FIELDS } from './views.js';
 import { createInspector } from './inspector.js';
-import { LayoutPalette, palettePlugin, layoutRulesPlugin, fillEntries } from './palette.js';
+import { LayoutPalette, palettePlugin, layoutRulesPlugin, slotConditionsPlugin, fillEntries } from './palette.js';
 import { createHeadDialog } from './head-dialog.js';
 import { createPreviewPane, previewLayoutFor } from './preview-pane.js';
 import '../components/confirm-panel.js';
@@ -94,7 +94,8 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     el: els.inspector,
     getView: () => view,
     getMeta: () => meta,
-    getContext: () => context,
+    // A child's piece picks from its parent's regions (null until they are known)
+    getContext: () => ({ ...context, parentSlots: parentKnown ? parentSlots : null }),
     onMetaChange: () => {
       setDirty(true);
       if (view) refreshSlotLabels(view, meta);
@@ -121,6 +122,8 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   let children = [];
   /** A child's parent regions ({ name, label }), for the palette and the canvas labels. */
   let parentSlots = [];
+  /** Whether parentSlots came from the parent (the inspector checks a piece's region against them). */
+  let parentKnown = false;
   /** The preview pane, once the layout is open. */
   let preview = null;
 
@@ -309,6 +312,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         // First: while the palette is open it owns the keys
         palettePlugin(palette),
         layoutRulesPlugin(),
+        slotConditionsPlugin(),
         history(),
         keymap({
           'Mod-z': undo,
@@ -492,6 +496,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       const data = await res.json();
       const parent = (Array.isArray(data?.layouts) ? data.layouts : []).find(l => l?.name === tree.parent);
       parentSlots = Array.isArray(parent?.slots) ? parent.slots : [];
+      parentKnown = Boolean(parent);
       palette.extraEntries = (state) => fillEntries(parentSlots, state.doc, tree.parent);
     } catch { /* the palette offers the usual blocks */ }
   }

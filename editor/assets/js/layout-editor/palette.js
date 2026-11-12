@@ -17,6 +17,7 @@
 
 import { Plugin, Selection, NodeSelection } from 'prosemirror-state';
 import { placePopover } from '../popover-place.js';
+import { dropSlotConditions } from './inspector-model.js';
 
 /** VB layout elements offered as containers. */
 const LAYOUT_ELEMENTS = [
@@ -202,6 +203,44 @@ export function layoutRulesPlugin() {
     filterTransaction(tr, state) {
       if (!tr.docChanged) return true;
       return !addsViolation(layoutViolations(state.doc), layoutViolations(tr.doc));
+    },
+  });
+}
+
+/** The names of the slot blocks in a doc. */
+function slotRefNames(doc) {
+  const names = new Set();
+  doc.descendants((node) => { if (node.type.name === 'slot_ref') names.add(node.attrs.name); });
+  return names;
+}
+
+/**
+ * When a change removes the last slot block of a name (a region deleted), the
+ * `data-if`/`data-unless="slot:<name>"` conditions that pointed at it go in a
+ * transaction appended to that change (one undo step): Cook refuses a
+ * condition on a region the layout doesn't declare.
+ */
+export function slotConditionsPlugin() {
+  return new Plugin({
+    appendTransaction(trs, oldState, newState) {
+      if (!trs.some(tr => tr.docChanged)) return null;
+      const now = slotRefNames(newState.doc);
+      const gone = [...slotRefNames(oldState.doc)].filter(n => !now.has(n));
+      if (!gone.length) return null;
+      const tr = newState.tr;
+      newState.doc.descendants((node, pos) => {
+        let attrs = node.attrs;
+        for (const name of gone) attrs = dropSlotConditions(attrs, name) ?? attrs;
+        if (attrs !== node.attrs) tr.setNodeMarkup(pos, null, attrs, node.marks);
+        for (const mark of node.marks) {
+          let markAttrs = mark.attrs;
+          for (const name of gone) markAttrs = dropSlotConditions(markAttrs, name) ?? markAttrs;
+          if (markAttrs !== mark.attrs) {
+            tr.removeMark(pos, pos + node.nodeSize, mark).addMark(pos, pos + node.nodeSize, mark.type.create(markAttrs));
+          }
+        }
+      });
+      return tr.docChanged ? tr : null;
     },
   });
 }

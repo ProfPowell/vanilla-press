@@ -40,7 +40,7 @@
     "vanilla-breeze": "file:../vanilla-breeze"
   },
   "devDependencies": {
-    "cook-ssg": "^2.5.0",
+    "cook-ssg": "^2.8.0",
     "gray-matter": "^4.0.3",
     "linkedom": "0.18.15",
     "prosemirror-commands": "1.6.2",

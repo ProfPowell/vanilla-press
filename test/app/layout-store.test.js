@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
-  listLayoutFiles, readLayoutFile, saveLayoutFile, createLayoutFile, deleteLayoutFile, layoutContext, LayoutError,
+  listLayoutFiles, readLayoutFile, saveLayoutFile, createLayoutFile, deleteLayoutFile, layoutContext, serializeLayoutTree, LayoutError,
   OLD_COOK_EDIT_MESSAGE, CHANGED_ON_DISK,
 } from '../../src/app/layout-store.js';
 
@@ -275,6 +275,25 @@ describe('layout-store', () => {
       await rejects(createLayoutFile(dir, { kind: 'layout', name, label: 'X', start: { type: 'blank' } }), 400);
     }
     await rejects(readLayoutFile(dir, 'file', 'page'), 400);
+  });
+
+  it('serializes an unsaved tree with the site\'s Cook (for the preview); writes nothing', async () => {
+    const dir = mk();
+    const file = join(dir, 'src', 'layouts', 'post.html');
+    const before = readFileSync(file, 'utf8');
+    const { tree } = await readLayoutFile(dir, 'layout', 'post');
+    tree.body[0].body[0].tag = 'h2';
+    const { html } = await serializeLayoutTree(dir, 'layout', tree);
+    assert.match(html, /<h2>\$\{title\}<\/h2>/);
+    assert.equal(readFileSync(file, 'utf8'), before);
+    const inc = await readLayoutFile(dir, 'include', 'header');
+    assert.match((await serializeLayoutTree(dir, 'include', inc.tree)).html, /^<!-- layout-fragment -->/);
+    await rejects(serializeLayoutTree(dir, 'file', tree), 400);
+    await rejects(serializeLayoutTree(dir, 'layout', null), 400);
+    await rejects(serializeLayoutTree(dir, 'include', tree), 400);
+    await rejects(serializeLayoutTree(dir, 'layout', inc.tree), 400);
+    await rejects(serializeLayoutTree(dir, 'layout', { ...tree, body: 'nope' }), 422);
+    await rejects(serializeLayoutTree(dir, 'layout', tree, { importCook: async () => ({}) }), 409, OLD_COOK_EDIT_MESSAGE);
   });
 
   it('an old Cook is unsupported with the message', async () => {

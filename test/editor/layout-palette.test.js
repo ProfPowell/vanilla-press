@@ -9,8 +9,9 @@ import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { layoutSchema } from '../../editor/assets/js/layout-editor/schema.js';
 import { treeToDoc } from '../../editor/assets/js/layout-editor/convert.js';
 import {
-  paletteItems, insertEntry, layoutViolations, layoutRulesPlugin, addsViolation,
+  paletteItems, insertEntry, layoutViolations, layoutRulesPlugin, addsViolation, fillEntries,
 } from '../../editor/assets/js/layout-editor/palette.js';
+import { docToTree } from '../../editor/assets/js/layout-editor/convert.js';
 
 const text = (tag, inline, extra = {}) => ({ type: 'text', tag, attrs: [], inline, ...extra });
 const region = (tag, body, attrs = []) => ({ type: 'container', tag, attrs, body });
@@ -199,5 +200,30 @@ describe('layout rules guard', () => {
     tr.delete(tr.mapping.map(contentPos), tr.mapping.map(contentPos) + 1);
     assert.equal(layoutViolations(tr.doc).length, 1);
     assert.equal(state.apply(tr).doc.eq(state.doc), true);
+  });
+});
+
+describe('a child fills its parent\'s regions', () => {
+  it('offers each unfilled parent region by its label; inserting one adds <template slot>', () => {
+    const tree = {
+      kind: 'child', info: { format: 1, label: 'Kid', slots: {} }, parent: 'base', vars: [], pageLayout: 'stack',
+      htmlAttrs: [], head: [], body: [{ type: 'content', attrs: [] }], slots: [],
+    };
+    const { doc, meta } = treeToDoc(tree, layoutSchema);
+    let pos = null;
+    doc.descendants((node, p) => { if (node.type.name === 'content') pos = p; });
+    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, pos) });
+    const slots = [{ name: 'nav', label: 'Section menu' }, { name: 'aside', label: 'Sidebar' }, { name: 'head', label: 'Head' }];
+    const extra = fillEntries(slots, doc, 'base');
+    assert.deepEqual(extra.map(e => [e.id, e.label, e.category]), [['fill-nav', 'Section menu', 'region'], ['fill-aside', 'Sidebar', 'region']]);
+    const items = paletteItems(state, extra);
+    const sidebar = items.find(e => e.id === 'fill-aside');
+    assert.ok(sidebar, items.map(e => e.id).join());
+    assert.equal(items.some(e => e.id === 'region-aside'), false, 'base regions are not offered in a child');
+    const tr = insertEntry(state, sidebar);
+    assert.ok(tr);
+    const after = docToTree(tr.doc, meta);
+    assert.deepEqual(after.slots.map(p => p.name), ['aside']);
+    assert.deepEqual(fillEntries(slots, tr.doc).map(e => e.id), ['fill-nav']);
   });
 });

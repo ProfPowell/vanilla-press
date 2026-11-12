@@ -96,6 +96,25 @@ export const ENTRIES = [
   { id: 'region-footer', label: 'Footer', description: '<footer> region', icon: '▄', category: 'region', create: reg('footer') },
 ];
 
+/**
+ * A child's entries for the parent's regions it doesn't fill yet: each puts
+ * a `<template slot="name">` (a slot_piece) after the child's blocks,
+ * labelled as the parent labels the region (e.g. `Sidebar`).
+ * @param {Array<{ name: string, label?: string }>} slots - the parent's regions (head excluded)
+ * @param {import('prosemirror-model').Node} doc
+ * @param {string} [parent] - the parent layout's name, for the description
+ */
+export function fillEntries(slots, doc, parent = 'parent') {
+  const filled = new Set();
+  doc?.descendants((node) => { if (node.type.name === 'slot_piece') filled.add(node.attrs.name); });
+  return (Array.isArray(slots) ? slots : [])
+    .filter(s => s && typeof s.name === 'string' && s.name && s.name !== 'head' && !filled.has(s.name))
+    .map(s => ({
+      id: `fill-${s.name}`, label: s.label || s.name, description: `Fill ${parent}'s ${s.name} region`, icon: '▌', category: 'region',
+      create: (schema) => schema.nodes.slot_piece.create({ name: s.name }),
+    }));
+}
+
 export const CATEGORY_LABELS = {
   text: 'Text', container: 'Containers', list: 'Lists', media: 'Images', layout: 'Layout', component: 'Components', region: 'Regions',
 };
@@ -252,10 +271,11 @@ function place(state, entry, node) {
 /**
  * The entries that fit at the caret.
  * @param {import('prosemirror-state').EditorState} state
+ * @param {Array<Object>} [extra] - entries for this layout only (a child's `fillEntries`)
  */
-export function paletteItems(state) {
+export function paletteItems(state, extra = []) {
   const before = layoutViolations(state.doc);
-  return ENTRIES.filter((entry) => {
+  return [...ENTRIES, ...extra].filter((entry) => {
     const { tr } = place(state, entry, entry.create(state.schema, state.doc));
     return tr !== null && !addsViolation(before, layoutViolations(tr.doc));
   });
@@ -297,13 +317,15 @@ export class LayoutPalette {
     this.filter = '';
     this.selected = 0;
     this.items = [];
+    /** Entries for this layout only, at open (the page sets it: a child's fillEntries). */
+    this.extraEntries = () => [];
     this.onOutside = (e) => { if (this.visible && !this.el.contains(e.target)) this.close(); };
     document.addEventListener('mousedown', this.onOutside);
   }
 
   open(view) {
     this.view = view;
-    this.entries = paletteItems(view.state);
+    this.entries = paletteItems(view.state, this.extraEntries(view.state));
     this.filter = '';
     this.selected = 0;
     this.visible = true;

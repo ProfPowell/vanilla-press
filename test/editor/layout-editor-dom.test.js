@@ -83,7 +83,7 @@ describe('layout editor page', { skip: !HAVE_COOK && 'needs the linked Cook' }, 
     assert.equal([...select.options].find(o => o.selected).value, '${pageLayout}');
     assert.equal(root.querySelector('[data-le-abstract]').closest('[hidden]'), null);
     assert.equal(root.querySelector('[data-le-abstract]').checked, true);
-    assert.ok(root.querySelector('[data-le-head]').disabled);
+    assert.equal(root.querySelector('[data-le-head]').disabled, false); // the Head dialog (base only)
     ed.destroy();
   });
 
@@ -215,6 +215,67 @@ describe('layout editor inspector', { skip: !HAVE_COOK && 'needs the linked Cook
     assert.equal(ed.isDirty(), true);
     assert.match(root.querySelector('[data-le-canvas]').textContent, /Region: Extras/);
     assert.equal(ed.tree().info.slots[view.state.doc.nodeAt(slotPos).attrs.name].label, 'Extras');
+    ed.destroy();
+  });
+});
+
+describe('layout editor head and preview', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
+  it('Head (base only): a head edit marks the layout unsaved and reaches the saved tree', async () => {
+    const root = freshRoot();
+    const fetch = stubFetch(starterTree('base', { fields: ['siteTitle'] }), [200, { hash: 'h2' }]);
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'base', fetch });
+    const head = root.querySelector('[data-le-head]');
+    assert.equal(head.hidden, false);
+    assert.equal(head.disabled, false);
+    head.click();
+    const dialog = root.querySelector('[data-le-head-dialog]');
+    assert.ok(dialog.hasAttribute('open'));
+    assert.match(dialog.querySelector('[data-head-list]').textContent, /Region: Head/);
+    const region = [...dialog.querySelectorAll('[data-head-new] option')].find(o => o.value === 'region');
+    assert.equal(region.disabled, true, 'the starter base already has the head region');
+    dialog.querySelector('[data-head-add]').click(); // <meta> is the default choice
+    assert.equal(ed.isDirty(), true);
+    await ed.save();
+    const put = fetch.calls.find(c => c.method === 'PUT');
+    assert.equal(put.body.tree.head.at(-1).tag, 'meta');
+    ed.destroy();
+    assert.equal(root.querySelector('[data-le-head-dialog]'), null);
+  });
+
+  it('a child hides Head; the preview pane mounts and an edit schedules a render', async () => {
+    const root = freshRoot();
+    const fetch = stubFetch(starterTree('post'), [200, { hash: 'h2' }]);
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch });
+    assert.equal(root.querySelector('[data-le-head]').hidden, true);
+    const frame = root.querySelector('[data-le-preview] iframe');
+    assert.equal(frame.getAttribute('sandbox'), 'allow-scripts');
+    await ed.preview().ready;
+    const serializes = () => fetch.calls.filter(c => c.url === '/api/sites/s1/layout-files/serialize').length;
+    const before = serializes();
+    const label = root.querySelector('[data-le-label]');
+    label.value = 'Changed';
+    label.dispatchEvent(new win.Event('input', { bubbles: true }));
+    await ed.preview().render();
+    assert.equal(serializes(), before + 1);
+    assert.equal(fetch.calls.filter(c => c.url === '/api/sites/s1/layout-files/serialize').at(-1).body.tree.info.label, 'Changed');
+    ed.destroy();
+  });
+});
+
+describe('layout editor: a child fills its parent\'s regions', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
+  it('the palette offers the parent\'s regions the child doesn\'t fill yet, by their labels', async () => {
+    const root = freshRoot();
+    const tree = starterTree('post');
+    const base = stubFetch(tree, [200, { hash: 'h2' }]);
+    const fetch = async (url, opts) => {
+      if (url === '/api/sites/s1/layouts') {
+        return { ok: true, status: 200, json: async () => ({ layouts: [{ name: 'base', slots: [{ name: 'nav', label: 'Section menu' }, { name: 'aside', label: 'Sidebar' }] }] }) };
+      }
+      return base(url, opts);
+    };
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch });
+    // The starter post fills aside (and head) already
+    assert.deepEqual(ed.palette.extraEntries(ed.view.state).map(e => [e.id, e.label]), [['fill-nav', 'Section menu']]);
     ed.destroy();
   });
 });

@@ -366,6 +366,28 @@ export async function saveLayoutFile(siteDir, kind, name, input, { importCook = 
   return { hash: sha1(source) };
 }
 
+/**
+ * An unsaved tree as the site's Cook writes it, for the preview. Nothing is
+ * checked or written: the preview build reports what the source gets wrong.
+ * @param {string} siteDir
+ * @param {'layout'|'include'} kind
+ * @param {object} tree - a fragment for an include; a base or child for a layout
+ * @returns {Promise<{ html: string }>}
+ */
+export async function serializeLayoutTree(siteDir, kind, tree, { importCook = defaultImportCook } = {}) {
+  if (kind !== 'layout' && kind !== 'include') throw new LayoutError(400, 'kind must be layout or include');
+  if (!tree || typeof tree !== 'object' || Array.isArray(tree)) throw new LayoutError(400, 'tree is required');
+  if ((kind === 'include') !== (tree.kind === 'fragment')) {
+    throw new LayoutError(400, kind === 'include' ? 'an include tree must be a fragment' : 'a layout tree must be a base or a child');
+  }
+  const cook = await loadCook(siteDir, importCook);
+  try {
+    return { html: cook.serializeLayout(tree) };
+  } catch (err) {
+    throw new LayoutError(422, "This layout can't be previewed", { problems: [{ line: 1, message: String(err?.message ?? err) }] });
+  }
+}
+
 const text = (v) => typeof v === 'string' && v.trim() !== '';
 
 function blankBase(label) {

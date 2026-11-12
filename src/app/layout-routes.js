@@ -1,7 +1,8 @@
 /**
  * @file layout-routes.js
  * @description The layout editor's routes on a site's router: list, read, save,
- * create (new, built on, copy) and delete layouts and include fragments. A
+ * create (new, built on, copy) and delete layouts and include fragments, and
+ * serialize an unsaved tree for the preview. A
  * name or kind is validated in layout-store.js and is the only path input.
  * Writes run inside the site's document write lock. The preview route renders
  * unsaved sources in a working copy outside the site (layout-preview.js).
@@ -9,7 +10,8 @@
 
 import { sendJson } from '../server/router.js';
 import {
-  listLayoutFiles, readLayoutFile, saveLayoutFile, createLayoutFile, deleteLayoutFile, publishLayouts, layoutContext, LayoutError,
+  listLayoutFiles, readLayoutFile, saveLayoutFile, createLayoutFile, deleteLayoutFile, publishLayouts, layoutContext, serializeLayoutTree,
+  LayoutError,
 } from './layout-store.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import { getDocument, getCollections } from '../store/content.js';
@@ -55,6 +57,12 @@ export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db
     const collections = db ? [...new Set([...getCollections(db), ...Object.keys(getCollectionsConfig(db))])] : [];
     const out = await layoutContext(ws.siteDir, { collections });
     sendJson(res, 200, { ...out, ...(components ? components() : { components: {}, layoutElements: {} }) });
+  }));
+
+  // An unsaved tree as the site's Cook writes it (the preview pane sends it as an override)
+  router.add('POST', `${prefix}/layout-files/serialize`, handle(async (req, res) => {
+    const { tree, kind } = body(req);
+    sendJson(res, 200, await serializeLayoutTree(ws.siteDir, kind, tree));
   }));
 
   router.add('GET', `${prefix}/layout-files/:kind/:name`, handle(async (req, res) => {

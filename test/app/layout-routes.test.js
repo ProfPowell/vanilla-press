@@ -125,6 +125,16 @@ describe('layout routes', () => {
     assert.ok(r.data.layoutElements['layout-stack'].some((a) => a.name === 'data-layout-gap' && a.enum.includes('m')));
   });
 
+  it('serialize: an unsaved tree as the site\'s Cook writes it; bad input 400', async () => {
+    const read = await call('/layout-files/layout/post');
+    read.data.tree.body[0].body[0].tag = 'h2';
+    const r = await call('/layout-files/serialize', { method: 'POST', body: { tree: read.data.tree, kind: 'layout' } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.match(r.data.html, /<h2>\$\{title\}<\/h2>/);
+    assert.doesNotMatch(readFileSync(join(site, 'src/layouts/post.html'), 'utf8'), /<h2>\$\{title\}/);
+    assert.equal((await call('/layout-files/serialize', { method: 'POST', body: { kind: 'layout' } })).status, 400);
+  });
+
   it('app close stops the layout preview server', async () => {
     const r = await call('/layout-preview', { method: 'POST', body: { layout: 'page' } });
     assert.equal(r.data.ok, true, r.data.log);

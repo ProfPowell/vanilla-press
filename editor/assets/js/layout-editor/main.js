@@ -2,7 +2,7 @@
  * The layout editor page (editor/layout.html?site=&kind=&name=): loads the
  * layout's tree, shows it on the canvas (views.js) with the `/` palette
  * (palette.js), and the bar above it: label, description, page structure,
- * Abstract (base only), Head (Task 10) and Save.
+ * Abstract (base only), Head (base only: head-dialog.js) and Save.
  *
  * Save PUTs the tree with the hash the layout was opened with. A 409 says
  * `This layout changed on disk since you opened it` with `Reload` (nothing
@@ -14,8 +14,9 @@
  * The inspector (inspector.js) shows the selected block's settings in
  * `[data-le-inspector]`, with the site's fields, lists and components from
  * `GET …/layout-files/context`; its changes are transactions (a slot
- * label, kept in meta, marks the layout unsaved). The preview mounts in
- * `[data-le-preview]` (Task 10).
+ * label, kept in meta, marks the layout unsaved). The preview pane
+ * (preview-pane.js) mounts in `[data-le-preview]` and re-renders after each
+ * edit; head edits live in meta (outside ProseMirror) and count as edits.
  *
  * @module editor/layout-editor/main
  */
@@ -29,7 +30,9 @@ import { layoutSchema } from './schema.js';
 import { treeToDoc, docToTree } from './convert.js';
 import { nodeViews, refreshSlotLabels, DOCUMENT_FIELDS } from './views.js';
 import { createInspector } from './inspector.js';
-import { LayoutPalette, palettePlugin, layoutRulesPlugin } from './palette.js';
+import { LayoutPalette, palettePlugin, layoutRulesPlugin, fillEntries } from './palette.js';
+import { createHeadDialog } from './head-dialog.js';
+import { createPreviewPane } from './preview-pane.js';
 import '../components/confirm-panel.js';
 
 /** Cook's VB page layouts (cook-ssg/layouts PAGE_LAYOUTS), without the empty value. */
@@ -47,7 +50,9 @@ const problemText = (p) => (typeof p === 'string' ? p : p?.line ? `Line ${p.line
  * @param {{ root: Element, site: string, kind: 'layout'|'include', name: string, fetch?: typeof fetch,
  *   navigate?: (href: string) => void }} opts
  * @returns {Promise<{ view: EditorView|null, save: () => Promise<boolean>, isDirty: () => boolean,
- *   hash: () => string|null, meta: () => Object, tree: () => Object, destroy: () => void }>}
+ *   hash: () => string|null, meta: () => Object, tree: () => Object, headDialog: Object, palette: LayoutPalette,
+ *   preview: () => Object|null,
+ *   destroy: () => void }>}
  */
 export async function openLayoutEditor({ root, site, kind, name, fetch = globalThis.fetch, navigate = (href) => { window.location.href = href; } }) {
   const $ = (sel) => root.querySelector(sel);
@@ -66,11 +71,13 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     status: $('[data-le-status]'),
     canvas: $('[data-le-canvas]'),
     inspector: $('[data-le-inspector]'),
+    preview: $('[data-le-preview]'),
     confirm: $('confirm-panel[data-confirm]'),
   };
   const url = `/api/sites/${encodeURIComponent(site)}/layout-files/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`;
   const backHref = `/app/site.html?site=${encodeURIComponent(site)}&section=layouts`;
   const contextUrl = `/api/sites/${encodeURIComponent(site)}/layout-files/context`;
+  const layoutsUrl = `/api/sites/${encodeURIComponent(site)}/layouts`;
 
   let view = null;
   let meta = null;
@@ -92,6 +99,15 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       if (view) refreshSlotLabels(view, meta);
     },
   }) : null;
+  /** The Head dialog (a base only); its changes edit meta.head. */
+  const headDialog = createHeadDialog({
+    root,
+    getMeta: () => meta,
+    getContext: () => context,
+    onChange: () => setDirty(true),
+  });
+  /** The preview pane, once the layout is open. */
+  let preview = null;
 
   // STATUS
   // -----------------------------
@@ -128,6 +144,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     root.toggleAttribute?.('data-le-dirty', value);
     // An error (Cook's problems, changed on disk) stays up until the next save or reload
     if (value && els.status.dataset.tone !== 'error') showStatus('Unsaved changes');
+    if (value) preview?.schedule();
   }
 
   // THE BAR
@@ -144,6 +161,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     const hasInfo = meta.kind !== 'fragment' && meta.info && typeof meta.info === 'object';
     els.fields.hidden = !hasInfo;
     els.head.hidden = meta.kind !== 'base';
+    els.head.disabled = meta.kind !== 'base';
     if (!hasInfo) return;
     els.label.value = meta.info.label ?? '';
     els.description.value = meta.info.description ?? '';
@@ -182,6 +200,9 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     palette.open(view);
   };
   const onSave = () => { save(); };
+  const onHead = () => {
+    if (meta?.kind === 'base') headDialog.open();
+  };
   const onBack = async (e) => {
     if (!dirty) return;
     e.preventDefault();
@@ -208,6 +229,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   els.abstract.addEventListener('change', onAbstract);
   els.add.addEventListener('click', onAdd);
   els.save.addEventListener('click', onSave);
+  els.head.addEventListener('click', onHead);
   els.back.addEventListener('click', onBack);
   globalThis.addEventListener?.('beforeunload', onBeforeUnload);
 
@@ -273,6 +295,14 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     dirty = false;
     root.toggleAttribute?.('data-le-dirty', false);
     showStatus('');
+    if (!els.preview) return;
+    if (preview) preview.schedule();
+    else {
+      preview = createPreviewPane({
+        el: els.preview, site, kind, name, fetch,
+        getTree: () => docToTree(view.state.doc, meta),
+      });
+    }
   }
 
   // SAVE
@@ -345,8 +375,22 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     } catch { /* the inspector offers free text */ }
   }
 
+  /** A child's palette offers the parent's regions it doesn't fill yet (by the parent's labels). */
+  async function loadParentRegions() {
+    if (meta?.kind !== 'child' || !meta.parent) return;
+    try {
+      const res = await fetch(layoutsUrl);
+      if (!res.ok) return;
+      const data = await res.json();
+      const parent = (Array.isArray(data?.layouts) ? data.layouts : []).find(l => l?.name === meta.parent);
+      const slots = Array.isArray(parent?.slots) ? parent.slots : [];
+      palette.extraEntries = (state) => fillEntries(slots, state.doc, meta.parent);
+    } catch { /* the palette offers the usual blocks */ }
+  }
+
   await load();
   await loadContext();
+  await loadParentRegions();
 
   return {
     get view() { return view; },
@@ -355,17 +399,24 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     hash: () => hash,
     meta: () => meta,
     tree: () => (view ? docToTree(view.state.doc, meta) : null),
+    headDialog,
+    palette,
+    preview: () => preview,
     destroy() {
       view?.destroy();
       view = null;
       palette.destroy();
       inspector?.destroy();
+      headDialog.destroy();
+      preview?.destroy();
+      preview = null;
       els.label.removeEventListener('input', onLabel);
       els.description.removeEventListener('input', onDescription);
       els.pageLayout.removeEventListener('change', onPageLayout);
       els.abstract.removeEventListener('change', onAbstract);
       els.add.removeEventListener('click', onAdd);
       els.save.removeEventListener('click', onSave);
+      els.head.removeEventListener('click', onHead);
       els.back.removeEventListener('click', onBack);
       globalThis.removeEventListener?.('beforeunload', onBeforeUnload);
     },

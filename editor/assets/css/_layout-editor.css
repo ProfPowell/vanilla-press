@@ -324,3 +324,173 @@
 .le-inspector .le-insp-mark-name {
   font-family: var(--font-mono);
 }
+
+/* THE PREVIEW PANE (layout-editor/preview-pane.js): sizes as the Theme preview's */
+.le-preview .le-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-xs);
+  margin-block-end: var(--size-xs);
+  font-size: 0.85rem;
+}
+
+.le-preview .le-preview-doc select {
+  max-inline-size: 16rem;
+}
+
+.le-preview .le-preview-widths button {
+  flex: none;
+}
+
+.le-preview .le-preview-status {
+  margin: 0 0 var(--size-xs);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.le-preview .le-preview-status:empty {
+  display: none;
+}
+
+.le-preview .le-preview-log {
+  max-block-size: 16rem;
+  overflow: auto;
+  margin: 0 0 var(--size-xs);
+  padding: var(--size-xs) var(--size-s);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface-alt, var(--color-surface));
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.le-preview .le-preview-stage {
+  display: flex;
+  justify-content: center;
+}
+
+.le-preview .le-preview-frame {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 860px;
+  min-width: 0;
+  block-size: 40rem;
+  border: 0;
+  border-radius: var(--radius-l, 8px);
+  background: #fff;
+  box-shadow: var(--shadow-s);
+}
+
+.le-preview .le-preview-frame[data-width="narrow"] {
+  inline-size: 390px;
+  max-inline-size: 100%;
+}
+
+/* THE HEAD DIALOG (layout-editor/head-dialog.js) */
+.le-head-dialog {
+  inline-size: min(40rem, calc(100vw - 2rem));
+  max-block-size: calc(100dvh - 2rem);
+  padding: var(--size-l, 1.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l, 8px);
+  background: var(--color-background);
+  color: var(--color-text);
+  box-shadow: var(--shadow-l);
+  font-family: var(--font-sans);
+}
+
+.le-head-dialog::backdrop {
+  background: var(--color-backdrop, rgb(0 0 0 / 0.4));
+}
+
+.le-head-dialog h2 {
+  margin-block: 0 var(--size-xs);
+  font-size: 1.1rem;
+}
+
+.le-head-dialog .le-head-hint,
+.le-head-dialog .le-head-message {
+  margin-block: 0 var(--size-s);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.le-head-dialog .le-head-list {
+  display: grid;
+  gap: var(--size-2xs, 0.25rem);
+  margin: 0 0 var(--size-s);
+  padding: 0;
+  list-style: none;
+}
+
+.le-head-dialog .le-head-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--size-xs);
+  padding: var(--size-2xs, 0.25rem) var(--size-xs);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-m);
+}
+
+.le-head-dialog .le-head-list li[aria-current="true"] {
+  border-color: var(--color-interactive);
+}
+
+.le-head-dialog .le-head-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.le-head-dialog .le-head-actions {
+  display: flex;
+  gap: var(--size-2xs, 0.25rem);
+}
+
+.le-head-dialog .le-head-add,
+.le-head-dialog .le-head-attr,
+.le-head-dialog .le-head-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-xs);
+  margin-block-end: var(--size-s);
+}
+
+.le-head-dialog .le-head-form {
+  display: grid;
+  gap: var(--size-xs);
+  margin: 0 0 var(--size-s);
+  padding: var(--size-s);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-m);
+}
+
+.le-head-dialog .le-head-form[hidden] {
+  display: none;
+}
+
+.le-head-dialog .le-head-attr {
+  margin: 0;
+}
+
+.le-head-dialog .le-head-attr input {
+  flex: 1 1 10rem;
+  font-family: var(--font-mono);
+}
+
+.le-head-dialog .le-head-body {
+  inline-size: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.le-head-dialog .le-head-foot {
+  justify-content: flex-end;
+  margin: 0;
+}

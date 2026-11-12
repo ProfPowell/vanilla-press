@@ -59,6 +59,22 @@ describe('siteLayouts', () => {
     assert.equal(by.post.missing, false);
   });
 
+  for (const [label, listLayouts, text] of [
+    ['throws', async () => { throw new Error('boom'); }, 'boom'],
+    ['returns no layouts', async () => ({}), null],
+  ]) {
+    it(`falls back with a read-failure message when listLayouts ${label}`, async () => {
+      const dir = mk();
+      writeFileSync(join(dir, 'src/layouts/post.html'), '<html><body>${content}</body></html>');
+      const r = await siteLayouts(dir, { importCook: async () => ({ listLayouts }) });
+      assert.equal(r.supported, false);
+      assert.match(r.message, /^This site's Cook couldn't read its layouts: /);
+      if (text) assert.ok(r.message.endsWith(text));
+      assert.notEqual(r.message, OLD_COOK);
+      assert.deepEqual(r.layouts.map((l) => l.name), ['post']);
+    });
+  }
+
   it('data-template on body also marks a layout unusable', async () => {
     const dir = mk();
     writeFileSync(join(dir, 'src/layouts/b.html'), '<html><body data-template="x"></body></html>');

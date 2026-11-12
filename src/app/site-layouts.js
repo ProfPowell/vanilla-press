@@ -67,23 +67,28 @@ export async function siteLayouts(siteDir, { importCook = defaultImportCook } = 
   if (!siteDir) return { supported: false, message: null, layouts: [] };
 
   const cook = await importCook(siteDir);
+  let message = OLD_COOK_MESSAGE;
   if (cook && typeof cook.listLayouts === 'function') {
-    const { layouts } = await cook.listLayouts(siteDir);
-    return {
-      supported: true,
-      message: null,
-      layouts: layouts.map((e) => ({
-        name: e.name,
-        label: e.label || e.name,
-        abstract: Boolean(e.abstract),
-        usable: true,
-        editable: Boolean(e.editable),
-        missing: false,
-        slots: (e.slots || []).filter((s) => s.name !== 'head').map((s) => ({ name: s.name, label: s.label })),
-      })),
-    };
+    try {
+      const { layouts } = await cook.listLayouts(siteDir);
+      return {
+        supported: true,
+        message: null,
+        layouts: layouts.map((e) => ({
+          name: e.name,
+          label: e.label || e.name,
+          abstract: Boolean(e.abstract),
+          usable: true,
+          editable: Boolean(e.editable),
+          missing: false,
+          slots: (e.slots || []).filter((s) => s.name !== 'head').map((s) => ({ name: s.name, label: s.label })),
+        })),
+      };
+    } catch (err) {
+      message = `This site's Cook couldn't read its layouts: ${err?.message ?? err}`;
+    }
   }
 
   const files = await readLayoutFiles(siteDir);
-  return { supported: false, message: OLD_COOK_MESSAGE, layouts: files.map(fallbackLayout) };
+  return { supported: false, message, layouts: files.map(fallbackLayout) };
 }

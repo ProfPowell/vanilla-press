@@ -283,3 +283,17 @@ describe('layout convert: inline marks, fields, slots', { skip: !HAVE_COOK && 'C
     }
   });
 });
+
+describe('layout convert: the starter include', { skip: !HAVE_COOK && 'Cook not linked' }, () => {
+  it('site-nav round-trips as a fragment and keeps its marker', async () => {
+    const names = await cook.loadSiteNames(STARTER);
+    const src = read(path.join(STARTER, 'src', 'includes', 'site-nav.html'));
+    const tree = parse(src, { fields: names.fields, lists: names.lists, fragment: true }, 'site-nav');
+    assert.equal(tree.kind, 'fragment');
+    const { doc, meta } = treeToDoc(tree, layoutSchema);
+    assert.equal(doc.firstChild.type.name, 'fragment_body');
+    const back = docToTree(doc, meta);
+    assert.equal(cook.serializeLayout(back), cook.serializeLayout(tree));
+    assert.ok(cook.serializeLayout(back).startsWith('<!-- layout-fragment -->'));
+  });
+});

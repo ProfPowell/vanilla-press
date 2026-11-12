@@ -32,7 +32,7 @@ import { nodeViews, refreshSlotLabels, DOCUMENT_FIELDS } from './views.js';
 import { createInspector } from './inspector.js';
 import { LayoutPalette, palettePlugin, layoutRulesPlugin, fillEntries } from './palette.js';
 import { createHeadDialog } from './head-dialog.js';
-import { createPreviewPane } from './preview-pane.js';
+import { createPreviewPane, previewLayoutFor } from './preview-pane.js';
 import '../components/confirm-panel.js';
 
 /** Cook's VB page layouts (cook-ssg/layouts PAGE_LAYOUTS), without the empty value. */
@@ -305,8 +305,10 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     if (!els.preview) return;
     if (preview) preview.schedule();
     else {
+      // An include is previewed through a layout that includes it
+      const through = kind === 'include' ? previewLayoutFor(await fetchListing(), name) : null;
       preview = createPreviewPane({
-        el: els.preview, site, kind, name, fetch,
+        el: els.preview, site, kind, name, fetch, layout: through,
         getTree: () => docToTree(view.state.doc, meta),
       });
     }
@@ -382,13 +384,22 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     } catch { /* the inspector offers free text */ }
   }
 
+  /** The layouts and includes listing, or null. */
+  async function fetchListing() {
+    try {
+      const res = await fetch(`/api/sites/${encodeURIComponent(site)}/layout-files`);
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** A base's children, from the layouts listing. */
   async function loadChildren() {
     if (meta?.kind !== 'base') return;
     try {
-      const res = await fetch(`/api/sites/${encodeURIComponent(site)}/layout-files`);
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await fetchListing();
+      if (!data) return;
       const entry = (Array.isArray(data?.layouts) ? data.layouts : []).find(l => l?.name === name);
       children = Array.isArray(entry?.baseFor) ? entry.baseFor.filter(n => typeof n === 'string') : [];
     } catch { /* the note names no layouts */ }

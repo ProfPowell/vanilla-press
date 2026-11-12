@@ -258,7 +258,7 @@ export async function listLayoutFiles(siteDir, { importCook = defaultImportCook 
     message: null,
     deleted: deletedEntries(siteDir, dirty).map(({ kind, name }) => ({ kind, name })),
     layouts: layouts.map((e) => ({
-      name: e.name, kind: 'layout', label: e.label || e.name, status: statusOf(e, false),
+      name: e.name, kind: 'layout', label: e.label || e.name, abstract: e.abstract === true, status: statusOf(e, false),
       problems: problemsOf(e, false), parent: e.parent ?? null,
       baseFor: usage.layouts[e.name] ?? [], usedBy: usage.pages[e.name] ?? [],
       unpublished: unpublished('layout', e.file),

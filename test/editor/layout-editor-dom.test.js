@@ -358,3 +358,73 @@ describe('canvas labels', () => {
     assert.equal(repeatLabel({ source: 'collections.blog', alias: 'post', pipes: ['offset:1', 'limit:3'] }), 'Repeats for each post in collections.blog (3)');
   });
 });
+
+describe('layout editor: fragment mode (kind=include)', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
+  const siteNav = async () => {
+    const names = await cook.loadSiteNames(path.join(COOK, 'starters', 'vanilla-breeze'));
+    const src = readFileSync(path.join(COOK, 'starters', 'vanilla-breeze', 'src', 'includes', 'site-nav.html'), 'utf8');
+    const r = cook.parseLayout(src, { fields: names.fields, lists: names.lists, fragment: true });
+    assert.ok(r.ok, JSON.stringify(r.problems));
+    return r.tree;
+  };
+  const listing = {
+    layouts: [
+      { name: 'base', kind: 'layout', abstract: true, usedBy: [], baseFor: ['page'] },
+      { name: 'page', kind: 'layout', abstract: false, parent: 'base', usedBy: [], baseFor: [] },
+    ],
+    includes: [{ name: 'site-nav', kind: 'include', usedBy: ['src/layouts/base.html', 'src/layouts/page.html'] }],
+  };
+
+  /** GET listing answers `listing`; other GETs answer the tree; PUT records. */
+  function fragFetch(tree) {
+    const calls = [];
+    const fn = async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      calls.push({ url, method, body: opts.body ? JSON.parse(opts.body) : null });
+      const reply = (status, data) => ({ ok: status < 400, status, json: async () => data });
+      if (method === 'PUT') return reply(200, { hash: 'h2' });
+      if (url === '/api/sites/s1/layout-files') return reply(200, listing);
+      if (url.endsWith('/layout-files/serialize')) return reply(200, { html: '<nav></nav>' });
+      if (url.endsWith('/layout-preview')) return reply(200, { ok: true, url: 'http://127.0.0.1:5555/p/' });
+      if (url.endsWith('/documents')) return reply(200, []);
+      if (url.endsWith('/layout-files/context')) return reply(200, {});
+      return reply(200, { tree, hash: 'h1', problems: [] });
+    };
+    fn.calls = calls;
+    return fn;
+  }
+
+  it('hides Head, Abstract, page structure and the info inputs; the title is the file name', async () => {
+    const root = freshRoot();
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'include', name: 'site-nav', fetch: fragFetch(await siteNav()) });
+    assert.equal(root.querySelector('[data-le-head]').hidden, true);
+    assert.equal(root.querySelector('[data-le-head]').disabled, true);
+    assert.equal(root.querySelector('[data-le-info-fields]').hidden, true);
+    assert.equal(root.querySelector('[data-le-file]').textContent, 'src/includes/site-nav.html');
+    assert.ok(root.querySelector('[data-le-canvas]').textContent.length > 0);
+    ed.destroy();
+  });
+
+  it('Save keeps the fragment marker', async () => {
+    const root = freshRoot();
+    const fetch = fragFetch(await siteNav());
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'include', name: 'site-nav', fetch });
+    assert.ok(await ed.save());
+    const put = fetch.calls.find(c => c.method === 'PUT');
+    assert.match(put.url, /\/layout-files\/include\/site-nav$/);
+    assert.equal(put.body.tree.kind, 'fragment');
+    assert.ok(cook.serializeLayout(put.body.tree).startsWith('<!-- layout-fragment -->'));
+    ed.destroy();
+  });
+
+  it('previews through a layout that includes it, sending the include as an override', async () => {
+    const root = freshRoot();
+    const fetch = fragFetch(await siteNav());
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'include', name: 'site-nav', fetch });
+    await ed.preview().ready;
+    const prev = fetch.calls.filter(c => c.url.endsWith('/layout-preview')).at(-1);
+    assert.equal(prev.body.layout, 'page', 'base is abstract, so the first non-abstract user');
+    assert.deepEqual(prev.body.includes, { 'site-nav': '<nav></nav>' });
+    ed.destroy();
+  });
+});

@@ -55,6 +55,25 @@ export function defaultPreviewDocument(docs, collectionsConfig, layout) {
     || null;
 }
 
+/**
+ * The layout to render an include's preview through: the first non-abstract
+ * `src/layouts/<x>.html` among the files that include it (the listing's
+ * `usedBy`), else the first non-abstract layout, else null.
+ * @param {{ layouts?: Object[], includes?: Object[] }} listing - GET /layout-files
+ * @param {string} name - the include's name
+ * @returns {string|null}
+ */
+export function previewLayoutFor(listing, name) {
+  const layouts = Array.isArray(listing?.layouts) ? listing.layouts : [];
+  const usable = layouts.filter(l => l && typeof l.name === 'string' && l.abstract !== true);
+  const entry = (Array.isArray(listing?.includes) ? listing.includes : []).find(i => i?.name === name);
+  for (const file of Array.isArray(entry?.usedBy) ? entry.usedBy : []) {
+    const m = /^src\/layouts\/([^/]+)\.html$/.exec(file);
+    if (m && usable.some(l => l.name === m[1])) return m[1];
+  }
+  return usable[0]?.name ?? null;
+}
+
 /** The last `n` lines of a log. */
 export function logTail(log, n = LOG_LINES) {
   const lines = String(log ?? '').replace(/\s+$/, '').split('\n');

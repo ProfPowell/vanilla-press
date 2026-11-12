@@ -120,3 +120,16 @@ describe('new layout', () => {
     assert.equal(OLD_COOK_TEXT, "This site's Cook is too old to edit layouts; update cook-ssg");
   });
 });
+
+describe('includes in the rows', () => {
+  it('Open only for editable (fragment) includes, not plain ones', () => {
+    const rows = layoutRows({
+      layouts: [],
+      includes: [
+        entry({ name: 'site-nav', kind: 'include', status: 'editable' }),
+        entry({ name: 'raw', kind: 'include', status: 'plain' }),
+      ],
+    });
+    assert.deepEqual(rows.map((r) => r.canOpen), [true, false]);
+  });
+});

@@ -189,3 +189,22 @@ describe('preview document choice', () => {
     pane.destroy();
   });
 });
+
+describe('previewLayoutFor (an include)', () => {
+  const layouts = [
+    { name: 'base', abstract: true }, { name: 'post', abstract: false }, { name: 'page', abstract: false },
+  ];
+  it('picks the first non-abstract layout that includes it', () => {
+    const listing = { layouts, includes: [{ name: 'nav', usedBy: ['src/posts/a.html', 'src/layouts/base.html', 'src/layouts/page.html', 'src/layouts/post.html'] }] };
+    assert.equal(mod.previewLayoutFor(listing, 'nav'), 'page');
+  });
+  it('falls back to the first non-abstract layout when none includes it', () => {
+    const listing = { layouts, includes: [{ name: 'nav', usedBy: ['src/posts/a.html', 'src/layouts/base.html'] }] };
+    assert.equal(mod.previewLayoutFor(listing, 'nav'), 'post');
+    assert.equal(mod.previewLayoutFor({ layouts, includes: [] }, 'nav'), 'post');
+  });
+  it('is null when there is nothing to render with', () => {
+    assert.equal(mod.previewLayoutFor({ layouts: [{ name: 'base', abstract: true }], includes: [] }, 'nav'), null);
+    assert.equal(mod.previewLayoutFor(null, 'nav'), null);
+  });
+});

@@ -59,6 +59,8 @@ describe('layout-store', () => {
     assert.equal(by.bad.status, 'problems');
     assert.ok(by.bad.problems.length > 0);
     assert.equal(by.post.kind, 'layout');
+    assert.equal(by.base.abstract, true);
+    assert.equal(by.post.abstract, false);
     assert.equal(r.includes.find((e) => e.name === 'header').status, 'editable');
     assert.equal(r.includes.find((e) => e.name === 'header').kind, 'include');
     // plain and bad were added after the commit: untracked, so unpublished

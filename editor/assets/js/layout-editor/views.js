@@ -141,7 +141,7 @@ export function nodeViews(getMeta) {
       return { dom, ignoreMutation: () => true };
     },
     include: (node) => tileView('le-include', node, 'Include', node.attrs.path || '(no path yet)'),
-    component: (node) => tileView('le-component', node, `<${node.attrs.tag}>`),
+    component: (node) => tileView('le-component', node, node.attrs.tag ? `<${node.attrs.tag}>` : 'Component (no name yet)'),
     image: (node) => tileView('le-image', node, node.attrs.tag === 'picture' ? 'Picture' : 'Image', attrOf(node, 'src') || null),
     comment: (node) => tileView('le-comment', node, 'Comment', node.attrs.text.trim() || null),
     head_piece: (node) => tileView('le-head-piece', node, 'Head', `${node.attrs.items.length} items`),
@@ -152,7 +152,7 @@ export function nodeViews(getMeta) {
       return { dom, ignoreMutation: () => true };
     },
     inline_component: (node) => {
-      const dom = el('span', { class: 'le-inline-component', contenteditable: 'false' }, `<${node.attrs.tag}>`);
+      const dom = el('span', { class: 'le-inline-component', contenteditable: 'false' }, node.attrs.tag ? `<${node.attrs.tag}>` : 'Component (no name yet)');
       return { dom, ignoreMutation: () => true };
     },
     inline_image: () => {

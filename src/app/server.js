@@ -47,7 +47,7 @@ import { serveStatic, serveFile, MEDIA_HEADERS } from '../server/static.js';
 import { refuseForeign } from '../server/guard.js';
 import { CATALOG } from '../components/catalog.js';
 import { packageDir } from '../components/describe.js';
-import { setComponent, componentsState, enabledComponents, catalogComponents, ComponentError } from './components.js';
+import { setComponent, componentsState, enabledComponents, catalogComponents, layoutComponents, ComponentError } from './components.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SITE_PATH = /^\/api\/sites\/([^/]+)(?:\/|$)/;
@@ -236,7 +236,9 @@ export async function startApp({
       });
       const writes = createLock();
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
-      mountLayoutRoutes(router, prefix, { ws, writes, backup, deps: git, db, preview: layoutPreview(site) });
+      mountLayoutRoutes(router, prefix, {
+        ws, writes, backup, deps: git, db, preview: layoutPreview(site), components: () => layoutComponents(roots),
+      });
       mountThemeRoutes(router, prefix, {
         site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,
         onBuilt: () => vbCache.delete(site.id), // Apply's build may have vendored the site's VB copy

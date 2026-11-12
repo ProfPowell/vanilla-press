@@ -75,11 +75,12 @@ describe('layout palette: what the caret allows', () => {
     assert.ok(ids(state).includes('content'));
   });
 
-  it('inside a menu offers only menu_item', () => {
+  it('inside a menu offers only menu_item (and an inline component in its text)', () => {
     const state = stateAt(fragmentTree([
       { type: 'menu', tag: 'ul', attrs: [], items: [{ attrs: [], inline: [{ text: 'Home' }] }] },
     ]), 'Home');
-    const items = paletteItems(state);
+    assert.ok(ids(state).includes('inline-component'));
+    const items = paletteItems(state).filter(e => !e.inline);
     assert.ok(items.length > 0);
     assert.deepEqual([...new Set(items.map(e => e.create(layoutSchema).type.name))], ['menu_item']);
   });
@@ -123,6 +124,34 @@ describe('layout palette: what the caret allows', () => {
     assert.equal(main.child(1).type.name, 'text_block');
     assert.equal(main.child(1).attrs.tag, 'h2');
     assert.equal(tr.selection.$from.parent.attrs.tag, 'h2');
+  });
+});
+
+describe('layout palette: components', () => {
+  it('offers a Component where blocks go and inserts it selected, for the inspector to name', () => {
+    const state = stateAt(baseTree([text('p', [{ text: 'Hello' }]), { type: 'content', attrs: [] }]), 'Hello');
+    const entry = paletteItems(state).find(e => e.id === 'component');
+    assert.ok(entry);
+    const tr = insertEntry(state, entry);
+    assert.equal(tr.selection.node.type.name, 'component');
+    assert.equal(tr.doc.firstChild.child(1).child(1).type.name, 'component');
+  });
+
+  it('offers an inline component inside text, inserted at the caret', () => {
+    const state = stateAt(fragmentTree([text('p', [{ text: 'Hello' }])]), 'Hello');
+    const entry = paletteItems(state).find(e => e.id === 'inline-component');
+    assert.ok(entry);
+    const tr = insertEntry(state, entry);
+    const p = tr.doc.firstChild.child(0);
+    assert.equal(p.childCount, 3);
+    assert.equal(p.child(1).type.name, 'inline_component');
+    assert.equal(tr.selection.node.type.name, 'inline_component');
+  });
+
+  it('no inline component with a block selected', () => {
+    const state = stateSelecting(fragmentTree([{ type: 'container', tag: 'section', attrs: [], body: [] }]), 'container');
+    assert.ok(!ids(state).includes('inline-component'));
+    assert.ok(ids(state).includes('component'));
   });
 });
 

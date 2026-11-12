@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
-  listLayoutFiles, readLayoutFile, saveLayoutFile, createLayoutFile, deleteLayoutFile, LayoutError,
+  listLayoutFiles, readLayoutFile, saveLayoutFile, createLayoutFile, deleteLayoutFile, layoutContext, LayoutError,
   OLD_COOK_EDIT_MESSAGE, CHANGED_ON_DISK,
 } from '../../src/app/layout-store.js';
 
@@ -69,6 +69,18 @@ describe('layout-store', () => {
     r = await listLayoutFiles(dir);
     assert.equal(r.layouts.find((e) => e.name === 'post').unpublished, true);
     assert.equal(r.layouts.find((e) => e.name === 'post').label, 'Post 2');
+  });
+
+  it('layoutContext: fields, lists with collections and program areas; an old Cook is a 409', async () => {
+    const dir = mk();
+    writeFileSync(join(dir, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: 'courses' }, { path: 'media' }] }));
+    const ctx = await layoutContext(dir, { collections: ['posts', 'posts'] });
+    assert.deepEqual(ctx.lists.filter((l) => l.startsWith('collections.') || l.startsWith('programAreas')), ['collections.posts', 'programAreas.courses']);
+    assert.ok(ctx.lists.includes('navItems'));
+    assert.ok(ctx.siteFields.includes('siteTitle'));
+    assert.deepEqual(ctx.declaredFields, []);
+    assert.ok(ctx.documentFields.includes('url'));
+    await rejects(layoutContext(dir, { importCook: async () => null }), 409, OLD_COOK_EDIT_MESSAGE);
   });
 
   it('unpublished is false outside a git repository', async () => {

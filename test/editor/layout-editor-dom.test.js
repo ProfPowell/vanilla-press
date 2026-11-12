@@ -195,6 +195,30 @@ describe('layout editor page', { skip: !HAVE_COOK && 'needs the linked Cook' }, 
   });
 });
 
+describe('layout editor inspector', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
+  it('loads the context, shows the selected block and its changes mark the layout unsaved', async () => {
+    const { NodeSelection } = await import('prosemirror-state');
+    const root = freshRoot();
+    const fetch = stubFetch(starterTree('post'), [200, { hash: 'h2' }]);
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch });
+    assert.ok(fetch.calls.some(c => c.url === '/api/sites/s1/layout-files/context'));
+    const view = ed.view;
+    let slotPos = null;
+    view.state.doc.descendants((node, pos) => { if (node.type.name === 'slot_ref' && slotPos === null) slotPos = pos; });
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, slotPos)));
+    const panel = root.querySelector('[data-le-inspector]');
+    const label = panel.querySelector('[data-field="slot.label"]');
+    assert.equal(label.value, 'Sidebar');
+    assert.equal(ed.isDirty(), false);
+    label.value = 'Extras';
+    label.dispatchEvent(new win.Event('change', { bubbles: true }));
+    assert.equal(ed.isDirty(), true);
+    assert.match(root.querySelector('[data-le-canvas]').textContent, /Region: Extras/);
+    assert.equal(ed.tree().info.slots[view.state.doc.nodeAt(slotPos).attrs.name].label, 'Extras');
+    ed.destroy();
+  });
+});
+
 describe('layout editor save edge cases', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
   it('an edit made while the save runs keeps the layout unsaved (new hash stored)', async () => {
     const root = freshRoot();

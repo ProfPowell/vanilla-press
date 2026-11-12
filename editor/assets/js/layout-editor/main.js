@@ -11,8 +11,11 @@
  * (as the post editor asks; never a browser confirm()); closing the tab
  * gets the browser's own leave-page warning.
  *
- * The inspector and preview panes mount in `[data-le-inspector]` and
- * `[data-le-preview]` (Tasks 9 and 10).
+ * The inspector (inspector.js) shows the selected block's settings in
+ * `[data-le-inspector]`, with the site's fields, lists and components from
+ * `GET …/layout-files/context`; its changes are transactions (a slot
+ * label, kept in meta, marks the layout unsaved). The preview mounts in
+ * `[data-le-preview]` (Task 10).
  *
  * @module editor/layout-editor/main
  */
@@ -24,7 +27,8 @@ import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
 import { layoutSchema } from './schema.js';
 import { treeToDoc, docToTree } from './convert.js';
-import { nodeViews } from './views.js';
+import { nodeViews, refreshSlotLabels, DOCUMENT_FIELDS } from './views.js';
+import { createInspector } from './inspector.js';
 import { LayoutPalette, palettePlugin, layoutRulesPlugin } from './palette.js';
 import '../components/confirm-panel.js';
 
@@ -61,10 +65,12 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     save: $('[data-le-save]'),
     status: $('[data-le-status]'),
     canvas: $('[data-le-canvas]'),
+    inspector: $('[data-le-inspector]'),
     confirm: $('confirm-panel[data-confirm]'),
   };
   const url = `/api/sites/${encodeURIComponent(site)}/layout-files/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`;
   const backHref = `/app/site.html?site=${encodeURIComponent(site)}&section=layouts`;
+  const contextUrl = `/api/sites/${encodeURIComponent(site)}/layout-files/context`;
 
   let view = null;
   let meta = null;
@@ -74,6 +80,18 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   let edits = 0;
   let saving = false;
   const palette = new LayoutPalette();
+  /** The inspector's site context; document fields until the route answers. */
+  let context = { documentFields: DOCUMENT_FIELDS };
+  const inspector = els.inspector ? createInspector({
+    el: els.inspector,
+    getView: () => view,
+    getMeta: () => meta,
+    getContext: () => context,
+    onMetaChange: () => {
+      setDirty(true);
+      if (view) refreshSlotLabels(view, meta);
+    },
+  }) : null;
 
   // STATUS
   // -----------------------------
@@ -224,9 +242,11 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         if (!view) return;
         view.updateState(view.state.apply(tr));
         if (tr.docChanged) setDirty(true);
+        inspector?.update(view.state);
       },
     });
     fillBar();
+    inspector?.render();
   }
 
   async function load() {
@@ -312,7 +332,21 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     }
   }
 
+  /** The inspector's context (fields, lists, components); without it the inspector still works. */
+  async function loadContext() {
+    try {
+      const res = await fetch(contextUrl);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        context = { ...data, documentFields: Array.isArray(data.documentFields) && data.documentFields.length ? data.documentFields : DOCUMENT_FIELDS };
+        inspector?.render();
+      }
+    } catch { /* the inspector offers free text */ }
+  }
+
   await load();
+  await loadContext();
 
   return {
     get view() { return view; },
@@ -325,6 +359,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       view?.destroy();
       view = null;
       palette.destroy();
+      inspector?.destroy();
       els.label.removeEventListener('input', onLabel);
       els.description.removeEventListener('input', onDescription);
       els.pageLayout.removeEventListener('change', onPageLayout);

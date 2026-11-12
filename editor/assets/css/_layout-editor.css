@@ -238,3 +238,89 @@
   outline: 2px solid var(--color-interactive);
   outline-offset: 1px;
 }
+
+/* THE INSPECTOR: the selected block's settings */
+.le-inspector .le-insp-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--size-2xs, 0.25rem);
+  margin-block-end: var(--size-s);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.le-inspector .le-insp-path button {
+  padding: 0;
+  font-size: inherit;
+}
+
+.le-inspector .le-insp-path strong {
+  color: var(--color-text);
+}
+
+.le-inspector .le-insp-message:empty {
+  display: none;
+}
+
+.le-inspector .le-insp-message,
+.le-inspector .le-insp-error {
+  color: var(--color-error-text);
+  font-size: 0.85rem;
+}
+
+.le-inspector .le-insp-group,
+.le-inspector .le-insp-marks {
+  display: grid;
+  gap: var(--size-xs);
+  margin-block-end: var(--size-m);
+}
+
+.le-inspector h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.le-inspector .le-insp-field {
+  display: grid;
+  gap: var(--size-3xs, 0.125rem);
+}
+
+.le-inspector .le-insp-field label {
+  font-size: 0.85rem;
+}
+
+.le-inspector .le-insp-checkbox {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
+.le-inspector .le-insp-pairs {
+  display: grid;
+  gap: var(--size-xs);
+  margin: 0;
+  padding: var(--size-xs);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-s, 4px);
+}
+
+.le-inspector .le-insp-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--size-2xs, 0.25rem);
+}
+
+.le-inspector .le-insp-mark {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-xs);
+}
+
+.le-inspector .le-insp-mark-name {
+  font-family: var(--font-mono);
+}

@@ -98,6 +98,33 @@ describe('layout routes', () => {
     assert.equal((await call('/layout-preview', { method: 'POST', body: {} })).status, 422);
   });
 
+  it('context: site and declared fields, the lists a repeat can use, document fields and components', async () => {
+    writeFileSync(join(site, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: 'courses', label: 'Courses' }] }));
+    const main = readFileSync(join(site, 'config', 'main.js'), 'utf8');
+    writeFileSync(join(site, 'config', 'main.js'), main.replace('export default {', "export default {\n  layouts: { fields: ['subtitle'] },"));
+    const made = await call('/documents', { method: 'POST', body: { meta: { title: 'Hi', slug: 'hi', collection: 'blog' }, blocks: [] } });
+    assert.ok(made.status < 300, JSON.stringify(made.data));
+
+    const r = await call('/layout-files/context');
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.ok(r.data.siteFields.includes('siteTitle'));
+    assert.ok(r.data.siteFields.includes('navItems'));
+    assert.deepEqual(r.data.declaredFields, ['subtitle']);
+    assert.ok(!r.data.siteFields.includes('subtitle'));
+    assert.ok(r.data.lists.includes('collections.blog'), r.data.lists.join());
+    assert.ok(r.data.lists.includes('programs'));
+    assert.ok(r.data.lists.includes('programAreas.courses'));
+    assert.ok(r.data.lists.includes('navItems'));
+    assert.ok(!r.data.lists.includes('programAreas'));
+    assert.ok(r.data.documentFields.includes('title'));
+    assert.ok(r.data.documentFields.includes('pageLayout'));
+    // VB's own manifest; a catalog package only when it is on for the site
+    assert.ok(Array.isArray(r.data.components['site-search']?.attributes));
+    assert.ok(r.data.components['youtube-player']);
+    assert.equal(r.data.components['code-block'], undefined);
+    assert.ok(r.data.layoutElements['layout-stack'].some((a) => a.name === 'data-layout-gap' && a.enum.includes('m')));
+  });
+
   it('app close stops the layout preview server', async () => {
     const r = await call('/layout-preview', { method: 'POST', body: { layout: 'page' } });
     assert.equal(r.data.ok, true, r.data.log);

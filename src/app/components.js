@@ -7,9 +7,11 @@
  */
 
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { CATALOG } from '../components/catalog.js';
-import { describeComponents, componentIndex } from '../components/describe.js';
+import { describeComponents, componentIndex, packageDir } from '../components/describe.js';
+import { readManifest } from '../components/manifest.js';
 import { durationText } from './site-process.js';
 import { allBlockLists } from '../schema/blocks.js';
 
@@ -88,6 +90,48 @@ export function enabledComponents({ siteDir, vpRoot, catalog = CATALOG }) {
  */
 export function catalogComponents({ siteDir, vpRoot, catalog = CATALOG }) {
   return componentIndex(describeComponents({ siteDir, vpRoot, catalog }), { enabledOnly: false });
+}
+
+/**
+ * What the layout inspector knows about components and VB's layout
+ * elements, for a site:
+ * - `components`: every tag in VB's custom-elements.json, then the
+ *   catalog's elements that are on for the site (their attributes merged
+ *   with the catalog's hints), as `{ attributes, description, package }`.
+ * - `layoutElements`: each `layout-*` element's attributes, from VB's
+ *   html-validate element table (`src/htmlvalidate/elements.cjs`), as
+ *   `[{ name, type, enum? }]`.
+ * VB is the site's copy when installed, else VP's. Anything unreadable is left out.
+ * @param {{ siteDir: string|null, vpRoot: string, catalog?: Object[] }} roots
+ * @returns {{ components: Record<string, { attributes: Object[], description: string, package: string }>,
+ *   layoutElements: Record<string, Array<{ name: string, type: string, enum?: string[] }>> }}
+ */
+export function layoutComponents({ siteDir, vpRoot, catalog = CATALOG }) {
+  const components = {};
+  const layoutElements = {};
+  const vb = packageDir('vanilla-breeze', { siteDir, vpRoot });
+  if (vb) {
+    for (const [tag, def] of readManifest(vb.dir)) {
+      components[tag] = { attributes: def.attributes, description: def.description ?? '', package: 'vanilla-breeze' };
+    }
+    try {
+      const table = createRequire(join(vb.dir, 'package.json'))(join(vb.dir, 'src', 'htmlvalidate', 'elements.cjs'));
+      for (const [tag, def] of Object.entries(table || {})) {
+        if (!tag.startsWith('layout-')) continue;
+        layoutElements[tag] = Object.entries(def?.attributes || {})
+          .filter(([, a]) => a && !a.omit)
+          .map(([name, a]) => (a.boolean ? { name, type: 'boolean' }
+            : Array.isArray(a.enum) ? { name, type: 'string', enum: a.enum.filter((v) => typeof v === 'string') } : { name, type: 'string' }));
+      }
+    } catch { /* no element table in this VB: the inspector shows raw attributes */ }
+  }
+  for (const pkg of describeComponents({ siteDir, vpRoot, catalog })) {
+    if (!pkg.enabled) continue;
+    for (const el of pkg.elements) {
+      components[el.tag] = { attributes: el.attributes, description: el.description ?? '', package: pkg.package };
+    }
+  }
+  return { components, layoutElements };
 }
 
 /**

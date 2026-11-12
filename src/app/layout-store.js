@@ -110,6 +110,50 @@ async function programAreas(siteDir) {
   return areas;
 }
 
+/** `layouts.fields` from config/main.js: the fields a site declares for its layouts; [] when absent or broken. */
+async function declaredLayoutFields(siteDir) {
+  const file = join(siteDir, 'config', 'main.js');
+  if (!existsSync(file)) return [];
+  try {
+    const mod = await import(`${pathToFileURL(file).href}?t=${statSync(file).mtimeMs}`);
+    let value = mod.default ?? mod;
+    if (typeof value === 'function') value = await value();
+    const fields = value?.layouts?.fields;
+    return Array.isArray(fields) ? fields.filter((f) => typeof f === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * What the layout inspector offers for a site: its fields (config/data.js
+ * keys, from Cook's loadSiteNames), the fields it declares for layouts
+ * (config/main.js `layouts.fields`), the lists a repeat can read
+ * (`collections.<name>` for each collection, `programs`,
+ * `programAreas.<area>` for each program area, and data.js arrays) and
+ * Cook's document fields.
+ * @param {string} siteDir
+ * @param {{ collections?: string[], importCook?: Function }} [opts] - collections: the site's collection names
+ * @returns {Promise<{ siteFields: string[], declaredFields: string[], lists: string[], documentFields: string[] }>}
+ */
+export async function layoutContext(siteDir, { collections = [], importCook = defaultImportCook } = {}) {
+  const cook = await loadCook(siteDir, importCook);
+  const names = await cook.loadSiteNames(siteDir);
+  const declaredFields = await declaredLayoutFields(siteDir);
+  const siteFields = names.fields.filter((f) => !declaredFields.includes(f));
+  const lists = [...new Set(collections.filter((c) => typeof c === 'string' && c).map((c) => `collections.${c}`))];
+  for (const list of names.lists) {
+    if (list === 'programAreas') lists.push(...(await programAreas(siteDir)).map((a) => `programAreas.${a}`));
+    else if (!lists.includes(list)) lists.push(list);
+  }
+  return {
+    siteFields,
+    declaredFields,
+    lists,
+    documentFields: Array.isArray(cook.DOCUMENT_FIELDS) ? [...cook.DOCUMENT_FIELDS] : [],
+  };
+}
+
 /** Site-relative paths of the .html/.md files that may hold includes: pages, layouts and includes. */
 async function includeScanFiles(siteDir) {
   const src = join(siteDir, 'src');

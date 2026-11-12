@@ -8,7 +8,9 @@
  *
  * Where an entry goes (`insertionTarget`): in place of an empty text block
  * at the caret, after the caret's text block or the selected block, or
- * inside a selected empty container or region.
+ * inside a selected empty container or region. An inline entry (the
+ * inline component) goes at the caret, in text only. A component is
+ * inserted unnamed and selected: the inspector picks its tag.
  *
  * @module editor/layout-editor/palette
  */
@@ -79,6 +81,13 @@ export const ENTRIES = [
   { id: 'include', label: 'Include', description: 'A shared fragment (<div data-include>)', icon: '⧉', category: 'layout', create: (s) => s.nodes.include.create({ path: '' }) },
   { id: 'comment', label: 'Comment', description: 'A note in the HTML', icon: '#', category: 'layout', create: (s) => s.nodes.comment.create({ text: ' ' }) },
 
+  // Components: named (and given attributes) in the inspector
+  { id: 'component', label: 'Component', description: 'A custom element, such as <site-search>', icon: '◇', category: 'component', create: (s) => s.nodes.component.create({ tag: '' }) },
+  {
+    id: 'inline-component', label: 'Inline component', description: 'A custom element inside the text', icon: '◆', category: 'component',
+    inline: true, create: (s) => s.nodes.inline_component.create({ tag: '' }),
+  },
+
   // Base regions
   { id: 'region-header', label: 'Header', description: '<header> region', icon: '▀', category: 'region', create: reg('header') },
   { id: 'region-nav', label: 'Navigation', description: '<nav> region', icon: '☰', category: 'region', create: reg('nav') },
@@ -88,7 +97,7 @@ export const ENTRIES = [
 ];
 
 export const CATEGORY_LABELS = {
-  text: 'Text', container: 'Containers', list: 'Lists', media: 'Images', layout: 'Layout', region: 'Regions',
+  text: 'Text', container: 'Containers', list: 'Lists', media: 'Images', layout: 'Layout', component: 'Components', region: 'Regions',
 };
 
 // RULES
@@ -217,15 +226,37 @@ function placeNode(state, target, node) {
   return tr;
 }
 
+/** The transaction that puts an inline `node` in place of the text selection, or null. */
+function placeInline(state, node) {
+  const { $from, $to } = state.selection;
+  if (state.selection instanceof NodeSelection && !state.selection.node.isInline) return null;
+  if (!$from.parent.inlineContent || !$from.sameParent($to)) return null;
+  if (!$from.parent.type.contentMatch.matchType(node.type)) return null;
+  let tr;
+  try {
+    tr = state.tr.replaceWith($from.pos, $to.pos, node);
+  } catch {
+    return null;
+  }
+  if (!tr.doc.nodeAt($from.pos)?.eq(node)) return null;
+  return tr;
+}
+
+/** Where an entry goes and the transaction that puts it there (or null). */
+function place(state, entry, node) {
+  if (entry.inline) return { from: state.selection.from, tr: placeInline(state, node) };
+  const target = insertionTarget(state);
+  return { from: target.from, tr: placeNode(state, target, node) };
+}
+
 /**
  * The entries that fit at the caret.
  * @param {import('prosemirror-state').EditorState} state
  */
 export function paletteItems(state) {
-  const target = insertionTarget(state);
   const before = layoutViolations(state.doc);
   return ENTRIES.filter((entry) => {
-    const tr = placeNode(state, target, entry.create(state.schema, state.doc));
+    const { tr } = place(state, entry, entry.create(state.schema, state.doc));
     return tr !== null && !addsViolation(before, layoutViolations(tr.doc));
   });
 }
@@ -236,14 +267,13 @@ export function paletteItems(state) {
  * doesn't fit.
  */
 export function insertEntry(state, entry) {
-  const target = insertionTarget(state);
   const node = entry.create(state.schema, state.doc);
-  const tr = placeNode(state, target, node);
+  const { from, tr } = place(state, entry, node);
   if (!tr) return null;
-  const end = target.from + node.nodeSize;
-  const inside = Selection.findFrom(tr.doc.resolve(target.from), 1, true);
+  const end = from + node.nodeSize;
+  const inside = node.isAtom ? null : Selection.findFrom(tr.doc.resolve(from), 1, true);
   if (inside && inside.from < end) tr.setSelection(inside);
-  else tr.setSelection(NodeSelection.create(tr.doc, target.from));
+  else tr.setSelection(NodeSelection.create(tr.doc, from));
   return tr.scrollIntoView();
 }
 

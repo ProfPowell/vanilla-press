@@ -176,16 +176,14 @@ const nodes = {
   },
 
   /**
-   * `${slot:name}`. `label` is the slot's label in the info block (null:
-   * none); `info` is the rest of its info entry, kept as written.
+   * `${slot:name}`. The slot's info entry (its label…) lives in
+   * `meta.info.slots`, keyed by name (convert.js `setSlotLabel`).
    */
   slot_ref: {
     group: 'block',
     ...atom,
     attrs: {
       name: { default: '' },
-      label: { default: null },
-      info: { default: null },
       attrs: { default: [] },
     },
     toDOM: (node) => ['div', { class: 'le-block le-slot-ref', 'data-slot': node.attrs.name }],

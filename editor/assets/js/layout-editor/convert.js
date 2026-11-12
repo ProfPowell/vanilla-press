@@ -4,9 +4,11 @@
  * `treeToDoc` puts the body (and a child's slot pieces) into the layout
  * schema; everything else rides in `meta`. `docToTree` rebuilds the tree
  * exactly, with `info.slots` recomputed from the `slot_ref` nodes (and a
- * base's `${slot:head}` head item): slots keep their order in the info
- * block, new slots follow in the order they appear, each slot's label
- * comes from its first `slot_ref`.
+ * base's `${slot:head}` head item). Slot entries live in `meta.info.slots`
+ * keyed by name, never on the nodes: entries still referenced are kept
+ * whole in their order, new names follow in document order as
+ * `{ label: name }`, names no longer referenced are dropped. The inspector
+ * edits labels with `setSlotLabel`.
  *
  * Nothing is lost: a tree shape this module doesn't know throws rather
  * than being dropped (Review Focus 5).
@@ -49,7 +51,6 @@ const fail = (what, value) => {
  */
 export function treeToDoc(tree, schema) {
   const n = schema.nodes;
-  const slotInfo = tree.info?.slots ?? {};
   let keys = 0;
 
   const inline = (runs = [], marks = [], parentKey = null) => runs.flatMap((run) => {
@@ -69,11 +70,7 @@ export function treeToDoc(tree, schema) {
     return inline(run.inline, [...marks, mark], key);
   });
 
-  const slotRef = (block) => {
-    const entry = slotInfo[block.name];
-    const label = entry && typeof entry.label === 'string' ? entry.label : null;
-    return n.slot_ref.create({ name: block.name, label, info: clone(entry ?? null), attrs: clone(block.attrs ?? []) });
-  };
+  const slotRef = (block) => n.slot_ref.create({ name: block.name, attrs: clone(block.attrs ?? []) });
 
   const block = (b, { inFigure = false } = {}) => {
     switch (b.type) {
@@ -131,11 +128,11 @@ export function treeToDoc(tree, schema) {
 
 // DOC → TREE
 // -----------------------------
-/** Depth of a mark in its nesting path; marks added by the editor (no key) go innermost. */
+/** Depth of a mark in its nesting path; marks added by the editor (no key) come last. */
 const markDepth = (mark) => (mark.attrs.key == null ? Number.MAX_SAFE_INTEGER : mark.attrs.key.split('/').length);
 
-/** A node's marks, outermost first. */
-const markChain = (node) => [...node.marks].sort((a, b) => markDepth(a) - markDepth(b));
+/** A node's marks in tie-break order: keyed by nesting depth, then keyless in rank order. */
+const markOrder = (node) => [...node.marks].sort((a, b) => markDepth(a) - markDepth(b));
 
 function leafRun(node) {
   switch (node.type.name) {
@@ -149,12 +146,18 @@ function leafRun(node) {
   }
 }
 
-/** Inline runs from `{ node, chain }` items, nesting by the marks at `level`. */
-function runsAt(items, level) {
+/**
+ * Inline runs from `{ node, marks }` items (`marks`: the ones not yet
+ * opened by an outer element). At each item the outer element is the mark
+ * whose run covers the most consecutive items; ties go to the earlier mark
+ * in `markOrder` (keyed outer-first, then keyless), so source nesting is
+ * kept and a mark added across several elements wraps them once.
+ */
+function runsAt(items) {
   const out = [];
   for (let i = 0; i < items.length;) {
-    const { node, chain } = items[i];
-    if (chain.length <= level) {
+    const { node, marks } = items[i];
+    if (marks.length === 0) {
       const run = leafRun(node);
       const last = out.at(-1);
       if ('text' in run && last && 'text' in last) last.text += run.text;
@@ -162,11 +165,16 @@ function runsAt(items, level) {
       i++;
       continue;
     }
-    const mark = chain[level];
-    let j = i + 1;
-    while (j < items.length && items[j].chain.length > level && items[j].chain[level].eq(mark)) j++;
-    out.push({ tag: mark.type.name, attrs: clone(mark.attrs.attrs), inline: runsAt(items.slice(i, j), level + 1) });
-    i = j;
+    let best = null;
+    let end = i;
+    for (const mark of marks) {
+      let j = i + 1;
+      while (j < items.length && items[j].marks.some(m => m.eq(mark))) j++;
+      if (j > end) { best = mark; end = j; }
+    }
+    const inner = items.slice(i, end).map(it => ({ node: it.node, marks: it.marks.filter(m => !m.eq(best)) }));
+    out.push({ tag: best.type.name, attrs: clone(best.attrs.attrs), inline: runsAt(inner) });
+    i = end;
   }
   return out;
 }
@@ -174,8 +182,8 @@ function runsAt(items, level) {
 /** The inline runs of a text-level node. */
 function inlineRuns(node) {
   const items = [];
-  node.forEach(child => items.push({ node: child, chain: markChain(child) }));
-  return runsAt(items, 0);
+  node.forEach(child => items.push({ node: child, marks: markOrder(child) }));
+  return runsAt(items);
 }
 
 function blockOf(node) {
@@ -229,35 +237,41 @@ function pieceOf(node) {
 }
 
 /**
- * The info block's slots, from the slot_ref nodes (and a base's head slot):
- * declared slots keep their order, new ones follow as they appear.
+ * The info block's slots: the entries in `meta.info.slots` for the names
+ * still referenced (a slot_ref, or a base's `${slot:head}` head item), in
+ * their order, then `{ label: name }` for new names in document order.
  */
 function slotsOf(doc, meta) {
-  const found = new Map();
-  if (meta.kind === 'base' && (meta.head ?? []).some(item => item.slot === 'head')) {
-    const entry = meta.info?.slots?.head;
-    found.set('head', entry ? clone(entry) : { label: 'Head' });
-  }
+  const used = [];
+  if (meta.kind === 'base' && (meta.head ?? []).some(item => item.slot === 'head')) used.push('head');
   doc.descendants((node) => {
-    if (node.type.name !== 'slot_ref' || found.has(node.attrs.name)) return;
-    const { info } = node.attrs;
-    const isObject = info !== null && typeof info === 'object' && !Array.isArray(info);
-    // An entry that isn't an object (the checker doesn't require one) is kept as written
-    if (info !== null && !isObject && node.attrs.label === null) {
-      found.set(node.attrs.name, clone(info));
-      return;
-    }
-    const entry = isObject ? clone(info) : {};
-    if (node.attrs.label === null) delete entry.label;
-    else entry.label = node.attrs.label;
-    found.set(node.attrs.name, entry);
+    if (node.type.name === 'slot_ref' && !used.includes(node.attrs.name)) used.push(node.attrs.name);
   });
+  const declared = meta.info?.slots ?? {};
   const slots = {};
-  for (const name of Object.keys(meta.info?.slots ?? {})) {
-    if (found.has(name)) slots[name] = found.get(name);
+  for (const name of Object.keys(declared)) {
+    if (used.includes(name)) slots[name] = clone(declared[name]);
   }
-  for (const [name, entry] of found) if (!(name in slots)) slots[name] = entry;
+  for (const name of used) if (!(name in slots)) slots[name] = { label: name };
   return slots;
+}
+
+/**
+ * Set a slot's label in `meta.info.slots`, keeping the entry's other keys
+ * (an entry is created for a new name). For the inspector.
+ * @param {Object} meta - from treeToDoc
+ * @param {string} name
+ * @param {string} label
+ * @returns {Object} meta
+ */
+export function setSlotLabel(meta, name, label) {
+  if (!meta.info) return meta;
+  if (!meta.info.slots || typeof meta.info.slots !== 'object') meta.info.slots = {};
+  const entry = meta.info.slots[name];
+  meta.info.slots[name] = entry && typeof entry === 'object' && !Array.isArray(entry)
+    ? { ...entry, label }
+    : { label };
+  return meta;
 }
 
 /**

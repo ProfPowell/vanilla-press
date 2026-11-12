@@ -8,9 +8,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
+import { toggleMark } from 'prosemirror-commands';
 import { layoutSchema } from '../../editor/assets/js/layout-editor/schema.js';
-import { treeToDoc, docToTree } from '../../editor/assets/js/layout-editor/convert.js';
+import { treeToDoc, docToTree, setSlotLabel } from '../../editor/assets/js/layout-editor/convert.js';
 
 const COOK = '/Users/tpowell/src/cook';
 const COOK_LAYOUTS = path.join(COOK, 'scripts', 'layouts.js');
@@ -169,43 +170,107 @@ describe('layout convert: inline marks, fields, slots', { skip: !HAVE_COOK && 'C
     assert.deepEqual(time.marks.map(m => [m.type.name, m.attrs.attrs]), [['time', [['datetime', '${date}']]]]);
   });
 
-  it('a mark added in the editor nests inside the marks already there', () => {
-    const tree = parse('<!-- layout-fragment -->\n<footer><p>x <a href="/">one</a></p></footer>\n', { fragment: true }, 'mark');
+  const fragPara = (html) => {
+    const tree = parse(`<!-- layout-fragment -->\n<footer>${html}</footer>\n`, { fragment: true }, html);
     const { doc, meta } = treeToDoc(tree, layoutSchema);
-    const para = nodesOf(doc, 'text_block')[0];
+    return { doc, meta, para: nodesOf(doc, 'text_block')[0] };
+  };
+  const inlineOf = (doc, meta) => docToTree(doc, meta).body[0].body[0].inline;
+
+  it('a mark added across a whole paragraph wraps the elements already there once', () => {
+    const { doc, meta, para } = fragPara('<p>x <a href="/">one</a></p>');
     const tr = EditorState.create({ doc }).tr.addMark(para.pos + 1, para.pos + 1 + para.node.content.size, layoutSchema.marks.strong.create());
-    assert.deepEqual(docToTree(tr.doc, meta).body[0].body[0].inline, [
-      { tag: 'strong', attrs: [], inline: [{ text: 'x ' }] },
+    assert.deepEqual(inlineOf(tr.doc, meta), [
+      { tag: 'strong', attrs: [], inline: [{ text: 'x ' }, { tag: 'a', attrs: [['href', '/']], inline: [{ text: 'one' }] }] },
+    ]);
+  });
+
+  it('a link added across x <strong>y</strong> z is one <a> around the strong', () => {
+    const { doc, meta, para } = fragPara('<p>x <strong>y</strong> z</p>');
+    const state = EditorState.create({ doc });
+    const from = para.pos + 1;
+    const to = from + para.node.content.size;
+    const tr = state.tr.setSelection(TextSelection.create(doc, from, to));
+    let next = state.apply(tr);
+    toggleMark(layoutSchema.marks.a, { attrs: [['href', '/n']] })(next, (t) => { next = next.apply(t); });
+    const back = docToTree(next.doc, meta);
+    assert.deepEqual(back.body[0].body[0].inline, [{
+      tag: 'a', attrs: [['href', '/n']],
+      inline: [{ text: 'x ' }, { tag: 'strong', attrs: [], inline: [{ text: 'y' }] }, { text: ' z' }],
+    }]);
+    assert.ok(cook.serializeLayout(back).includes('<p><a href="/n">x <strong>y</strong> z</a></p>'));
+  });
+
+  it('a mark added inside an element nests inside it', () => {
+    const { doc, meta } = fragPara('<p>x <a href="/">one</a></p>');
+    let at = -1;
+    doc.descendants((n, pos) => { if (n.isText && n.text === 'one') at = pos; });
+    const tr = EditorState.create({ doc }).tr.addMark(at, at + 3, layoutSchema.marks.strong.create());
+    assert.deepEqual(inlineOf(tr.doc, meta), [
+      { text: 'x ' },
       { tag: 'a', attrs: [['href', '/']], inline: [{ tag: 'strong', attrs: [], inline: [{ text: 'one' }] }] },
     ]);
   });
 
-  it('a new slot_ref adds its slot (with its label) to info.slots; deleting one removes it', () => {
+  /** A base with a nav slot carrying extra keys; header and main positions. */
+  const navBase = () => {
+    const info = '<script type="application/json" data-layout-info>{ "format": 1, "label": "K", "slots": {"nav":{"label":"Nav","note":"n"}} }</script>';
+    const tree = parse(`<!doctype html><html><head>${info}</head><body><header></header><nav>\${slot:nav}</nav><main>\${content}</main></body></html>`, {}, 'nav base');
+    const { doc, meta } = treeToDoc(tree, layoutSchema);
+    const region = (tag) => nodesOf(doc, 'region').find(r => r.node.attrs.tag === tag);
+    return { tree, doc, meta, region };
+  };
+  const sectionWith = (name) => layoutSchema.nodes.container.create({ tag: 'section' }, [layoutSchema.nodes.slot_ref.create({ name })]);
+
+  it('a slot_ref inserted before an existing one of that name keeps its entry whole', () => {
+    const { doc, meta, region } = navBase();
+    const d2 = EditorState.create({ doc }).tr.insert(region('header').pos + 1, sectionWith('nav')).doc;
+    assert.deepEqual(docToTree(d2, meta).info.slots, { nav: { label: 'Nav', note: 'n' } });
+    // and with the original ref deleted, the copy still carries it
+    const nav = nodesOf(d2, 'region').find(r => r.node.attrs.tag === 'nav');
+    const d3 = EditorState.create({ doc: d2 }).tr.delete(nav.pos + 1, nav.pos + nav.node.nodeSize - 1).doc;
+    const back = docToTree(d3, meta);
+    assert.deepEqual(back.info.slots, { nav: { label: 'Nav', note: 'n' } });
+    assert.equal(cook.checkLayout(cook.serializeLayout(back)).ok, true);
+  });
+
+  it('deleting and re-adding a slot_ref keeps its entry', () => {
+    const { doc, meta, region } = navBase();
+    const nav = region('nav');
+    const deleted = EditorState.create({ doc }).tr.delete(nav.pos + 1, nav.pos + nav.node.nodeSize - 1).doc;
+    assert.deepEqual(docToTree(deleted, meta).info.slots, {});
+    const header = nodesOf(deleted, 'region').find(r => r.node.attrs.tag === 'header');
+    const readded = EditorState.create({ doc: deleted }).tr.insert(header.pos + 1, sectionWith('nav')).doc;
+    assert.deepEqual(docToTree(readded, meta).info.slots, { nav: { label: 'Nav', note: 'n' } });
+  });
+
+  it('a new slot name gets { label: name }; setSlotLabel sets it; deleting a ref drops it', () => {
     const tree = parse(read(path.join(TAP, 'base.html')), TAP_OPTS, 'tap base');
     const { doc, meta } = treeToDoc(tree, layoutSchema);
     const main = nodesOf(doc, 'region').find(r => r.node.attrs.tag === 'main');
     const state = EditorState.create({ doc });
     // A slot stands alone in its element: wrap it in a section inside main
-    const ref = layoutSchema.nodes.slot_ref.create({ name: 'extra', label: 'Extra' });
-    const section = layoutSchema.nodes.container.create({ tag: 'section' }, [ref]);
-    const added = docToTree(state.tr.insert(main.pos + 1, section).doc, meta);
-    assert.deepEqual(added.info.slots.extra, { label: 'Extra' });
+    const withExtra = state.tr.insert(main.pos + 1, sectionWith('extra')).doc;
+    const added = docToTree(withExtra, meta);
+    assert.deepEqual(added.info.slots.extra, { label: 'extra' });
     assert.deepEqual(Object.keys(added.info.slots), [...Object.keys(tree.info.slots), 'extra']);
     assert.equal(cook.checkLayout(cook.serializeLayout(added), TAP_OPTS).ok, true);
+
+    assert.equal(setSlotLabel(meta, 'extra', 'Extra'), meta);
+    assert.deepEqual(docToTree(withExtra, meta).info.slots.extra, { label: 'Extra' });
 
     const nav = nodesOf(doc, 'slot_ref').find(r => r.node.attrs.name === 'nav');
     const removed = docToTree(state.tr.delete(nav.pos, nav.pos + nav.node.nodeSize).doc, meta);
     assert.equal('nav' in removed.info.slots, false);
+    assert.equal('extra' in removed.info.slots, false);
     assert.deepEqual(Object.keys(removed.info.slots), Object.keys(tree.info.slots).filter(k => k !== 'nav'));
   });
 
-  it('a slot label edited on its slot_ref reaches info.slots, keeping other keys', () => {
+  it('setSlotLabel keeps the entry’s other keys', () => {
     const tree = parse(SYNTHETIC['synthetic child'][0], {}, 'child');
     const { doc, meta } = treeToDoc(tree, layoutSchema);
-    const zed = nodesOf(doc, 'slot_ref').find(r => r.node.attrs.name === 'zed');
-    assert.equal(zed.node.attrs.label, 'Zed');
-    const tr = EditorState.create({ doc }).tr.setNodeMarkup(zed.pos, null, { ...zed.node.attrs, label: 'Zee' });
-    const back = docToTree(tr.doc, meta);
+    setSlotLabel(meta, 'zed', 'Zee');
+    const back = docToTree(doc, meta);
     assert.deepEqual(back.info.slots.zed, { label: 'Zee', note: 'n' });
     assert.deepEqual(back.info.slots.aside, {});
   });

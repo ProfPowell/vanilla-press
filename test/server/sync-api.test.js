@@ -402,3 +402,39 @@ describe('API in fixture mode', () => {
     assert.deepEqual(data, { ok: true, synced: 0 });
   });
 });
+
+describe('GET /api/layouts', () => {
+  it('without a workspace is unsupported with no message', async () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    const { api, close } = await startApi(db, {});
+    try {
+      const { status, data } = await api('/api/layouts');
+      assert.equal(status, 200);
+      assert.deepEqual(data, { supported: false, message: null, layouts: [] });
+    } finally {
+      await close();
+      db.close();
+    }
+  });
+
+  it('with a workspace lists the site layouts (fallback scan)', async () => {
+    const site = mkdtempSync(join(tmpdir(), 'vp-layouts-api-'));
+    mkdirSync(join(site, 'src', 'layouts'), { recursive: true });
+    writeFileSync(join(site, 'src/layouts/post.html'), '<html><body>${content}</body></html>');
+    const ws = resolveWorkspace({ site, repoRoot });
+    const db = openWorkspaceDb(ws);
+    const { api, close } = await startApi(db, { mediaDir: ws.mediaDir, workspace: ws });
+    try {
+      const { status, data } = await api('/api/layouts');
+      assert.equal(status, 200);
+      assert.equal(data.supported, false);
+      assert.match(data.message, /too old/);
+      assert.deepEqual(data.layouts.map((l) => l.name), ['post']);
+    } finally {
+      await close();
+      db.close();
+      rmSync(site, { recursive: true, force: true });
+    }
+  });
+});

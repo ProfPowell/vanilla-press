@@ -116,6 +116,11 @@ export const api = {
     return request('/collections');
   },
 
+  /** The site's layouts: { supported, message, layouts: [{ name, label, abstract, usable, editable, missing, slots }] }. */
+  getLayouts() {
+    return request('/layouts');
+  },
+
   /** Full-text search. */
   search(query) {
     return request('/search', { query: { q: query } });

@@ -7,6 +7,7 @@
  * @module server/api
  */
 
+import { siteLayouts } from '../app/site-layouts.js';
 import { mediaAltLookup } from '../media/alt-lookup.js';
 import crypto from 'node:crypto';
 import { join } from 'node:path';
@@ -347,6 +348,12 @@ export function mountApi(router, db, options) {
     const collections = getCollections(db);
     sendJson(res, 200, collections);
   });
+
+  // --- Layouts ---
+
+  route.add('GET', '/api/layouts', jsonErrors(async (req, res) => {
+    sendJson(res, 200, await siteLayouts(ws ? ws.siteDir : null));
+  }));
 
   // --- Search ---
 

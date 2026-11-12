@@ -288,6 +288,73 @@ describe('layout editor: a child fills its parent\'s regions', { skip: !HAVE_COO
   });
 });
 
+describe('layout editor: a child\'s head (I3)', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
+  /** The starter tree, with the parent's regions (head included) from the layouts route. */
+  const withParent = (tree, slots) => {
+    const base = stubFetch(tree, [200, { hash: 'h2' }]);
+    const fetch = async (url, opts) => {
+      if (url === '/api/sites/s1/layouts') return { ok: true, status: 200, json: async () => ({ layouts: [{ name: 'base', slots }] }) };
+      return base(url, opts);
+    };
+    fetch.calls = base.calls;
+    return fetch;
+  };
+  const SLOTS = [{ name: 'nav', label: 'Section menu' }, { name: 'aside', label: 'Sidebar' }, { name: 'head', label: 'Head' }];
+
+  it('the starter post: Head opens the dialog on its head piece; adding a <link> passes Cook\'s check', async () => {
+    const root = freshRoot();
+    const fetch = withParent(starterTree('post'), SLOTS);
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch });
+    const head = root.querySelector('[data-le-head]');
+    assert.equal(head.hidden, false);
+    assert.equal(head.disabled, false);
+    head.click();
+    const dialog = root.querySelector('[data-le-head-dialog]');
+    assert.ok(dialog.hasAttribute('open'));
+    const tags = [...dialog.querySelectorAll('[data-head-new] option')].map(o => o.value);
+    assert.deepEqual(tags, ['meta', 'link', 'script', 'style'], 'a head piece takes meta, link, script and style; no region');
+    const before = ed.tree().slots.find(p => p.name === 'head').body.length;
+    for (const o of dialog.querySelectorAll('[data-head-new] option')) { if (o.value === 'link') o.setAttribute('selected', ''); else o.removeAttribute('selected'); }
+    dialog.querySelector('[data-head-add]').click();
+    assert.equal(ed.isDirty(), true);
+    const row = dialog.querySelector('[data-head-attr-add]');
+    row.click();
+    const [n, v] = dialog.querySelectorAll('[data-head-attr] input');
+    n.value = 'rel'; n.dispatchEvent(new win.Event('input', { bubbles: true }));
+    v.value = 'alternate'; v.dispatchEvent(new win.Event('input', { bubbles: true }));
+    const piece = ed.tree().slots.find(p => p.name === 'head');
+    assert.equal(piece.body.length, before + 1);
+    assert.deepEqual(piece.body.at(-1), { tag: 'link', attrs: [['rel', 'alternate']] });
+    await ed.save();
+    const put = fetch.calls.find(c => c.method === 'PUT');
+    const check = cook.checkLayout(cook.serializeLayout(put.body.tree));
+    assert.ok(check.ok, JSON.stringify(check.problems));
+    ed.destroy();
+  });
+
+  it('a child without a head piece gets one from Head', async () => {
+    const root = freshRoot();
+    const fetch = withParent(starterTree('docs'), SLOTS);
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'docs', fetch });
+    assert.equal(ed.tree().slots.some(p => p.name === 'head'), false);
+    const head = root.querySelector('[data-le-head]');
+    assert.equal(head.hidden, false);
+    head.click();
+    assert.equal(ed.tree().slots.some(p => p.name === 'head'), true);
+    root.querySelector('[data-le-head-dialog] [data-head-add]').click(); // <meta>
+    assert.equal(ed.tree().slots.find(p => p.name === 'head').body[0].tag, 'meta');
+    assert.equal(ed.isDirty(), true);
+    ed.destroy();
+  });
+
+  it('a child whose parent has no head region shows no Head', async () => {
+    const root = freshRoot();
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'docs', fetch: withParent(starterTree('docs'), SLOTS.slice(0, 2)) });
+    assert.equal(root.querySelector('[data-le-head]').hidden, true);
+    ed.destroy();
+  });
+});
+
 describe('layout editor save edge cases', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
   it('an edit made while the save runs keeps the layout unsaved (new hash stored)', async () => {
     const root = freshRoot();

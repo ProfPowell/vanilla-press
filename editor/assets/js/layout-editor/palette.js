@@ -98,20 +98,24 @@ export const ENTRIES = [
 
 /**
  * A child's entries for the parent's regions it doesn't fill yet: each puts
- * a `<template slot="name">` (a slot_piece) after the child's blocks,
- * labelled as the parent labels the region (e.g. `Sidebar`).
- * @param {Array<{ name: string, label?: string }>} slots - the parent's regions (head excluded)
+ * a `<template slot="name">` (a slot_piece; for `head`, a head_piece) after
+ * the child's blocks, labelled as the parent labels the region (e.g. `Sidebar`).
+ * @param {Array<{ name: string, label?: string }>} slots - the parent's regions
  * @param {import('prosemirror-model').Node} doc
  * @param {string} [parent] - the parent layout's name, for the description
  */
 export function fillEntries(slots, doc, parent = 'parent') {
   const filled = new Set();
-  doc?.descendants((node) => { if (node.type.name === 'slot_piece') filled.add(node.attrs.name); });
+  doc?.descendants((node) => {
+    if (node.type.name === 'slot_piece') filled.add(node.attrs.name);
+    else if (node.type.name === 'head_piece') filled.add('head');
+  });
   return (Array.isArray(slots) ? slots : [])
-    .filter(s => s && typeof s.name === 'string' && s.name && s.name !== 'head' && !filled.has(s.name))
+    .filter(s => s && typeof s.name === 'string' && s.name && !filled.has(s.name))
     .map(s => ({
       id: `fill-${s.name}`, label: s.label || s.name, description: `Fill ${parent}'s ${s.name} region`, icon: '▌', category: 'region',
-      create: (schema) => schema.nodes.slot_piece.create({ name: s.name }),
+      // The head region takes head items (edited in the Head dialog), not blocks
+      create: (schema) => (s.name === 'head' ? schema.nodes.head_piece.create({ items: [] }) : schema.nodes.slot_piece.create({ name: s.name })),
     }));
 }
 

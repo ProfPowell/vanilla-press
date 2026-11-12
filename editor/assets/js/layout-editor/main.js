@@ -2,7 +2,8 @@
  * The layout editor page (editor/layout.html?site=&kind=&name=): loads the
  * layout's tree, shows it on the canvas (views.js) with the `/` palette
  * (palette.js), and the bar above it: label, description, page structure,
- * Abstract (base only), Head (base only: head-dialog.js) and Save.
+ * Abstract (base only), Head (head-dialog.js: a base's head, or the head
+ * piece of a child whose parent has a head region) and Save.
  *
  * Save PUTs the tree with the hash the layout was opened with. A 409 says
  * `This layout changed on disk since you opened it` with `Reload` (nothing
@@ -99,14 +100,23 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       if (view) refreshSlotLabels(view, meta);
     },
   }) : null;
-  /** The Head dialog (a base only); its changes edit meta.head. */
+  /**
+   * The Head dialog. A base: its changes edit meta.head. A child: it edits the items of the
+   * `<template slot="head">` piece through `pieceHead`, and each change is a transaction on the canvas.
+   */
   const headDialog = createHeadDialog({
     root,
-    getMeta: () => meta,
+    getMeta: () => (meta?.kind === 'child' ? pieceHead : meta),
     getContext: () => context,
-    onChange: () => setDirty(true),
+    onChange: () => {
+      if (meta?.kind === 'child') commitHeadPiece();
+      else setDirty(true);
+    },
     getChildren: () => children,
+    getMode: () => (meta?.kind === 'child' ? 'piece' : 'base'),
   });
+  /** A child's head piece items while the Head dialog edits them: `{ head: HeadItem[] }`. */
+  let pieceHead = { head: [] };
   /** A base's children (the listing's baseFor), for the Head dialog's note. */
   let children = [];
   /** A child's parent regions ({ name, label }), for the palette and the canvas labels. */
@@ -174,12 +184,44 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     return o;
   }
 
+  /** Whether this is a child whose parent has a head region (so it can fill it). */
+  const childHasHeadRegion = () => meta?.kind === 'child' && parentSlots.some(s => s?.name === 'head');
+
+  /** The child's head piece position, or null. */
+  function headPiecePos() {
+    let at = null;
+    view?.state.doc.descendants((node, pos) => {
+      if (at !== null) return false;
+      if (node.type.name === 'head_piece') { at = pos; return false; }
+      return true;
+    });
+    return at;
+  }
+
+  /** Give the child a head piece (last in its body) when it has none. */
+  function ensureHeadPiece() {
+    if (!view) return false;
+    if (headPiecePos() !== null) return true;
+    const body = view.state.doc.firstChild;
+    view.dispatch(view.state.tr.insert(1 + body.content.size, layoutSchema.nodes.head_piece.create({ items: [] })));
+    return headPiecePos() !== null;
+  }
+
+  /** Write the Head dialog's items into the child's head piece (an edit, so it counts as one). */
+  function commitHeadPiece() {
+    const pos = headPiecePos();
+    if (pos === null) return;
+    const node = view.state.doc.nodeAt(pos);
+    view.dispatch(view.state.tr.setNodeMarkup(pos, null, { ...node.attrs, items: structuredClone(pieceHead.head) }));
+  }
+
   function fillBar() {
     els.file.textContent = `${kind === 'include' ? 'src/includes' : 'src/layouts'}/${name}.html`;
     const hasInfo = meta.kind !== 'fragment' && meta.info && typeof meta.info === 'object';
     els.fields.hidden = !hasInfo;
-    els.head.hidden = meta.kind !== 'base';
-    els.head.disabled = meta.kind !== 'base';
+    const head = meta.kind === 'base' || childHasHeadRegion();
+    els.head.hidden = !head;
+    els.head.disabled = !head;
     if (!hasInfo) return;
     els.label.value = meta.info.label ?? '';
     els.description.value = meta.info.description ?? '';
@@ -220,6 +262,10 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   const onSave = () => { save(); };
   const onHead = () => {
     if (meta?.kind === 'base') headDialog.open();
+    else if (childHasHeadRegion() && ensureHeadPiece()) {
+      pieceHead = { head: structuredClone(view.state.doc.nodeAt(headPiecePos()).attrs.items || []) };
+      headDialog.open();
+    }
   };
   const onBack = async (e) => {
     if (!dirty) return;

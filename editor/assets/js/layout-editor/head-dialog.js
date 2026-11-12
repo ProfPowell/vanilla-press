@@ -1,8 +1,10 @@
 /**
- * The layout editor's Head dialog (a base layout only; a child's head piece
- * is a block on the canvas). It lists `meta.head` in order, each item with
- * Edit, Move up, Move down and Remove, and adds items of the tags a head
- * item can have (`HeadItem`): title, meta, link, script, style and base.
+ * The layout editor's Head dialog. For a base it lists `meta.head` in order,
+ * each item with Edit, Move up, Move down and Remove, and adds items of the
+ * tags a head item can have (`HeadItem`): title, meta, link, script, style
+ * and base. For a child (mode `piece`) it edits the items of its
+ * `<template slot="head">` piece, which take meta, link, script and style
+ * only (Cook's HEAD_SLOT_ELEMENTS), and has no region.
  *
  * - Text and attribute values are free text, so they take field
  *   placeholders like `${title}`; `Insert field` adds one at the caret.
@@ -26,6 +28,9 @@ const regionText = (meta) => (meta?.info?.slots?.head ? slotText(meta, 'head') :
 
 /** The tags a head item can have (Cook's HeadItem). */
 export const HEAD_TAGS = ['title', 'meta', 'link', 'script', 'style', 'base'];
+
+/** The tags a child's head piece can hold (Cook's HEAD_SLOT_ELEMENTS). */
+export const HEAD_PIECE_TAGS = ['meta', 'link', 'script', 'style'];
 
 /** Tags without an end tag. */
 const VOID = new Set(['meta', 'link', 'base']);
@@ -144,12 +149,14 @@ let ids = 0;
 /**
  * The Head dialog, appended to `root`.
  * @param {{ root: Element, getMeta: () => Object, getContext?: () => Object, onChange?: () => void,
- *   getChildren?: () => string[] }} opts -
+ *   getChildren?: () => string[], getMode?: () => 'base'|'piece' }} opts -
+ *   getMeta: what holds `head` (a base's meta; for a piece, an object whose `head` is its items);
  *   getContext: the inspector's context (documentFields, siteFields, declaredFields) for `Insert field`;
- *   getChildren: the layouts built on this one (the listing's baseFor), named when the region is removed
+ *   getChildren: the layouts built on this one (the listing's baseFor), named when the region is removed;
+ *   getMode: `piece` for a child's head piece
  * @returns {{ el: HTMLDialogElement, open: () => void, close: () => void, render: () => void, destroy: () => void }}
  */
-export function createHeadDialog({ root, getMeta, getContext = () => ({}), onChange = () => {}, getChildren = () => [] }) {
+export function createHeadDialog({ root, getMeta, getContext = () => ({}), onChange = () => {}, getChildren = () => [], getMode = () => 'base' }) {
   const prefix = `le-head-${++ids}`;
   /** The item being edited (an object in meta.head), or null. */
   let editing = null;
@@ -179,13 +186,19 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
 
   // THE LIST
   // -----------------------------
+  const isPiece = () => getMode() === 'piece';
+  const BASE_HINT = hint.textContent;
+  const PIECE_HINT = 'What this layout adds to the <head> of its pages. Text and values can use fields, like ${title}.';
+
   function renderNewSelect() {
     const meta = getMeta();
-    const opts = HEAD_TAGS.map(tag => el('option', { value: tag }, `<${tag}>`));
-    const region = el('option', { value: REGION }, regionText(meta));
-    region.disabled = !canAddHeadRegion(meta);
-    if (region.disabled) region.setAttribute('disabled', '');
-    opts.push(region);
+    const opts = (isPiece() ? HEAD_PIECE_TAGS : HEAD_TAGS).map(tag => el('option', { value: tag }, `<${tag}>`));
+    if (!isPiece()) {
+      const region = el('option', { value: REGION }, regionText(meta));
+      region.disabled = !canAddHeadRegion(meta);
+      if (region.disabled) region.setAttribute('disabled', '');
+      opts.push(region);
+    }
     const current = selectValue(newSelect) || 'meta';
     newSelect.replaceChildren(...opts);
     const pick = opts.find(o => o.value === current && !o.disabled) || opts.find(o => o.value === 'meta');
@@ -308,6 +321,7 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
 
   function render() {
     if (editing && !(getMeta().head ?? []).includes(editing)) editing = null;
+    hint.textContent = isPiece() ? PIECE_HINT : BASE_HINT;
     renderNewSelect();
     renderList();
     renderForm();
@@ -355,6 +369,7 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
   const onAdd = () => {
     const meta = getMeta();
     const value = selectValue(newSelect);
+    if (isPiece() && !HEAD_PIECE_TAGS.includes(value)) return;
     if (value === REGION) {
       if (!addHeadItem(meta, { slot: 'head' })) {
         say(`${regionText(meta)} is already in the head`);

@@ -215,7 +215,7 @@ describe('a child fills its parent\'s regions', () => {
     const state = EditorState.create({ doc, selection: NodeSelection.create(doc, pos) });
     const slots = [{ name: 'nav', label: 'Section menu' }, { name: 'aside', label: 'Sidebar' }, { name: 'head', label: 'Head' }];
     const extra = fillEntries(slots, doc, 'base');
-    assert.deepEqual(extra.map(e => [e.id, e.label, e.category]), [['fill-nav', 'Section menu', 'region'], ['fill-aside', 'Sidebar', 'region']]);
+    assert.deepEqual(extra.map(e => [e.id, e.label, e.category]), [['fill-nav', 'Section menu', 'region'], ['fill-aside', 'Sidebar', 'region'], ['fill-head', 'Head', 'region']]);
     const items = paletteItems(state, extra);
     const sidebar = items.find(e => e.id === 'fill-aside');
     assert.ok(sidebar, items.map(e => e.id).join());
@@ -224,6 +224,25 @@ describe('a child fills its parent\'s regions', () => {
     assert.ok(tr);
     const after = docToTree(tr.doc, meta);
     assert.deepEqual(after.slots.map(p => p.name), ['aside']);
-    assert.deepEqual(fillEntries(slots, tr.doc).map(e => e.id), ['fill-nav']);
+    assert.deepEqual(fillEntries(slots, tr.doc).map(e => e.id), ['fill-nav', 'fill-head']);
+  });
+
+  it('offers a Head fill when the parent has a head region and the child has no head piece (I3)', () => {
+    const tree = {
+      kind: 'child', info: { format: 1, label: 'Kid', slots: {} }, parent: 'base', vars: [], pageLayout: 'stack',
+      htmlAttrs: [], head: [], body: [{ type: 'content', attrs: [] }], slots: [],
+    };
+    const { doc, meta } = treeToDoc(tree, layoutSchema);
+    let pos = null;
+    doc.descendants((node, p) => { if (node.type.name === 'content') pos = p; });
+    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, pos) });
+    const head = fillEntries([{ name: 'head', label: 'Head' }], doc, 'base');
+    assert.deepEqual(head.map(e => [e.id, e.label]), [['fill-head', 'Head']]);
+    const entry = paletteItems(state, head).find(e => e.id === 'fill-head');
+    assert.ok(entry, 'it fits after the body');
+    const tr = insertEntry(state, entry);
+    assert.deepEqual(docToTree(tr.doc, meta).slots, [{ name: 'head', attrs: [], body: [] }]);
+    assert.deepEqual(fillEntries([{ name: 'head', label: 'Head' }], tr.doc), []);
+    assert.deepEqual(fillEntries([{ name: 'aside' }], doc).map(e => e.id), ['fill-aside'], 'no head region, no Head fill');
   });
 });

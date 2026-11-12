@@ -12,8 +12,11 @@ import { isSafeComponentTag, isSafeAttrName } from './component-names.js';
 import { blockTypes, inlineTypes, validMarks, requiredMeta, validStatuses } from './content-schema.js';
 import { validCredit } from '../media/credit.js';
 
-const LAYOUT_NAME = /^[a-z0-9][a-z0-9_-]*(\/[a-z0-9_-]+)?$/;
-const REGION_NAME = /^[a-z][a-z0-9-]*$/;
+// Must match what Cook accepts. A layout is any `src/layouts/<name>.html`
+// basename or the `<dir>` of `<dir>/index.html`: no slash, no leading dot.
+export const LAYOUT_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
+// A region fills a layout slot; Cook's slot names are `[\w-]+` (`head` is reserved).
+export const REGION_NAME = /^[A-Za-z0-9_-]+$/;
 const WRAPS = ['text', 'template', 'script'];
 
 /**
@@ -73,7 +76,7 @@ export function validate(doc, { components } = {}) {
     }
     const { layout } = doc.meta;
     if (layout !== undefined && layout !== null && layout !== '' && !(typeof layout === 'string' && LAYOUT_NAME.test(layout))) {
-      errors.push('meta.layout must be a layout name (a-z, 0-9, -, _, with one optional /child)');
+      errors.push('meta.layout must be a layout name (letters, digits, _, -, .; no slash or leading dot)');
     }
     if (doc.meta.status && !validStatuses.includes(doc.meta.status)) {
       errors.push(`meta.status "${doc.meta.status}" is not valid (expected: ${validStatuses.join(', ')})`);
@@ -94,7 +97,7 @@ export function validate(doc, { components } = {}) {
     } else {
       for (const [name, list] of Object.entries(doc.regions)) {
         if (!REGION_NAME.test(name) || name === 'head') {
-          errors.push(`regions: "${name}" is not a valid region name (a-z, 0-9, -; not "head")`);
+          errors.push(`regions: "${name}" is not a valid region name (letters, digits, _, -; not "head")`);
           continue;
         }
         if (!Array.isArray(list)) {

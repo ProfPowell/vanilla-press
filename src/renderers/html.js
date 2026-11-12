@@ -40,8 +40,17 @@ export function render(doc, options = {}) {
 }
 
 /**
+ * A paragraph with no text: no children, or only empty text nodes.
+ * @param {Object} block
+ * @returns {boolean}
+ */
+const isEmptyParagraph = (block) => !!block && block.type === 'paragraph'
+  && (block.children || []).every((c) => c && c.type === 'text' && !c.value);
+
+/**
  * The document's regions as slot templates for Cook's layouts: one
- * `<template slot="name">` per non-empty region (sorted by name), holding the
+ * `<template slot="name">` per non-empty region (sorted by name; a region of
+ * only empty paragraphs counts as empty), holding the
  * bare content render of its blocks, joined by newlines. '' without regions.
  * @param {Object} doc
  * @returns {string}
@@ -49,7 +58,7 @@ export function render(doc, options = {}) {
 export function renderRegions(doc) {
   const regions = doc && doc.regions && typeof doc.regions === 'object' && !Array.isArray(doc.regions) ? doc.regions : {};
   return Object.keys(regions).sort()
-    .filter((name) => Array.isArray(regions[name]) && regions[name].length > 0)
+    .filter((name) => Array.isArray(regions[name]) && !regions[name].every(isEmptyParagraph))
     .map((name) => `<template slot="${escapeAttr(name)}">${renderContent({ ...doc, blocks: regions[name] }, { bare: true })}</template>`)
     .join('\n');
 }

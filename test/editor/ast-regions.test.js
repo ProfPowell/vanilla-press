@@ -45,6 +45,17 @@ describe('regions in the PM doc', () => {
     assert.deepEqual(toRegionsAst(doc), { footer: [para('Foot')] });
   });
 
+  it('omits a region of only empty paragraphs; keeps one with any text', () => {
+    const emptyP = { type: 'paragraph', children: [] };
+    const doc = fromBlockAst([para('Body')], schema, {
+      regions: [
+        { name: 'aside', label: 'Aside', shown: true, blocks: [emptyP, emptyP] },
+        { name: 'footer', label: 'Footer', shown: true, blocks: [emptyP, para('x')] },
+      ],
+    });
+    assert.deepEqual(toRegionsAst(doc), { footer: [emptyP, para('x')] });
+  });
+
   it('a doc without regions gives {}', () => {
     const doc = fromBlockAst([para('Body')], schema, { title: 'T' });
     assert.deepEqual(toRegionsAst(doc), {});

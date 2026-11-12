@@ -457,6 +457,13 @@ describe('renderRegions', () => {
     assert.equal(renderRegions({ id: 'd', meta: {}, blocks: [] }), '');
     assert.equal(renderRegions({ id: 'd', meta: {}, blocks: [], regions: { a: [] } }), '');
   });
+  it('renders a region of only empty paragraphs as nothing; keeps one with text', () => {
+    const emptyP = { type: 'paragraph', children: [] };
+    assert.equal(renderRegions({ id: 'd', meta: {}, blocks: [], regions: { a: [emptyP, emptyP] } }), '');
+    const out = renderRegions({ id: 'd', meta: {}, blocks: [], regions: { a: [emptyP, para('x')] } });
+    assert.ok(out.startsWith('<template slot="a">'), out);
+    assert.ok(out.includes('<p>x</p>'), out);
+  });
   it('wraps each non-empty region in a slot template, sorted, joined by newline', () => {
     const out = renderRegions({ id: 'd', meta: {}, blocks: [], regions: { b: [para('B')], a: [para('A')] } });
     assert.equal(out, '<template slot="a"><p>A</p></template>\n<template slot="b"><p>B</p></template>');

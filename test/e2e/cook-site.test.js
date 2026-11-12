@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { resolveWorkspace } from '../../src/workspace/workspace.js';
 import { syncDocument } from '../../src/sync/to-site.js';
+import { parseHTML } from 'linkedom';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const fixture = (n) => JSON.parse(readFileSync(join(repoRoot, 'test', 'fixtures', n), 'utf8'));
@@ -107,5 +108,36 @@ describe('synced site builds with Cook', () => {
     assert.ok(main.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), main);
     const areas = [...main.matchAll(/<textarea[^>]*>([\s\S]*?)<\/textarea>/g)].map((m) => m[1]);
     assert.equal(decode(areas[2]), '<code-block>x</code-block><script>alert(1)</script>');
+  });
+});
+
+describe('a library alt with quotes, & and < reaches the built <img> intact', () => {
+  let dir, result;
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'vp-e2e-alt-'));
+    const put = (rel, body) => {
+      mkdirSync(dirname(join(dir, rel)), { recursive: true });
+      writeFileSync(join(dir, rel), body);
+    };
+    put('config/main.js', `export default { buildOnlyPaths: ['layouts'], formats: { feed: false, json: false, markdown: false, llmsTxt: false } };\n`);
+    put('src/layouts/post.html', '<!doctype html><html><head><title>${title}</title></head><body><main><img src="${image}" alt="${imageAlt}"><article>${content}</article></main></body></html>\n');
+    symlinkSync(join(repoRoot, 'node_modules'), join(dir, 'node_modules'));
+    const ws = resolveWorkspace({ site: dir, repoRoot });
+    const doc = mk(fixture('simple-post.json'), { slug: 'sign', collection: 'posts', status: 'published', image: '/media/sign.jpg' });
+    syncDocument(ws, doc, { mediaAlt: () => 'A sign reading "Open" & <b>' });
+    result = spawnSync(process.execPath, ['node_modules/cook-ssg/bin/cook.js', 'build'], {
+      cwd: dir, env: { ...process.env, NODE_ENV: 'production' }, stdio: 'pipe', encoding: 'utf8',
+    });
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('the parsed alt attribute is the library alt', () => {
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const html = readFileSync(join(dir, 'dist/posts/sign/index.html'), 'utf8');
+    const { document } = parseHTML(html);
+    const img = document.querySelector('img');
+    assert.ok(img, html);
+    assert.equal(img.getAttribute('alt'), 'A sign reading "Open" & <b>', html);
+    assert.equal(document.querySelectorAll('main b').length, 0, html);
   });
 });

@@ -63,7 +63,7 @@ const isEmptyLine = (block) => block.type === 'paragraph' && !(block.children ||
 
 /**
  * The document's regions as stored: `{ [name]: Block[] }`, in the doc's
- * order. A region that holds only one empty paragraph is left out.
+ * order. A region that holds only empty paragraphs is left out.
  * @param {import('prosemirror-model').Node} pmDoc
  * @returns {Record<string, Object[]>}
  */
@@ -77,7 +77,8 @@ export function toRegionsAst(pmDoc) {
       if (block) blocks.push(block);
     });
     withoutTrailingLine(blocks);
-    if (blocks.length === 0 || (blocks.length === 1 && isEmptyLine(blocks[0]))) return;
+    // Only empty paragraphs (no text, no other block): nothing to publish
+    if (blocks.every(isEmptyLine)) return;
     regions[child.attrs.name] = blocks;
   });
   return regions;

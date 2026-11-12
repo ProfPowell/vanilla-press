@@ -209,6 +209,16 @@ export function checkSync(ws, doc, { collectionsConfig, previousDoc } = {}) {
   }
 }
 
+/**
+ * Entity-encode `&`, `"`, `<` and `>` in the library alt. Layouts write it
+ * into `alt="${imageAlt}"` and Cook doesn't escape attribute values.
+ * @param {string|null|undefined} alt
+ * @returns {string|null|undefined}
+ */
+const encodeAlt = (alt) => (typeof alt === 'string'
+  ? alt.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  : alt);
+
 /** Region templates, then the body (a newline between when both exist). */
 const joinRegions = (regions, body) => (regions ? `${regions}\n${body}` : body);
 
@@ -229,7 +239,7 @@ const joinRegions = (regions, body) => (regions ? `${regions}\n${body}` : body);
 export function syncDocument(ws, doc, { collectionsConfig, previousDoc, render: renderFn = render, mediaAlt } = {}) {
   checkSync(ws, doc, { collectionsConfig, previousDoc });
   const layout = doc.meta.layout || collectionOutput(doc.meta.collection, collectionsConfig).layout;
-  const imageAlt = mediaAlt && doc.meta.image ? mediaAlt(doc.meta.image) : null;
+  const imageAlt = encodeAlt(mediaAlt && doc.meta.image ? mediaAlt(doc.meta.image) : null);
   const paths = outputPaths(doc, collectionsConfig);
   const manifest = readManifest(ws);
   const previous = previousPaths(manifest, doc.id, previousDoc, collectionsConfig);

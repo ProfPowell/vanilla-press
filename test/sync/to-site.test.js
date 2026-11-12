@@ -469,6 +469,12 @@ describe('syncDocument layouts, regions, imageAlt', () => {
     assert.ok(!read().includes('imageAlt'));
   });
 
+  it('entity-encodes & " < > in imageAlt (layouts write it into alt="...")', () => {
+    const doc = mk(simple(), { image: '/media/a.jpg' });
+    syncDocument(ws, doc, { mediaAlt: () => 'A sign reading "Open" & <b>' });
+    assert.ok(read().includes('imageAlt: "A sign reading &quot;Open&quot; &amp; &lt;b&gt;"\n'), read());
+  });
+
   it('writes regions as templates in sorted order before the body; skips empty', () => {
     const doc = { ...simple(), regions: { sidebar: [para('side')], aside: [para('asd')], empty: [] } };
     syncDocument(ws, doc, {});

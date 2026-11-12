@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { validate } from '../../src/schema/validate.js';
+import { validate, LAYOUT_NAME, REGION_NAME } from '../../src/schema/validate.js';
 
 const fixture = (name) => JSON.parse(readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8'));
 
@@ -350,8 +350,8 @@ describe('validate layout and regions', () => {
   });
   const para = { type: 'paragraph', children: [{ type: 'text', value: 'x' }] };
 
-  it('accepts a layout name, a child layout path and no layout', () => {
-    for (const layout of [undefined, 'article', 'sidebar-right', 'my_layout/child-1']) {
+  it('accepts any Cook layout name (a file basename or a directory) and no layout', () => {
+    for (const layout of [undefined, 'article', 'sidebar-right', 'my_layout', 'Post', 'my.layout', '_partial', '2col']) {
       const doc = base();
       if (layout) doc.meta.layout = layout;
       assert.equal(validate(doc).valid, true, String(layout));
@@ -359,7 +359,7 @@ describe('validate layout and regions', () => {
   });
 
   it('rejects a bad layout', () => {
-    for (const layout of ['Article', '../x', 'a/b/c', '/a', 'a b', 5]) {
+    for (const layout of ['../x', '.hidden', 'a/b', 'my_layout/child-1', 'a/b/c', '/a', 'a b', '-x', 5]) {
       const doc = base();
       doc.meta.layout = layout;
       assert.equal(validate(doc).valid, false, String(layout));
@@ -368,12 +368,34 @@ describe('validate layout and regions', () => {
 
   it('accepts valid regions', () => {
     const doc = base();
-    doc.regions = { aside: [para], 'footer-note': [] };
-    assert.equal(validate(doc).valid, true);
+    doc.regions = { aside: [para], 'footer-note': [], sideNav: [para], side_bar: [para], Aside: [], '1a': [] };
+    assert.equal(validate(doc).valid, true, validate(doc).errors.join('; '));
+  });
+
+  it('every slot name the Cook checker can produce (${slot:[\\w-]+}) is a valid region name', () => {
+    // Cook's checker scans `\${slot:([\w-]+)}`: keep the two grammars in step.
+    const cookSlot = /^[\w-]+$/;
+    const singles = [];
+    for (let c = 32; c < 127; c++) {
+      const ch = String.fromCharCode(c);
+      if (cookSlot.test(ch)) singles.push(ch);
+    }
+    const samples = [...singles, 'aside', 'sideNav', 'side_bar', 'footer-note', 'Nav2', '_x', '-x', 'x-', '__', 'A-B_c-9', 'SIDEBAR'];
+    for (const name of samples) {
+      assert.ok(cookSlot.test(name), `sample ${name} is a Cook slot name`);
+      assert.ok(REGION_NAME.test(name), `REGION_NAME refuses Cook slot name "${name}"`);
+      const doc = base();
+      doc.regions = { [name]: [para] };
+      assert.equal(validate(doc).valid, true, name);
+    }
+  });
+
+  it('LAYOUT_NAME refuses a slash and a leading dot', () => {
+    for (const name of ['a/b', '.hidden', '../x', '']) assert.equal(LAYOUT_NAME.test(name), false, name);
   });
 
   it('rejects region head, a bad name, and a non-array', () => {
-    for (const name of ['head', 'Aside', '1a', 'a_b', '']) {
+    for (const name of ['head', '', 'a b', 'a.b', 'a/b', 'a:b']) {
       const doc = base();
       doc.regions = { [name]: [para] };
       assert.equal(validate(doc).valid, false, name);

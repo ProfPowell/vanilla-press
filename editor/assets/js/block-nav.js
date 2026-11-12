@@ -184,6 +184,22 @@ export function typeAfterMediaPlugin() {
 
 const isEmptyParagraph = (node) => !!node && node.type.name === 'paragraph' && node.childCount === 0;
 
+/**
+ * The body's end: the position before the first layout region (regions.js),
+ * or the doc's end. The trailing paragraph belongs to the body.
+ * @param {import('prosemirror-model').Node} doc
+ * @returns {{ end: number, last: import('prosemirror-model').Node }}
+ */
+function bodyEnd(doc) {
+  let end = doc.content.size;
+  let last = doc.lastChild;
+  for (let i = doc.childCount - 1; i > 0 && doc.child(i).type.name === 'region'; i--) {
+    end -= doc.child(i).nodeSize;
+    last = doc.child(i - 1);
+  }
+  return { end, last };
+}
+
 /** The tracked trailing paragraph's position if it is still an empty top-level paragraph. */
 function checkTracked(doc, pos) {
   if (pos == null || pos > doc.content.size) return null;
@@ -192,8 +208,8 @@ function checkTracked(doc, pos) {
 }
 
 /**
- * Keeps an empty paragraph after a document that ends in anything but a
- * paragraph, so there is a line to click into or arrow onto. Its
+ * Keeps an empty paragraph after a body (the document, less its layout
+ * regions) that ends in anything but a paragraph, so there is a line to click into or arrow onto. Its
  * transactions carry `vp-trailing` and stay out of the undo history. It
  * remembers the paragraph it added; when the block above that paragraph
  * turns into an empty paragraph (an undone insert, a deleted image), the
@@ -206,9 +222,11 @@ export function trailingParagraphPlugin() {
       init(_config, state) {
         // A doc that already ends in [media, empty paragraph] is ours to manage
         const { doc } = state;
-        const last = doc.lastChild;
-        if (doc.childCount > 2 && isEmptyParagraph(last) && doc.child(doc.childCount - 2).type.name !== 'paragraph') {
-          return doc.content.size - last.nodeSize;
+        const { end, last } = bodyEnd(doc);
+        const $end = doc.resolve(end);
+        const before = $end.index() >= 2 ? doc.child($end.index() - 2) : null;
+        if (before && isEmptyParagraph(last) && before.type.name !== 'paragraph' && before.type.name !== 'title') {
+          return end - last.nodeSize;
         }
         return null;
       },
@@ -222,15 +240,14 @@ export function trailingParagraphPlugin() {
     },
     appendTransaction(_trs, oldState, newState) {
       const { doc } = newState;
-      const last = doc.lastChild;
+      const { end, last } = bodyEnd(doc);
       if (last.type.name !== 'paragraph') {
-        const pos = doc.content.size;
-        const tr = newState.tr.insert(pos, newState.schema.nodes.paragraph.create());
-        return tr.setMeta(TRAILING_META, true).setMeta('addToHistory', false).setMeta(trailingKey, pos);
+        const tr = newState.tr.insert(end, newState.schema.nodes.paragraph.create());
+        return tr.setMeta(TRAILING_META, true).setMeta('addToHistory', false).setMeta(trailingKey, end);
       }
 
       const tracked = trailingKey.getState(newState);
-      if (tracked == null || tracked + last.nodeSize !== doc.content.size) return null;
+      if (tracked == null || tracked + last.nodeSize !== end) return null;
       const before = doc.resolve(tracked).nodeBefore;
       if (!isEmptyParagraph(before)) return null;
       // Only when the block above it was not a paragraph a moment ago

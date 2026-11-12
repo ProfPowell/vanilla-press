@@ -37,7 +37,7 @@ import { api } from './api-client.js';
 import { postUrlPath } from '../../../src/sync/paths.js';
 import { getCurrentMeta, getCurrentDocId } from './meta-state.js';
 import { saveDocument, loadDocument, deleteDoc, exportDocument, getEditorDoc } from './editor.js';
-import { toBlockAst } from './ast.js';
+import { toBlockAst, toRegionsAst } from './ast.js';
 import { altWarnings, altWarningText } from './alt-check.js';
 import { paneTheme, applyPaneTheme, siteThemes } from './pane-theme.js';
 
@@ -543,7 +543,8 @@ export async function altCheckPasses(action, returnFocus) {
     return true;
   }
   // A non-array answer counts as no list (altWarnings gives none): never a false warning
-  const warnings = altWarnings(toBlockAst(doc), library);
+  // The regions' images are published too (every non-empty region is written)
+  const warnings = altWarnings([...toBlockAst(doc), ...Object.values(toRegionsAst(doc)).flat()], library);
   if (!warnings.length) return true;
   const go = await confirm.ask(altWarningText(warnings, action));
   if (!go) (returnFocus || els?.primary)?.focus();

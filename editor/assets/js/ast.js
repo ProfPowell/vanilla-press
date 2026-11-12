@@ -31,24 +31,56 @@ const VP_TO_PM_MARK = {
 /**
  * Convert a ProseMirror document to a VP block AST. The title node (the
  * document's first line, which holds `meta.title`) is not a block: skipped.
+ * Region nodes (after the body) are not body blocks either: see `toRegionsAst`.
  * @param {import('prosemirror-model').Node} pmDoc
  * @returns {Object[]} Array of VP blocks
  */
 export function toBlockAst(pmDoc) {
   const blocks = [];
   pmDoc.forEach(child => {
-    if (child.type.name === 'title') return;
+    if (child.type.name === 'title' || child.type.name === 'region') return;
     const block = nodeToBlock(child);
     if (block) blocks.push(block);
   });
-  // The editor's trailing paragraph (block-nav.js): an empty last paragraph
-  // after anything but a paragraph is not part of the post
+  return withoutTrailingLine(blocks);
+}
+
+/**
+ * The editor's trailing paragraph (block-nav.js): an empty last paragraph
+ * after anything but a paragraph is not part of the post.
+ * @param {Object[]} blocks
+ */
+function withoutTrailingLine(blocks) {
   const last = blocks[blocks.length - 1];
   const before = blocks[blocks.length - 2];
   if (before && before.type !== 'paragraph' && last.type === 'paragraph' && !(last.children || []).length) {
     blocks.pop();
   }
   return blocks;
+}
+
+const isEmptyLine = (block) => block.type === 'paragraph' && !(block.children || []).length;
+
+/**
+ * The document's regions as stored: `{ [name]: Block[] }`, in the doc's
+ * order. A region that holds only one empty paragraph is left out.
+ * @param {import('prosemirror-model').Node} pmDoc
+ * @returns {Record<string, Object[]>}
+ */
+export function toRegionsAst(pmDoc) {
+  const regions = {};
+  pmDoc.forEach(child => {
+    if (child.type.name !== 'region') return;
+    const blocks = [];
+    child.forEach(node => {
+      const block = nodeToBlock(node);
+      if (block) blocks.push(block);
+    });
+    withoutTrailingLine(blocks);
+    if (blocks.length === 0 || (blocks.length === 1 && isEmptyLine(blocks[0]))) return;
+    regions[child.attrs.name] = blocks;
+  });
+  return regions;
 }
 
 /**
@@ -357,17 +389,32 @@ function cleanAttrs(attrs) {
  * first node.
  * @param {Object[]} blocks - Array of VP blocks
  * @param {import('prosemirror-model').Schema} pmSchema
- * @param {{ title?: string }} [options] - title: `meta.title`
+ * @param {{ title?: string, regions?: Array<{ name: string, label?: string, shown?: boolean, blocks?: Object[] }> }} [options]
+ *   title: `meta.title`; regions: the region areas after the body, in order (regions.js `regionPlan`)
  * @returns {import('prosemirror-model').Node}
  */
-export function fromBlockAst(blocks, pmSchema, { title = '' } = {}) {
+export function fromBlockAst(blocks, pmSchema, { title = '', regions = [] } = {}) {
   const s = pmSchema || schema;
   const children = blocks.map(b => blockToNode(b, s)).filter(Boolean);
   if (children.length === 0) {
     children.push(s.node('paragraph'));
   }
   const titleNode = s.node('title', null, title ? [s.text(title)] : []);
-  return s.node('doc', null, [titleNode, ...children]);
+  const regionNodes = regions.map(({ name, label, shown = true, blocks: regionBlocks = [] }) =>
+    regionNode(s, { name, label: label || name, shown }, regionBlocks));
+  return s.node('doc', null, [titleNode, ...children, ...regionNodes]);
+}
+
+/**
+ * A region node holding `blocks` (an empty one gets an empty paragraph).
+ * @param {import('prosemirror-model').Schema} s
+ * @param {{ name: string, label: string, shown: boolean }} attrs
+ * @param {Object[]} blocks
+ */
+export function regionNode(s, attrs, blocks) {
+  const children = (blocks || []).map(b => blockToNode(b, s)).filter(Boolean);
+  if (children.length === 0) children.push(s.node('paragraph'));
+  return s.node('region', attrs, children);
 }
 
 /**

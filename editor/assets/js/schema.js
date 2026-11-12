@@ -26,7 +26,41 @@ const headingAttrs = blockTypes.heading.attrs;
 
 /** @type {import('prosemirror-model').NodeSpec} */
 const doc = {
-  content: 'title block+',
+  content: 'title block+ region*',
+};
+
+/** The note on a region the document's layout does not show. */
+export const REGION_HIDDEN_NOTE = 'Not shown by this layout';
+
+/**
+ * A layout region (`<template slot="name">` when published): a labelled
+ * block area after the body, one per slot the layout offers, plus stored
+ * regions the layout does not show (`shown` false, kept with a note).
+ * Never moved, selected or removed by the writer: regions.js guards the
+ * sequence of regions, and only a layout change rebuilds it.
+ */
+const region = {
+  content: 'block+',
+  isolating: true,
+  defining: true,
+  selectable: false,
+  draggable: false,
+  attrs: {
+    name: { default: '' },
+    label: { default: '' },
+    shown: { default: true },
+  },
+  // Copied region content pastes as plain blocks: the section and its body
+  // unwrap, the label is dropped (a pasted region would add a region)
+  parseDOM: [{ tag: 'p.pm-region-label', ignore: true, priority: 60 }],
+  toDOM(node) {
+    const { name, label, shown } = node.attrs;
+    const attrs = { class: 'pm-region', 'data-region': name };
+    if (!shown) attrs['data-region-hidden'] = '';
+    return ['section', attrs,
+      ['p', { class: 'pm-region-label', contenteditable: 'false' }, label + (shown ? '' : ` · ${REGION_HIDDEN_NOTE}`)],
+      ['div', { class: 'pm-region-body' }, 0]];
+  },
 };
 
 /**
@@ -783,6 +817,7 @@ export const schema = new Schema({
   nodes: {
     doc,
     title,
+    region,
     paragraph,
     heading,
     blockquote,

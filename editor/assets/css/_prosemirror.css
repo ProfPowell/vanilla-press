@@ -298,3 +298,30 @@
   padding-inline: var(--size-m);
   font: inherit;
 }
+
+/* Layout regions (regions.js): one labelled block area per slot the
+   post's layout offers, after the body. A region the layout does not show
+   is kept, muted, and its label says so in words (not by colour alone). */
+.ProseMirror .pm-region {
+  margin-block-start: var(--size-xl);
+  padding-block-start: var(--size-m);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.ProseMirror .pm-region-label {
+  margin-block: 0 var(--size-s);
+  font-size: var(--font-size-s);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.ProseMirror [data-region][data-region-hidden] .pm-region-body {
+  color: var(--color-text-muted);
+}
+
+.ProseMirror [data-region][data-region-hidden] .pm-region-label {
+  font-style: italic;
+}

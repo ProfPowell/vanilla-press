@@ -6,8 +6,9 @@
  *
  * The movable block is a list item, tab or step (always within its parent),
  * or a block that shares its parent with other blocks (a lone child moves
- * with its container). The title never
- * moves and nothing moves above it.
+ * with its container; a layout region's lone block moves within the
+ * region). The title and the regions never move: nothing moves above the
+ * title, and a body block never swaps past a region.
  *
  * @module editor/block-handles
  */
@@ -37,7 +38,9 @@ const isBlock = (node) => (node.type.spec.group || '').split(' ').includes('bloc
  */
 function isMovable(node, parent, index) {
   if (ITEMS.has(node.type.name)) return true;
-  if (!isBlock(node) || parent.childCount < 2) return false;
+  if (!isBlock(node)) return false;
+  // A region never moves, so its lone block moves (within it) on its own
+  if (parent.childCount < 2 && parent.type.name !== 'region') return false;
   // An item's first line stands for the item (and its nested list)
   return !(index === 0 && ITEMS.has(parent.type.name) && node.isTextblock);
 }

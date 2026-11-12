@@ -36,8 +36,10 @@ export class MetaPanel extends HTMLElement {
     /** The site's layouts listing (GET /api/layouts), for the Layout select; null until fetched or when the fetch failed. */
     this.layoutsListing = null;
     this.render();
-    this.loadCollections();
-    this.loadLayouts();
+    /** Settled once the collections config has loaded (or failed): the editor waits on it for a document's regions. */
+    this.collectionsLoaded = this.loadCollections();
+    /** Settled once the layouts listing has loaded (or failed): the editor reuses it (no second fetch). */
+    this.layoutsLoaded = this.loadLayouts();
 
     // Listen for meta updates (e.g. from doc loading)
     window.__onMetaUpdate = (meta) => {
@@ -48,6 +50,11 @@ export class MetaPanel extends HTMLElement {
     window.__onConflictChange = (docId, message) => this.showConflict(docId, message);
   }
 
+  /** The site's `collections` config ({} until loaded or when the fetch failed). */
+  get collections() {
+    return this._collections;
+  }
+
   async loadCollections() {
     try {
       const { value } = await api.getConfig('collections');
@@ -55,6 +62,16 @@ export class MetaPanel extends HTMLElement {
       this._collections = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     } catch { /* defaults */ }
     this.syncFromMeta(getCurrentMeta());
+  }
+
+  /**
+   * Tell the editor the post's layout changed (its regions follow).
+   * @param {string} layout - `meta.layout` ('' for the collection default)
+   */
+  fireLayoutChange(layout) {
+    this.dispatchEvent(new CustomEvent('vp-layout-change', {
+      bubbles: true, detail: { layout, listing: this.layoutsListing },
+    }));
   }
 
   /** Fetch the layouts listing once; a failure leaves the select with the default and the current value only. */
@@ -187,15 +204,15 @@ export class MetaPanel extends HTMLElement {
       this.renderUrlPrefix(getCurrentMeta());
       this.renderLayouts(getCurrentMeta()); // the collection default's name follows
       refreshMetaLine();
+      // With no layout of its own, the post's layout is the collection's: its regions follow
+      if (!getCurrentMeta().layout) this.fireLayoutChange('');
       metaEdited();
     });
 
     this.querySelector('#meta-layout').addEventListener('change', (e) => {
       const layout = e.target.value;
       setCurrentMeta({ layout });
-      this.dispatchEvent(new CustomEvent('vp-layout-change', {
-        bubbles: true, detail: { layout, listing: this.layoutsListing },
-      }));
+      this.fireLayoutChange(layout);
       metaEdited();
     });
 

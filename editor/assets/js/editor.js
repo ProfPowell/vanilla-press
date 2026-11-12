@@ -19,7 +19,9 @@ import { buildKeymap, buildBaseKeymap } from './keymap.js';
 import { buildInputRules } from './input-rules.js';
 import { formatToolbarPlugin, setFormatToolbarComponents } from './format-toolbar.js';
 import { blockHandlesPlugin } from './block-handles.js';
-import { toBlockAst, fromBlockAst } from './ast.js';
+import { toBlockAst, toRegionsAst, fromBlockAst } from './ast.js';
+import { regionPlan, storedRegionPlan, regionGuard, applyRegionPlan, REGIONS_META } from './regions.js';
+import { collectionOutput } from '../../../src/sync/paths.js';
 import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
 import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
 import { getCurrentMeta, setCurrentMeta, resetCurrentMeta,
@@ -213,6 +215,8 @@ export function initEditor() {
       // First: while the palette is open it owns Enter, Escape, arrows and
       // Backspace, which the keymaps below would otherwise consume.
       createSlashPlugin(),
+      // A layout's regions are added, removed and ordered only by a layout change
+      regionGuard(),
       // Typing with an image or embed selected starts a paragraph after it.
       // After the slash plugin (its palette sees keys first), before the
       // input rules (which could otherwise replace the selected media).
@@ -294,7 +298,10 @@ export function initEditor() {
       // A save's own clean-up (attributes the server removed) is already saved
       // (The trailing paragraph after a last image, block-nav.js, is appended
       // to the root transaction: it never shows up here as a change.)
-      if (transaction.docChanged && !transaction.getMeta(SERVER_NORMALIZED)) {
+      // A layout change's region rebuild (regions.js) changes no saved
+      // content: a new region is empty, a dropped one was. Never a save of
+      // its own (the blank new post must not be created by it).
+      if (transaction.docChanged && !transaction.getMeta(SERVER_NORMALIZED) && !transaction.getMeta(REGIONS_META)) {
         setSaveStatus('unsaved');
         debouncedSave();
       }
@@ -314,10 +321,15 @@ export function initEditor() {
     window.__onEditorUpdate(editorView.state);
   }
 
-  // Load document from URL hash or show empty
+  // A layout change (the Layout select, or the collection for a post on its default) rebuilds the regions
+  document.addEventListener('vp-layout-change', (e) => { syncRegions(e.detail?.listing); });
+
+  // Load document from URL hash or show empty (the collection default's regions)
   const hashDoc = window.location.hash.match(/^#doc-(.+)/);
   if (hashDoc) {
     loadDocument(hashDoc[1]);
+  } else {
+    syncRegions();
   }
 
   editorView.focus();
@@ -343,6 +355,70 @@ async function loadComponents() {
   }
 }
 
+// --- Layout regions ---
+
+/** The editor's own layouts fetch, used only when there is no settings panel to share its listing. */
+let ownListing = null;
+
+/**
+ * The site's layouts listing (GET /api/layouts), or null when it failed:
+ * the settings panel's (fetched once), else one fetch of the editor's own.
+ */
+async function layoutsListing() {
+  const panel = document.querySelector('meta-panel');
+  if (panel?.layoutsLoaded) {
+    await panel.layoutsLoaded;
+    return panel.layoutsListing;
+  }
+  ownListing ??= api.getLayouts().catch(() => null);
+  return ownListing;
+}
+
+/** The site's `collections` config, from the settings panel ({} without one). */
+async function collectionsConfig() {
+  const panel = document.querySelector('meta-panel');
+  if (panel?.collectionsLoaded) await panel.collectionsLoaded;
+  return panel?.collections || {};
+}
+
+/**
+ * The region areas for a post: the slots of its layout (its own, or its
+ * collection's), then stored regions that layout does not show. Without a
+ * listing (the fetch failed) the stored regions show as they are.
+ * @param {Object} meta
+ * @param {Record<string, Object[]>|undefined} stored
+ * @param {Object|null} listing
+ * @param {Object} collections - the site's `collections` config
+ */
+function regionPlanFor(meta, stored, listing, collections) {
+  if (!listing || !Array.isArray(listing.layouts)) return storedRegionPlan(stored);
+  const layout = meta.layout || collectionOutput(meta.collection || 'posts', collections).layout;
+  const slots = listing.layouts.find((l) => l.name === layout)?.slots || [];
+  // A region this layout does not show keeps the label another layout gives its slot
+  const labels = new Map();
+  for (const l of listing.layouts) for (const slot of l.slots || []) if (slot.label && !labels.has(slot.name)) labels.set(slot.name, slot.label);
+  return regionPlan(slots, stored).map((r) => (r.shown ? r : { ...r, label: labels.get(r.name) || r.label }));
+}
+
+/**
+ * Rebuild the open post's regions for its current layout, keeping every
+ * region's content (one not shown by the layout stays, with a note).
+ * @param {Object|null} [listing] - the layouts listing, when the caller has it
+ */
+async function syncRegions(listing) {
+  if (!editorView) return;
+  const current = listing === undefined ? await layoutsListing() : listing;
+  if (!current) return; // slots unknown: leave the regions as they are
+  const collections = await collectionsConfig();
+  // After the waits: the doc and meta as they are now
+  applyRegionPlan(editorView, regionPlanFor(getCurrentMeta(), toRegionsAst(editorView.state.doc), current, collections));
+}
+
+/** Every block of a post, its regions' too (for walks over all its content). */
+function allBlocks(blocks, regions) {
+  return [...(blocks || []), ...Object.values(regions || {}).flatMap((r) => (Array.isArray(r) ? r : []))];
+}
+
 export function exportDocument() {
   if (!editorView) return;
 
@@ -352,6 +428,7 @@ export function exportDocument() {
     id: getCurrentDocId(),
     meta: { ...meta, updated: new Date().toISOString().split('T')[0] },
     blocks,
+    regions: toRegionsAst(editorView.state.doc),
   };
 
   const json = JSON.stringify(doc, null, 2);
@@ -400,19 +477,24 @@ export function getEditorView() {
 export async function loadDocument(id) {
   try {
     const doc = await api.getDocument(id);
+    // Before the post becomes current: no await between that and showing it
+    const listing = await layoutsListing();
+    const collections = await collectionsConfig();
 
     setCurrentDocId(doc.id);
     clearSaveNotes(); // notes belong to the post they were made in
     if (doc.meta) resetCurrentMeta(doc.meta);
     slugHandEdited = handEditedOnLoad(getCurrentMeta());
-    const lossy = unrepresentable(doc.blocks || []);
+    const lossy = unrepresentable(allBlocks(doc.blocks, doc.regions));
     saveHold = lossy.length
       ? `Not saving: this post has content the editor can't show (${lossy.join(', ')}). Edit it in its file instead.`
       : null;
     if (lossy.length) console.warn('Unrepresentable content, auto-save off:', lossy);
 
-    // The title is the document's first line (an empty post still gets a paragraph)
-    setEditorDoc(fromBlockAst(doc.blocks || [], schema, { title: getCurrentMeta().title || '' }));
+    // The title is the document's first line (an empty post still gets a
+    // paragraph); its layout's regions follow the body
+    const regions = regionPlanFor(getCurrentMeta(), doc.regions, listing, collections);
+    setEditorDoc(fromBlockAst(doc.blocks || [], schema, { title: getCurrentMeta().title || '', regions }));
 
     // Update URL hash
     window.location.hash = `doc-${doc.id}`;
@@ -495,9 +577,10 @@ export async function saveDocument() {
 
   try {
     const blocks = toBlockAst(editorView.state.doc);
+    const regions = toRegionsAst(editorView.state.doc);
     const meta = metaToSave(getCurrentMeta());
 
-    const saved = await api.updateDocument(docId, { meta, blocks });
+    const saved = await api.updateDocument(docId, { meta, blocks, regions });
     applyDropped(saved?.dropped);
     setSaveStatus('saved', noticesMessage(saved));
     return true;
@@ -523,7 +606,8 @@ function createFromEditor() {
     if (!meta.slug || meta.slug === 'untitled') meta.slug = 'untitled-' + Date.now().toString(36);
     if (!meta.collection) meta.collection = 'posts';
     try {
-      const doc = await api.createDocument({ meta, blocks: toBlockAst(editorView.state.doc) });
+      const { doc: pmDoc } = editorView.state;
+      const doc = await api.createDocument({ meta, blocks: toBlockAst(pmDoc), regions: toRegionsAst(pmDoc) });
       setCurrentDocId(doc.id);
       setCurrentMeta({ slug: doc.meta.slug });
       window.location.hash = `doc-${doc.id}`;
@@ -640,6 +724,7 @@ function clearIfCurrent(id) {
     });
     slugHandEdited = false;
     setEditorDoc(fromBlockAst([], schema));
+    syncRegions();
     window.location.hash = '';
 
     if (window.__onMetaUpdate) {

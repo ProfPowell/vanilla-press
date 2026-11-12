@@ -513,3 +513,41 @@ describe('FTS triggers', () => {
     assert.equal(results.length, 0);
   });
 });
+
+describe('layout and regions', () => {
+  const para = (value) => ({ type: 'paragraph', children: [{ type: 'text', value }] });
+  const withRegions = () => ({
+    id: 'reg_doc01',
+    meta: { title: 'Regions', slug: 'regions', collection: 'pages', status: 'draft', layout: 'sidebar-right' },
+    blocks: [para('main text')],
+    regions: { aside: [para('zebrafish sidebar')] },
+  });
+
+  it('round trips meta.layout and regions', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    saveDocument(db, withRegions());
+    const got = getDocument(db, 'reg_doc01');
+    assert.equal(got.meta.layout, 'sidebar-right');
+    assert.deepEqual(got.regions, { aside: [para('zebrafish sidebar')] });
+    db.close();
+  });
+
+  it('a document without them has neither', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    saveDocument(db, { id: 'plain01', meta: { title: 'P', slug: 'p', collection: 'pages' }, blocks: [para('x')] });
+    const got = getDocument(db, 'plain01');
+    assert.equal('layout' in got.meta && got.meta.layout !== undefined, false);
+    assert.equal(got.regions, undefined);
+    db.close();
+  });
+
+  it('search finds a word that appears only in a region', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    saveDocument(db, withRegions());
+    assert.deepEqual(searchDocuments(db, 'zebrafish').map((d) => d.id), ['reg_doc01']);
+    db.close();
+  });
+});

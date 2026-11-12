@@ -1,5 +1,7 @@
 // Which posts use which media files. Pure and browser-safe.
 
+import { allBlockLists } from '../schema/blocks.js';
+
 /**
  * The decoded `<file>` of a `/media/<file>` URL (query and hash ignored), or null.
  * @param {unknown} url
@@ -92,7 +94,7 @@ const URL_ATTRS = {
  * Every media file a document refers to: figure and component sources, embed
  * URLs, links, and the featured image. A linked library item (a remote image,
  * no file) counts where the same photo is used (same `linkedKey`), by its filename.
- * @param {{ meta?: Object, blocks?: Array }} doc
+ * @param {{ meta?: Object, blocks?: Array, regions?: Object }} doc
  * @param {{ linked?: Map<string, string> }} [options] linked items, from `linkedIndex`
  * @returns {Set<string>}
  */
@@ -112,7 +114,7 @@ export function mediaRefs(doc, { linked } = {}) {
     if (node.children) walk(node.children);
   };
   add(doc?.meta?.image);
-  walk(doc?.blocks);
+  for (const list of allBlockLists(doc || {})) walk(list);
   return found;
 }
 

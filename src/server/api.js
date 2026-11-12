@@ -235,6 +235,7 @@ export function mountApi(router, db, options) {
       meta: body.meta || {},
       blocks: body.blocks || [],
     };
+    if (body.regions !== undefined) doc.regions = body.regions;
 
     // Set timestamps
     const now = new Date().toISOString();
@@ -274,6 +275,8 @@ export function mountApi(router, db, options) {
       meta: keepStatus({ ...existing.meta, ...body.meta, updated: new Date().toISOString() }, existing.meta),
       blocks: body.blocks !== undefined ? body.blocks : existing.blocks,
     };
+    const regions = body.regions !== undefined ? body.regions : existing.regions;
+    if (regions !== undefined) doc.regions = regions;
 
     const { doc: checked, result, notices, dropped } = checkDocument(doc);
     if (!result.valid) {

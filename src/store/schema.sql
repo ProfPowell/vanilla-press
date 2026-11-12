@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS documents (
   image       TEXT, -- featured image URL (/media/<file>)
   theme       TEXT, -- page theme id (meta.theme)
   theme_scope TEXT, -- 'page' | 'article' (meta.themeScope)
+  layout      TEXT, -- page layout name (meta.layout)
+  regions     TEXT, -- JSON object: region name -> block AST array
   blocks      TEXT NOT NULL, -- JSON array of block AST
   plaintext   TEXT NOT NULL DEFAULT '',
   UNIQUE(collection, slug)

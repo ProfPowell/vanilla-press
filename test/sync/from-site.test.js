@@ -159,3 +159,21 @@ describe('sync safety (fix round 1)', () => {
     assert.equal(console.warn.mock.callCount(), 1);
   });
 });
+
+describe('regions through site files', () => {
+  it('syncDocument writes regions to the content JSON and syncFromSite restores them', () => {
+    const d = { ...simple(), regions: { aside: [{ type: 'paragraph', children: [{ type: 'text', value: 'side note' }] }] } };
+    d.meta.layout = 'sidebar-right';
+    const saved = saveDocument(db, d);
+    syncDocument(ws, saved, { collectionsConfig: {} });
+    const onDisk = JSON.parse(readFileSync(join(tmp, REL), 'utf8'));
+    assert.deepEqual(onDisk.regions, d.regions);
+    assert.equal(onDisk.meta.layout, 'sidebar-right');
+    db.prepare('DELETE FROM documents WHERE id = ?').run(d.id);
+    const res = syncFromSite(ws, db);
+    assert.deepEqual(res.imported, [d.id]);
+    const back = getDocument(db, d.id);
+    assert.deepEqual(back.regions, d.regions);
+    assert.equal(back.meta.layout, 'sidebar-right');
+  });
+});

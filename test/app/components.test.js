@@ -7,7 +7,7 @@ import Database from 'better-sqlite3';
 import { migrate } from '../../src/store/migrate.js';
 import { saveDocument } from '../../src/store/content.js';
 import { startApp } from '../../src/app/server.js';
-import { postsUsing, cookSupportsPackages } from '../../src/app/components.js';
+import { postsUsing, cookSupportsPackages, componentTags } from '../../src/app/components.js';
 import { commitPaths as realCommitPaths } from '../../src/git/git.js';
 import { makeGitSite, fakeClock, git, write } from './git-site-fixture.js';
 
@@ -335,5 +335,24 @@ describe('cookSupportsPackages', () => {
     } finally {
       rmSync(fx.root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('regions and components', () => {
+  const comp = (tag) => ({ type: 'component', tag, attrs: {} });
+  it('componentTags sees a component in a region', () => {
+    const doc = { blocks: [comp('x-main')], regions: { aside: [comp('x-side')] } };
+    assert.deepEqual([...componentTags(doc)].sort(), ['x-main', 'x-side']);
+    assert.deepEqual([...componentTags([comp('x-main')])], ['x-main']);
+  });
+  it('postsUsing finds a component only used in a region', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    saveDocument(db, {
+      id: 'doc_reg', meta: { title: 'R', slug: 'r', collection: 'pages', status: 'draft' },
+      blocks: [], regions: { aside: [comp('x-side')] },
+    });
+    assert.deepEqual(postsUsing(db, ['x-side']).map((p) => p.id), ['doc_reg']);
+    db.close();
   });
 });

@@ -148,6 +148,24 @@ describe('API', () => {
       assert.equal((await api(`/api/documents/${docId}`)).data.meta.image, undefined);
     });
 
+    it('POST accepts regions and a PUT without regions keeps them', async () => {
+      const aside = [{ type: 'paragraph', children: [{ type: 'text', value: 'side' }] }];
+      const made = await api('/api/documents', {
+        method: 'POST',
+        body: { meta: { title: 'Regions', slug: 'regions-doc', collection: 'pages', layout: 'sidebar-right' }, blocks: [], regions: { aside } },
+      });
+      assert.equal(made.status, 201);
+      assert.deepEqual(made.data.regions, { aside });
+      const put = await api(`/api/documents/${made.data.id}`, { method: 'PUT', body: { meta: { title: 'Regions 2' } } });
+      assert.equal(put.status, 200);
+      assert.deepEqual(put.data.regions, { aside });
+      assert.equal(put.data.meta.layout, 'sidebar-right');
+      const changed = await api(`/api/documents/${made.data.id}`, { method: 'PUT', body: { regions: { aside: [], nav: aside } } });
+      assert.deepEqual(changed.data.regions, { aside: [], nav: aside });
+      const bad = await api(`/api/documents/${made.data.id}`, { method: 'PUT', body: { regions: { head: aside } } });
+      assert.equal(bad.status, 400);
+    });
+
     it('lists documents', async () => {
       const { status, data } = await api('/api/documents');
 

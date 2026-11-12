@@ -341,3 +341,55 @@ describe('validate', () => {
     });
   });
 });
+
+describe('validate layout and regions', () => {
+  const base = () => ({
+    id: 'd1',
+    meta: { title: 'T', slug: 't', collection: 'pages', status: 'draft' },
+    blocks: [],
+  });
+  const para = { type: 'paragraph', children: [{ type: 'text', value: 'x' }] };
+
+  it('accepts a layout name, a child layout path and no layout', () => {
+    for (const layout of [undefined, 'article', 'sidebar-right', 'my_layout/child-1']) {
+      const doc = base();
+      if (layout) doc.meta.layout = layout;
+      assert.equal(validate(doc).valid, true, String(layout));
+    }
+  });
+
+  it('rejects a bad layout', () => {
+    for (const layout of ['Article', '../x', 'a/b/c', '/a', 'a b', 5]) {
+      const doc = base();
+      doc.meta.layout = layout;
+      assert.equal(validate(doc).valid, false, String(layout));
+    }
+  });
+
+  it('accepts valid regions', () => {
+    const doc = base();
+    doc.regions = { aside: [para], 'footer-note': [] };
+    assert.equal(validate(doc).valid, true);
+  });
+
+  it('rejects region head, a bad name, and a non-array', () => {
+    for (const name of ['head', 'Aside', '1a', 'a_b', '']) {
+      const doc = base();
+      doc.regions = { [name]: [para] };
+      assert.equal(validate(doc).valid, false, name);
+    }
+    const doc = base();
+    doc.regions = { aside: 'nope' };
+    assert.equal(validate(doc).valid, false);
+    doc.regions = [para];
+    assert.equal(validate(doc).valid, false);
+  });
+
+  it('reports a bad block with its region path', () => {
+    const doc = base();
+    doc.regions = { aside: [para, { type: 'nonsense' }] };
+    const { valid, errors } = validate(doc);
+    assert.equal(valid, false);
+    assert.ok(errors.some((e) => e.startsWith('regions.aside[1]')), errors.join('; '));
+  });
+});

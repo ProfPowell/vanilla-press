@@ -12,6 +12,8 @@ import { isSafeComponentTag, isSafeAttrName } from './component-names.js';
 import { blockTypes, inlineTypes, validMarks, requiredMeta, validStatuses } from './content-schema.js';
 import { validCredit } from '../media/credit.js';
 
+const LAYOUT_NAME = /^[a-z0-9][a-z0-9_-]*(\/[a-z0-9_-]+)?$/;
+const REGION_NAME = /^[a-z][a-z0-9-]*$/;
 const WRAPS = ['text', 'template', 'script'];
 
 /**
@@ -69,6 +71,10 @@ export function validate(doc, { components } = {}) {
       if (themeScope !== 'page' && themeScope !== 'article') errors.push('meta.themeScope must be "page" or "article"');
       else if (!hasTheme) errors.push('meta.themeScope needs meta.theme');
     }
+    const { layout } = doc.meta;
+    if (layout !== undefined && layout !== null && layout !== '' && !(typeof layout === 'string' && LAYOUT_NAME.test(layout))) {
+      errors.push('meta.layout must be a layout name (a-z, 0-9, -, _, with one optional /child)');
+    }
     if (doc.meta.status && !validStatuses.includes(doc.meta.status)) {
       errors.push(`meta.status "${doc.meta.status}" is not valid (expected: ${validStatuses.join(', ')})`);
     }
@@ -78,6 +84,25 @@ export function validate(doc, { components } = {}) {
   if (Array.isArray(doc.blocks)) {
     for (let i = 0; i < doc.blocks.length; i++) {
       validateBlock(doc.blocks[i], `blocks[${i}]`, errors, ctx);
+    }
+  }
+
+  // Regions: named lists of body blocks that fill a layout's slots
+  if (doc.regions !== undefined && doc.regions !== null) {
+    if (typeof doc.regions !== 'object' || Array.isArray(doc.regions)) {
+      errors.push('"regions" must be an object of block arrays');
+    } else {
+      for (const [name, list] of Object.entries(doc.regions)) {
+        if (!REGION_NAME.test(name) || name === 'head') {
+          errors.push(`regions: "${name}" is not a valid region name (a-z, 0-9, -; not "head")`);
+          continue;
+        }
+        if (!Array.isArray(list)) {
+          errors.push(`regions.${name} must be an array of blocks`);
+          continue;
+        }
+        list.forEach((b, i) => validateBlock(b, `regions.${name}[${i}]`, errors, ctx));
+      }
     }
   }
 

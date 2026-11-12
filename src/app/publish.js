@@ -162,14 +162,14 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
   }
   if (publish && deps.components) {
     const on = deps.components();
-    const off = [...componentTags(previous.blocks)].find((tag) => !on.has(tag));
+    const off = [...componentTags(previous)].find((tag) => !on.has(tag));
     if (off) {
       throw new PublishRejectedError(422, {
         error: `This post uses <${off}>, which is not on for this site. Turn it on under Components, or remove it from the post.`,
       });
     }
     // On, but Cook won't load it on the live site (R14): the page would show it inert.
-    const dead = [...componentTags(previous.blocks)].map((tag) => on.get(tag)).find((d) => d.loadsOnLiveSite === false);
+    const dead = [...componentTags(previous)].map((tag) => on.get(tag)).find((d) => d.loadsOnLiveSite === false);
     if (dead) {
       throw new PublishRejectedError(422, {
         error: `This post uses <${dead.tag}>, which won't load on the live site: ${dead.liveSiteNote}. Remove it from the post to publish now.`,

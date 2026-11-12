@@ -120,3 +120,12 @@ describe('normalizeComponents', () => {
     assert.equal(validate({ ...doc, blocks: doc.blocks.slice(0, 3) }, { components: index }).valid, true);
   });
 });
+
+describe('normalizeComponents regions', () => {
+  it('normalizes components inside regions', () => {
+    const src = { ...docWith(), regions: { aside: [comp({ attrs: { mode: 'a', bogus: 'z' } })] } };
+    const { doc, dropped } = normalizeComponents(src, fixtureIndex);
+    assert.deepEqual(doc.regions.aside[0].attrs, { mode: 'a' });
+    assert.deepEqual(dropped, [{ path: 'regions.aside[0]', tag: 'x-one', attr: 'bogus' }]);
+  });
+});

@@ -70,5 +70,10 @@ export function normalizeComponents(doc, components) {
   };
 
   if (Array.isArray(out.blocks)) out.blocks.forEach((b, i) => visit(b, `blocks[${i}]`));
+  if (out.regions && typeof out.regions === 'object' && !Array.isArray(out.regions)) {
+    for (const [name, list] of Object.entries(out.regions)) {
+      if (Array.isArray(list)) list.forEach((b, i) => visit(b, `regions.${name}[${i}]`));
+    }
+  }
   return { doc: out, dropped };
 }

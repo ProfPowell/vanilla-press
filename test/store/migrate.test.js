@@ -33,3 +33,19 @@ describe('migrate', () => {
     db.close();
   });
 });
+
+describe('migrate documents', () => {
+  it('an old database gains the layout and regions columns', () => {
+    const db = new Database(':memory:');
+    db.exec(`CREATE TABLE documents (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, slug TEXT NOT NULL, collection TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft', description TEXT, author_id TEXT, created TEXT NOT NULL,
+      updated TEXT NOT NULL, published TEXT, tags TEXT, blocks TEXT NOT NULL, plaintext TEXT NOT NULL DEFAULT '',
+      UNIQUE(collection, slug))`);
+    migrate(db);
+    const cols = db.prepare('PRAGMA table_info(documents)').all().map((c) => c.name);
+    assert.ok(cols.includes('layout'));
+    assert.ok(cols.includes('regions'));
+    db.close();
+  });
+});

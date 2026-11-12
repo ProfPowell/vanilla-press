@@ -143,3 +143,12 @@ test('a linked item counts when a post uses the same photo with another ixid or 
   ] };
   assert.deepEqual([...mediaRefs(doc, { linked })], ['unsplash-u1']);
 });
+
+test('mediaRefs finds an image in a region', () => {
+  const doc = {
+    meta: {},
+    blocks: [],
+    regions: { aside: [{ type: 'figure', attrs: { src: '/media/side-aaaaaa.png' } }] },
+  };
+  assert.deepEqual([...mediaRefs(doc)], ['side-aaaaaa.png']);
+});

@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { CATALOG } from '../components/catalog.js';
 import { describeComponents, componentIndex } from '../components/describe.js';
 import { durationText } from './site-process.js';
+import { allBlockLists } from '../schema/blocks.js';
 
 /** The files a component change edits; nothing else is staged. */
 export const PACKAGE_FILES = ['package.json', 'package-lock.json'];
@@ -90,18 +91,20 @@ export function catalogComponents({ siteDir, vpRoot, catalog = CATALOG }) {
 }
 
 /**
- * Every component tag in a list of blocks, at any depth (inline children included).
- * @param {Object[]} blocks
+ * Every component tag in a document (its blocks and every region) or in a list
+ * of blocks, at any depth (inline children included).
+ * @param {Object[]|{ blocks?: Object[], regions?: Object }} input
  * @returns {Set<string>}
  */
-export function componentTags(blocks) {
+export function componentTags(input) {
   const tags = new Set();
   const visit = (node) => {
     if (!node || typeof node !== 'object') return;
     if (node.type === 'component' && typeof node.tag === 'string') tags.add(node.tag);
     if (Array.isArray(node.children)) node.children.forEach(visit);
   };
-  if (Array.isArray(blocks)) blocks.forEach(visit);
+  const lists = Array.isArray(input) ? [input] : allBlockLists(input || {});
+  for (const list of lists) list.forEach(visit);
   return tags;
 }
 
@@ -113,12 +116,12 @@ export function componentTags(blocks) {
  */
 export function postsUsing(db, tags) {
   const wanted = new Set(tags);
-  const rows = db.prepare('SELECT id, title, status, blocks FROM documents ORDER BY title, id').all();
+  const rows = db.prepare('SELECT id, title, status, blocks, regions FROM documents ORDER BY title, id').all();
   const out = [];
   for (const row of rows) {
-    let blocks;
-    try { blocks = JSON.parse(row.blocks); } catch { continue; }
-    if ([...componentTags(blocks)].some((t) => wanted.has(t))) {
+    let doc;
+    try { doc = { blocks: JSON.parse(row.blocks), regions: row.regions ? JSON.parse(row.regions) : undefined }; } catch { continue; }
+    if ([...componentTags(doc)].some((t) => wanted.has(t))) {
       out.push({ id: row.id, title: row.title, status: row.status });
     }
   }

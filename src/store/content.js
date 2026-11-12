@@ -7,6 +7,8 @@
  * @module store/content
  */
 
+import { allBlockLists } from '../schema/blocks.js';
+
 /**
  * Extract plaintext from a blocks array for FTS indexing.
  * Recursively walks the block tree, collecting all text values.
@@ -38,7 +40,7 @@ export function extractPlaintext(blocks) {
  * @returns {Object}
  */
 function rowToDocument(row) {
-  return {
+  const doc = {
     id: row.id,
     meta: {
       title: row.title,
@@ -54,9 +56,12 @@ function rowToDocument(row) {
       image: row.image || undefined,
       theme: row.theme || undefined,
       themeScope: (row.theme && row.theme_scope) || undefined,
+      layout: row.layout || undefined,
     },
     blocks: JSON.parse(row.blocks),
   };
+  if (row.regions) doc.regions = JSON.parse(row.regions);
+  return doc;
 }
 
 /**
@@ -126,12 +131,13 @@ export function listCollection(db, collection, options = {}) {
  */
 export function saveDocument(db, doc) {
   const { id, meta, blocks } = doc;
-  const plaintext = extractPlaintext(blocks);
+  const regions = doc.regions && Object.keys(doc.regions).length ? doc.regions : null;
+  const plaintext = allBlockLists({ blocks, regions }).map(extractPlaintext).filter(Boolean).join(' ');
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO documents (id, title, slug, collection, status, description, author_id, created, updated, published, tags, image, theme, theme_scope, blocks, plaintext)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO documents (id, title, slug, collection, status, description, author_id, created, updated, published, tags, image, theme, theme_scope, layout, regions, blocks, plaintext)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       slug = excluded.slug,
@@ -145,6 +151,8 @@ export function saveDocument(db, doc) {
       image = excluded.image,
       theme = excluded.theme,
       theme_scope = excluded.theme_scope,
+      layout = excluded.layout,
+      regions = excluded.regions,
       blocks = excluded.blocks,
       plaintext = excluded.plaintext
   `).run(
@@ -162,6 +170,8 @@ export function saveDocument(db, doc) {
     meta.image || null,
     meta.theme || null,
     (meta.theme && meta.themeScope) || null,
+    meta.layout || null,
+    regions ? JSON.stringify(regions) : null,
     JSON.stringify(blocks),
     plaintext,
   );

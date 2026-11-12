@@ -47,7 +47,7 @@ export function migrate(db) {
   const mediaAdded = addMissingColumns(db, 'media', {
     original_name: 'TEXT', width: 'INTEGER', height: 'INTEGER', edited_from: 'TEXT', source: 'TEXT', credit: 'TEXT', url: 'TEXT',
   });
-  addMissingColumns(db, 'documents', { image: 'TEXT', theme: 'TEXT', theme_scope: 'TEXT' });
+  addMissingColumns(db, 'documents', { image: 'TEXT', theme: 'TEXT', theme_scope: 'TEXT', layout: 'TEXT', regions: 'TEXT' });
   // Before these columns, uploads without alt text stored '' (M2): that means "never written".
   if (mediaAdded.includes('original_name')) db.exec("UPDATE media SET alt = NULL WHERE alt = ''");
 }

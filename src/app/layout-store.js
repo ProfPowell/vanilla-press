@@ -15,7 +15,9 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LAYOUT_NAME } from '../schema/validate.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
-import { changedFiles } from '../git/git.js';
+import { changedFiles, GitNotConnectedError, GitConflictError, GitStashConflictError } from '../git/git.js';
+import { layoutMessage, THEME_PATHS } from './site-git.js';
+import { themeConflictResolver } from './site-theme.js';
 import { importCook as defaultImportCook } from './site-layouts.js';
 
 export const OLD_COOK_EDIT_MESSAGE = "This site's Cook is too old to edit layouts; update cook-ssg";
@@ -382,4 +384,57 @@ export async function deleteLayoutFile(siteDir, kind, name, { importCook = defau
   rmSync(file);
   const dir = join(file, '..');
   if (kind === 'layout' && entry.file.includes('/') && readdirSync(dir).length === 0) rmdirSync(dir);
+}
+
+/**
+ * Commit the layout and include files VP wrote (the unpublished ones listLayoutFiles
+ * reports) and push. Stages exactly those files by name, never a directory, so an
+ * unrelated edit stays unstaged. An empty `names` list means every unpublished file
+ * listLayoutFiles can see. Runs in the backup's git queue and the write lock, like Theme Apply.
+ * Resolves `{ status: 'pushed'|'saved', sha }`; a failed push resolves with `unpushedCommit`
+ * and `pushError` (the commit is kept and counted as unpushed). A rebase conflict throws.
+ * @param {{ siteDir: string }} ws
+ * @param {{ backup: object, deps: { gitStatus: Function, commitPaths: Function, push: Function },
+ *   names?: Array<{ kind: string, name: string }>, writes?: Function, importCook?: Function }} options
+ */
+export async function publishLayouts(ws, { backup, deps, names = [], writes = (fn) => fn(), importCook = defaultImportCook }) {
+  if (!Array.isArray(names)) throw new LayoutError(400, 'files must be a list');
+  for (const n of names) check(n?.kind, n?.name);
+  const siteDir = ws.siteDir;
+  return backup.exclusive(() => writes(async () => {
+    const cook = await loadCook(siteDir, importCook);
+    const status = await deps.gitStatus(siteDir);
+    if (!status.isRepo) throw new LayoutError(409, 'This site folder is not a git repository');
+    const all = await inspect(siteDir, cook);
+    const dirty = await unpublishedFiles(siteDir);
+    const entries = [];
+    for (const [kind, list, dir] of [['layout', all.layouts, 'layouts'], ['include', all.includes.filter((e) => LAYOUT_NAME.test(e.name)), 'includes']]) {
+      for (const e of list) {
+        const path = `src/${dir}/${e.file}`;
+        if (dirty.has(path)) entries.push({ kind, name: e.name, path, label: kind === 'layout' ? (e.label || e.name) : e.name });
+      }
+    }
+    let chosen = entries;
+    if (names.length) {
+      const known = new Set([...all.layouts.map((e) => `layout/${e.name}`), ...all.includes.map((e) => `include/${e.name}`)]);
+      for (const n of names) if (!known.has(`${n.kind}/${n.name}`)) throw new LayoutError(404, `No ${n.kind} named ${n.name}`);
+      const wanted = new Set(names.map((n) => `${n.kind}/${n.name}`));
+      chosen = entries.filter((e) => wanted.has(`${e.kind}/${e.name}`));
+    }
+    if (chosen.length === 0) throw new LayoutError(409, 'Nothing to publish');
+
+    const sha = await deps.commitPaths(siteDir, chosen.map((e) => e.path), layoutMessage(chosen.map((e) => e.label)));
+    if (!status.hasRemote || !status.hasUpstream) return { status: 'saved', sha, files: chosen.map((e) => e.path), ...(sha ? { unpushedCommit: true, pushError: null } : {}) };
+    try {
+      const pushed = await deps.push(siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });
+      return { status: 'pushed', sha, files: chosen.map((e) => e.path), rebased: Boolean(pushed?.rebased), yielded: pushed?.yielded, resolved: pushed?.resolved };
+    } catch (err) {
+      if (err instanceof GitConflictError || err instanceof GitStashConflictError) throw err;
+      const notConnected = err instanceof GitNotConnectedError;
+      return {
+        status: 'saved', sha, files: chosen.map((e) => e.path),
+        ...(sha ? { unpushedCommit: true, pushError: notConnected ? null : err.message } : {}),
+      };
+    }
+  }));
 }

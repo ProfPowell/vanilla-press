@@ -219,7 +219,7 @@ export async function startApp({
       });
       const writes = createLock();
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
-      mountLayoutRoutes(router, prefix, { ws, writes });
+      mountLayoutRoutes(router, prefix, { ws, writes, backup, deps: git });
       mountThemeRoutes(router, prefix, {
         site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,
         onBuilt: () => vbCache.delete(site.id), // Apply's build may have vendored the site's VB copy

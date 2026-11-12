@@ -25,6 +25,8 @@ export const BACKUP_PATHS = Object.freeze(['content', 'src/media', 'config/vp.js
  * library operations (their own commit), never staged by a backup.
  */
 export const THEME_PATHS = Object.freeze(['config/theme.json', 'src/assets/themes']);
+/** The layouts and includes the layout editor writes: committed by Publish layout only, never by a backup. */
+export const LAYOUT_PATHS = Object.freeze(['src/layouts', 'src/includes']);
 const MAX_TITLES = 3;
 
 const trimSlashes = (p) => p.replace(/^\/+|\/+$/g, '');
@@ -191,6 +193,16 @@ export function backupMessage(titles, allDraft) {
  */
 export function libraryMessage(text) {
   return `Theme library: ${commitTitle([text])}${SKIP}`;
+}
+
+/**
+ * Commit message of a layout publish: `Layout: <labels>`, with no CI skip marker
+ * (the push rebuilds the live site, so the change goes live).
+ * @param {string[]} labels
+ * @returns {string}
+ */
+export function layoutMessage(labels) {
+  return `Layout: ${commitTitle(labels.length ? labels : ['changes'])}`;
 }
 
 /**

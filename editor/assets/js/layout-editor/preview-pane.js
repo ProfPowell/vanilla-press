@@ -56,22 +56,36 @@ export function defaultPreviewDocument(docs, collectionsConfig, layout) {
 }
 
 /**
- * The layout to render an include's preview through: the first non-abstract
- * `src/layouts/<x>.html` among the files that include it (the listing's
- * `usedBy`), else the first non-abstract layout, else null.
+ * The layout to render an include's preview through. For each layout among
+ * the files that include it (the listing's `usedBy`, in order) the layout
+ * itself if it isn't abstract, else its non-abstract descendants through
+ * `baseFor` (depth first, cycle-safe). Editable layouts are preferred; else
+ * the first editable non-abstract layout, then any non-abstract one, else null.
  * @param {{ layouts?: Object[], includes?: Object[] }} listing - GET /layout-files
  * @param {string} name - the include's name
  * @returns {string|null}
  */
 export function previewLayoutFor(listing, name) {
-  const layouts = Array.isArray(listing?.layouts) ? listing.layouts : [];
-  const usable = layouts.filter(l => l && typeof l.name === 'string' && l.abstract !== true);
+  const layouts = (Array.isArray(listing?.layouts) ? listing.layouts : []).filter(l => l && typeof l.name === 'string');
+  const byName = new Map(layouts.map(l => [l.name, l]));
+  const concrete = layouts.filter(l => l.abstract !== true);
+  const good = (l) => l.status === 'editable';
   const entry = (Array.isArray(listing?.includes) ? listing.includes : []).find(i => i?.name === name);
+  const found = [];
+  const seen = new Set();
+  const visit = (layoutName) => {
+    if (seen.has(layoutName)) return;
+    seen.add(layoutName);
+    const l = byName.get(layoutName);
+    if (!l) return;
+    if (l.abstract !== true) { found.push(l); return; }
+    for (const child of Array.isArray(l.baseFor) ? l.baseFor : []) visit(child);
+  };
   for (const file of Array.isArray(entry?.usedBy) ? entry.usedBy : []) {
     const m = /^src\/layouts\/([^/]+)\.html$/.exec(file);
-    if (m && usable.some(l => l.name === m[1])) return m[1];
+    if (m) visit(m[1]);
   }
-  return usable[0]?.name ?? null;
+  return (found.find(good) || found[0] || concrete.find(good) || concrete[0])?.name ?? null;
 }
 
 /** The last `n` lines of a log. */

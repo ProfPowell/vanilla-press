@@ -208,3 +208,29 @@ describe('previewLayoutFor (an include)', () => {
     assert.equal(mod.previewLayoutFor(null, 'nav'), null);
   });
 });
+
+describe('previewLayoutFor follows abstract bases', () => {
+  const L = (name, o = {}) => ({ name, abstract: false, status: 'editable', baseFor: [], ...o });
+  it('resolves a base-only includer to its child', () => {
+    const listing = {
+      layouts: [L('other'), L('base', { abstract: true, baseFor: ['page'] }), L('page')],
+      includes: [{ name: 'nav', usedBy: ['src/layouts/base.html'] }],
+    };
+    assert.equal(mod.previewLayoutFor(listing, 'nav'), 'page');
+  });
+  it('follows a two-level abstract chain, cycle-safe', () => {
+    const listing = {
+      layouts: [L('other'), L('a', { abstract: true, baseFor: ['b'] }), L('b', { abstract: true, baseFor: ['c', 'a'] }), L('c')],
+      includes: [{ name: 'nav', usedBy: ['src/layouts/a.html'] }],
+    };
+    assert.equal(mod.previewLayoutFor(listing, 'nav'), 'c');
+  });
+  it('prefers an editable layout over one with problems', () => {
+    const listing = {
+      layouts: [L('bad', { status: 'problems' }), L('ok')],
+      includes: [{ name: 'nav', usedBy: ['src/layouts/bad.html', 'src/layouts/ok.html'] }],
+    };
+    assert.equal(mod.previewLayoutFor(listing, 'nav'), 'ok');
+    assert.equal(mod.previewLayoutFor({ layouts: [L('bad', { status: 'problems' }), L('ok')], includes: [] }, 'nav'), 'ok');
+  });
+});

@@ -20,11 +20,14 @@ import {
   writeFileSync, symlinkSync, readlinkSync, createReadStream, realpathSync,
 } from 'node:fs';
 import { join, extname, sep, dirname } from 'node:path';
-import { collectLog, BUILD_TIMEOUT_MS } from './site-process.js';
+import { collectLog, durationText } from './site-process.js';
 import { MIME_TYPES } from '../server/static.js';
 import { pageHtml } from '../sync/to-site.js';
 
 export const PREVIEW_PAGE = 'vp-layout-preview';
+
+/** A preview build that runs longer is stopped, so one hung build can't freeze the site's previews. */
+export const PREVIEW_BUILD_TIMEOUT_MS = 120_000;
 
 /** What the site contributes to the copy: directories, then files. */
 const MIRROR_DIRS = ['src', 'config', 'plugins'];
@@ -70,11 +73,17 @@ function sourceStat(abs) {
   }
 }
 
+/**
+ * Same mtime at whole-millisecond precision: utimes stamps millisecond Dates,
+ * while APFS keeps sub-millisecond source mtimes.
+ */
+const sameMtime = (a, b) => Math.floor(a.mtimeMs) === Math.floor(b.mtimeMs);
+
 /** Copy one file when its size or mtime differs (or `force`); the copy keeps the source's mtime. */
 function mirrorFile(from, to, st, force) {
   const have = lstatOrNull(to);
   if (have && !have.isFile()) remove(to);
-  else if (have && !force && have.size === st.size && have.mtimeMs === st.mtimeMs) return;
+  else if (have && !force && have.size === st.size && sameMtime(have, st)) return;
   if (have?.isFile()) rmSync(to);
   copyFileSync(from, to);
   utimesSync(to, st.atime, st.mtime);
@@ -159,6 +168,11 @@ function startStaticServer(distDir, port) {
     res.end(text);
   };
   const server = createServer((req, res) => {
+    // Only our own host names: a DNS-rebound name must not read draft previews.
+    const { port: bound } = server.address();
+    if (![`127.0.0.1:${bound}`, `localhost:${bound}`].includes(String(req.headers.host).toLowerCase())) {
+      return send(res, 403, 'Forbidden');
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
     let pathname;
     try {
@@ -213,10 +227,11 @@ function startStaticServer(distDir, port) {
  *   spawn?: typeof nodeSpawn,
  *   freePort?: () => Promise<number>,
  *   buildTimeoutMs?: number,
- * }} opts - freePort: the port to serve on (default: any free port the OS gives)
+ * }} opts - freePort: the port to serve on (default: any free port the OS gives);
+ *   buildTimeoutMs: default PREVIEW_BUILD_TIMEOUT_MS (2 min)
  */
 export function createLayoutPreview({
-  site, configDir, spawn = nodeSpawn, freePort = async () => 0, buildTimeoutMs = BUILD_TIMEOUT_MS,
+  site, configDir, spawn = nodeSpawn, freePort = async () => 0, buildTimeoutMs = PREVIEW_BUILD_TIMEOUT_MS,
 }) {
   if (!NAME.test(String(site?.id))) throw new Error(`Invalid site id: ${site?.id}`);
   const siteDir = site.path;
@@ -273,7 +288,7 @@ export function createLayoutPreview({
       };
       c.on('error', (err) => done({ ok: false, log: `${tail()}${err.message}` }));
       c.on('close', (code) => {
-        if (timedOut) return done({ ok: false, log: `${tail()}\nThe preview build took too long and was stopped.` });
+        if (timedOut) return done({ ok: false, log: `${tail()}\nThe preview build took too long (over ${durationText(buildTimeoutMs)}) and was stopped.` });
         if (closed) return done({ ok: false, log: 'Layout preview closed' });
         done({ ok: code === 0, log: tail() });
       });

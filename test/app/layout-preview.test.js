@@ -6,7 +6,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { request } from 'node:http';
-import { createLayoutPreview } from '../../src/app/layout-preview.js';
+import { EventEmitter } from 'node:events';
+import { createLayoutPreview, PREVIEW_BUILD_TIMEOUT_MS } from '../../src/app/layout-preview.js';
 import { pageHtml, syncDocument } from '../../src/sync/to-site.js';
 import { resolveWorkspace } from '../../src/workspace/workspace.js';
 
@@ -40,10 +41,10 @@ function snapshot(dir) {
 }
 
 /** A raw GET (no URL normalisation, so `..` reaches the server). */
-function rawGet(url, path) {
+function rawGet(url, path, headers = {}) {
   const { hostname, port } = new URL(url);
   return new Promise((resolve, reject) => {
-    const req = request({ hostname, port, path, method: 'GET' }, (res) => {
+    const req = request({ hostname, port, path, method: 'GET', headers }, (res) => {
       let body = '';
       res.on('data', (c) => { body += c; });
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
@@ -170,6 +171,50 @@ describe('createLayoutPreview', () => {
     const css = await rawGet(r.url, '/');
     assert.equal(css.status, 200);
     assert.match(css.headers['content-type'], /^text\/html/);
+  });
+
+  it('skips unchanged files on a second render and recopies changed ones', async () => {
+    await preview.render({ layout: 'page' });
+    const keep = join(copyDir(), 'src', 'about.html');
+    const edit = join(copyDir(), 'src', 'index.html');
+    const before = lstatSync(keep);
+    const editBefore = lstatSync(edit);
+    writeFileSync(join(site.path, 'src', 'index.html'), `${readFileSync(join(site.path, 'src', 'index.html'), 'utf8')}<!-- edited -->\n`);
+    const r = await preview.render({ layout: 'page' });
+    assert.equal(r.ok, true, r.log);
+    const after = lstatSync(keep);
+    assert.equal(after.ino, before.ino);
+    assert.equal(after.mtimeMs, before.mtimeMs);
+    assert.notEqual(lstatSync(edit).ino, editBefore.ino);
+    assert.equal(readFileSync(edit, 'utf8'), readFileSync(join(site.path, 'src', 'index.html'), 'utf8'));
+  });
+
+  it('refuses a Host header other than 127.0.0.1 or localhost on its port', async () => {
+    const r = await preview.render({ layout: 'page' });
+    const { port } = new URL(r.url);
+    assert.equal((await rawGet(r.url, '/', { Host: `evil.example:${port}` })).status, 403);
+    assert.equal((await rawGet(r.url, '/', { Host: '127.0.0.1:1' })).status, 403);
+    assert.equal((await rawGet(r.url, '/', { Host: `localhost:${port}` })).status, 200);
+    assert.equal((await rawGet(r.url, '/', { Host: `127.0.0.1:${port}` })).status, 200);
+  });
+
+  it('stops a build that runs too long and reports it', async () => {
+    assert.equal(PREVIEW_BUILD_TIMEOUT_MS, 120_000);
+    const spawn = () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = () => setImmediate(() => child.emit('close', null));
+      return child;
+    };
+    const p = createLayoutPreview({ site, configDir: join(root, 'config-timeout'), spawn, buildTimeoutMs: 50 });
+    try {
+      const r = await p.render({ layout: 'page' });
+      assert.equal(r.ok, false);
+      assert.match(r.log, /The preview build took too long \(over 0 s\) and was stopped\./);
+    } finally {
+      await p.close();
+    }
   });
 
   it('close stops the server', async () => {

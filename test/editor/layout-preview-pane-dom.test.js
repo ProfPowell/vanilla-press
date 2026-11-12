@@ -156,6 +156,18 @@ describe('preview document choice', () => {
     assert.equal(mod.defaultPreviewDocument(withNotes, { notes: { layout: 'docs' } }, 'docs').id, 'note');
   });
 
+  it('archived documents are left out', async () => {
+    const archived = { id: 'gone', meta: { title: 'gone', collection: 'posts', updated: '2026-09-01T00:00:00Z', status: 'archived' } };
+    const docs = [doc('a', 'posts', '2026-01-01T00:00:00Z'), archived];
+    assert.equal(mod.defaultPreviewDocument(docs, {}, 'post').id, 'a');
+    const el = freshEl();
+    const pane = mod.createPreviewPane({ el, site: 's1', kind: 'layout', name: 'post', getTree: () => TREE, fetch: stubFetch({ docs }) });
+    await pane.ready;
+    const values = [...el.querySelectorAll('select[data-lp-doc] option')].map(o => o.value);
+    assert.deepEqual(values, ['', 'a']);
+    pane.destroy();
+  });
+
   it('else the most recent post, else the sample page (null)', () => {
     const docs = [doc('a', 'posts', '2026-01-01T00:00:00Z'), doc('b', 'posts', '2026-02-01T00:00:00Z'), doc('p', 'pages', '2026-09-01T00:00:00Z')];
     assert.equal(mod.defaultPreviewDocument(docs, {}, 'landing').id, 'b');

@@ -105,7 +105,12 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     getMeta: () => meta,
     getContext: () => context,
     onChange: () => setDirty(true),
+    getChildren: () => children,
   });
+  /** A base's children (the listing's baseFor), for the Head dialog's note. */
+  let children = [];
+  /** A child's parent regions ({ name, label }), for the palette and the canvas labels. */
+  let parentSlots = [];
   /** The preview pane, once the layout is open. */
   let preview = null;
 
@@ -259,7 +264,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     els.canvas.replaceChildren();
     view = new EditorView(els.canvas, {
       state,
-      nodeViews: nodeViews(() => meta),
+      nodeViews: nodeViews(() => meta, () => parentSlots),
       dispatchTransaction(tr) {
         if (!view) return;
         view.updateState(view.state.apply(tr));
@@ -290,6 +295,8 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       return;
     }
     hash = data.hash;
+    // Before mounting, so filled regions are drawn with the parent's labels
+    await loadParentRegions(data.tree);
     mount(data.tree);
     els.save.disabled = false;
     dirty = false;
@@ -375,22 +382,37 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     } catch { /* the inspector offers free text */ }
   }
 
-  /** A child's palette offers the parent's regions it doesn't fill yet (by the parent's labels). */
-  async function loadParentRegions() {
-    if (meta?.kind !== 'child' || !meta.parent) return;
+  /** A base's children, from the layouts listing. */
+  async function loadChildren() {
+    if (meta?.kind !== 'base') return;
+    try {
+      const res = await fetch(`/api/sites/${encodeURIComponent(site)}/layout-files`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const entry = (Array.isArray(data?.layouts) ? data.layouts : []).find(l => l?.name === name);
+      children = Array.isArray(entry?.baseFor) ? entry.baseFor.filter(n => typeof n === 'string') : [];
+    } catch { /* the note names no layouts */ }
+  }
+
+  /**
+   * A child's palette offers the parent's regions it doesn't fill yet, and its
+   * filled regions show as `Region: <label>`, by the parent's labels.
+   */
+  async function loadParentRegions(tree) {
+    if (tree?.kind !== 'child' || !tree.parent) return;
     try {
       const res = await fetch(layoutsUrl);
       if (!res.ok) return;
       const data = await res.json();
-      const parent = (Array.isArray(data?.layouts) ? data.layouts : []).find(l => l?.name === meta.parent);
-      const slots = Array.isArray(parent?.slots) ? parent.slots : [];
-      palette.extraEntries = (state) => fillEntries(slots, state.doc, meta.parent);
+      const parent = (Array.isArray(data?.layouts) ? data.layouts : []).find(l => l?.name === tree.parent);
+      parentSlots = Array.isArray(parent?.slots) ? parent.slots : [];
+      palette.extraEntries = (state) => fillEntries(parentSlots, state.doc, tree.parent);
     } catch { /* the palette offers the usual blocks */ }
   }
 
   await load();
   await loadContext();
-  await loadParentRegions();
+  await loadChildren();
 
   return {
     get view() { return view; },

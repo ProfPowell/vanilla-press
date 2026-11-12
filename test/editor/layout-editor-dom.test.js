@@ -237,7 +237,11 @@ describe('layout editor head and preview', { skip: !HAVE_COOK && 'needs the link
     assert.equal(ed.isDirty(), true);
     await ed.save();
     const put = fetch.calls.find(c => c.method === 'PUT');
-    assert.equal(put.body.tree.head.at(-1).tag, 'meta');
+    // Before ${slot:head}, which stays last
+    assert.equal(put.body.tree.head.at(-2).tag, 'meta');
+    assert.deepEqual(put.body.tree.head.at(-1), { slot: 'head' });
+    const check = cook.checkLayout(cook.serializeLayout(put.body.tree), { fields: ['siteTitle'] });
+    assert.ok(check.ok, JSON.stringify(check.problems));
     ed.destroy();
     assert.equal(root.querySelector('[data-le-head-dialog]'), null);
   });
@@ -276,6 +280,10 @@ describe('layout editor: a child fills its parent\'s regions', { skip: !HAVE_COO
     const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch });
     // The starter post fills aside (and head) already
     assert.deepEqual(ed.palette.extraEntries(ed.view.state).map(e => [e.id, e.label]), [['fill-nav', 'Section menu']]);
+    // A filled region shows by the parent's label
+    const pieces = [...root.querySelectorAll('[data-le-canvas] .le-slot-piece')].map(d => d.querySelector('.le-name').textContent);
+    assert.deepEqual(pieces, ['Region: Sidebar']);
+    assert.doesNotMatch(root.querySelector('[data-le-canvas]').textContent, /Fills /);
     ed.destroy();
   });
 });
@@ -324,6 +332,11 @@ describe('layout editor save edge cases', { skip: !HAVE_COOK && 'needs the linke
 });
 
 describe('canvas labels', () => {
+  it('a filled region without the parent\'s label shows its name', async () => {
+    const { pieceText } = await import('../../editor/assets/js/layout-editor/views.js');
+    assert.equal(pieceText([{ name: 'aside', label: 'Sidebar' }], 'aside'), 'Region: Sidebar');
+    assert.equal(pieceText([], 'aside'), 'Region: aside');
+  });
   it('fields: document fields in Title Case, others as written', async () => {
     const { fieldLabel } = await import('../../editor/assets/js/layout-editor/views.js');
     assert.equal(fieldLabel('title'), 'Title');

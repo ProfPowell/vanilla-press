@@ -115,11 +115,18 @@ function tileView(cls, node, name, detail = null) {
   return { dom, ignoreMutation: () => true };
 }
 
+/** A child's filled region: `Region: <the parent's label>`, else its name. */
+export function pieceText(slots, name) {
+  const found = (Array.isArray(slots) ? slots : []).find(s => s?.name === name);
+  return `Region: ${(found && typeof found.label === 'string' && found.label) || name}`;
+}
+
 /**
  * The NodeViews for an EditorView.
  * @param {() => Object} getMeta - the layout's meta (slot labels)
+ * @param {() => Array<{ name: string, label?: string }>} [getParentSlots] - a child's parent regions
  */
-export function nodeViews(getMeta) {
+export function nodeViews(getMeta, getParentSlots = () => []) {
   return {
     region: (node) => boxView('le-region', node, regionLabel(node), 'section'),
     container: (node) => boxView('le-container', node, containerLabel(node)),
@@ -129,7 +136,11 @@ export function nodeViews(getMeta) {
     menu: (node) => boxView('le-menu', node, MENU_LABELS[node.attrs.tag] || node.attrs.tag),
     menu_item: (node) => boxView('le-menu-item', node, 'li'),
     menu_item_blocks: (node) => boxView('le-menu-item le-menu-item-blocks', node, 'li'),
-    slot_piece: (node) => boxView('le-slot-piece', node, `Fills ${node.attrs.name}`, 'section'),
+    slot_piece: (node) => {
+      const view = boxView('le-slot-piece', node, pieceText(getParentSlots(), node.attrs.name), 'section');
+      view.dom.dataset.slot = node.attrs.name;
+      return view;
+    },
 
     content: () => {
       const dom = el('div', { class: 'le-block le-content', contenteditable: 'false' }, 'Document body goes here');
@@ -176,3 +187,4 @@ export function refreshSlotLabels(view, meta) {
     dom.textContent = slotText(meta, dom.getAttribute('data-slot'));
   }
 }
+

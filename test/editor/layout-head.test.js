@@ -6,6 +6,24 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
+const COOK = '/Users/tpowell/src/cook';
+const HAVE_COOK = existsSync(path.join(COOK, 'scripts', 'layouts.js'));
+const cook = HAVE_COOK ? await import(path.join(COOK, 'scripts', 'layouts.js')) : null;
+const BASE = path.join(COOK, 'starters', 'vanilla-breeze', 'src', 'layouts', 'base.html');
+const NAMES = { fields: ['siteTitle'] };
+/** The starter base's tree (its head ends with ${slot:head}); the tree serves as the editor's meta. */
+const starterBase = () => {
+  const parsed = cook.parseLayout(readFileSync(BASE, 'utf8'), NAMES);
+  assert.ok(parsed.ok, JSON.stringify(parsed.problems));
+  return parsed.tree;
+};
+const checks = (tree) => {
+  const result = cook.checkLayout(cook.serializeLayout(tree), NAMES);
+  assert.ok(result.ok, JSON.stringify(result.problems));
+};
 
 const GLOBALS = ['window', 'document', 'Node', 'HTMLElement', 'Event'];
 const saved = {};
@@ -59,6 +77,59 @@ describe('head items (model)', () => {
     assert.equal(mod.headItemSummary({ tag: 'meta', attrs: [['name', 'theme-color'], ['content', '#fff']] }, meta), '<meta name="theme-color" content="#fff">');
     assert.equal(mod.headItemSummary({ tag: 'title', attrs: [], text: '${title}' }, meta), '<title>${title}</title>');
     assert.equal(mod.headItemSummary({ slot: 'head' }, meta), 'Region: Head');
+  });
+});
+
+describe('head items on the starter base (Cook checks the result)', { skip: !HAVE_COOK && 'needs the linked Cook' }, () => {
+  it('a new item goes before ${slot:head}, which stays last', () => {
+    const tree = starterBase();
+    assert.deepEqual(tree.head.at(-1), { slot: 'head' });
+    assert.equal(mod.addHeadItem(tree, { tag: 'meta', attrs: [['name', 'theme-color'], ['content', '#123456']] }), true);
+    assert.deepEqual(tree.head.at(-1), { slot: 'head' });
+    assert.equal(tree.head.at(-2).attrs[0][1], 'theme-color');
+    checks(tree);
+  });
+
+  it('the region can\'t move, and nothing moves below it', () => {
+    const tree = starterBase();
+    const last = tree.head.length - 1;
+    assert.equal(mod.canMoveHeadItem(tree, last, -1), false);
+    assert.equal(mod.canMoveHeadItem(tree, last - 1, 1), false);
+    assert.equal(mod.moveHeadItem(tree, last - 1, 1), false);
+    assert.equal(mod.moveHeadItem(tree, last, -1), false);
+    assert.equal(mod.canMoveHeadItem(tree, last - 1, -1), true);
+    assert.deepEqual(tree.head.at(-1), { slot: 'head' });
+    checks(tree);
+  });
+
+  it('removing the region drops its info entry', () => {
+    const tree = starterBase();
+    assert.equal(mod.removeHeadItem(tree, tree.head.length - 1), true);
+    assert.equal(tree.info.slots.head, undefined);
+    assert.ok(tree.info.slots.aside);
+    checks(tree);
+    assert.equal(mod.addHeadItem(tree, { slot: 'head' }), true);
+    assert.equal(tree.info.slots.head.label, 'Head');
+    checks(tree);
+  });
+
+  it('DOM: the region\'s ↑ and the ↓ above it are disabled; removing it names the layouts built on this one', () => {
+    const tree = starterBase();
+    const root = win.document.querySelector('[data-root]');
+    root.replaceChildren();
+    const dialog = mod.createHeadDialog({ root, getMeta: () => tree, getChildren: () => ['post', 'page'] });
+    dialog.open();
+    const items = () => [...root.querySelectorAll('[data-head-item]')];
+    const last = items().at(-1);
+    assert.match(last.textContent, /Region: Head/);
+    assert.equal(last.querySelector('[data-head-up]').disabled, true);
+    assert.equal(items().at(-2).querySelector('[data-head-down]').disabled, true);
+    assert.equal(items().at(-2).querySelector('[data-head-up]').disabled, false);
+    last.querySelector('[data-head-remove]').click();
+    assert.equal(tree.head.some(i => i.slot === 'head'), false);
+    assert.match(root.querySelector('[data-head-message]').textContent, /post, page/);
+    checks(tree);
+    dialog.destroy();
   });
 });
 
@@ -127,6 +198,20 @@ describe('head dialog (DOM)', () => {
     assert.equal(meta.head[1].tag, 'style');
     items()[1].querySelector('[data-head-remove]').click();
     assert.deepEqual(meta.head.map(i => i.tag), ['meta', 'title']);
+    dialog.destroy();
+  });
+
+  it('editing only the attributes keeps a body byte for byte (CRLF)', () => {
+    const meta = baseMeta();
+    meta.head.push({ tag: 'script', attrs: [['type', 'module']], text: '\r\n  a();\r\n' });
+    const { root, dialog } = setup(meta);
+    root.querySelectorAll('[data-head-item]')[2].querySelector('[data-head-edit]').click();
+    // A textarea's value normalizes CRLF; the body must not be read back from it
+    root.querySelector('textarea[data-head-text]').value = '\n  a();\n';
+    input(root.querySelector('[data-head-attr-value]'), 'text/javascript');
+    assert.deepEqual(meta.head[2], { tag: 'script', attrs: [['type', 'text/javascript']], text: '\r\n  a();\r\n' });
+    input(root.querySelector('textarea[data-head-text]'), 'b();');
+    assert.equal(meta.head[2].text, 'b();');
     dialog.destroy();
   });
 

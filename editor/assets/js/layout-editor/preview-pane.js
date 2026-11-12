@@ -6,7 +6,7 @@
  *   the page can't reach the editor) with `referrerpolicy="no-referrer"`.
  *   It loads from the site's preview server (`layout-preview.js`), whose
  *   URL is the same for every render, so each render adds `?v=<n>`.
- * - The document select defaults to the most recent document whose
+ * - The document select lists documents that aren't archived, and defaults to the most recent document whose
  *   effective layout (its own, else its collection's) is this one, else the
  *   most recent post, else `Sample page`.
  * - `Desktop` / `Narrow` set `data-width`, sized as the Theme preview's.
@@ -34,6 +34,9 @@ const stamp = (doc) => {
   return Number.isNaN(t) ? 0 : t;
 };
 
+/** A document the select offers: not archived. */
+const previewable = (d) => d && typeof d.id === 'string' && d.meta && typeof d.meta === 'object' && d.meta.status !== 'archived';
+
 /**
  * The document to preview a layout with: the most recent whose effective
  * layout is `layout`, else the most recent post, else null (the sample page).
@@ -44,7 +47,7 @@ const stamp = (doc) => {
  */
 export function defaultPreviewDocument(docs, collectionsConfig, layout) {
   const recent = (Array.isArray(docs) ? docs : [])
-    .filter(d => d && typeof d.id === 'string' && d.meta && typeof d.meta === 'object')
+    .filter(previewable)
     .sort((a, b) => stamp(b) - stamp(a));
   const effective = (d) => d.meta.layout || collectionOutput(d.meta.collection, collectionsConfig || {}).layout;
   return recent.find(d => effective(d) === layout)
@@ -241,7 +244,7 @@ export function createPreviewPane({
     } catch { /* defaults */ }
     if (destroyed) return;
     const recent = docs
-      .filter(d => d && typeof d.id === 'string' && d.meta && typeof d.meta === 'object')
+      .filter(previewable)
       .sort((a, b) => stamp(b) - stamp(a));
     const pick = pageLayout ? defaultPreviewDocument(recent, collections, pageLayout) : null;
     const options = [el('option', { value: '' }, SAMPLE_PAGE)];

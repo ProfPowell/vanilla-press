@@ -46,10 +46,14 @@ export function canAddHeadRegion(meta) {
   return !(meta.head ?? []).some(isRegion);
 }
 
+/** The region's index, or -1. */
+const regionIndex = (meta) => (meta.head ?? []).findIndex(isRegion);
+
 /**
- * Append a head item: `{ tag, attrs, text? }` with a HeadItem tag, or the
+ * Add a head item: `{ tag, attrs, text? }` with a HeadItem tag, or the
  * `{ slot: 'head' }` region when there isn't one yet (its info entry is
- * created as `Head` when missing).
+ * created as `Head` when missing). The region stays last (Cook: `${slot:head}`
+ * must be the last thing in <head>): an item goes in just before it.
  * @returns {boolean} whether it was added
  */
 export function addHeadItem(meta, item) {
@@ -62,25 +66,40 @@ export function addHeadItem(meta, item) {
   if (!item || !HEAD_TAGS.includes(item.tag)) return false;
   const out = { tag: item.tag, attrs: Array.isArray(item.attrs) ? item.attrs.map(([k, v]) => [k, v]) : [] };
   if (typeof item.text === 'string') out.text = item.text;
-  headOf(meta).push(out);
+  const head = headOf(meta);
+  const at = regionIndex(meta);
+  if (at === -1) head.push(out);
+  else head.splice(at, 0, out);
   return true;
 }
 
-/** Move the item at `index` by `delta` places (no change past either end). */
+/** Whether the item at `index` can move by `delta`: within the list, and the region stays last. */
+export function canMoveHeadItem(meta, index, delta) {
+  const head = meta.head ?? [];
+  const to = index + delta;
+  if (index < 0 || index >= head.length || to < 0 || to >= head.length) return false;
+  return !isRegion(head[index]) && !isRegion(head[to]);
+}
+
+/** Move the item at `index` by `delta` places (no change past either end, or past the region). */
 export function moveHeadItem(meta, index, delta) {
   const head = headOf(meta);
   const to = index + delta;
-  if (index < 0 || index >= head.length || to < 0 || to >= head.length) return false;
+  if (!canMoveHeadItem(meta, index, delta)) return false;
   const [item] = head.splice(index, 1);
   head.splice(to, 0, item);
   return true;
 }
 
-/** Remove the item at `index`. */
+/**
+ * Remove the item at `index`. Removing the region drops its info entry too
+ * (Cook refuses a declared slot that is never used).
+ */
 export function removeHeadItem(meta, index) {
   const head = headOf(meta);
   if (index < 0 || index >= head.length) return false;
-  head.splice(index, 1);
+  const [item] = head.splice(index, 1);
+  if (isRegion(item) && meta.info?.slots && typeof meta.info.slots === 'object') delete meta.info.slots.head;
   return true;
 }
 
@@ -124,11 +143,13 @@ let ids = 0;
 
 /**
  * The Head dialog, appended to `root`.
- * @param {{ root: Element, getMeta: () => Object, getContext?: () => Object, onChange?: () => void }} opts -
- *   getContext: the inspector's context (documentFields, siteFields, declaredFields) for `Insert field`
+ * @param {{ root: Element, getMeta: () => Object, getContext?: () => Object, onChange?: () => void,
+ *   getChildren?: () => string[] }} opts -
+ *   getContext: the inspector's context (documentFields, siteFields, declaredFields) for `Insert field`;
+ *   getChildren: the layouts built on this one (the listing's baseFor), named when the region is removed
  * @returns {{ el: HTMLDialogElement, open: () => void, close: () => void, render: () => void, destroy: () => void }}
  */
-export function createHeadDialog({ root, getMeta, getContext = () => ({}), onChange = () => {} }) {
+export function createHeadDialog({ root, getMeta, getContext = () => ({}), onChange = () => {}, getChildren = () => [] }) {
   const prefix = `le-head-${++ids}`;
   /** The item being edited (an object in meta.head), or null. */
   let editing = null;
@@ -180,8 +201,8 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
       const actions = el('span', { class: 'le-head-actions' });
       if (!isRegion(item)) actions.append(el('button', { type: 'button', class: 'quiet', 'data-head-edit': true }, 'Edit'));
       actions.append(
-        el('button', { type: 'button', class: 'quiet', 'data-head-up': true, 'aria-label': 'Move up', disabled: i === 0 }, '↑'),
-        el('button', { type: 'button', class: 'quiet', 'data-head-down': true, 'aria-label': 'Move down', disabled: i === head.length - 1 }, '↓'),
+        el('button', { type: 'button', class: 'quiet', 'data-head-up': true, 'aria-label': 'Move up', disabled: !canMoveHeadItem(meta, i, -1) }, '↑'),
+        el('button', { type: 'button', class: 'quiet', 'data-head-down': true, 'aria-label': 'Move down', disabled: !canMoveHeadItem(meta, i, 1) }, '↓'),
         el('button', { type: 'button', class: 'quiet', 'data-head-remove': true }, 'Remove'),
       );
       li.append(summary, actions);
@@ -246,7 +267,8 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
   }
 
   /** Read the form back into the item being edited. */
-  function readForm() {
+  /** Read the form back into the item being edited; the body only when `target` is the text box (kept byte for byte otherwise). */
+  function readForm(target = null) {
     if (!editing) return;
     const out = [];
     const seen = new Set();
@@ -263,7 +285,7 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
     }
     editing.attrs = out;
     const text = form.querySelector('[data-head-text]');
-    if (text) editing.text = text.value;
+    if (text && target === text) editing.text = text.value;
     say(problem);
     refreshSummary();
     changed();
@@ -281,7 +303,7 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
     target.value = target.value.slice(0, at) + token + target.value.slice(end);
     target.focus?.();
     target.setSelectionRange?.(at + token.length, at + token.length);
-    readForm();
+    readForm(target);
   }
 
   function render() {
@@ -289,6 +311,14 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
     renderNewSelect();
     renderList();
     renderForm();
+  }
+
+  /** What removing the region means for the layouts built on this one. */
+  function regionRemovedNote() {
+    let children = [];
+    try { children = (getChildren() || []).filter(n => typeof n === 'string' && n); } catch { /* unnamed */ }
+    const who = children.length ? `Layouts built on this one (${children.join(', ')})` : 'Layouts built on this one';
+    return `Region: Head removed. ${who} that fill the Head region will need it: add it back, or remove their Head pieces.`;
   }
 
   // EVENTS
@@ -316,7 +346,7 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
       if (item === editing) editing = null;
     }
     if (ok) {
-      say('');
+      say(isRegion(item) && btn.hasAttribute('data-head-remove') ? regionRemovedNote() : '');
       render();
       changed();
     }
@@ -335,7 +365,9 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
       const item = { tag: value, attrs: [] };
       if (!VOID.has(value)) item.text = '';
       if (!addHeadItem(meta, item)) return;
-      editing = meta.head.at(-1);
+      // Just before the region when there is one, else last
+      const r = regionIndex(meta);
+      editing = meta.head[r === -1 ? meta.head.length - 1 : r - 1];
     }
     say('');
     render();
@@ -344,7 +376,7 @@ export function createHeadDialog({ root, getMeta, getContext = () => ({}), onCha
   };
 
   const onFormInput = (e) => {
-    if (e.target.matches?.('[data-head-attr-name], [data-head-attr-value], [data-head-text]')) readForm();
+    if (e.target.matches?.('[data-head-attr-name], [data-head-attr-value], [data-head-text]')) readForm(e.target);
   };
   const onFormChange = (e) => {
     if (e.target.matches?.('[data-head-field]')) {

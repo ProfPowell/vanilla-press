@@ -80,10 +80,11 @@ async function includeScanFiles(siteDir) {
   let areas = [];
   try {
     const raw = JSON.parse(await readFile(join(siteDir, 'config', 'programs.json'), 'utf8'));
-    areas = (raw.areas || []).map((a) => a?.path).filter((p) => typeof p === 'string');
+    areas = (raw.areas || []).map((a) => a?.path).filter((p) => typeof p === 'string')
+      .map((p) => p.replace(/^\/+|\/+$/g, '')); // as Cook's normalizePrograms reads them (slugs, slashes trimmed)
   } catch { /* no programs */ }
   const found = [];
-  const walk = async (rel, inside) => {
+  const walk = async (rel) => {
     let entries;
     try { entries = await readdir(join(src, rel), { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
@@ -95,7 +96,7 @@ async function includeScanFiles(siteDir) {
       } else if (e.isFile() && /\.(html|md)$/.test(e.name)) found.push(`src/${childRel}`);
     }
   };
-  await walk('', false);
+  await walk('');
   return found.sort();
 }
 

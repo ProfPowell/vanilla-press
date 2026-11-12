@@ -202,6 +202,28 @@ describe('layout-store', () => {
     assert.equal(existsSync(join(dir, 'src/includes/spare.html')), false);
   });
 
+  it('include usage: files directly in a program area count, program folders do not', async () => {
+    for (const area of ['demos', '/demos/']) {
+      const dir = mk();
+      writeFileSync(join(dir, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: area, title: 'Demos' }], programs: [] }));
+      const tag = '<div data-include="/includes/footer.html"></div>';
+      mkdirSync(join(dir, 'src/demos/plasma'), { recursive: true });
+      writeFileSync(join(dir, 'src/demos/list.html'), tag);
+      writeFileSync(join(dir, 'src/demos/plasma/index.html'), tag);
+      const r = await listLayoutFiles(dir);
+      const used = r.includes.find((e) => e.name === 'footer').usedBy;
+      assert.ok(used.includes('src/demos/list.html'), area);
+      assert.ok(!used.includes('src/demos/plasma/index.html'), area);
+    }
+    const dir = mk();
+    writeFileSync(join(dir, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: 'demos', title: 'Demos' }], programs: [] }));
+    mkdirSync(join(dir, 'src/demos/plasma'), { recursive: true });
+    writeFileSync(join(dir, 'src/demos/plasma/index.html'), '<div data-include="/includes/spare.html"></div>');
+    await createLayoutFile(dir, { kind: 'include', name: 'spare', label: 'Spare', start: { type: 'blank' } });
+    await deleteLayoutFile(dir, 'include', 'spare');
+    assert.equal(existsSync(join(dir, 'src/includes/spare.html')), false);
+  });
+
   it('refuses a save that makes a parent cycle', async () => {
     const dir = mk();
     await createLayoutFile(dir, { kind: 'layout', name: 'a', label: 'A', start: { type: 'child', from: 'base' } });

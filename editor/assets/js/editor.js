@@ -17,6 +17,9 @@ import { tableEditing, goToNextCell } from 'prosemirror-tables';
 import { schema } from './schema.js';
 import { buildKeymap, buildBaseKeymap } from './keymap.js';
 import { buildInputRules } from './input-rules.js';
+import { charSuggestPlugin } from './chars/char-suggest.js';
+import { invisiblesPlugin } from './chars/invisibles.js';
+import { mountCharInsert } from './chars/char-insert.js';
 import { formatToolbarPlugin, setFormatToolbarComponents } from './format-toolbar.js';
 import { blockHandlesPlugin } from './block-handles.js';
 import { toBlockAst, toRegionsAst, fromBlockAst } from './ast.js';
@@ -215,6 +218,8 @@ export function initEditor() {
       // First: while the palette is open it owns Enter, Escape, arrows and
       // Backspace, which the keymaps below would otherwise consume.
       createSlashPlugin(),
+      // Then the `:` / `&` suggestions: while open they own ↑ ↓ Enter Tab Escape
+      charSuggestPlugin(),
       // A layout's regions are added, removed and ordered only by a layout change
       regionGuard(),
       // Typing with an image or embed selected starts a paragraph after it.
@@ -227,6 +232,8 @@ export function initEditor() {
         addAt: (view, pos) => getBlockPalette().open(view, pos, { insertAfter: pos }),
       }),
       buildInputRules(),
+      // Faint signs on non-breaking spaces and other invisible characters
+      invisiblesPlugin(),
       history(),
       // A line to type in after a post's last image or embed
       trailingParagraphPlugin(),
@@ -317,6 +324,9 @@ export function initEditor() {
   initPatterns();
   loadComponents();
   initSiteMode();
+  // Emoji and Symbols in the top bar
+  const charSlot = document.querySelector('[data-char-insert]');
+  if (charSlot) mountCharInsert(charSlot, { getView: () => editorView });
 
   // Trigger initial AST inspector update
   if (window.__onEditorUpdate) {

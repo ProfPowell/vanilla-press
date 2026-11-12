@@ -9,7 +9,7 @@
 
 import { createHash } from 'node:crypto';
 import { isSafeComponentTag, isSafeAttrName } from '../schema/component-names.js';
-import { escapeHtml, escapeAttr, formatDate } from './shared.js';
+import { escapeHtml, escapeAttr, formatDate, encodeInvisibles } from './shared.js';
 import { creditParts } from '../media/credit.js';
 
 /**
@@ -500,7 +500,7 @@ function renderInlineNode(node) {
 }
 
 function renderTextNode(node) {
-  let text = escapeHtml(node.value || '');
+  let text = encodeInvisibles(escapeHtml(node.value || ''));
   if (node.marks && node.marks.length) {
     for (const mark of node.marks) {
       switch (mark) {

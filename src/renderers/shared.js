@@ -9,6 +9,19 @@
  * @param {string} str
  * @returns {string}
  */
+/** Invisible characters and the references they are written as (HTML only: XML has no &nbsp;). */
+const INVISIBLE_REFS = { '\u00a0': '&nbsp;', '\u00ad': '&shy;', '\u200b': '&#8203;', '\u2060': '&#8288;' };
+
+/**
+ * Write the invisible characters in already-escaped HTML text as references,
+ * so they can be seen in the file (the editors mark them too).
+ * @param {string} html
+ * @returns {string}
+ */
+export function encodeInvisibles(html) {
+  return html.replace(/[\u00a0\u00ad\u200b\u2060]/g, (c) => INVISIBLE_REFS[c]);
+}
+
 export function escapeHtml(str) {
   if (!str) return '';
   return str

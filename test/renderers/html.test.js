@@ -31,6 +31,14 @@ describe('html renderer', () => {
       assert.ok(html.endsWith('</article>'));
     });
 
+    it('writes invisible characters in text as references, emoji and symbols as themselves', () => {
+      const doc = { ...fixture('minimal.json'), blocks: [{ type: 'paragraph', children: [
+        { type: 'text', value: '10\u00a0km, co\u00adop, a\u200bb, x\u2060y, ♥ 😄 —' },
+      ] }] };
+      const html = render(doc, { scope: 'content', bare: true });
+      assert.ok(html.includes('<p>10&nbsp;km, co&shy;op, a&#8203;b, x&#8288;y, ♥ 😄 —</p>'), html);
+    });
+
     it('with bare:true returns blocks without article wrapper', () => {
       const doc = fixture('minimal.json');
       const html = render(doc, { scope: 'content', bare: true });

@@ -8,6 +8,7 @@
  * - 1. → ordered list
  * - --- or *** → horizontal rule
  * - **bold**, *italic*, `code`, ~~strike~~, ==highlight==, [text](url) → marks
+ * - &hearts; / &#9829; → ♥ and :smile: → 😄 (chars/char-rules.js)
  *
  * @module editor/input-rules
  */
@@ -16,6 +17,7 @@ import { inputRules, wrappingInputRule, textblockTypeInputRule,
   InputRule } from 'prosemirror-inputrules';
 import { schema } from './schema.js';
 import { inlineMarkHandler } from './inline-marks.js';
+import { charRuleSpecs } from './chars/char-rules.js';
 
 /**
  * Code block: ``` optionally followed by language → code_block
@@ -109,6 +111,7 @@ export function buildInputRules() {
       orderedListRule(),
       hrRule(),
       ...inlineMarkRules(),
+      ...charRuleSpecs().map(r => new InputRule(r.match, r.handler)),
     ],
   });
 }

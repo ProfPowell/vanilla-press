@@ -26,7 +26,8 @@ import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { history, undo, redo } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
-import { baseKeymap } from 'prosemirror-commands';
+import { baseKeymap, chainCommands } from 'prosemirror-commands';
+import { inputRules, InputRule, undoInputRule } from 'prosemirror-inputrules';
 import { layoutSchema } from './schema.js';
 import { treeToDoc, docToTree } from './convert.js';
 import { nodeViews, refreshSlotLabels, DOCUMENT_FIELDS } from './views.js';
@@ -35,6 +36,10 @@ import { LayoutPalette, palettePlugin, layoutRulesPlugin, slotConditionsPlugin, 
 import { createHeadDialog } from './head-dialog.js';
 import { createPreviewPane, previewLayoutFor } from './preview-pane.js';
 import '../components/confirm-panel.js';
+import { charRuleSpecs } from '../chars/char-rules.js';
+import { charSuggestPlugin } from '../chars/char-suggest.js';
+import { invisiblesPlugin } from '../chars/invisibles.js';
+import { mountCharInsert } from '../chars/char-insert.js';
 
 /** Cook's VB page layouts (cook-ssg/layouts PAGE_LAYOUTS), without the empty value. */
 export const PAGE_LAYOUTS = ['stack', 'sidebar-left', 'sidebar-right', 'holy-grail', 'app-shell', 'dashboard', 'article', 'landing'];
@@ -67,6 +72,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     abstractField: $('[data-le-abstract-field]'),
     abstract: $('[data-le-abstract]'),
     add: $('[data-le-add]'),
+    chars: $('[data-le-chars]'),
     head: $('[data-le-head]'),
     save: $('[data-le-save]'),
     status: $('[data-le-status]'),
@@ -298,6 +304,8 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   els.save.addEventListener('click', onSave);
   els.head.addEventListener('click', onHead);
   els.back.addEventListener('click', onBack);
+  // Emoji and Symbols in the bar
+  if (els.chars) mountCharInsert(els.chars, { getView: () => view });
   globalThis.addEventListener?.('beforeunload', onBeforeUnload);
 
   // THE CANVAS
@@ -311,10 +319,16 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       plugins: [
         // First: while the palette is open it owns the keys
         palettePlugin(palette),
+        // Then the `:` / `&` suggestions: while open they own ↑ ↓ Enter Tab Escape
+        charSuggestPlugin(),
         layoutRulesPlugin(),
         slotConditionsPlugin(),
+        // &hearts; → ♥ and :smile: → 😄 as typed; Backspace straight after undoes it
+        inputRules({ rules: charRuleSpecs().map(r => new InputRule(r.match, r.handler)) }),
+        invisiblesPlugin(),
         history(),
         keymap({
+          Backspace: chainCommands(undoInputRule, baseKeymap.Backspace),
           'Mod-z': undo,
           'Shift-Mod-z': redo,
           'Mod-y': redo,

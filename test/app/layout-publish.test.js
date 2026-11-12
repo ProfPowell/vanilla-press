@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, symlinkSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { listLayoutFiles, readLayoutFile, saveLayoutFile, publishLayouts, LayoutError } from '../../src/app/layout-store.js';
+import { listLayoutFiles, readLayoutFile, saveLayoutFile, deleteLayoutFile, publishLayouts, LayoutError } from '../../src/app/layout-store.js';
 import { createBackup } from '../../src/app/site-git.js';
 import { startApp } from '../../src/app/server.js';
 import * as gitMod from '../../src/git/git.js';
@@ -115,6 +115,49 @@ describe('publishLayouts', () => {
     assert.equal(backup.state().pending, 1);
     assert.equal(backup.state().error, 'network down');
     backup.dispose();
+  });
+
+  it('leaves a pending draft pending, with its timer, and counts only the layout commit on push failure', async () => {
+    const s = mk();
+    const ws = { siteDir: s.dir };
+    const timers = [];
+    const backup = createBackup({ ws, git: gitMod, setTimer: (fn, ms) => { timers.push(ms); return timers.length; }, clearTimer: () => {} });
+    backup.noteSaved({ title: 'Draft', status: 'draft' });
+    await saveEdit(s.dir, 'page', 'Pub');
+    const before = timers.length;
+    await publishLayouts(ws, { backup, deps: gitMod, names: [] });
+    assert.equal(backup.state().pending, 1, 'the draft is still pending');
+    assert.ok(timers.length >= before, 'timer state kept');
+    await saveEdit(s.dir, 'post', 'Pub2');
+    const deps = { ...gitMod, push: async () => { throw new gitMod.GitError('down'); } };
+    await publishLayouts(ws, { backup, deps, names: [] });
+    assert.equal(backup.state().pending, 2, 'draft + the layout commit');
+    assert.ok(timers.length > before, 'a flush is scheduled');
+    backup.dispose();
+  });
+
+  it('publishes a deleted layout: the commit removes it and the remote loses it', async () => {
+    const s = mk(); const { ws, backup, deps } = setup(s);
+    writeFileSync(join(s.dir, 'src/layouts/extra.html'), readFileSync(join(s.dir, 'src/layouts/page.html'), 'utf8'));
+    git(s.dir, 'add', 'src/layouts/extra.html'); git(s.dir, 'commit', '-qm', 'extra'); git(s.dir, 'push', '-q');
+    await deleteLayoutFile(s.dir, 'layout', 'extra');
+    assert.deepEqual((await listLayoutFiles(s.dir)).deleted, [{ kind: 'layout', name: 'extra' }]);
+    const out = await publishLayouts(ws, { backup, deps, names: [] });
+    assert.equal(out.status, 'pushed');
+    assert.match(git(s.dir, 'show', '--name-status', '--format=', 'HEAD'), /^D\tsrc\/layouts\/extra\.html/);
+    assert.equal(git(s.bare, 'ls-tree', '-r', '--name-only', 'main').includes('extra.html'), false);
+    assert.deepEqual((await listLayoutFiles(s.dir)).deleted, []);
+  });
+
+  it('refuses a layout with problems', async () => {
+    const s = mk(); const { ws, backup, deps } = setup(s);
+    const f = join(s.dir, 'src/layouts/page.html');
+    writeFileSync(f, readFileSync(f, 'utf8').replace('${title}', '${nope}'));
+    for (const names of [[{ kind: 'layout', name: 'page' }], []]) {
+      await assert.rejects(publishLayouts(ws, { backup, deps, names }), (e) => e.status === 409
+        && e.message === 'Fix these layouts before publishing' && e.body.problems[0].name === 'page' && e.body.problems[0].problems.length > 0);
+    }
+    assert.equal(git(s.dir, 'log', '--oneline').trim().split('\n').length, 1);
   });
 
   it('saves without pushing when there is no remote', async () => {

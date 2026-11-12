@@ -440,6 +440,43 @@ export function createBackup({
   }
 
   /**
+   * Run `fn` in the git queue for a commit and push of files outside the backup
+   * paths (Publish layout). Pending draft saves are not taken: they stay pending
+   * with their timer. `fn` resolves like `exclusive`'s: `{ status: 'pushed'|'saved' }`,
+   * `unpushedCommit: true` when it committed but could not push. A push also sends
+   * earlier unpushed commits, so a successful one clears the unpushed count.
+   * @template T
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   */
+  function commitAndPush(fn) {
+    return serial(async () => {
+      try {
+        const result = await fn();
+        if (result?.status === 'pushed') {
+          pushed('publish');
+          afterPush(result);
+        } else if (result?.status === 'saved') connected = false;
+        if (result?.unpushedCommit) {
+          unpushed++;
+          if (result.pushError) error = result.pushError;
+          if (firstAt === null) firstAt = now();
+          schedule();
+        }
+        return result;
+      } catch (err) {
+        if (err?.name?.startsWith('Git')) {
+          unpushed++; // the commit was made; the push is retried on the next flush
+          error = err.message;
+          if (firstAt === null) firstAt = now();
+          schedule();
+        }
+        throw err;
+      }
+    });
+  }
+
+  /**
    * Run `fn` in the git queue for a commit outside the backup paths that is
    * pushed like a backup (a theme library change): when `fn` resolves to
    * `{ sha }`, the commit counts as unpushed and the backup timer starts.
@@ -499,5 +536,5 @@ export function createBackup({
     });
   }
 
-  return { noteSaved, flush, state, exclusive, commitOther, commitLater, dispose, close, init };
+  return { noteSaved, flush, state, exclusive, commitAndPush, commitOther, commitLater, dispose, close, init };
 }

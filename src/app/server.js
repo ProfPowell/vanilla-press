@@ -22,6 +22,7 @@ import * as defaultSiteProcess from './site-process.js';
 import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git.js';
 import { migrateVpTheme } from './site-theme.js';
 import { mountThemeRoutes } from './theme-routes.js';
+import { mountLayoutRoutes } from './layout-routes.js';
 import { mountProgramRoutes } from './program-routes.js';
 import { mountServiceRoutes } from './service-routes.js';
 import { createImageSearch } from '../services/image-search.js';
@@ -218,6 +219,7 @@ export async function startApp({
       });
       const writes = createLock();
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
+      mountLayoutRoutes(router, prefix, { ws, writes });
       mountThemeRoutes(router, prefix, {
         site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,
         onBuilt: () => vbCache.delete(site.id), // Apply's build may have vendored the site's VB copy

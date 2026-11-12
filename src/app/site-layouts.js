@@ -15,7 +15,7 @@ export const OLD_COOK_MESSAGE =
   "This site's Cook is too old for layouts built on other layouts; update cook-ssg";
 
 /** Import `cook-ssg/layouts` from the site's own install; null on any failure. */
-async function defaultImportCook(siteDir) {
+export async function importCook(siteDir) {
   try {
     const require = createRequire(join(siteDir, 'package.json'));
     return await import(pathToFileURL(require.resolve('cook-ssg/layouts')).href);
@@ -63,10 +63,10 @@ function fallbackLayout({ name, html }) {
  * @param {{ importCook?: (siteDir: string) => Promise<object|null> }} [options]
  * @returns {Promise<{ supported: boolean, message: string|null, layouts: object[] }>}
  */
-export async function siteLayouts(siteDir, { importCook = defaultImportCook } = {}) {
+export async function siteLayouts(siteDir, { importCook: load = importCook } = {}) {
   if (!siteDir) return { supported: false, message: null, layouts: [] };
 
-  const cook = await importCook(siteDir);
+  const cook = await load(siteDir);
   let message = OLD_COOK_MESSAGE;
   if (cook && typeof cook.listLayouts === 'function') {
     try {

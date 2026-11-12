@@ -79,3 +79,31 @@ export async function setComponent(siteId, pkg, enabled) {
   try { body = await res.json(); } catch { /* no body */ }
   return { status: res.status, body };
 }
+
+const layoutPath = (siteId, kind, name) =>
+  `/api/sites/${encodeURIComponent(siteId)}/layout-files/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`;
+
+/** Layouts and includes of a site: `{ supported, message, layouts, includes }`. */
+export function listLayoutFiles(siteId) {
+  return api(`/api/sites/${encodeURIComponent(siteId)}/layout-files`);
+}
+
+/** One editable layout or include: `{ tree, hash, problems }`. Throws (status 409) when it can't be edited here. */
+export function readLayoutFile(siteId, kind, name) {
+  return api(layoutPath(siteId, kind, name));
+}
+
+/** Save a tree; `hash` is the one read at open (null for a new file). Resolves `{ hash }`. */
+export function saveLayoutFile(siteId, kind, name, { tree, hash }) {
+  return api(layoutPath(siteId, kind, name), { method: 'PUT', body: { tree, hash } });
+}
+
+/** Create from `start: { type: 'child'|'copy'|'blank', from? }`. Resolves `{ name, hash }`. */
+export function createLayoutFile(siteId, { kind, name, label, start }) {
+  return api(`/api/sites/${encodeURIComponent(siteId)}/layout-files`, { method: 'POST', body: { kind, name, label, start } });
+}
+
+/** Delete an unused layout or include; a 409 error carries `data.usedBy` and `data.baseFor`. */
+export function deleteLayoutFile(siteId, kind, name) {
+  return api(layoutPath(siteId, kind, name), { method: 'DELETE' });
+}

@@ -20,7 +20,7 @@ import { buildInputRules } from './input-rules.js';
 import { formatToolbarPlugin, setFormatToolbarComponents } from './format-toolbar.js';
 import { blockHandlesPlugin } from './block-handles.js';
 import { toBlockAst, toRegionsAst, fromBlockAst } from './ast.js';
-import { regionPlan, storedRegionPlan, regionGuard, applyRegionPlan, REGIONS_META } from './regions.js';
+import { regionPlan, storedRegionPlan, regionGuard, applyRegionPlan, REGIONS_META, selectRegionOrBody } from './regions.js';
 import { collectionOutput } from '../../../src/sync/paths.js';
 import { titleOf, titleKeymap, titlePastePlugin, metaLineText } from './title.js';
 import { slugIsHandEdited, isPlaceholderSlug, slugAfterTitleEdit } from './slug.js';
@@ -232,6 +232,8 @@ export function initEditor() {
       trailingParagraphPlugin(),
       // Before the other keymaps: Enter, Backspace, Delete and Mod-a at the title's edge
       keymap(titleKeymap()),
+      // Mod-a with regions: the region, or the title and body (never the regions with them)
+      keymap({ 'Mod-a': selectRegionOrBody }),
       // Before titlePastePlugin: files dropped or pasted anywhere (the title
       // too) upload and land as their blocks
       ...mediaDropPlugin({

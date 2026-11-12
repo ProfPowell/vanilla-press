@@ -10,7 +10,8 @@
  * @module editor/regions
  */
 
-import { Plugin } from 'prosemirror-state';
+import { Plugin, Selection, TextSelection } from 'prosemirror-state';
+import { bodyEnd } from './block-nav.js';
 import { regionNode } from './ast.js';
 
 /** Transaction meta: this change rebuilds the regions (a layout change); the guard lets it through. */
@@ -120,5 +121,33 @@ export function applyRegionPlan(view, plan) {
   }
   if (!tr.docChanged) return false;
   view.dispatch(tr.setMeta(REGIONS_META, true).setMeta('addToHistory', false));
+  return true;
+}
+
+/**
+ * Mod-a on a post with regions: inside a region, select that region's
+ * content; elsewhere, the title through the body's end (title.js deletes a
+ * selection from the title into the body edge-safely). A delete or typing
+ * over it then keeps the regions (the guard would refuse a select-all
+ * delete). Again when that is already the selection, or on a post without
+ * regions: the default select-all.
+ * @type {import('prosemirror-state').Command}
+ */
+export function selectRegionOrBody(state, dispatch) {
+  const { doc, selection } = state;
+  if (!regionNames(doc).length) return false;
+  const { $from } = selection;
+  let from;
+  let to;
+  if ($from.depth >= 1 && $from.node(1).type.name === 'region') {
+    const start = $from.before(1);
+    from = Selection.findFrom(doc.resolve(start + 1), 1, true)?.from;
+    to = Selection.findFrom(doc.resolve(start + $from.node(1).nodeSize - 1), -1, true)?.to;
+  } else {
+    from = 1; // the title's start
+    to = Selection.findFrom(doc.resolve(bodyEnd(doc).end), -1, true)?.to;
+  }
+  if (from == null || to == null || (selection.from === from && selection.to === to)) return false;
+  if (dispatch) dispatch(state.tr.setSelection(TextSelection.create(doc, from, to)));
   return true;
 }

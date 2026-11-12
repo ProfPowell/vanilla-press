@@ -7,7 +7,7 @@
  * `insertAtTarget` checks the place still fits before using it: the `/`
  * paragraph must still hold exactly its text, and an "after this block"
  * position must still be a block boundary. Otherwise the block goes at the
- * end of the doc; a paragraph that no longer matches is never replaced.
+ * end of the body (before any layout regions); a paragraph that no longer matches is never replaced.
  * No DOM: tested in Node.
  *
  * @module editor/insert-target
@@ -15,6 +15,7 @@
 
 import { Plugin, PluginKey, Selection, NodeSelection } from 'prosemirror-state';
 import { Fragment } from 'prosemirror-model';
+import { bodyEnd } from './block-nav.js';
 
 export const insertTargetKey = new PluginKey('insertTarget');
 
@@ -95,7 +96,7 @@ function placeFor(doc, t, frag) {
 }
 
 /**
- * Insert `nodes` at a tracked target, or at the end of the doc when the
+ * Insert `nodes` at a tracked target, or at the end of the body when the
  * target no longer fits. The cursor goes into the first inserted node (or
  * selects it when it holds no text). Null when the target is unknown (the
  * editor's state was replaced, e.g. another post opened): insert nothing.
@@ -111,7 +112,9 @@ export function insertAtTarget(state, id, nodes) {
   const { doc } = state;
   let place = placeFor(doc, t, frag);
   const placed = place ? 'target' : 'end';
-  if (!place) place = { from: doc.content.size, to: doc.content.size };
+  // The body's end, before any layout regions (at the doc's end it would
+  // land in a new nameless region, which the region guard refuses)
+  if (!place) { const { end } = bodyEnd(doc); place = { from: end, to: end }; }
 
   const tr = state.tr.replaceWith(place.from, place.to, frag);
   tr.setMeta(insertTargetKey, { remove: id });

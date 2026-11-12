@@ -4,7 +4,10 @@ import { parseHTML } from 'linkedom';
 import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { schema } from '../../editor/assets/js/schema.js';
 import { toBlockAst, toRegionsAst, fromBlockAst } from '../../editor/assets/js/ast.js';
-import { regionPlan, regionGuard, applyRegionPlan, regionNames } from '../../editor/assets/js/regions.js';
+import { regionPlan, regionGuard, applyRegionPlan, regionNames, selectRegionOrBody } from '../../editor/assets/js/regions.js';
+import { insertTargetPlugin, trackTarget, insertAtTarget } from '../../editor/assets/js/insert-target.js';
+import { titleKeymap, titlePastePlugin, titleOf } from '../../editor/assets/js/title.js';
+import { deleteSelection } from 'prosemirror-commands';
 import { movableBlockAt, moveBlock } from '../../editor/assets/js/block-handles.js';
 import { trailingParagraphPlugin } from '../../editor/assets/js/block-nav.js';
 
@@ -219,5 +222,84 @@ describe('the block palette inside a region', () => {
     const next = state.apply(state.tr.setSelection(sel).deleteSelection());
     next.doc.check();
     assert.deepEqual(regionNames(next.doc), ['aside']);
+  });
+});
+
+describe('select all with regions (fix round 1)', () => {
+  const docWith = () => fromBlockAst([para('Body one'), para('Body two')], schema, {
+    title: 'Title', regions: regionPlan(POST, { aside: [para('Side one'), para('Side two')] }),
+  });
+  const plugins = () => [regionGuard(), titlePastePlugin(), trailingParagraphPlugin()];
+  const run = (state, command) => {
+    let next = null;
+    const ok = command(state, (tr) => { next = state.apply(tr); });
+    return ok ? next : null;
+  };
+
+  it('Mod-a then Delete in the body clears the title and body, keeps the regions', () => {
+    const doc = docWith();
+    const state = EditorState.create({ doc, plugins: plugins(), selection: TextSelection.create(doc, posOf(doc, 'Body two') + 2) });
+    const selected = run(state, selectRegionOrBody);
+    assert.ok(selected, 'Mod-a applies');
+    assert.equal(selected.selection.from, 1);
+    const cleared = run(selected, titleKeymap().Delete);
+    assert.ok(cleared, 'Delete applies');
+    cleared.doc.check();
+    assert.equal(titleOf(cleared.doc), '');
+    assert.deepEqual(toBlockAst(cleared.doc), [{ type: 'paragraph', children: [] }]);
+    assert.deepEqual(toRegionsAst(cleared.doc), { aside: [para('Side one'), para('Side two')] });
+  });
+
+  it('Mod-a then Backspace in the body does the same', () => {
+    const doc = docWith();
+    const state = EditorState.create({ doc, plugins: plugins(), selection: TextSelection.create(doc, posOf(doc, 'Body one')) });
+    const cleared = run(run(state, selectRegionOrBody), titleKeymap().Backspace);
+    assert.deepEqual(toBlockAst(cleared.doc), [{ type: 'paragraph', children: [] }]);
+    assert.deepEqual(regionNames(cleared.doc), ['aside']);
+    assert.equal(cleared.doc.lastChild.textContent, 'Side oneSide two');
+  });
+
+  it('Mod-a then Delete in a region empties only that region', () => {
+    const doc = docWith();
+    const state = EditorState.create({ doc, plugins: plugins(), selection: TextSelection.create(doc, posOf(doc, 'Side two') + 1) });
+    const selected = run(state, selectRegionOrBody);
+    assert.equal(selected.doc.textBetween(selected.selection.from, selected.selection.to, '|'), 'Side one|Side two');
+    const cleared = run(selected, deleteSelection);
+    cleared.doc.check();
+    assert.deepEqual(regionNames(cleared.doc), ['aside']);
+    assert.deepEqual(toRegionsAst(cleared.doc), {});
+    assert.equal(cleared.doc.lastChild.childCount, 1);
+    assert.equal(titleOf(cleared.doc), 'Title');
+    assert.deepEqual(toBlockAst(cleared.doc), [para('Body one'), para('Body two')]);
+  });
+
+  it('a second Mod-a, and Mod-a on a post without regions, fall through to the default', () => {
+    const doc = docWith();
+    const state = EditorState.create({ doc, plugins: plugins(), selection: TextSelection.create(doc, posOf(doc, 'Body one')) });
+    assert.equal(run(run(state, selectRegionOrBody), selectRegionOrBody), null);
+    const plain = fromBlockAst([para('Body')], schema, { title: 'T' });
+    assert.equal(selectRegionOrBody(EditorState.create({ doc: plain }), () => {}), false);
+  });
+});
+
+describe('insert target with regions (fix round 1)', () => {
+  it('a target that no longer fits inserts at the end of the body, before the regions', () => {
+    const doc = fromBlockAst([para('Body'), para('/')], schema, {
+      title: 'T', regions: regionPlan(POST, { aside: [para('Side')] }),
+    });
+    let state = EditorState.create({ doc, plugins: [regionGuard(), insertTargetPlugin()] });
+    const { tr, id } = trackTarget(state, { replace: posOf(doc, '/') + 1 });
+    state = state.apply(tr);
+    state = state.apply(state.tr.insertText('x', posOf(state.doc, '/') + 1)); // the `/` line changed: target invalid
+    const done = insertAtTarget(state, id, [schema.nodes.heading.create({ level: 2 }, schema.text('New'))]);
+    assert.equal(done.placed, 'end');
+    const next = state.apply(done.tr);
+    assert.notEqual(next.doc, state.doc, 'the insert is dispatched (not refused by the guard)');
+    next.doc.check();
+    assert.deepEqual(regionNames(next.doc), ['aside']);
+    assert.deepEqual(toRegionsAst(next.doc), { aside: [para('Side')] });
+    const body = toBlockAst(next.doc);
+    assert.equal(body[body.length - 1].type, 'heading');
+    assert.equal(next.selection.$from.parent.type.name, 'heading');
   });
 });

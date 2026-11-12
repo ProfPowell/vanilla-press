@@ -190,7 +190,7 @@ const isEmptyParagraph = (node) => !!node && node.type.name === 'paragraph' && n
  * @param {import('prosemirror-model').Node} doc
  * @returns {{ end: number, last: import('prosemirror-model').Node }}
  */
-function bodyEnd(doc) {
+export function bodyEnd(doc) {
   let end = doc.content.size;
   let last = doc.lastChild;
   for (let i = doc.childCount - 1; i > 0 && doc.child(i).type.name === 'region'; i--) {

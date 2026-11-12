@@ -14,7 +14,8 @@ import { homedir } from 'node:os';
 import { realpathSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, extname, relative, isAbsolute, sep, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { listSites, getSite, addSite, removeSite, listFolders } from './registry.js';
+import { listSites, getSite, addSite, removeSite, listFolders, configDir } from './registry.js';
+import { createLayoutPreview } from './layout-preview.js';
 import { createPreviews } from './preview.js';
 import * as defaultGit from '../git/git.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
@@ -143,6 +144,22 @@ export async function startApp({
   /** Open sites, cached for the life of the server: id -> { db, router, ws, backup, writes } */
   const open = new Map();
 
+  /** Layout previews (working copy + static server), created on first use: id -> preview. */
+  const layoutPreviews = new Map();
+  const layoutPreview = (site) => () => {
+    let p = layoutPreviews.get(site.id);
+    if (!p) {
+      p = createLayoutPreview({ site, configDir: configDir(env) });
+      layoutPreviews.set(site.id, p);
+    }
+    return p;
+  };
+  const closeLayoutPreview = async (id) => {
+    const p = layoutPreviews.get(id);
+    layoutPreviews.delete(id);
+    await p?.close();
+  };
+
   /** Opens in progress: id -> Promise<entry>, so concurrent requests open a site once. */
   const opening = new Map();
 
@@ -219,7 +236,7 @@ export async function startApp({
       });
       const writes = createLock();
       mountSiteGit(router, prefix, { site, ws, db, backup, writes, roots });
-      mountLayoutRoutes(router, prefix, { ws, writes, backup, deps: git });
+      mountLayoutRoutes(router, prefix, { ws, writes, backup, deps: git, db, preview: layoutPreview(site) });
       mountThemeRoutes(router, prefix, {
         site, ws, db, backup, writes, vpRoot, fetch: fetchImpl,
         onBuilt: () => vbCache.delete(site.id), // Apply's build may have vendored the site's VB copy
@@ -420,6 +437,7 @@ export async function startApp({
     removeSite(siteId, { env }); // first, so no new request reopens it
     vbCache.delete(siteId);
     previews.stop?.(siteId)?.catch?.(() => {});
+    closeLayoutPreview(siteId).catch(() => {});
     await closeSite(siteId, { flush: true });
     sendJson(res, 200, { ok: true });
   });
@@ -602,7 +620,10 @@ export async function startApp({
   programsUrl = programs.url;
 
   // However the process ends (a second Ctrl-C, process.exit, a crash), no detached preview survives it.
-  const killPreviews = () => previews.killAllSync?.();
+  const killPreviews = () => {
+    previews.killAllSync?.();
+    for (const p of layoutPreviews.values()) p.killSync();
+  };
   process.on('exit', killPreviews);
 
   async function close() {
@@ -614,7 +635,7 @@ export async function startApp({
       programs.close(),
     ]);
     await Promise.all([...new Set([...open.keys(), ...opening.keys()])].map((id) => closeSite(id)));
-    await previews.stopAll();
+    await Promise.all([previews.stopAll(), ...[...layoutPreviews.keys()].map(closeLayoutPreview)]);
     process.off('exit', killPreviews); // only once every preview is down
   }
 

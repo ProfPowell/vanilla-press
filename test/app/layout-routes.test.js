@@ -79,4 +79,30 @@ describe('layout routes', () => {
     assert.equal((await call('/layout-files/layout/a%2Fb', { method: 'DELETE' })).status, 400);
     assert.equal((await call('/layout-files/thing/page')).status, 400);
   });
+
+  it('previews unsaved sources: { ok, url }, a failed build as { ok: false, log }, unknown doc 404', async () => {
+    const post = readFileSync(join(site, 'src/layouts/post.html'), 'utf8').replace('<article>', '<article><p>ROUTE-MARKER-55</p>');
+    const ok = await call('/layout-preview', { method: 'POST', body: { layouts: { post }, layout: 'post' } });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.data.ok, true, ok.data.log);
+    assert.match(await (await fetch(ok.data.url)).text(), /ROUTE-MARKER-55/);
+    assert.ok(existsSync(join(root, 'config', 'layout-preview', id, 'dist')));
+
+    const bad = await call('/layout-preview', { method: 'POST', body: { layouts: { base: '<body data-template="post">${content}</body>' }, layout: 'post' } });
+    assert.equal(bad.status, 200);
+    assert.equal(bad.data.ok, false);
+    assert.match(bad.data.log, /cycle/i);
+
+    assert.equal((await call('/layout-preview', { method: 'POST', body: { docId: 'nope', layout: 'post' } })).status, 404);
+    assert.equal((await call('/layout-preview', { method: 'POST', body: { layouts: [], layout: 'post' } })).status, 422);
+    assert.equal((await call('/layout-preview', { method: 'POST', body: {} })).status, 422);
+  });
+
+  it('app close stops the layout preview server', async () => {
+    const r = await call('/layout-preview', { method: 'POST', body: { layout: 'page' } });
+    assert.equal(r.data.ok, true, r.data.log);
+    await app.close();
+    await assert.rejects(fetch(r.data.url));
+    app = await startApp({ port: 0, env: { VP_CONFIG_DIR: join(root, 'config') } });
+  });
 });

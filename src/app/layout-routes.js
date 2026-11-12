@@ -3,7 +3,8 @@
  * @description The layout editor's routes on a site's router: list, read, save,
  * create (new, built on, copy) and delete layouts and include fragments. A
  * name or kind is validated in layout-store.js and is the only path input.
- * Writes run inside the site's document write lock.
+ * Writes run inside the site's document write lock. The preview route renders
+ * unsaved sources in a working copy outside the site (layout-preview.js).
  */
 
 import { sendJson } from '../server/router.js';
@@ -11,13 +12,21 @@ import {
   listLayoutFiles, readLayoutFile, saveLayoutFile, createLayoutFile, deleteLayoutFile, publishLayouts, LayoutError,
 } from './layout-store.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
+import { getDocument } from '../store/content.js';
+import { getCollectionsConfig } from '../sync/site-files.js';
+import { collectionOutput } from '../sync/paths.js';
+import { mediaAltLookup } from '../media/alt-lookup.js';
+
+const isRecord = (v) => v == null || (typeof v === 'object' && !Array.isArray(v));
 
 /**
  * @param {{ add: Function }} router
  * @param {string} prefix - `/api/sites/<id>`
- * @param {{ ws: { siteDir: string }, writes: (fn: Function) => Promise<any>, backup?: object, deps?: object }} context
+ * @param {{ ws: { siteDir: string }, writes: (fn: Function) => Promise<any>, backup?: object, deps?: object,
+ *   db?: object, preview?: () => ReturnType<typeof import('./layout-preview.js').createLayoutPreview> }} context -
+ *   preview: the site's layout preview, created on first use
  */
-export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps }) {
+export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db, preview }) {
   const body = (req) => (req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {});
 
   const handle = (fn, { write = false } = {}) => async (req, res) => {
@@ -65,5 +74,23 @@ export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps }) 
     const out = await publishLayouts(ws, { backup, deps, names: files, writes });
     if (out.pushError) return sendJson(res, 502, { error: out.pushError, committed: true, sha: out.sha });
     sendJson(res, 200, { status: out.status, sha: out.sha, files: out.files });
+  }));
+
+  // Preview unsaved layout and include sources (with a document draft, or a sample page).
+  // A failed build is { ok: false, log } with 200: the pane shows the log, the editor carries on.
+  router.add('POST', `${prefix}/layout-preview`, handle(async (req, res) => {
+    if (!preview) return sendJson(res, 404, { error: 'Layout preview is not available' });
+    const { layouts = {}, includes = {}, docId = null, layout = null } = body(req);
+    if (!isRecord(layouts) || !isRecord(includes)) return sendJson(res, 422, { error: 'layouts and includes must be objects' });
+    let doc = null;
+    let mediaAlt;
+    if (docId != null) {
+      doc = db && typeof docId === 'string' ? getDocument(db, docId) : null;
+      if (!doc) return sendJson(res, 404, { error: 'Document not found' });
+      mediaAlt = mediaAltLookup(db);
+    }
+    const effective = layout || (doc && (doc.meta.layout || collectionOutput(doc.meta.collection, getCollectionsConfig(db)).layout));
+    if (typeof effective !== 'string' || !effective) return sendJson(res, 422, { error: 'layout is required' });
+    sendJson(res, 200, await preview().render({ layouts: layouts || {}, includes: includes || {}, doc, layout: effective, mediaAlt }));
   }));
 }

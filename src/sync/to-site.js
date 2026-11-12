@@ -223,6 +223,19 @@ const encodeAlt = (alt) => (typeof alt === 'string'
 const joinRegions = (regions, body) => (regions ? `${regions}\n${body}` : body);
 
 /**
+ * The HTML page Vanilla Press writes for a document: front matter, then the
+ * protected (see protectBody) region templates and body, then a newline.
+ * @param {Object} doc
+ * @param {{ layout: string, mediaAlt?: (src: string) => string|null, render?: Function }} options - render overrides the renderer (tests)
+ * @returns {string}
+ */
+export function pageHtml(doc, { layout, mediaAlt, render: renderFn = render } = {}) {
+  const imageAlt = encodeAlt(mediaAlt && doc.meta.image ? mediaAlt(doc.meta.image) : null);
+  return frontMatter(doc, { layout, imageAlt }) +
+    protectBody(joinRegions(renderRegions(doc), renderFn(doc, { scope: 'content', bare: true }))) + '\n';
+}
+
+/**
  * Sync a document. Writes the JSON; if published, the HTML page; removes
  * this document's own files at its old paths; records the local manifest
  * entry. Everything that can fail without touching the filesystem
@@ -239,16 +252,12 @@ const joinRegions = (regions, body) => (regions ? `${regions}\n${body}` : body);
 export function syncDocument(ws, doc, { collectionsConfig, previousDoc, render: renderFn = render, mediaAlt } = {}) {
   checkSync(ws, doc, { collectionsConfig, previousDoc });
   const layout = doc.meta.layout || collectionOutput(doc.meta.collection, collectionsConfig).layout;
-  const imageAlt = encodeAlt(mediaAlt && doc.meta.image ? mediaAlt(doc.meta.image) : null);
   const paths = outputPaths(doc, collectionsConfig);
   const manifest = readManifest(ws);
   const previous = previousPaths(manifest, doc.id, previousDoc, collectionsConfig);
 
   const jsonText = JSON.stringify(doc, null, 2) + '\n';
-  const htmlText = paths.html
-    ? frontMatter(doc, { layout, imageAlt }) +
-      protectBody(joinRegions(renderRegions(doc), renderFn(doc, { scope: 'content', bare: true }))) + '\n'
-    : null;
+  const htmlText = paths.html ? pageHtml(doc, { layout, mediaAlt, render: renderFn }) : null;
 
   const written = [];
   const removed = [];

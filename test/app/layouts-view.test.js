@@ -107,7 +107,7 @@ describe('new layout', () => {
   });
   it('lists the starts', () => {
     const opts = startOptions({ layouts: [entry({}), entry({ name: 'bad', label: 'Bad', status: 'problems' })] });
-    assert.deepEqual(opts.map((o) => o.text), ['Built on Post', 'Built on Bad', 'Copy of Post', 'Blank base']);
+    assert.deepEqual(opts.map((o) => o.text), ['Built on Post', 'Copy of Post', 'Blank base']);
     assert.deepEqual(startFromValue('child:post'), { type: 'child', from: 'post' });
     assert.deepEqual(startFromValue('blank'), { type: 'blank' });
   });

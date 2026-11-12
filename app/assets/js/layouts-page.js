@@ -31,7 +31,7 @@ export function initLayoutsSection({ siteId, root }) {
   const openHref = (r) =>
     `/editor/layout.html?site=${encodeURIComponent(siteId)}&kind=${encodeURIComponent(r.kind)}&name=${encodeURIComponent(r.name)}`;
 
-  function renderRow(r) {
+  function renderRow(r, readOnly) {
     const problemsId = `layouts-problems-${r.kind}-${r.name}`;
     const li = h('li', { class: 'layouts-row', 'data-kind': r.kind, 'data-name': r.name });
     const title = h('p', { class: 'layouts-name' }, h('strong', {}, r.label), ' ', h('code', { class: 'mono' }, r.fileName));
@@ -48,13 +48,17 @@ export function initLayoutsSection({ siteId, root }) {
       });
       li.append(toggle, list);
     }
+    if (readOnly) return li;
     const actions = h('div', { class: 'layouts-actions' });
-    if (r.canOpen) actions.append(h('a', { class: 'btn', href: openHref(r) }, 'Open'));
-    const dup = h('button', { type: 'button' }, 'Duplicate');
-    dup.addEventListener('click', () => openNewDialog({ opener: dup, duplicate: r }));
+    if (r.canOpen) {
+      actions.append(h('a', { class: 'btn', href: openHref(r) }, 'Open'));
+      const dup = h('button', { type: 'button' }, 'Duplicate');
+      dup.addEventListener('click', () => openNewDialog({ opener: dup, duplicate: r }));
+      actions.append(dup);
+    }
     const del = h('button', { type: 'button', disabled: !r.canDelete }, 'Delete');
     del.addEventListener('click', () => askDelete(r, del));
-    actions.append(dup, del);
+    actions.append(del);
     li.append(actions);
     if (!r.canDelete) li.append(h('p', { class: 'layouts-blocked' }, r.deleteBlockedText));
     return li;
@@ -70,8 +74,8 @@ export function initLayoutsSection({ siteId, root }) {
     const rows = layoutRows(listing);
     $('layouts-summary').textContent = supported
       ? `${rows.length} in src/layouts and src/includes` : '';
-    const items = rows.map(renderRow);
-    for (const d of deletedRows(listing)) items.push(h('li', { class: 'layouts-row layouts-deleted' }, d.text));
+    const items = rows.map((r) => renderRow(r, !supported));
+    for (const d of supported ? deletedRows(listing) : []) items.push(h('li', { class: 'layouts-row layouts-deleted' }, d.text));
     $('layouts-list').replaceChildren(...items);
   }
 
@@ -141,7 +145,7 @@ export function initLayoutsSection({ siteId, root }) {
           out = await publishLayoutFiles(siteId, files);
         } catch (err) {
           if (err.status === 502 && err.data?.committed) {
-            showResult(`Committed, but pushing failed: ${err.data.error}. It will be pushed with the next backup.`);
+            showResult(`Committed, but pushing failed: ${err.data.error || 'the push failed'}. It will be pushed with the next backup.`);
             await refresh();
             return;
           }

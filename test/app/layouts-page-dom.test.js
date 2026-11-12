@@ -210,11 +210,31 @@ describe('Layouts section', () => {
   });
 
   it('shows the old-Cook message for an unsupported site', async () => {
-    listing = { supported: false, message: "This site's Cook is too old to edit layouts; update cook-ssg", layouts: [], includes: [], deleted: [] };
+    listing = { supported: false, message: "This site's Cook is too old to edit layouts; update cook-ssg", deleted: [],
+      layouts: [entry({ name: 'page', label: 'page', status: 'plain', unpublished: true })], includes: [] };
     await section.refresh();
     assert.match(text($('layouts-old')), /too old to edit layouts; update cook-ssg/);
     assert.equal($('layouts-old').hidden, false);
     assert.equal($('layouts-new').hidden, true);
-    assert.equal(rows().length, 0);
+    assert.equal(rows().length, 1);
+    assert.equal(rows()[0].querySelectorAll('button, a').length, 0);
+    assert.equal($('layouts-publish').hidden, true);
+  });
+
+  it('offers Duplicate only on layouts that can be opened', async () => {
+    listing.layouts = [entry({ status: 'plain' })];
+    await section.refresh();
+    assert.equal(button(rows()[0], 'Duplicate'), undefined);
+  });
+
+  it('does not print undefined when a failed push has no error text', async () => {
+    listing.layouts[1].unpublished = true;
+    await section.refresh();
+    responders['POST /publish'] = () => Response.json({ committed: true }, { status: 502 });
+    $('layouts-publish').click();
+    $('layouts-confirm-form').onsubmit(new win.Event('submit'));
+    await settle();
+    assert.doesNotMatch(text($('layouts-result')), /undefined/);
+    assert.match(text($('layouts-result')), /next backup/);
   });
 });

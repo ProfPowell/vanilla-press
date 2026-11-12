@@ -107,7 +107,7 @@ export function nameFromLabel(label) {
 export function startOptions(listing, { kind = 'layout' } = {}) {
   const layouts = listing?.layouts || [];
   const out = [];
-  if (kind === 'layout') for (const l of layouts) out.push({ value: `child:${l.name}`, text: `Built on ${l.label || l.name}` });
+  if (kind === 'layout') for (const l of layouts.filter((x) => x.status === 'editable')) out.push({ value: `child:${l.name}`, text: `Built on ${l.label || l.name}` });
   for (const e of kind === 'layout' ? layouts : listing?.includes || []) {
     if (e.status === 'editable') out.push({ value: `copy:${e.name}`, text: `Copy of ${e.label || e.name}` });
   }

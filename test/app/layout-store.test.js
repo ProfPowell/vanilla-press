@@ -269,7 +269,16 @@ describe('layout-store', () => {
     const dir = mk();
     const old = async () => ({ listLayouts: async () => ({ layouts: [], includes: [] }) });
     const r = await listLayoutFiles(dir, { importCook: old });
-    assert.deepEqual(r, { supported: false, message: OLD_COOK_EDIT_MESSAGE, layouts: [], includes: [], deleted: [] });
+    assert.equal(r.supported, false);
+    assert.equal(r.message, OLD_COOK_EDIT_MESSAGE);
+    assert.deepEqual(r.deleted, []);
+    assert.ok(r.layouts.length > 0 && r.includes.length > 0);
+    for (const e of [...r.layouts, ...r.includes]) {
+      assert.equal(e.status, 'plain');
+      assert.deepEqual([e.usedBy, e.baseFor, e.unpublished], [[], [], false]);
+    }
+    assert.ok(r.layouts.some((e) => e.name === 'post' && e.kind === 'layout'));
+    assert.ok(r.includes.every((e) => e.kind === 'include'));
     assert.equal(OLD_COOK_EDIT_MESSAGE, "This site's Cook is too old to edit layouts; update cook-ssg");
     await rejects(readLayoutFile(dir, 'layout', 'page', { importCook: old }), 409, OLD_COOK_EDIT_MESSAGE);
   });

@@ -18,7 +18,7 @@ import { writeFileAtomic } from '../sync/atomic-write.js';
 import { changedFiles, GitNotConnectedError, GitConflictError, GitStashConflictError } from '../git/git.js';
 import { layoutMessage, THEME_PATHS } from './site-git.js';
 import { themeConflictResolver } from './site-theme.js';
-import { importCook as defaultImportCook } from './site-layouts.js';
+import { importCook as defaultImportCook, siteLayouts } from './site-layouts.js';
 
 export const OLD_COOK_EDIT_MESSAGE = "This site's Cook is too old to edit layouts; update cook-ssg";
 export const CHANGED_ON_DISK = 'This layout changed on disk since you opened it';
@@ -173,6 +173,24 @@ function deletedEntries(siteDir, dirty) {
   return out;
 }
 
+/** What an old Cook can show: every layout and include file as a plain, read-only entry. */
+async function plainListing(siteDir) {
+  const dirty = await unpublishedFiles(siteDir);
+  const plain = (kind, name, paths) => ({
+    name, kind, label: name, status: 'plain', problems: [], parent: null, baseFor: [], usedBy: [],
+    unpublished: paths.some((p) => dirty.has(p)),
+  });
+  const { layouts } = await siteLayouts(siteDir, { importCook: async () => null });
+  let files = [];
+  try { files = await readdir(dirOf(siteDir, 'include')); } catch { /* no includes folder */ }
+  const includes = files.filter((f) => f.endsWith('.html') && LAYOUT_NAME.test(f.slice(0, -5))).sort();
+  return {
+    deleted: deletedEntries(siteDir, dirty).map(({ kind, name }) => ({ kind, name })),
+    layouts: layouts.map((l) => plain('layout', l.name, [`src/layouts/${l.name}.html`, `src/layouts/${l.name}/index.html`])),
+    includes: includes.map((f) => plain('include', f.slice(0, -5), [`src/includes/${f}`])),
+  };
+}
+
 /**
  * @param {string} siteDir
  * @param {{ importCook?: Function }} [opts]
@@ -182,7 +200,7 @@ export async function listLayoutFiles(siteDir, { importCook = defaultImportCook 
   try {
     cook = await loadCook(siteDir, importCook);
   } catch (err) {
-    if (err instanceof LayoutError) return { supported: false, message: err.message, layouts: [], includes: [], deleted: [] };
+    if (err instanceof LayoutError) return { ...(await plainListing(siteDir)), supported: false, message: err.message };
     throw err;
   }
   const { layouts, includes } = await inspect(siteDir, cook);

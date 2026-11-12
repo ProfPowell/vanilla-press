@@ -489,7 +489,12 @@ export async function createLayoutFile(siteDir, input, { importCook = defaultImp
   return { name, hash: sha1(source) };
 }
 
-export async function deleteLayoutFile(siteDir, kind, name, { importCook = defaultImportCook, writesLog } = {}) {
+/**
+ * Delete a layout or include; refused (409 'in use') while anything uses it.
+ * @param {{ importCook?: Function, writesLog?: string, vpUsers?: (name: string) => string[] }} [opts] -
+ *   vpUsers: the layout's users VP knows of beyond the site's files (drafts, collection defaults)
+ */
+export async function deleteLayoutFile(siteDir, kind, name, { importCook = defaultImportCook, writesLog, vpUsers = () => [] } = {}) {
   check(kind, name);
   const cook = await loadCook(siteDir, importCook);
   const { entry } = await findEntry(siteDir, cook, kind, name);
@@ -498,7 +503,7 @@ export async function deleteLayoutFile(siteDir, kind, name, { importCook = defau
     if (usedBy.length) throw new LayoutError(409, 'in use', { usedBy, baseFor: [] });
   } else {
     const usage = await cook.layoutUsage(siteDir);
-    const usedBy = usage.pages[name] ?? [];
+    const usedBy = [...(usage.pages[name] ?? []), ...vpUsers(name)];
     const baseFor = usage.layouts[name] ?? [];
     if (usedBy.length || baseFor.length) throw new LayoutError(409, 'in use', { usedBy, baseFor });
   }

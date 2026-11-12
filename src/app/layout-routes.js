@@ -14,7 +14,7 @@ import {
   LayoutError,
 } from './layout-store.js';
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
-import { getDocument, getCollections } from '../store/content.js';
+import { getDocument, getCollections, getAllDocuments } from '../store/content.js';
 import { getCollectionsConfig } from '../sync/site-files.js';
 import { collectionOutput } from '../sync/paths.js';
 import { mediaAltLookup } from '../media/alt-lookup.js';
@@ -80,8 +80,29 @@ export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db
     sendJson(res, 201, await createLayoutFile(ws.siteDir, { kind, name, label, start }, { writesLog }));
   }, { write: true }));
 
+  /**
+   * Users of a layout only VP knows: unpublished documents whose layout (their own, else their
+   * collection's) is `name`, and collections whose default layout is `name`. Published documents
+   * are pages in src/, which Cook's layoutUsage already lists.
+   */
+  const vpUsers = (name) => {
+    if (!db) return [];
+    const config = getCollectionsConfig(db);
+    const out = [];
+    for (const doc of getAllDocuments(db)) {
+      if (doc.meta.status === 'published') continue;
+      if ((doc.meta.layout || collectionOutput(doc.meta.collection, config).layout) === name) {
+        out.push(`draft: ${doc.meta.title || doc.meta.slug || doc.id}`);
+      }
+    }
+    for (const c of [...new Set([...getCollections(db), ...Object.keys(config)])].sort()) {
+      if (collectionOutput(c, config).layout === name) out.push(`collection default: ${c}`);
+    }
+    return out;
+  };
+
   router.add('DELETE', `${prefix}/layout-files/:kind/:name`, handle(async (req, res) => {
-    await deleteLayoutFile(ws.siteDir, req.params.kind, req.params.name, { writesLog });
+    await deleteLayoutFile(ws.siteDir, req.params.kind, req.params.name, { writesLog, vpUsers });
     sendJson(res, 200, { deleted: true });
   }, { write: true }));
 

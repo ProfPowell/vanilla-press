@@ -80,6 +80,25 @@ describe('layout routes', () => {
     assert.equal((await call('/layout-files/thing/page')).status, 400);
   });
 
+  it('delete is refused while a VP draft or a collection default uses the layout (M1)', async () => {
+    const api = (path, init) => fetch(`${app.url}/api/sites/${id}${path}`, init);
+    const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const doc = await api('/documents', json('POST', { meta: { title: 'Hello draft', slug: 'hello-draft', collection: 'notes', layout: 'docs' }, blocks: [] }));
+    assert.equal(doc.status, 201, await doc.clone().text());
+    const cfg = await api('/config/collections', json('PUT', { value: JSON.stringify({ articles: { layout: 'landing' } }) }));
+    assert.equal(cfg.status, 200);
+
+    const docs = await call('/layout-files/layout/docs', { method: 'DELETE' });
+    assert.equal(docs.status, 409);
+    assert.equal(docs.data.error, 'in use');
+    assert.ok(docs.data.usedBy.includes('draft: Hello draft'), JSON.stringify(docs.data));
+    const landing = await call('/layout-files/layout/landing', { method: 'DELETE' });
+    assert.equal(landing.status, 409);
+    assert.ok(landing.data.usedBy.includes('collection default: articles'), JSON.stringify(landing.data));
+    assert.ok(existsSync(join(site, 'src/layouts/docs.html')));
+    assert.ok(existsSync(join(site, 'src/layouts/landing.html')));
+  });
+
   it('previews unsaved sources: { ok, url }, a failed build as { ok: false, log }, unknown doc 404', async () => {
     const post = readFileSync(join(site, 'src/layouts/post.html'), 'utf8').replace('<article>', '<article><p>ROUTE-MARKER-55</p>');
     const ok = await call('/layout-preview', { method: 'POST', body: { layouts: { post }, layout: 'post' } });

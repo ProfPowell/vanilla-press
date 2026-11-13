@@ -349,3 +349,30 @@ describe('Backspace in the trailing paragraph', () => {
     assert.equal(contentChanged(tr, state.doc, state.apply(tr).doc), true);
   });
 });
+
+describe('the trailing paragraph in a layout region', () => {
+  const card = () => ({ type: 'card', attrs: {}, children: [p('inside')] });
+
+  it('a region ending in a card gets an empty line after it, to type past the card', async () => {
+    const { toRegionsAst } = await import('../../editor/assets/js/ast.js');
+    const doc = fromBlockAst([p('Body')], schema, { title: 'T', regions: [{ name: 'aside', label: 'Sidebar', blocks: [p('Side'), card()] }] });
+    let state = EditorState.create({ doc, plugins: [trailingParagraphPlugin()] });
+    state = state.apply(state.tr);
+    const region = state.doc.lastChild;
+    assert.equal(region.type.name, 'region');
+    assert.equal(region.lastChild.type.name, 'paragraph');
+    assert.equal(region.lastChild.childCount, 0);
+    // The line is the editor's: it is not saved
+    assert.deepEqual(toRegionsAst(state.doc).aside.map(b => b.type), ['paragraph', 'card']);
+  });
+
+  it('an empty region and one ending in a paragraph are left alone', () => {
+    const doc = fromBlockAst([p('Body')], schema, { title: 'T', regions: [
+      { name: 'aside', label: 'Sidebar', blocks: [p('Side')] },
+      { name: 'footer', label: 'Footer', blocks: [] },
+    ] });
+    let state = EditorState.create({ doc, plugins: [trailingParagraphPlugin()] });
+    const next = state.apply(state.tr);
+    assert.ok(next.doc.eq(state.doc));
+  });
+});

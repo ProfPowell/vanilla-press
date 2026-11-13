@@ -6,7 +6,7 @@ import { parseHTML } from 'linkedom';
 const win = parseHTML('<!doctype html><html><body></body></html>');
 const GLOBALS = ['document', 'HTMLElement', 'customElements', 'CustomEvent', 'Event', 'Node'];
 const saved = {};
-let openMediaPicker, list;
+let openMediaPicker, list, api;
 
 before(async () => {
   for (const k of GLOBALS) { saved[k] = globalThis[k]; globalThis[k] = win[k]; }
@@ -17,6 +17,7 @@ before(async () => {
   proto.showModal ??= function showModal() { this.setAttribute('open', ''); };
   proto.close ??= function close() { this.removeAttribute('open'); };
   ({ openMediaPicker } = await import('../../editor/assets/js/components/media-picker.js'));
+  ({ api } = await import('../../editor/assets/js/api-client.js'));
 });
 after(() => {
   for (const k of GLOBALS) globalThis[k] = saved[k];
@@ -43,5 +44,28 @@ describe('media picker library tab', () => {
     assert.equal(tiles[0].textContent.includes('Linked from Unsplash'), false);
     tiles[0].dispatchEvent(new win.Event('click'));
     assert.equal((await chosen).id, 'u');
+  });
+
+  it('an uploaded PDF shows its name and Use this file, with no stray "null" text', async () => {
+    list = [];
+    const pdf = { id: 'p', filename: 'talk-c575a0.pdf', kind: 'pdf', mime_type: 'application/pdf', alt: null, linked: false, src: '/media/talk-c575a0.pdf', missing: false, created: '2026-11-13' };
+    const real = api.uploadMedia;
+    api.uploadMedia = async () => pdf;
+    try {
+      const chosen = openMediaPicker({ kind: 'pdf' });
+      await tick(); await tick();
+      const input = win.document.querySelector('input[type="file"]');
+      Object.defineProperty(input, 'files', { configurable: true, value: [new File(['%PDF-1.4'], 'Talk.pdf', { type: 'application/pdf' })] });
+      input.dispatchEvent(new win.Event('change'));
+      for (let i = 0; i < 6; i++) await tick();
+      const selected = win.document.querySelector('.media-picker-selected');
+      assert.ok(selected && !selected.hidden, 'the upload is shown');
+      assert.match(selected.textContent, /Uploaded talk-c575a0\.pdf/);
+      assert.doesNotMatch(selected.textContent, /null/);
+      [...selected.querySelectorAll('button')].find(b => b.textContent === 'Use this file').dispatchEvent(new win.Event('click'));
+      assert.equal((await chosen).id, 'p');
+    } finally {
+      api.uploadMedia = real;
+    }
   });
 });

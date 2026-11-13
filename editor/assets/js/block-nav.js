@@ -239,25 +239,45 @@ export function trailingParagraphPlugin() {
       },
     },
     appendTransaction(_trs, oldState, newState) {
-      const { doc } = newState;
-      const { end, last } = bodyEnd(doc);
-      if (last.type.name !== 'paragraph') {
-        const tr = newState.tr.insert(end, newState.schema.nodes.paragraph.create());
-        return tr.setMeta(TRAILING_META, true).setMeta('addToHistory', false).setMeta(trailingKey, end);
-      }
-
-      const tracked = trailingKey.getState(newState);
-      if (tracked == null || tracked + last.nodeSize !== end) return null;
-      const before = doc.resolve(tracked).nodeBefore;
-      if (!isEmptyParagraph(before)) return null;
-      // Only when the block above it was not a paragraph a moment ago
-      const oldTracked = trailingKey.getState(oldState);
-      const oldBefore = oldTracked == null ? null : oldState.doc.resolve(oldTracked).nodeBefore;
-      if (!oldBefore || oldBefore.type.name === 'paragraph' || oldBefore.type.name === 'title') return null;
-      const tr = newState.tr.delete(tracked, tracked + last.nodeSize);
-      return tr.setMeta(TRAILING_META, true).setMeta('addToHistory', false).setMeta(trailingKey, null);
+      const body = bodyTrailing(oldState, newState);
+      // Each layout region that ends in anything but a paragraph gets an empty
+      // line too (a card or tabs last in the sidebar can be typed past). Regions
+      // come after the body, so the body's positions are unaffected; the line
+      // is never saved (ast.js toRegionsAst drops it).
+      const tr = body || newState.tr;
+      const ends = [];
+      tr.doc.forEach((child, offset) => {
+        if (child.type.name === 'region' && child.childCount > 0 && child.lastChild.type.name !== 'paragraph') {
+          ends.push(offset + child.nodeSize - 1);
+        }
+      });
+      for (const pos of ends.reverse()) tr.insert(pos, newState.schema.nodes.paragraph.create());
+      if (!body && !ends.length) return null;
+      if (!body) tr.setMeta(TRAILING_META, true).setMeta('addToHistory', false);
+      return tr;
     },
   });
+}
+
+/** The body's trailing-paragraph transaction (see trailingParagraphPlugin), or null. */
+function bodyTrailing(oldState, newState) {
+  const { doc } = newState;
+  const { end, last } = bodyEnd(doc);
+  if (last.type.name !== 'paragraph') {
+    const tr = newState.tr.insert(end, newState.schema.nodes.paragraph.create());
+    return tr.setMeta(TRAILING_META, true).setMeta('addToHistory', false).setMeta(trailingKey, end);
+  }
+
+  const tracked = trailingKey.getState(newState);
+  if (tracked == null || tracked + last.nodeSize !== end) return null;
+  const before = doc.resolve(tracked).nodeBefore;
+  if (!isEmptyParagraph(before)) return null;
+  // Only when the block above it was not a paragraph a moment ago
+  const oldTracked = trailingKey.getState(oldState);
+  const oldBefore = oldTracked == null ? null : oldState.doc.resolve(oldTracked).nodeBefore;
+  if (!oldBefore || oldBefore.type.name === 'paragraph' || oldBefore.type.name === 'title') return null;
+  const tr = newState.tr.delete(tracked, tracked + last.nodeSize);
+  return tr.setMeta(TRAILING_META, true).setMeta('addToHistory', false).setMeta(trailingKey, null);
 }
 
 /**

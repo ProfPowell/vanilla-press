@@ -51,6 +51,9 @@
 .node-controls select,
 .node-controls input {
   height: 1.5rem;
+  /* A site theme's touch-target minimum (brutalist: 44px) would push the
+     overlay down over the block it belongs to */
+  min-block-size: 0;
   padding: 0 var(--size-xs);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-m);
@@ -106,9 +109,12 @@
   color: var(--color-text-muted);
 }
 
-/* Card href display */
-.pm-card {
+/* Card href display. VB's layout-card clips its overflow (for its rounded
+   corners); in the editor that would cut off its Link field, which sits
+   above the card, and anything wider inside it. */
+.ProseMirror layout-card.pm-card {
   position: relative;
+  overflow: visible;
 }
 
 /* Tabs controls */

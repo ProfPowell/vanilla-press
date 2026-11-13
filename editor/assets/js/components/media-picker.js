@@ -341,13 +341,14 @@ function createPicker({ kind, heading, resolve }) {
       finish(chosen);
     } }, 'Use this file');
 
-    selected.replaceChildren(
+    selected.replaceChildren(...[
       el('p', { class: 'media-picker-selected-name' }, added ? addedLead(item) : 'Uploaded ', el('span', { class: 'media-picker-file' }, item.filename)),
       isImage ? el('div', { class: 'media-picker-preview' }, el('img', { src: displayMediaUrl(item.src, SITE), alt: '' })) : null,
       isImage ? el('div', { class: 'field' }, el('label', { for: altId }, 'Alt text'), altArea) : null,
       isImage ? el('div', { class: 'field field-check' }, decorative, el('label', { for: 'media-picker-decorative' }, 'Decorative (no alt text needed)')) : null,
       error,
-      use);
+      use,
+    ].filter(Boolean)); // replaceChildren would print a null as the text "null"
     selected.hidden = false;
     (isImage && !decorative.checked ? altArea : use).focus();
   }

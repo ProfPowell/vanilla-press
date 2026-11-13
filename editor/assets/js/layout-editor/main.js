@@ -37,6 +37,7 @@ import { createHeadDialog } from './head-dialog.js';
 import { createPreviewPane, previewLayoutFor } from './preview-pane.js';
 import '../components/confirm-panel.js';
 import { charRuleSpecs } from '../chars/char-rules.js';
+import { layoutTextRuleSpecs, toggleLayoutMark } from './text-rules.js';
 import { charSuggestPlugin } from '../chars/char-suggest.js';
 import { invisiblesPlugin } from '../chars/invisibles.js';
 import { mountCharInsert } from '../chars/char-insert.js';
@@ -324,7 +325,10 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         layoutRulesPlugin(),
         slotConditionsPlugin(),
         // &hearts; → ♥ and :smile: → 😄 as typed; Backspace straight after undoes it
-        inputRules({ rules: charRuleSpecs().map(r => new InputRule(r.match, r.handler)) }),
+        // ${title} → a field token, **bold** → <strong>, … (text-rules.js)
+        inputRules({
+          rules: [...layoutTextRuleSpecs(), ...charRuleSpecs()].map(r => new InputRule(r.match, r.handler)),
+        }),
         invisiblesPlugin(),
         history(),
         keymap({
@@ -333,6 +337,9 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
           'Shift-Mod-z': redo,
           'Mod-y': redo,
           'Mod-s': () => { save(); return true; },
+          'Mod-b': toggleLayoutMark('strong'),
+          'Mod-i': toggleLayoutMark('em'),
+          'Mod-e': toggleLayoutMark('code'),
         }),
         keymap(baseKeymap),
       ],

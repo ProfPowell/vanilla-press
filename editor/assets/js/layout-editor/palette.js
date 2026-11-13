@@ -8,14 +8,15 @@
  *
  * Where an entry goes (`insertionTarget`): in place of an empty text block
  * at the caret, after the caret's text block or the selected block, or
- * inside a selected empty container or region. An inline entry (the
- * inline component) goes at the caret, in text only. A component is
+ * inside a selected empty container or region. An inline entry (a field,
+ * a line break, an inline component) goes at the caret, in text only. In
+ * text that isn't empty, `/` opens where a word could start (`slashOpens`). A component is
  * inserted unnamed and selected: the inspector picks its tag.
  *
  * @module editor/layout-editor/palette
  */
 
-import { Plugin, Selection, NodeSelection } from 'prosemirror-state';
+import { Plugin, Selection, NodeSelection, TextSelection } from 'prosemirror-state';
 import { placePopover } from '../popover-place.js';
 import { dropSlotConditions } from './inspector-model.js';
 
@@ -47,6 +48,16 @@ function freshSlotName(doc) {
  * @type {Array<{ id: string, label: string, description: string, icon: string, category: string, create: Function }>}
  */
 export const ENTRIES = [
+  // In the text, at the caret: a field token (named in the inspector), a line break
+  {
+    id: 'field', label: 'Field', description: 'A value such as the title or date: ${title}', icon: '{ }', category: 'inline',
+    inline: true, create: (s) => s.nodes.field.create({ name: 'title' }),
+  },
+  {
+    id: 'line-break', label: 'Line break', description: '<br>', icon: '↵', category: 'inline',
+    inline: true, caretAfter: true, create: (s) => s.nodes.hard_break.create(),
+  },
+
   // Text
   { id: 'p', label: 'Paragraph', description: 'Text with fields', icon: '¶', category: 'text', create: tb('p') },
   ...[1, 2, 3, 4, 5, 6].map(n => ({
@@ -121,7 +132,7 @@ export function fillEntries(slots, doc, parent = 'parent') {
 }
 
 export const CATEGORY_LABELS = {
-  text: 'Text', container: 'Containers', list: 'Lists', media: 'Images', layout: 'Layout', component: 'Components', region: 'Regions',
+  inline: 'In the text', text: 'Text', container: 'Containers', list: 'Lists', media: 'Images', layout: 'Layout', component: 'Components', region: 'Regions',
 };
 
 // RULES
@@ -334,6 +345,7 @@ export function insertEntry(state, entry) {
   const { from, tr } = place(state, entry, node);
   if (!tr) return null;
   const end = from + node.nodeSize;
+  if (entry.caretAfter) return tr.setSelection(TextSelection.create(tr.doc, end)).scrollIntoView();
   const inside = node.isAtom ? null : Selection.findFrom(tr.doc.resolve(from), 1, true);
   if (inside && inside.from < end) tr.setSelection(inside);
   else tr.setSelection(NodeSelection.create(tr.doc, from));
@@ -366,8 +378,14 @@ export class LayoutPalette {
     document.addEventListener('mousedown', this.onOutside);
   }
 
-  open(view) {
+  /**
+   * @param {import('prosemirror-view').EditorView} view
+   * @param {{ literal?: boolean }} [options] - opened from text: closing
+   *   without a choice types the `/` and the filter
+   */
+  open(view, { literal = false } = {}) {
     this.view = view;
+    this.literal = literal;
     this.entries = paletteItems(view.state, this.extraEntries(view.state));
     this.filter = '';
     this.selected = 0;
@@ -380,7 +398,16 @@ export class LayoutPalette {
   close() {
     this.visible = false;
     this.filter = '';
+    this.literal = false;
     this.el.classList.remove('open');
+  }
+
+  /** Close and type the `/`, what was filtered and `more` as text. */
+  typeLiteral(more = '') {
+    const text = `/${this.filter}${more}`;
+    const view = this.view;
+    this.close();
+    if (view) view.dispatch(view.state.tr.insertText(text).scrollIntoView());
   }
 
   destroy() {
@@ -406,7 +433,10 @@ export class LayoutPalette {
       case 'ArrowDown': this.move(1); return true;
       case 'ArrowUp': this.move(-1); return true;
       case 'Enter': this.choose(this.items[this.selected]?.entry); return true;
-      case 'Escape': this.close(); return true;
+      case 'Escape':
+        if (this.literal) this.typeLiteral();
+        else this.close();
+        return true;
       case 'Backspace':
         if (!this.filter) { this.close(); return true; }
         this.filter = this.filter.slice(0, -1);
@@ -415,9 +445,12 @@ export class LayoutPalette {
         return true;
       default:
         if (event.key.length === 1 && !event.metaKey && !event.ctrlKey) {
+          if (this.literal && event.key === ' ') { this.typeLiteral(' '); return true; }
           this.filter += event.key;
           this.selected = 0;
           this.render();
+          // Opened from text and nothing matches: it was a `/` in the text
+          if (this.literal && !this.items.length) this.typeLiteral();
           return true;
         }
         return false;
@@ -494,8 +527,33 @@ export class LayoutPalette {
 }
 
 /**
- * The `/` key opens the palette in an empty text block, or with a block
- * selected; while it is open it takes the keys.
+ * Whether `/` opens the palette here, and how:
+ * - `'block'`: a block is selected, or the caret is in an empty text block;
+ *   the `/` is never typed.
+ * - `'text'`: the caret is in text where a word could start (at its start or
+ *   after a space), outside inline code. Escape, a space, or a filter that
+ *   matches nothing types the `/` (and the filter) after all, so `and / or`
+ *   and `/usr` still go in as text.
+ * - null: the `/` is typed (mid-word, in code, over a text range).
+ * @param {import('prosemirror-state').EditorState} state
+ * @returns {'block'|'text'|null}
+ */
+export function slashOpens(state) {
+  const sel = state.selection;
+  if (sel instanceof NodeSelection) return sel.node.isInline ? null : 'block';
+  const { $from } = sel;
+  if (!sel.empty || !$from.parent.inlineContent) return null;
+  if ($from.parent.type.name === 'text_block' && $from.parent.content.size === 0) return 'block';
+  const code = state.schema.marks.code;
+  if (code && code.isInSet($from.marks())) return null;
+  if ($from.parentOffset === 0) return 'text';
+  const before = $from.parent.textBetween($from.parentOffset - 1, $from.parentOffset, null, '\ufffc');
+  return /\s/.test(before) ? 'text' : null;
+}
+
+/**
+ * The `/` key opens the palette where `slashOpens` says; while it is open it
+ * takes the keys.
  * @param {LayoutPalette} palette
  */
 export function palettePlugin(palette) {
@@ -506,12 +564,11 @@ export function palettePlugin(palette) {
           if (palette.handleKey(event)) { event.preventDefault(); return true; }
           return false;
         }
-        if (event.key !== '/' || event.metaKey || event.ctrlKey) return false;
-        const sel = view.state.selection;
-        const emptyText = sel.$from.parent.type.name === 'text_block' && sel.$from.parent.content.size === 0;
-        if (!(sel instanceof NodeSelection) && !emptyText) return false;
+        if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return false;
+        const how = slashOpens(view.state);
+        if (!how) return false;
         event.preventDefault();
-        palette.open(view);
+        palette.open(view, { literal: how === 'text' });
         return true;
       },
     },

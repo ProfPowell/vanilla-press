@@ -51,6 +51,16 @@ export const SAMPLE_DOC = Object.freeze({
   }],
 });
 
+/**
+ * The document as previewed: an untitled draft is titled "Untitled", since
+ * Cook shows a missing `${title}` as the placeholder itself.
+ * @param {{ meta?: { title?: string } }} doc
+ */
+export function previewDoc(doc) {
+  if (String(doc?.meta?.title ?? '').trim()) return doc;
+  return { ...doc, meta: { ...doc.meta, title: 'Untitled' } };
+}
+
 /** Remove a path of any kind (a file, a link, a directory tree). */
 const remove = (abs) => rmSync(abs, { recursive: true, force: true });
 
@@ -334,7 +344,7 @@ export function createLayoutPreview({
     if (typeof layout !== 'string' || !NAME.test(layout)) return { ok: false, log: `Invalid layout name: ${layout}` };
     let page;
     try {
-      page = pageHtml(doc || SAMPLE_DOC, { layout, mediaAlt: doc ? mediaAlt : undefined });
+      page = pageHtml(doc ? previewDoc(doc) : SAMPLE_DOC, { layout, mediaAlt: doc ? mediaAlt : undefined });
     } catch (err) {
       return { ok: false, log: `The draft could not be rendered: ${err.message}` };
     }

@@ -331,3 +331,18 @@ describe('pageHtml', () => {
     }
   });
 });
+
+describe('previewDoc', () => {
+  it('gives an untitled draft the title Untitled, so ${title} has a value', async () => {
+    const { previewDoc } = await import('../../src/app/layout-preview.js');
+    const doc = { id: 'a', meta: { title: '  ', slug: 'a' }, blocks: [] };
+    assert.equal(previewDoc(doc).meta.title, 'Untitled');
+    assert.equal(doc.meta.title, '  ', 'the draft itself is unchanged');
+  });
+
+  it('keeps a real title', async () => {
+    const { previewDoc } = await import('../../src/app/layout-preview.js');
+    const doc = { id: 'a', meta: { title: 'Hi' }, blocks: [] };
+    assert.equal(previewDoc(doc), doc);
+  });
+});

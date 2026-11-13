@@ -625,24 +625,31 @@ async function deleteCurrent() {
 async function preview() {
   clearReport();
   // Open the tab now (still inside the click, so it is not blocked as a
-  // popup), then point it at the page once we know the URL.
+  // popup), then point it at the page once it is built.
   const tab = window.open('about:blank', '_blank');
+  try {
+    if (tab) {
+      tab.document.title = 'Building preview…';
+      tab.document.body.textContent = 'Building the preview…';
+    }
+  } catch { /* another origin: leave it blank */ }
   const fail = (text) => {
     tab?.close();
     show(els.actionState, text, 'error');
   };
   if (!(await saveDocument())) return fail('Preview needs the post saved first');
-  const meta = getCurrentMeta();
-  if (meta.status !== 'published') return fail('Preview shows published pages: publish first');
-  show(els.actionState, 'Starting preview…');
-  let url;
+  show(els.actionState, 'Building preview…');
+  let result;
   try {
-    ({ url } = await api.startPreview());
+    result = await api.previewDocument(getCurrentDocId());
   } catch (err) {
     return fail(err.message);
   }
-  const pageUrl = `${url.replace(/\/+$/, '')}${postUrlPath({ meta }, collections)}`;
+  if (!result.ok) {
+    const last = String(result.log || '').trim().split('\n').filter(Boolean).pop() || 'the build failed';
+    return fail(`Preview failed: ${last}`);
+  }
   show(els.actionState, '');
-  if (tab) tab.location.href = pageUrl;
-  else window.open(pageUrl, '_blank');
+  if (tab) tab.location.href = result.url;
+  else window.open(result.url, '_blank');
 }

@@ -251,8 +251,12 @@ export const api = {
     return request('/status');
   },
 
-  /** Start (or reuse) the site's dev server: { url }. */
-  startPreview() {
-    return request('/preview', { method: 'POST' });
+  /**
+   * Build a post as it would be published, at its own address in a private
+   * copy of the site (nothing is written to the site), published or not:
+   * { ok: true, url } or { ok: false, log }.
+   */
+  previewDocument(docId) {
+    return request('/doc-preview', { method: 'POST', body: { docId } });
   },
 };

@@ -117,6 +117,26 @@ describe('layout routes', () => {
     assert.equal((await call('/layout-preview', { method: 'POST', body: {} })).status, 422);
   });
 
+  it('previews a draft post at its own address, without publishing it (doc-preview)', async () => {
+    const api = (path, init) => fetch(`${app.url}/api/sites/${id}${path}`, init);
+    const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const made = await api('/documents', json('POST', {
+      meta: { title: 'Preview me', slug: 'preview-me', collection: 'posts' },
+      blocks: [{ type: 'paragraph', children: [{ type: 'text', value: 'Draft words 4471' }] }],
+    }));
+    assert.equal(made.status, 201, await made.clone().text());
+    const docId = (await made.json()).id;
+    const r = await call('/doc-preview', { method: 'POST', body: { docId } });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.ok, true, r.data.log);
+    assert.match(r.data.url, /\/posts\/preview-me\/$/);
+    const html = await (await fetch(r.data.url)).text();
+    assert.match(html, /Draft words 4471/);
+    assert.ok(!existsSync(join(site, 'src/posts/preview-me.html')), 'nothing written to the site');
+    assert.equal((await call('/doc-preview', { method: 'POST', body: { docId: 'nope' } })).status, 404);
+    assert.equal((await call('/doc-preview', { method: 'POST', body: {} })).status, 422);
+  });
+
   it('context: site and declared fields, the lists a repeat can use, document fields and components', async () => {
     writeFileSync(join(site, 'config', 'programs.json'), JSON.stringify({ areas: [{ path: 'courses', label: 'Courses' }] }));
     const main = readFileSync(join(site, 'config', 'main.js'), 'utf8');

@@ -150,6 +150,30 @@ describe('createLayoutPreview', () => {
     assert.equal(src, pageHtml(doc, { layout: 'post' }));
   });
 
+  it('renders a draft at its own address, as it would be published (page)', async () => {
+    const before = snapshot(site.path);
+    const doc = {
+      id: 'doc-2',
+      meta: { title: 'Unpublished Z', slug: 'zed', collection: 'posts', status: 'draft' },
+      blocks: [{ type: 'paragraph', children: [{ type: 'text', value: 'Not live yet' }] }],
+    };
+    const r = await preview.render({ doc, layout: 'post', page: 'src/posts/zed.html' });
+    assert.equal(r.ok, true, r.log);
+    assert.match(r.url, /^http:\/\/127\.0\.0\.1:\d+\/posts\/zed\/$/);
+    const html = await (await fetch(r.url)).text();
+    assert.match(html, /Unpublished Z/);
+    assert.match(html, /Not live yet/);
+    assert.deepEqual(snapshot(site.path), before, 'the site is untouched');
+  });
+
+  it('refuses a page path outside src/ or not .html', async () => {
+    const doc = { id: 'd', meta: { title: 'x', slug: 'x', collection: 'posts' }, blocks: [] };
+    for (const page of ['src/../x.html', 'dist/x.html', 'src/x.js', '/etc/x.html']) {
+      const r = await preview.render({ doc, layout: 'post', page });
+      assert.equal(r.ok, false, page);
+    }
+  });
+
   it('only the latest of overlapping requests is used', async () => {
     const [a, b, c] = await Promise.all([
       preview.render({ layouts: { post: POST_OVERRIDE.replace('7731', 'AAA') }, layout: 'post' }),

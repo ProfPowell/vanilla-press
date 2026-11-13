@@ -51,6 +51,16 @@ export const SAMPLE_DOC = Object.freeze({
   }],
 });
 
+/** A page source in the copy: `src/…/name.html`, plain segments only. */
+const PAGE_PATH = /^src(?:\/(?!\.\.?\/)[A-Za-z0-9_][A-Za-z0-9_.-]*)+\.html$/;
+
+/** The address Cook gives a page source: `src/posts/a.html` → `/posts/a/`, `src/x/index.html` → `/x/`. */
+function pageUrl(pagePath) {
+  const rest = pagePath.slice('src/'.length, -'.html'.length);
+  const dir = rest === 'index' ? '' : rest.endsWith('/index') ? rest.slice(0, -'/index'.length) : rest;
+  return dir ? `/${dir}/` : '/';
+}
+
 /**
  * The document as previewed: an untitled draft is titled "Untitled", since
  * Cook shows a missing `${title}` as the placeholder itself.
@@ -331,7 +341,7 @@ export function createLayoutPreview({
     });
   }
 
-  async function doRender({ layouts = {}, includes = {}, doc = null, layout, mediaAlt } = {}) {
+  async function doRender({ layouts = {}, includes = {}, doc = null, layout, mediaAlt, page: pagePath = null } = {}) {
     if (closed) return { ok: false, log: 'Layout preview closed' };
     const overrides = [];
     for (const [kind, map] of [['layouts', layouts], ['includes', includes]]) {
@@ -342,6 +352,7 @@ export function createLayoutPreview({
       }
     }
     if (typeof layout !== 'string' || !NAME.test(layout)) return { ok: false, log: `Invalid layout name: ${layout}` };
+    if (pagePath !== null && !PAGE_PATH.test(String(pagePath))) return { ok: false, log: `Invalid page path: ${pagePath}` };
     let page;
     try {
       page = pageHtml(doc ? previewDoc(doc) : SAMPLE_DOC, { layout, mediaAlt: doc ? mediaAlt : undefined });
@@ -351,7 +362,7 @@ export function createLayoutPreview({
 
     try {
       mirrorSite(siteDir, copyDir, forced);
-      const draft = join(copyDir, 'src', `${PREVIEW_PAGE}.html`);
+      const draft = pagePath ? join(copyDir, ...pagePath.split('/')) : join(copyDir, 'src', `${PREVIEW_PAGE}.html`);
       forced = new Set([draft, ...overrides.map(([abs]) => abs)]);
       for (const [abs, text] of overrides) writeOver(abs, text);
       writeOver(draft, page);
@@ -362,13 +373,16 @@ export function createLayoutPreview({
     const result = await build();
     if (!result.ok) return { ok: false, log: result.log };
     const s = await ensureServer();
-    return { ok: true, url: `http://127.0.0.1:${s.address().port}/${PREVIEW_PAGE}/` };
+    const at = pagePath ? pageUrl(pagePath) : `/${PREVIEW_PAGE}/`;
+    return { ok: true, url: `http://127.0.0.1:${s.address().port}${at}` };
   }
 
   return {
     /**
      * @param {{ layouts?: Record<string, string>, includes?: Record<string, string>, doc?: Object, layout: string,
-     *   mediaAlt?: (src: string) => string|null }} req - doc: a document draft (default: a sample page)
+     *   mediaAlt?: (src: string) => string|null, page?: string }} req - doc: a document draft (default: a
+     *   sample page); page: the copy path to write it at (`src/posts/a.html`), so it previews at its own
+     *   address with the rest of the site around it (default: `src/vp-layout-preview.html`)
      * @returns {Promise<{ ok: true, url: string } | { ok: false, log: string }>}
      */
     async render(req) {

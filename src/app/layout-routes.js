@@ -16,7 +16,7 @@ import {
 import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import { getDocument, getCollections, getAllDocuments } from '../store/content.js';
 import { getCollectionsConfig } from '../sync/site-files.js';
-import { collectionOutput } from '../sync/paths.js';
+import { collectionOutput, outputPaths } from '../sync/paths.js';
 import { mediaAltLookup } from '../media/alt-lookup.js';
 
 const isRecord = (v) => v == null || (typeof v === 'object' && !Array.isArray(v));
@@ -132,5 +132,20 @@ export function mountLayoutRoutes(router, prefix, { ws, writes, backup, deps, db
     const effective = layout || (doc && (doc.meta.layout || collectionOutput(doc.meta.collection, getCollectionsConfig(db)).layout));
     if (typeof effective !== 'string' || !effective) return sendJson(res, 422, { error: 'layout is required' });
     sendJson(res, 200, await preview().render({ layouts: layouts || {}, includes: includes || {}, doc, layout: effective, mediaAlt }));
+  }));
+
+  // Preview a post as it would be published, at its own address in the preview
+  // copy (the rest of the site around it), whether or not it is published yet.
+  // Nothing is written to the site. A failed build is { ok: false, log } with 200.
+  router.add('POST', `${prefix}/doc-preview`, handle(async (req, res) => {
+    if (!preview) return sendJson(res, 404, { error: 'Preview is not available' });
+    const { docId = null } = body(req);
+    if (typeof docId !== 'string' || !docId) return sendJson(res, 422, { error: 'docId is required' });
+    const doc = db ? getDocument(db, docId) : null;
+    if (!doc) return sendJson(res, 404, { error: 'Document not found' });
+    const config = getCollectionsConfig(db);
+    const layout = doc.meta.layout || collectionOutput(doc.meta.collection, config).layout;
+    const page = outputPaths({ ...doc, meta: { ...doc.meta, status: 'published' } }, config).html;
+    sendJson(res, 200, await preview().render({ doc, layout, page, mediaAlt: mediaAltLookup(db) }));
   }));
 }

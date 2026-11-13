@@ -70,6 +70,10 @@
     --input-bg: var(--color-surface-alt);
     --input-border: color-mix(in oklab, var(--color-border), var(--color-text) 35%);
     --input-placeholder: var(--color-text-subtle);
+    /* Checkboxes: an ink checked fill and a paper-derived edge vanish on ink */
+    --control-border: var(--input-border);
+    --control-checked-bg: var(--color-primary);
+    --control-checked-border: var(--color-primary);
 
     background: var(--color-background);
     color: var(--color-text);

@@ -40,12 +40,15 @@
 <body>
 <div class="le-page" data-layout-editor-page>
   <!-- The bar: back to Layouts, the layout's name, its info and Save. Wired by layout-editor/main.js -->
+  <!-- Two rows: where you are and the actions, then the layout's info and the status -->
   <header class="le-bar on-ink">
-    <a class="le-back" data-le-back href="/app/">
-      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>
-      Layouts
-    </a>
-    <p class="le-file" data-le-file></p>
+    <div class="le-ident">
+      <a class="le-back" data-le-back href="/app/">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>
+        Layouts
+      </a>
+      <p class="le-file" data-le-file></p>
+    </div>
     <div class="le-fields" data-le-info-fields hidden>
       <label class="le-field-input">Label <input type="text" data-le-label/></label>
       <label class="le-field-input le-description">Description <input type="text" data-le-description/></label>
@@ -57,7 +60,7 @@
       <span class="char-insert" data-le-chars></span>
       <button type="button" class="secondary" data-le-add>Add block</button>
       <!-- Head items (a base only): layout-editor/head-dialog.js -->
-      <button type="button" data-le-head disabled hidden>Head</button>
+      <button type="button" class="secondary" data-le-head disabled hidden>Head</button>
       <button type="button" class="primary" data-le-save>Save</button>
     </div>
     <div class="le-status" data-le-status role="status" aria-live="polite"></div>

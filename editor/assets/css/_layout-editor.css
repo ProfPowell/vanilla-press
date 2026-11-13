@@ -9,24 +9,40 @@
   min-height: 0;
 }
 
-/* THE BAR */
+/* THE BAR: two rows. Row 1 says where you are (back, file) and holds the
+ * actions; row 2 holds the layout's info fields and the status. Under 48rem
+ * every part takes its own row. */
 .le-page .le-bar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "ident  actions"
+    "fields status";
   align-items: center;
   gap: var(--size-xs) var(--size-m);
   padding: var(--size-xs) var(--size-m);
   background: var(--color-background);
   border-block-end: 1px solid var(--color-border-subtle);
   font-family: var(--font-sans);
+  font-size: var(--font-size-s);
   /* Compact fields: the bar is chrome, not a form */
   --input-height: 2.25rem;
 }
 
-.le-page .le-bar :is(input, select) {
+/* VB's focus tokens resolve on :root to ink, which vanishes on the ink bar:
+ * re-derive them here (vanilla), and give a menu from the bar the page's back */
+.le-page .le-bar,
+.le-page .le-bar [role="menu"] {
+  --color-focus-ring: var(--color-primary);
+  --focus-ring-color: var(--color-focus-ring);
+  --input-border-focus: var(--color-interactive);
+}
+
+/* Text fields and selects only: a checkbox keeps its own small box */
+.le-page .le-bar :is(input:not([type="checkbox"], [type="radio"]), select) {
   min-block-size: var(--input-height);
   padding-block: 0;
-  font-size: 0.875rem;
+  font-size: var(--font-size-s);
 }
 
 .le-page .le-bar .le-actions button {
@@ -34,27 +50,63 @@
   padding-block: 0;
 }
 
+.le-page .le-ident {
+  grid-area: ident;
+  display: flex;
+  align-items: center;
+  gap: var(--size-s);
+  min-inline-size: 0;
+}
+
 .le-page .le-back {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: var(--size-2xs, 0.25rem);
+  gap: var(--size-2xs);
+  min-block-size: 1.5rem;
+  padding-inline: var(--size-2xs);
+  margin-inline-start: calc(-1 * var(--size-2xs));
+  border-radius: var(--radius-s);
   color: inherit;
+  font-weight: var(--font-weight-semibold);
   text-decoration: none;
 }
 
+.le-page .le-back:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.le-page .le-back:focus-visible {
+  outline: 2px solid var(--color-interactive);
+  outline-offset: 2px;
+}
+
+/* The file path: after a divider, cut with an ellipsis rather than wrapped */
 .le-page .le-file {
+  min-inline-size: 0;
   margin: 0;
+  padding-inline-start: var(--size-s);
+  border-inline-start: 1px solid var(--color-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 0.85rem;
-  opacity: 0.8;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.le-page .le-file:empty {
+  display: none;
 }
 
 .le-page .le-fields {
+  grid-area: fields;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--size-xs) var(--size-s);
-  flex: 1;
+  gap: var(--size-xs) var(--size-m);
+  min-inline-size: 0;
 }
 
 .le-page .le-fields[hidden],
@@ -62,33 +114,71 @@
   display: none;
 }
 
+/* A field: its label inline before the box, never broken over two lines */
 .le-page .le-field-input {
   display: inline-flex;
   align-items: center;
   gap: var(--size-xs);
-  font-size: 0.85rem;
+  margin: 0;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.le-page .le-field-input :is(input, select) {
+  inline-size: 12rem;
+  color: var(--color-text);
+}
+
+.le-page .le-field-input select {
+  inline-size: auto;
+  min-inline-size: 8rem;
+}
+
+.le-page .le-description {
+  flex: 1 1 14rem;
+  max-inline-size: 28rem;
 }
 
 .le-page .le-description input {
-  min-width: 16rem;
+  inline-size: auto;
+  flex: 1;
+  min-inline-size: 8rem;
 }
 
 .le-page .le-check {
   display: inline-flex;
   align-items: center;
-  gap: var(--size-2xs, 0.25rem);
-  font-size: 0.85rem;
+  gap: var(--size-xs);
+  margin: 0;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.le-page .le-check > input {
+  translate: none;
 }
 
 .le-page .le-actions {
+  grid-area: actions;
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--size-xs);
-  margin-inline-start: auto;
 }
 
+/* The status sits at the end of the fields row; a problem list takes a row of its own */
 .le-page .le-status {
-  flex-basis: 100%;
-  font-size: 0.85rem;
+  grid-area: status;
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-2xs) var(--size-s);
+  color: var(--color-text-muted);
+}
+
+.le-page .le-status[data-tone="error"] {
+  color: var(--color-error-text, var(--color-text));
 }
 
 .le-page .le-status:empty {
@@ -97,15 +187,35 @@
 
 .le-page .le-status p {
   margin: 0;
-  display: inline;
 }
 
-.le-page .le-status button {
-  margin-inline-start: var(--size-s);
+.le-page .le-status:has(.le-problems) {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  justify-self: stretch;
 }
 
 .le-page .le-status .le-problems {
-  margin: var(--size-2xs, 0.25rem) 0 0;
+  flex-basis: 100%;
+  margin: 0;
+  padding-inline-start: var(--size-m);
+}
+
+@media (max-width: 48rem) {
+  .le-page .le-bar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "ident" "actions" "fields" "status";
+  }
+  .le-page .le-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .le-page .le-status {
+    justify-self: start;
+  }
+  .le-page .le-status:has(.le-problems) {
+    grid-row: auto;
+  }
 }
 
 /* THE PANES */
@@ -141,115 +251,210 @@
   }
 }
 
-/* THE CANVAS: labelled boxes */
+/* THE CANVAS: labelled boxes. Regions are wide bands with a header strip,
+ * containers outlined boxes with their tag and VB layout name, text blocks
+ * a tag badge beside text edited in place, and fields tokens in the text. */
 .le-canvas .ProseMirror {
   outline: none;
   font-family: var(--font-sans);
+  font-size: var(--font-size-m);
+  line-height: 1.5;
 }
 
 .le-canvas .le-block {
   margin-block: var(--size-xs);
-  padding: var(--size-xs) var(--size-s);
+  padding: var(--size-xs) var(--size-s) var(--size-s);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-m);
   background: var(--color-surface);
 }
 
+.le-canvas .le-block:first-child {
+  margin-block-start: 0;
+}
+
+.le-canvas .le-block:last-child {
+  margin-block-end: 0;
+}
+
+/* The label bar above a block: its name, then its repeat and conditions */
 .le-canvas .le-label {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--size-xs);
-  align-items: baseline;
-  font-size: 0.75rem;
+  gap: var(--size-2xs) var(--size-xs);
+  align-items: center;
+  margin-block-end: var(--size-xs);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4;
   color: var(--color-text-muted);
   user-select: none;
   cursor: grab;
 }
 
 .le-canvas .le-name {
-  font-weight: 700;
-  text-transform: none;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
 }
 
 .le-canvas .le-repeat,
 .le-canvas .le-cond {
-  padding-inline: var(--size-2xs, 0.25rem);
-  border-radius: var(--radius-s, 4px);
-  background: color-mix(in oklab, var(--color-interactive) 12%, transparent);
+  padding: 0 var(--size-xs);
+  border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--color-interactive) 10%, var(--color-surface));
   color: var(--color-text);
 }
 
+/* Regions: full-width bands, a header strip over their blocks */
 .le-canvas .le-region {
-  border-width: 2px;
-  background: color-mix(in oklab, var(--color-interactive) 4%, var(--color-surface));
+  margin-block: var(--size-s);
+  padding: 0;
+  overflow: clip;
+  border: 1px solid var(--color-border);
+  border-inline-start: 3px solid color-mix(in oklab, var(--color-interactive) 55%, var(--color-border));
+  border-radius: var(--radius-m);
+  background: var(--color-surface-raised);
+}
+
+.le-canvas .le-region > .le-label {
+  margin: 0;
+  padding: var(--size-2xs) var(--size-s);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
 }
 
 .le-canvas .le-region > .le-label .le-name {
-  font-size: 0.85rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
+.le-canvas .le-region > .le-children {
+  padding: var(--size-xs) var(--size-s);
+}
+
+/* Containers: an outlined box named by its tag and layout (`div · stack`) */
 .le-canvas .le-container {
-  border-style: dashed;
+  border: 1px dashed color-mix(in oklab, var(--color-text-muted) 55%, var(--color-border));
+  background: transparent;
 }
 
+.le-canvas .le-container > .le-label .le-name {
+  font-family: var(--font-mono);
+}
+
+/* Text blocks: the tag as a small badge, the text editable beside it */
 .le-canvas .le-text {
   display: flex;
-  gap: var(--size-s);
+  gap: var(--size-xs);
   align-items: baseline;
-  border-color: transparent;
+  margin-block: var(--size-2xs);
+  padding: var(--size-2xs) var(--size-xs);
+  border: 1px dashed transparent;
+  border-radius: var(--radius-s);
   background: transparent;
+}
+
+.le-canvas .le-text:hover {
+  border-color: var(--color-border);
 }
 
 .le-canvas .le-text > .le-label {
   flex: none;
-  min-width: 2.5rem;
+  margin: 0;
+  min-inline-size: 1.75rem;
+}
+
+.le-canvas .le-text > .le-label .le-name {
+  padding: 0 var(--size-2xs);
+  border-radius: var(--radius-s);
+  background: var(--color-surface-alt);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
 }
 
 .le-canvas .le-text > .le-children {
   flex: 1;
-  min-height: 1.4em;
+  min-inline-size: 0;
+  min-block-size: 1.5em;
 }
 
 .le-canvas .le-text[data-tag^="h"] > .le-children {
-  font-weight: 700;
-  font-size: 1.1rem;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-l);
 }
 
+/* Where the document's body, or a child's region, goes */
 .le-canvas .le-content,
 .le-canvas .le-slot-ref {
-  padding: var(--size-m);
+  padding: var(--size-s);
   text-align: center;
-  border-style: dashed;
-  border-width: 2px;
-  font-weight: 600;
+  border: 2px dashed color-mix(in oklab, var(--color-text-muted) 40%, var(--color-border));
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-muted);
 }
 
 .le-canvas .le-content {
-  background: color-mix(in oklab, var(--color-interactive) 10%, var(--color-surface));
+  background: color-mix(in oklab, var(--color-interactive) 5%, var(--color-surface));
+}
+
+/* Tiles: image, include, component, comment, head */
+.le-canvas .le-tile {
+  padding-block-end: var(--size-xs);
+}
+
+.le-canvas .le-tile > .le-label:last-child {
+  margin-block-end: 0;
 }
 
 .le-canvas .le-tile .le-detail {
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
 }
 
-.le-canvas .le-field,
+/* Fields: tokens in the text */
+.le-canvas .le-field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  padding: 0 0.5em;
+  border: 1px solid color-mix(in oklab, var(--color-interactive) 40%, transparent);
+  border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--color-interactive) 8%, var(--color-surface));
+  color: var(--color-interactive);
+  font-size: 0.875em;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.45;
+  cursor: default;
+}
+
+.le-canvas .le-field::before {
+  content: "{}" / "";
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+/* Inline components, images and empty elements: tokens too, outlined only */
 .le-canvas .le-inline-component,
 .le-canvas .le-inline-image,
 .le-canvas .le-empty-inline {
   display: inline-block;
-  padding: 0 var(--size-2xs, 0.25rem);
-  border-radius: var(--radius-s, 4px);
-  background: color-mix(in oklab, var(--color-interactive) 18%, transparent);
-  font-size: 0.9em;
+  padding: 0 0.4em;
+  border: 1px dashed color-mix(in oklab, var(--color-text-muted) 55%, var(--color-border));
+  border-radius: var(--radius-s);
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  line-height: 1.45;
+  color: var(--color-text-muted);
 }
 
 .le-canvas .ProseMirror-selectednode {
   outline: 2px solid var(--color-interactive);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 /* THE INSPECTOR: the selected block's settings */
@@ -291,6 +496,37 @@
   display: none;
 }
 
+/* One drop-down arrow everywhere. The selects show VB's ::picker-icon (the
+ * text color at 0.55); a combo (input[list]) showed VB's gradient arrow at
+ * full strength plus Chrome's own datalist button. Draw VB's arrow in the
+ * picker-icon's color under Chrome's button, and make the button (which
+ * opens the list) invisible but still there to click. */
+.le-inspector input[list] {
+  /* A ▼ the size of the select's icon: two half tiles, each split corner to corner */
+  --_arrow: color-mix(in oklab, currentColor 55%, transparent);
+  --_arrow-w: 0.625rem;
+  --_arrow-h: 0.4375rem;
+  --_hit: 1rem;
+  padding-inline-end: var(--size-s);
+  background-image:
+    linear-gradient(to bottom left, var(--_arrow) 50%, transparent 50%),
+    linear-gradient(to bottom right, var(--_arrow) 50%, transparent 50%);
+  background-repeat: no-repeat;
+  background-size: calc(var(--_arrow-w) / 2) var(--_arrow-h);
+  background-position:
+    right calc(var(--size-s) + (var(--_hit) - var(--_arrow-w)) / 2 + var(--_arrow-w) / 2) center,
+    right calc(var(--size-s) + (var(--_hit) - var(--_arrow-w)) / 2) center;
+}
+
+.le-inspector input[list]::-webkit-calendar-picker-indicator {
+  inline-size: var(--_hit);
+  block-size: var(--_hit);
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .le-inspector .le-insp-path strong {
   color: var(--color-text);
 }
@@ -310,6 +546,12 @@
   display: grid;
   gap: var(--size-xs);
   margin-block-end: var(--size-m);
+}
+
+/* A headed group (Attributes, Repeat…) starts under a rule */
+.le-inspector .le-insp-group:has(> h3) {
+  padding-block-start: var(--size-s);
+  border-block-start: 1px solid var(--color-border);
 }
 
 .le-inspector h3 {
@@ -342,6 +584,11 @@
   padding: var(--size-xs);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-s, 4px);
+}
+
+/* Add attribute: a small button at the start, not a full-width bar */
+.le-inspector .le-insp-pairs > button {
+  justify-self: start;
 }
 
 .le-inspector .le-insp-pair {

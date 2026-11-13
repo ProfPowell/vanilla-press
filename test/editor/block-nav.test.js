@@ -325,3 +325,27 @@ describe('typing on a selected media block runs before the input rules', () => {
     assert.ok(slash < typing && typing < rules, `order: slash ${slash}, typing ${typing}, input rules ${rules}`);
   });
 });
+
+describe('Backspace in the trailing paragraph', () => {
+  it('leaves the post unchanged, so it is not marked Unsaved', async () => {
+    const { baseKeymap } = await import('prosemirror-commands');
+    const { contentChanged } = await import('../../editor/assets/js/block-nav.js');
+    const state = stateFor([p('First'), figure()]);
+    // the trailing paragraph is the last child; put the cursor in it
+    const end = state.doc.content.size - 1;
+    const inTrailing = state.apply(state.tr.setSelection(TextSelection.create(state.doc, end)));
+    let root = null;
+    let next = inTrailing;
+    baseKeymap.Backspace(inTrailing, (tr) => { root = tr; next = inTrailing.applyTransaction(tr).state; });
+    assert.ok(root && root.docChanged, 'Backspace changed the doc');
+    assert.equal(contentChanged(root, inTrailing.doc, next.doc), false);
+    assert.equal(toBlockAst(next.doc).length, toBlockAst(inTrailing.doc).length);
+  });
+
+  it('a real edit counts as a change', async () => {
+    const { contentChanged } = await import('../../editor/assets/js/block-nav.js');
+    const state = stateFor([p('First')]);
+    const tr = state.tr.insertText('x', 3);
+    assert.equal(contentChanged(tr, state.doc, state.apply(tr).doc), true);
+  });
+});

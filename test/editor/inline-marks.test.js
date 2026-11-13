@@ -11,6 +11,7 @@ describe('matchInlineMark', () => {
     ['a **bold**', { mark: 'strong', start: 2, text: 'bold' }],
     ['__bold__', { mark: 'strong', start: 0, text: 'bold' }],
     ['x *it*', { mark: 'em', start: 2, text: 'it' }],
+    ['x*it*', { mark: 'em', start: 1, text: 'it' }],
     ['_it_', { mark: 'em', start: 0, text: 'it' }],
     ['`c`', { mark: 'code', start: 0, text: 'c' }],
     ['~~s~~', { mark: 'strikethrough', start: 0, text: 's' }],
@@ -55,6 +56,11 @@ describe('inlineMarkHandler', () => {
     return pos + 1;
   };
 
+  const withPara = (inline) => schema.node('doc', null, [
+    schema.node('title', null, schema.text('T')),
+    schema.node('paragraph', null, inline),
+  ]);
+
   it('marks a just-closed span at an empty text cursor', () => {
     const doc = fromBlockAst([para('a *it')], schema, { title: 'T' });
     const end = contentStart(doc, 0) + 'a *it'.length;
@@ -63,6 +69,37 @@ describe('inlineMarkHandler', () => {
     assert.ok(tr);
     assert.equal(tr.doc.child(1).textContent, 'a it');
     assert.ok(schema.marks.em.isInSet(tr.doc.child(1).lastChild.marks));
+  });
+
+  it('keeps the marks already inside the span (italic inside new bold)', () => {
+    const em = [schema.marks.em.create()];
+    const doc = withPara([schema.text('**a '), schema.text('b', em), schema.text(' c*')]);
+    const end = contentStart(doc, 0) + '**a b c*'.length;
+    const state = EditorState.create({ doc, selection: TextSelection.create(doc, end) });
+    const tr = inlineMarkHandler(state, '*', end, end);
+    assert.ok(tr);
+    const p = tr.doc.child(1);
+    assert.equal(p.textContent, 'a b c');
+    const b = [];
+    p.forEach(n => { if (n.text === 'b') b.push(n); });
+    assert.equal(b.length, 1);
+    assert.ok(schema.marks.em.isInSet(b[0].marks), 'b keeps its italic');
+    assert.ok(schema.marks.strong.isInSet(b[0].marks), 'b is bold too');
+  });
+
+  it('italic closed inside a bold run leaves the following text bold', () => {
+    const doc = withPara([schema.text('bold *it', [schema.marks.strong.create()])]);
+    const end = contentStart(doc, 0) + 'bold *it'.length;
+    const state = EditorState.create({ doc, selection: TextSelection.create(doc, end) });
+    const tr = inlineMarkHandler(state, '*', end, end);
+    assert.ok(tr);
+    const next = tr.doc.resolve(tr.selection.from);
+    const marks = tr.storedMarks || next.marks();
+    assert.ok(schema.marks.strong.isInSet(marks), 'still bold after the italic');
+    assert.ok(!schema.marks.em.isInSet(marks), 'italic ends');
+    const after = tr.insertText('x');
+    const x = after.doc.child(1).lastChild;
+    assert.ok(schema.marks.strong.isInSet(x.marks));
   });
 
   it('declines over a text range, so the typed character replaces the selection', () => {

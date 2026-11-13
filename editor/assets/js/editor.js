@@ -42,7 +42,7 @@ import {
 } from './blocks/component-view.js';
 import { getBlockPalette } from './components/block-palette.js';
 import { insertTargetPlugin } from './insert-target.js';
-import { trailingParagraphPlugin, typeAfterMediaPlugin } from './block-nav.js';
+import { trailingParagraphPlugin, typeAfterMediaPlugin, typeAfterMedia, contentChanged } from './block-nav.js';
 import { mediaDropPlugin } from './media-drop.js';
 import { insertPlan, pdfViewerEnabled } from './media-insert.js';
 import { api } from './api-client.js';
@@ -189,6 +189,13 @@ function createSlashPlugin() {
 
       handleTextInput(view, from, to, text) {
         if (text === '/') {
+          // A selected image or embed: `/` starts a new line after it and opens there
+          const afterMedia = typeAfterMedia(view.state, '/');
+          if (afterMedia) {
+            view.dispatch(afterMedia);
+            palette.open(view, view.state.selection.from - 1);
+            return true;
+          }
           const { $from } = view.state.selection;
           if ($from.parent.type.name === 'paragraph' && $from.parent.textContent === '') {
             // Open now (not on a timer) so the very next keys reach the filter
@@ -310,7 +317,7 @@ export function initEditor() {
       // A layout change's region rebuild (regions.js) changes no saved
       // content: a new region is empty, a dropped one was. Never a save of
       // its own (the blank new post must not be created by it).
-      if (transaction.docChanged && !transaction.getMeta(SERVER_NORMALIZED) && !transaction.getMeta(REGIONS_META)) {
+      if (contentChanged(transaction, oldDoc, newState.doc) && !transaction.getMeta(SERVER_NORMALIZED) && !transaction.getMeta(REGIONS_META)) {
         setSaveStatus('unsaved');
         debouncedSave();
       }

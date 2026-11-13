@@ -259,3 +259,15 @@ export function trailingParagraphPlugin() {
     },
   });
 }
+
+/**
+ * Whether a dispatched transaction changed the post. A Backspace that
+ * deletes the trailing paragraph changes the doc, but this plugin puts the
+ * paragraph straight back, so the post is as it was: not Unsaved.
+ * @param {import('prosemirror-state').Transaction} tr - the root transaction
+ * @param {import('prosemirror-model').Node} oldDoc
+ * @param {import('prosemirror-model').Node} newDoc - after appended transactions
+ */
+export function contentChanged(tr, oldDoc, newDoc) {
+  return tr.docChanged && !oldDoc.eq(newDoc);
+}

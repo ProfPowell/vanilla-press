@@ -814,6 +814,8 @@ function initPostDrafts() {
     siteId: SITE,
     bar,
     getView: () => editorView,
+    // Post settings take no input while this tab may not edit (another tab edits, or an offer waits)
+    setSettingsEditable: (on) => document.querySelector('meta-panel')?.setEditable?.(on),
     snapshot: () => ({
       meta: metaToSave(getCurrentMeta()),
       blocks: toBlockAst(editorView.state.doc),
@@ -858,7 +860,7 @@ export const getPostVersions = () => (postDrafts ? postDrafts.versions() : Promi
 /** How a version differs from the post as it is now: plain lines. */
 export const versionDifferences = (version) => (postDrafts ? postDrafts.differences(version) : []);
 
-/** False while another tab edits this post. */
+/** False while another tab edits this post, or an offer to restore waits. */
 export const canRestoreVersion = () => !postDrafts || postDrafts.canSave();
 
 /** Put a version in the editor (one undoable step) and save it. */

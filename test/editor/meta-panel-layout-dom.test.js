@@ -128,3 +128,24 @@ describe('meta-panel Layout select', () => {
     assert.equal(detail.layout, '');
   });
 });
+
+describe('meta-panel setEditable', () => {
+  it('off: every field is inert, Versions stays readable; on: all back', async () => {
+    const panel = await mount({}, LIST);
+    panel.setEditable(false);
+    const parts = [...panel.children];
+    const versions = panel.querySelector('[data-versions]');
+    assert.ok(parts.length > 3);
+    for (const el of parts) assert.equal(el.hasAttribute('inert'), el !== versions, el.className || el.tagName);
+    panel.setEditable(true);
+    for (const el of parts) assert.equal(el.hasAttribute('inert'), false);
+  });
+
+  it('stays off when the panel renders again', async () => {
+    const panel = await mount({}, LIST);
+    panel.setEditable(false);
+    panel.render();
+    assert.equal(panel.querySelector('#meta-slug').closest('[inert]') != null, true);
+    panel.setEditable(true);
+  });
+});

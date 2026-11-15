@@ -7,7 +7,9 @@
  *
  * The save bar shows one thing at a time. In order of what stays on screen:
  * the other-tab notice (or a failed reload after taking over), a save problem, an offer to restore, the storage
- * warning (shown again whenever nothing else is).
+ * warning (shown again whenever nothing else is). While an offer to restore
+ * waits, editing pauses (the post read-only, Post settings off, nothing
+ * recorded or saved) until Restore, Restore as a new draft or Discard.
  *
  * @module editor/drafts/post-editor-drafts
  */
@@ -53,6 +55,7 @@ const quiet = (p) => Promise.resolve(p).catch((err) => console.warn('Local copy:
  * @param {string|null} opts.siteId
  * @param {object|null} opts.bar the <save-bar>
  * @param {() => object|null} opts.getView the ProseMirror view
+ * @param {(on: boolean) => void} [opts.setSettingsEditable] turn Post settings on or off
  * @param {() => { meta: object, blocks: object[], regions: object }} opts.snapshot the post as it is now
  * @param {(record: object) => Promise|void} opts.restore put a local copy in the editor and save it
  * @param {(record: object) => Promise<string>} opts.createCopy create a draft post from a copy; resolves its id
@@ -64,7 +67,7 @@ const quiet = (p) => Promise.resolve(p).catch((err) => console.warn('Local copy:
  * @param {number} [opts.handoffWait] how long a takeover waits for the other tab's last save
  */
 export function createEditorDrafts({
-  store, siteId, bar, getView, snapshot, restore, createCopy, load, saveNow, flushSave,
+  store, siteId, bar, getView, setSettingsEditable, snapshot, restore, createCopy, load, saveNow, flushSave,
   retryMs = 10000, lockWait, handoffWait = 3000,
 }) {
   const drafts = createPostDrafts({ store, siteId });
@@ -81,6 +84,7 @@ export function createEditorDrafts({
   let lockEpoch = 0;    // bumped each time this tab stops editing
   let handoff = null;   // a takeover waiting for the other tab's last save: { timer, done }
   let showing = null;   // 'lock' | 'failure' | 'offer' | 'storage' | null
+  let waiting = false;  // an offer to restore waits for a choice: editing pauses
   let unprotected = false;
 
   // --- the bar ---
@@ -122,10 +126,23 @@ export function createEditorDrafts({
 
   // --- one editing tab per post ---
 
-  const setEditable = (on) => getView()?.setProps({ editable: () => on });
+  /**
+   * Another tab edits this post, this tab is taking over and waits for its
+   * last save, or an offer to restore waits for a choice.
+   */
+  const readOnly = () => locked || handoff != null || waiting;
 
-  /** Another tab edits this post, or this tab is taking over and waits for its last save. */
-  const readOnly = () => locked || handoff != null;
+  /** The post and its settings take edits exactly when this tab may edit. */
+  function applyEditable() {
+    const on = !readOnly();
+    getView()?.setProps({ editable: () => on });
+    setSettingsEditable?.(on);
+  }
+
+  function setWaiting(on) {
+    waiting = on;
+    applyEditable();
+  }
 
   function endHandoff() {
     if (!handoff) return null;
@@ -142,12 +159,12 @@ export function createEditorDrafts({
     lockKey = null;
     old.release();
     if (endHandoff()) {
-      setEditable(true);
+      applyEditable();
       barClear('reload');
     }
     if (locked) {
       locked = false;
-      setEditable(true);
+      applyEditable();
       barClear('lock');
     }
   }
@@ -168,7 +185,7 @@ export function createEditorDrafts({
         lockEpoch++;
         stopRetry();
         endHandoff();
-        setEditable(false);
+        applyEditable();
         barShow('lock', { tone: 'info', text: LOCKED, actions: [{ label: 'Edit here instead', run: () => l.takeOver() }] });
         last.finally(() => l.handedOff());
       },
@@ -198,7 +215,7 @@ export function createEditorDrafts({
           }
           handoff = null;
           barClear('reload');
-          setEditable(true);
+          applyEditable();
           getView()?.focus();
         };
         endHandoff();
@@ -222,6 +239,7 @@ export function createEditorDrafts({
     stopRetry();
     barClear('failure');
     barClear('offer');
+    if (waiting) setWaiting(false);
     if (id == null || postKey(siteId, id) !== lockKey) releaseLock();
     return gen;
   }
@@ -258,8 +276,10 @@ export function createEditorDrafts({
     // kept (as a version, and offered again next time).
     if (showing && showing !== 'storage') return;
     showing = 'offer';
+    setWaiting(true);
     const act = (fn) => async () => {
       if (showing === 'offer') showing = null;
+      if (g === gen) setWaiting(false);
       await null; // the bar hides itself once this returns
       getView()?.focus();
       if (unprotected && !showing) barShow('storage', { tone: 'warn', text: UNPROTECTED });
@@ -364,13 +384,13 @@ export function createEditorDrafts({
       if (!msg) return;
       if (isNetworkFailure(err)) scheduleRetry();
       else stopRetry();
-      if (showing !== 'lock' && showing !== 'reload') barShow('failure', msg);
+      if (!['lock', 'reload', 'offer'].includes(showing)) barShow('failure', msg);
     },
 
     /** Saving is paused (a conflict, or content the editor can't show). */
     saveWarning(text) {
       stopRetry();
-      if (showing !== 'lock' && showing !== 'reload') barShow('failure', { tone: 'warn', text });
+      if (!['lock', 'reload', 'offer'].includes(showing)) barShow('failure', { tone: 'warn', text });
     },
 
     /** A save worked: the save problem is over. */

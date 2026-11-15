@@ -27,8 +27,10 @@ function setup(opts = {}) {
   let text = 'a';
   const calls = { restore: [], saves: 0, loads: [], created: [] };
   const view = { editable: true, focused: 0, setProps(p) { this.editable = p.editable(); }, focus() { this.focused++; } };
+  const settings = { editable: true };
   const drafts = createEditorDrafts({
     store, siteId: 's', bar, getView: () => view,
+    setSettingsEditable: (on) => { settings.editable = on; },
     snapshot: () => ({ meta: { title: 'T' }, blocks: [{ text }], regions: {} }),
     restore: async (record) => { calls.restore.push(record); },
     createCopy: async (record) => { calls.created.push(record); return 'd2'; },
@@ -39,7 +41,7 @@ function setup(opts = {}) {
     ...opts.extra,
   });
   live.push(drafts);
-  return { store, bar, view, drafts, calls, type: (t) => { text = t; drafts.edited(); } };
+  return { store, bar, view, settings, drafts, calls, type: (t) => { text = t; drafts.edited(); } };
 }
 
 describe('post editor drafts', () => {
@@ -427,5 +429,91 @@ describe('post editor drafts, reload after a takeover', () => {
     await drafts.restoreVersion(older);
     assert.equal(calls.restore.length, 0);
     assert.equal(bar.shown?.text, UNPROTECTED);
+  });});
+
+describe('post editor drafts, while an offer waits', () => {
+  /** A store holding an unsaved copy of d1 ('mine'), as a crashed tab leaves it. */
+  async function leftCopy(text = 'mine') {
+    const first = setup();
+    await first.drafts.openPost(serverDoc());
+    first.type(text);
+    await first.drafts.flush();
+    first.drafts.release();
+    return first.store;
+  }
+
+  it('while an offer waits, editing pauses: read-only, settings off, nothing recorded or saved', async () => {
+    const { bar, drafts, view, settings, store, type } = setup({ store: await leftCopy() });
+    await drafts.openPost(serverDoc());
+    assert.equal(bar.offer.kind, 'restore');
+    assert.equal(view.editable, false);
+    assert.equal(settings.editable, false);
+    assert.equal(drafts.canSave(), false);
+    assert.equal(drafts.saveStarted(), null);
+    type('typed over it');
+    await drafts.flush();
+    assert.equal((await store.get('post:s:d1')).blocks[0].text, 'mine');
+  });
+
+  for (const choice of ['onRestore', 'onDiscard']) {
+    it(`editing comes back after ${choice.slice(2)}`, async () => {
+      const { bar, drafts, view, settings } = setup({ store: await leftCopy() });
+      await drafts.openPost(serverDoc());
+      await bar.click(choice);
+      assert.equal(view.editable, true);
+      assert.equal(settings.editable, true);
+      assert.equal(drafts.canSave(), true);
+      assert.notEqual(drafts.saveStarted(), null);
+    });
+  }
+
+  it('editing comes back after Restore as a new draft', async () => {
+    const { bar, drafts, view, settings } = setup({ store: await leftCopy() });
+    await drafts.openPost(serverDoc('d1', 'U9'));
+    assert.equal(bar.offer.kind, 'stale');
+    assert.equal(view.editable, false);
+    await bar.click('onRestoreAsNew');
+    assert.equal(view.editable, true);
+    assert.equal(settings.editable, true);
+  });
+
+  it('Restore runs with editing back on, so the restored copy can save', async () => {
+    let canSaveDuring = null;
+    let ref;
+    const { bar, drafts } = setup({ store: await leftCopy(), extra: { restore: async () => { canSaveDuring = ref.canSave(); } } });
+    ref = drafts;
+    await drafts.openPost(serverDoc());
+    await bar.click('onRestore');
+    assert.equal(canSaveDuring, true);
+  });
+
+  it('a save problem while an offer waits does not replace the offer', async () => {
+    const { bar, drafts } = setup({ store: await leftCopy() });
+    await drafts.openPost(serverDoc());
+    drafts.saveFailed(new TypeError('Failed to fetch'));
+    assert.equal(bar.offer?.kind, 'restore');
+  });
+
+  it('opening another post ends the pause', async () => {
+    const { drafts, view, settings } = setup({ store: await leftCopy() });
+    await drafts.openPost(serverDoc());
+    assert.equal(view.editable, false);
+    await drafts.openPost(serverDoc('d2'));
+    assert.equal(view.editable, true);
+    assert.equal(settings.editable, true);
+    assert.equal(drafts.canSave(), true);
+  });
+
+  it('a pending new post offer pauses editing too', async () => {
+    const first = setup();
+    await first.drafts.openNew();
+    first.type('never saved');
+    await first.drafts.flush();
+    first.drafts.release();
+    const { bar, drafts, view } = setup({ store: first.store });
+    await drafts.openNew();
+    assert.equal(bar.offer.kind, 'restore');
+    assert.equal(view.editable, false);
+    assert.equal(drafts.canSave(), false);
   });
 });

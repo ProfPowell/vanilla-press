@@ -10,7 +10,8 @@
  * (title.js); the slug
  * follows it until edited here or the post is published (editor.js, slug.js).
  * In `vp serve` the Publish/Unpublish and Preview actions stay here too.
- * Every field edit auto-saves.
+ * Every field edit auto-saves. `setEditable(false)` makes everything but
+ * Versions inert (another tab edits the post, or an offer to restore waits).
  *
  * @module editor/components/meta-panel
  */
@@ -188,6 +189,7 @@ export class MetaPanel extends HTMLElement {
     `;
 
     this.wireEvents();
+    this.#applyEditable();
     if (!this._versionsListening) {
       this._versionsListening = true;
       document.addEventListener('post-versions-changed', () => this.refreshVersions());
@@ -442,6 +444,23 @@ export class MetaPanel extends HTMLElement {
       this._versionsFor = getCurrentDocId();
       this.refreshVersions();
     }
+  }
+
+  /**
+   * Turn the fields on or off. Off: everything but Versions is inert (it
+   * stays readable; its Restore is off too, as canRestoreVersion says).
+   * @param {boolean} on
+   */
+  setEditable(on) {
+    const was = this._editable !== false;
+    this._editable = Boolean(on);
+    this.#applyEditable();
+    if (was !== this._editable) this.refreshVersions();
+  }
+
+  #applyEditable() {
+    const off = this._editable === false;
+    for (const el of this.children) el.toggleAttribute('inert', off && !el.matches('[data-versions]'));
   }
 
   /** Show the open post's recent versions (kept in this browser). */

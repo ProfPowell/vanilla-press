@@ -38,7 +38,7 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
 
   const controller = {
     /** Start on a post. A new post (no id) gets a fresh key. */
-    async open(id, serverDoc) {
+    async open(id, serverDoc, { adoptKey } = {}) {
       await chain;
       generation++;
       scheduled = false;
@@ -46,21 +46,34 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
       seq = 0;
       docId = id ?? null;
       baseUpdated = serverDoc?.meta?.updated ?? null;
-      key = id ? postKey(siteId, id) : newPostKey(siteId, now());
-      const local = await store.get(key);
-      return restoreOffer(local, serverDoc ?? null);
+      key = id ? postKey(siteId, id) : (adoptKey || newPostKey(siteId, now()));
+      const k = key;
+      const local = await store.get(k);
+      const offer = restoreOffer(local, serverDoc ?? null);
+      if (offer) {
+        // Keep the offered copy as a version before any later write can replace it.
+        await enqueue(async () => {
+          const have = await store.versions(k);
+          if (have.some((v) => v.offered && v.at === local.at)) return;
+          await store.pushVersion(k, {
+            meta: clone(local.meta), blocks: clone(local.blocks), regions: clone(local.regions) ?? {},
+            updated: local.baseUpdated ?? null, at: local.at, offered: true,
+          });
+        });
+      }
+      return offer;
     },
 
-    /** The newest never-saved copy for this site, or null. */
+    /** The newest never-saved copy for this site as { key, record }, or null. */
     pendingNew() {
       return enqueue(async () => {
         const keys = await store.keys(newPostKey(siteId, ''));
         let best = null;
         for (const k of keys) {
           const rec = await store.get(k);
-          if (rec && (!best || String(rec.at) > String(best.at))) best = rec;
+          if (rec && (!best || String(rec.at) > String(best.record.at))) best = { key: k, record: rec };
         }
-        return best;
+        return best && { key: best.key, record: clone(best.record) };
       });
     },
 
@@ -113,11 +126,12 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
         const rec = (await store.get(k)) ?? (latest && record(latest));
         latest = null;
         if (!rec) return;
-        await store.remove(k);
-        await store.pushVersion(k, {
+        // Keep it as a version first; only remove the copy once that is safe.
+        const kept = await store.pushVersion(k, {
           meta: rec.meta, blocks: rec.blocks, regions: rec.regions,
           updated: rec.baseUpdated, at: now(), discarded: true,
         });
+        if (kept) await store.remove(k);
       });
     },
 

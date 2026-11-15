@@ -73,8 +73,8 @@ describe('post drafts', () => {
     await d.flush();
     const d2 = mk();
     const pending = await d2.pendingNew();
-    assert.equal(pending.blocks[0].text, 'fresh');
-    assert.equal(pending.docId, null);
+    assert.equal(pending.record.blocks[0].text, 'fresh');
+    assert.equal(pending.record.docId, null);
 
     const token = d.saveStarted();
     d.edited(snap('fresh2'));
@@ -131,5 +131,66 @@ describe('post drafts', () => {
     d.edited(snap('a'));
     await d.flush();
     assert.notEqual(await store.get('post:local:d1'), null);
+  });
+
+  it('keeps an offered stale copy as a version before it is overwritten', async () => {
+    const { mk } = setup();
+    const d = mk();
+    await d.open('d1', serverDoc());
+    d.edited(snap('old work'));
+    await d.flush();
+    const d2 = mk();
+    const offer = await d2.open('d1', serverDoc('U9'));
+    assert.equal(offer.kind, 'stale');
+    d2.edited(snap('new'));
+    await d2.flush();
+    const v = await d2.versions();
+    assert.ok(v.some((x) => x.offered === true && x.blocks[0].text === 'old work'));
+  });
+
+  it('keeps an offered restore copy as a version', async () => {
+    const { mk } = setup();
+    const d = mk();
+    await d.open('d1', serverDoc());
+    d.edited(snap('old work'));
+    await d.flush();
+    const d2 = mk();
+    assert.equal((await d2.open('d1', serverDoc())).kind, 'restore');
+    d2.edited(snap('new'));
+    await d2.flush();
+    assert.ok((await d2.versions()).some((x) => x.offered && x.blocks[0].text === 'old work'));
+  });
+
+  it('adopts a pending new post key', async () => {
+    const { store, mk } = setup();
+    const d = mk();
+    await d.open(null, null);
+    d.edited(snap('fresh'));
+    await d.flush();
+    const d2 = mk();
+    const { key, record } = await d2.pendingNew();
+    record.blocks[0].text = 'poked';
+    assert.equal((await store.get(key)).blocks[0].text, 'fresh');
+    await d2.open(null, null, { adoptKey: key });
+    d2.edited(snap('resumed'));
+    const token = d2.saveStarted();
+    await d2.saveConfirmed(token, { docId: 'doc_9', updated: 'U1', ...snap('resumed') });
+    assert.equal(await d2.pendingNew(), null);
+    assert.equal(await store.get('post:s:doc_9'), null);
+    d2.edited(snap('later'));
+    await d2.flush();
+    assert.equal((await store.get('post:s:doc_9')).blocks[0].text, 'later');
+    assert.deepEqual(await store.keys('post:s:new-'), []);
+  });
+
+  it('discard keeps the draft when the version cannot be saved', async () => {
+    const backend = memoryBackend();
+    const store = createDraftStore({ ...backend, set: (s, k, v) => (s === 'versions' ? Promise.reject(new Error('full')) : backend.set(s, k, v)) });
+    const d = createPostDrafts({ store, siteId: 's' });
+    await d.open('d1', serverDoc());
+    d.edited(snap('precious'));
+    await d.flush();
+    await d.discard();
+    assert.equal((await backend.get('drafts', 'post:s:d1')).blocks[0].text, 'precious');
   });
 });

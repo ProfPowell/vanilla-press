@@ -17,6 +17,8 @@ Saves happen as you type, and are backed up to GitHub about 30 seconds after you
 
 **Edits to a published post go live only when you click Update.** Until then they are saved and backed up to GitHub (the editor says "Saved · not live yet", then "Backed up · not live yet"), and the live site keeps the version you last published. **Update** runs the same build check as Publish, commits that post's page (and nothing of any other post's), and pushes; the editor says "Updating…" and then "Live" (or "Still deploying, check Cloudflare"). **Unpublish** takes the page down. **Preview** builds the post exactly as it would be published, drafts included, at its own address in a private copy of the site (the rest of the site around it), and opens it in a new tab. Nothing is written to your site and nothing goes live.
 
+**Unsaved changes are kept in this browser.** While you edit a post or a layout, a copy of your work is kept in this browser, and if a save fails the editor says so and keeps trying. If you close the tab or lose the connection, the editor offers the copy back (Restore, Show differences or Discard) the next time you open that post or layout. A post can be edited in one tab at a time; a second tab says so and offers "Edit here instead". Recent versions of a post are listed under **Versions** in its settings.
+
 On a second computer, opening a site pulls (fast-forward only) before loading its posts, as long as you have no uncommitted changes in the files VP owns; a backup or publish that had to rebase onto another machine's commits reloads the posts too.
 
 The list of sites is kept in `~/.config/vanilla-press/sites.json` (set `VP_CONFIG_DIR` to move it).

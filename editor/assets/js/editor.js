@@ -633,7 +633,7 @@ export async function saveDocument() {
     const request = api.updateDocument(docId, { meta, blocks, regions });
     inFlight = request;
     const saved = await request.finally(() => { if (inFlight === request) inFlight = null; });
-    postDrafts?.saveConfirmed(token, { docId, updated: saved?.meta?.updated ?? null, meta: saved?.meta ?? meta, blocks, regions });
+    postDrafts?.saveConfirmed(token, { docId, updated: saved?.meta?.updated ?? null, meta: saved?.meta ?? meta, blocks, regions })?.then(versionsChanged);
     applyDropped(saved?.dropped);
     setSaveStatus('saved', noticesMessage(saved));
     postDrafts?.saveSucceeded();
@@ -671,7 +671,7 @@ function createFromEditor() {
       setCurrentDocId(doc.id);
       setCurrentMeta({ slug: doc.meta.slug });
       window.location.hash = `doc-${doc.id}`;
-      postDrafts?.saveConfirmed(token, { docId: doc.id, updated: doc.meta?.updated ?? null, meta: doc.meta ?? meta, blocks, regions });
+      postDrafts?.saveConfirmed(token, { docId: doc.id, updated: doc.meta?.updated ?? null, meta: doc.meta ?? meta, blocks, regions })?.then(versionsChanged);
       applyDropped(doc.dropped);
       setSaveStatus('saved', noticesMessage(doc));
       postDrafts?.saveSucceeded();
@@ -846,6 +846,23 @@ function initPostDrafts() {
   });
   postDrafts.installPageEvents({ isUnsaved: () => saveStatus !== 'saved' });
 }
+
+/** A save was confirmed and its version kept: the Versions list refreshes. */
+function versionsChanged() {
+  document.dispatchEvent(new CustomEvent('post-versions-changed'));
+}
+
+/** The recent versions of the open post kept in this browser, newest first. */
+export const getPostVersions = () => (postDrafts ? postDrafts.versions() : Promise.resolve([]));
+
+/** How a version differs from the post as it is now: plain lines. */
+export const versionDifferences = (version) => (postDrafts ? postDrafts.differences(version) : []);
+
+/** False while another tab edits this post. */
+export const canRestoreVersion = () => !postDrafts || postDrafts.canSave();
+
+/** Put a version in the editor (one undoable step) and save it. */
+export const restoreVersion = (version) => postDrafts?.restoreVersion(version);
 
 /**
  * Put a local copy (`{ meta, blocks, regions }`) in the editor in one

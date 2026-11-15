@@ -5,7 +5,8 @@
  * publishing status box (site mode; `vp serve` keeps its Status select),
  * URL (the collection's prefix plus the slug), Description with its hint,
  * Featured image (a thumbnail and file name, Choose… and Remove), Tags, Collection (a select from the site's `collections` config) and
- * Appearance (<appearance-section>). The title is the document's first line
+ * Appearance (<appearance-section>) and Versions (the post's recent versions
+ * kept in this browser, <versions-list>: Look, Restore). The title is the document's first line
  * (title.js); the slug
  * follows it until edited here or the post is published (editor.js, slug.js).
  * In `vp serve` the Publish/Unpublish and Preview actions stay here too.
@@ -19,13 +20,14 @@ import { getCurrentMeta, setCurrentMeta, getCurrentDocId } from '../meta-state.j
 import { api } from '../api-client.js';
 import { postUrlPath, collectionOutput } from '../../../../src/sync/paths.js';
 import {
-  saveDocument, loadDocument, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine, metaEdited,
+  saveDocument, loadDocument, getPostVersions, versionDifferences, canRestoreVersion, restoreVersion, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine, metaEdited,
 } from '../editor.js';
 import { onMetaUpdate as onSiteMetaUpdate, isSiteMode, altCheckPasses } from '../site-mode.js';
 import { statusBox, collectionOptions, layoutChoices, urlPrefix, featuredModel } from '../settings-view.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
 import { openMediaPicker } from './media-picker.js';
 import './appearance-section.js';
+import './versions-list.js';
 
 export class MetaPanel extends HTMLElement {
   connectedCallback() {
@@ -105,6 +107,7 @@ export class MetaPanel extends HTMLElement {
   }
 
   render() {
+    this._versionsFor = undefined; // the fresh Versions section is filled for the open post
     this.className = 'meta-panel';
     const status = isSiteMode
       ? `<section class="status-box" data-status-box aria-label="Publishing">
@@ -172,6 +175,11 @@ export class MetaPanel extends HTMLElement {
 
       <appearance-section></appearance-section>
 
+      <details class="versions-section" data-versions>
+        <summary>Versions</summary>
+        <versions-list></versions-list>
+      </details>
+
       <div class="actions">
         <button type="button" class="btn btn-publish" data-publish>Publish</button>
         <button type="button" class="btn" data-preview>Preview</button>
@@ -180,6 +188,10 @@ export class MetaPanel extends HTMLElement {
     `;
 
     this.wireEvents();
+    if (!this._versionsListening) {
+      this._versionsListening = true;
+      document.addEventListener('post-versions-changed', () => this.refreshVersions());
+    }
     this.syncFromMeta(getCurrentMeta());
   }
 
@@ -425,6 +437,26 @@ export class MetaPanel extends HTMLElement {
     this.renderTags(meta.tags || []);
     this.renderFeatured(meta);
     this.querySelector('appearance-section')?.render?.(meta);
+    // A different post: its versions
+    if (getCurrentDocId() !== this._versionsFor) {
+      this._versionsFor = getCurrentDocId();
+      this.refreshVersions();
+    }
+  }
+
+  /** Show the open post's recent versions (kept in this browser). */
+  async refreshVersions() {
+    const list = this.querySelector('versions-list');
+    if (!list) return;
+    const docId = getCurrentDocId();
+    let versions = [];
+    try { versions = await getPostVersions(); } catch { /* none to show */ }
+    if (docId !== getCurrentDocId()) return; // another post opened meanwhile
+    list.render(versions, {
+      onLook: versionDifferences,
+      canRestore: canRestoreVersion,
+      onRestore: (version) => restoreVersion(version),
+    });
   }
 
   /**

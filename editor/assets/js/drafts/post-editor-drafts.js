@@ -406,6 +406,26 @@ export function createEditorDrafts({
       });
     },
 
+    /** The recent versions of the open post kept in this browser, newest first (Promise; [] when none). */
+    versions: () => Promise.resolve(drafts.versions()).catch(() => []),
+
+    /** How a version differs from the post as it is now, as plain lines. */
+    differences: (version) => describeDifferences(version, snapshot()),
+
+    /**
+     * Put a version in the editor and save it, as a copy is restored from the
+     * save bar (one undoable step). Not in a read-only tab.
+     */
+    async restoreVersion(version) {
+      if (readOnly()) return;
+      try {
+        await restore(version);
+      } catch (err) {
+        console.error('Restoring a version:', err);
+        api.saveFailed(err);
+      }
+    },
+
     /** Resolves when the local copy is written. */
     flush: () => drafts.flush(),
 

@@ -365,4 +365,38 @@ describe('post editor drafts, reload after a takeover', () => {
     assert.equal(b.view.editable, true);
     assert.equal(b.drafts.canSave(), true);
   });
+
+  it('lists the saved versions and restores one through the restore path', async () => {
+    const { drafts, calls, type } = setup();
+    await drafts.openPost(serverDoc());
+    type('v1');
+    const token = drafts.saveStarted();
+    await drafts.saveConfirmed(token, { docId: 'd1', updated: 'U2', meta: { title: 'T', updated: 'U2' }, blocks: [{ text: 'v1' }], regions: {} });
+    const versions = await drafts.versions();
+    assert.equal(versions.length, 1);
+    assert.equal(versions[0].blocks[0].text, 'v1');
+    assert.deepEqual(drafts.differences(versions[0]), []);
+    type('v2');
+    assert.ok(drafts.differences(versions[0]).length > 0);
+    await drafts.restoreVersion(versions[0]);
+    assert.deepEqual(calls.restore, [versions[0]]);
+  });
+
+  it('a read-only tab does not restore a version', async () => {
+    const restored = [];
+    const { drafts } = setup({ extra: { restore: async (v) => { restored.push(v); } } });
+    await drafts.openPost(serverDoc());
+    const other = createEditorDrafts({
+      store: createDraftStore(memoryBackend()), siteId: 's', bar: fakeBar(), getView: () => null,
+      snapshot: () => ({ meta: {}, blocks: [], regions: {} }), restore: async (v) => { restored.push(v); }, createCopy: async () => 'x',
+      load: async () => {}, saveNow: async () => {}, lockWait: 5,
+    });
+    live.push(other);
+    await other.openPost(serverDoc());
+    await sleep(30);
+    const readOnly = [drafts, other].filter((d) => !d.canSave());
+    assert.equal(readOnly.length, 1);
+    await readOnly[0].restoreVersion({ meta: {}, blocks: [], regions: {} });
+    assert.equal(restored.length, 0);
+  });
 });

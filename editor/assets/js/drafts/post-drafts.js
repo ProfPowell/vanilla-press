@@ -8,7 +8,7 @@
  * @module editor/drafts/post-drafts
  */
 
-import { postKey, newPostKey, restoreOffer } from './draft-logic.js';
+import { postKey, newPostKey, restoreOffer, describeDifferences } from './draft-logic.js';
 
 const clone = (value) => (value === undefined ? value : JSON.parse(JSON.stringify(value)));
 
@@ -147,6 +147,24 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
     /** Saved and discarded copies of this post, newest first. */
     versions() {
       return enqueue(async () => (key ? store.versions(key) : []));
+    },
+
+    /**
+     * Keep the post as it is now as a version (an "unsaved copy") unless it
+     * matches the newest version, so a restore over it loses nothing.
+     * Resolves false when it could not be written.
+     */
+    keepCurrent(snapshot) {
+      const k = key;
+      return enqueue(async () => {
+        if (!k) return false;
+        const [newest] = await store.versions(k);
+        if (newest && describeDifferences(newest, snapshot).length === 0) return true;
+        return store.pushVersion(k, {
+          meta: clone(snapshot.meta), blocks: clone(snapshot.blocks), regions: clone(snapshot.regions) ?? {},
+          updated: baseUpdated, at: now(), offered: true,
+        });
+      });
     },
 
     /** The key the copy is kept under (null before the first open). */

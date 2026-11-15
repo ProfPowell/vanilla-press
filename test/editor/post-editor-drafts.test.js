@@ -399,4 +399,33 @@ describe('post editor drafts, reload after a takeover', () => {
     await readOnly[0].restoreVersion({ meta: {}, blocks: [], regions: {} });
     assert.equal(restored.length, 0);
   });
+
+  it('restoring a version keeps the unsaved text as an "Unsaved copy" first', async () => {
+    const { drafts, type, calls } = setup();
+    await drafts.openPost(serverDoc());
+    type('v1');
+    await drafts.saveConfirmed(drafts.saveStarted(), { docId: 'd1', updated: 'U2', meta: { title: 'T', updated: 'U2' }, blocks: [{ text: 'v1' }], regions: {} });
+    type('typed, not saved yet');
+    const [older] = await drafts.versions();
+    await drafts.restoreVersion(older);
+    assert.equal(calls.restore.length, 1);
+    const kept = (await drafts.versions())[0];
+    assert.equal(kept.offered, true);
+    assert.equal(kept.blocks[0].text, 'typed, not saved yet');
+  });
+
+  it('when the unsaved text cannot be kept, nothing is restored and storage is warned about', async () => {
+    const backend = memoryBackend();
+    const store = createDraftStore(backend);
+    const { drafts, type, calls, bar } = setup({ store });
+    await drafts.openPost(serverDoc());
+    type('v1');
+    await drafts.saveConfirmed(drafts.saveStarted(), { docId: 'd1', updated: 'U2', meta: { title: 'T', updated: 'U2' }, blocks: [{ text: 'v1' }], regions: {} });
+    const [older] = await drafts.versions();
+    type('typed, not saved yet');
+    store.pushVersion = async () => false;
+    await drafts.restoreVersion(older);
+    assert.equal(calls.restore.length, 0);
+    assert.equal(bar.shown?.text, UNPROTECTED);
+  });
 });

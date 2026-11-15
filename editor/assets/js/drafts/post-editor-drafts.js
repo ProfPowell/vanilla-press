@@ -419,6 +419,11 @@ export function createEditorDrafts({
     async restoreVersion(version) {
       if (readOnly()) return;
       try {
+        // What is in the editor now stays as a version; if that can't be kept, nothing is replaced
+        if (!(await drafts.keepCurrent(snapshot()))) {
+          api.storageUnavailable();
+          return;
+        }
         await restore(version);
       } catch (err) {
         console.error('Restoring a version:', err);

@@ -2,7 +2,10 @@
  * Local copies of unsaved work. A small key/value store with two stores:
  * `drafts` (one record per post, keyed like `post:<site>:<docId>`) and
  * `versions` (the last saved copies of a post, newest first, under the same
- * key). Browsers use IndexedDB; tests use memory. If storage fails for any
+ * key). Copies kept so they are not lost (offered, discarded, or kept before
+ * a restore) have their own list in `versions`, under the key plus `#kept`,
+ * capped by its own count so auto-saves never push them out; `versions(key)`
+ * gives both lists merged, newest first. Browsers use IndexedDB; tests use memory. If storage fails for any
  * reason (private window, quota, IndexedDB missing) every method still
  * resolves with an empty answer, `available` turns false and `onUnavailable`
  * is called once, so editing carries on without a local copy.
@@ -13,6 +16,14 @@
 const DRAFTS = 'drafts';
 const VERSIONS = 'versions';
 const STORES = [DRAFTS, VERSIONS];
+const KEPT = '#kept';
+
+/** Newest first by `at`; on a tie a kept copy comes first. */
+const merge = (kept, saved) => {
+  if (!kept.length) return saved;
+  if (!saved.length) return kept;
+  return [...kept, ...saved].sort((a, b) => String(b?.at ?? '').localeCompare(String(a?.at ?? '')));
+};
 
 /** In-memory backend, for tests and as a fallback. */
 export function memoryBackend() {
@@ -93,11 +104,11 @@ export function createDraftStore(backend, { onUnavailable } = {}) {
   // Removes the draft only; saved versions stay.
   store.remove = (key) => guard(async () => { await backend.delete(DRAFTS, key); return true; }, false);
   store.rekey = (from, to) => guard(async () => {
-    for (const s of STORES) {
-      const value = await read(s, from);
+    for (const [s, suffix] of [[DRAFTS, ''], [VERSIONS, ''], [VERSIONS, KEPT]]) {
+      const value = await read(s, from + suffix);
       if (value === null) continue;
-      await backend.set(s, to, value);
-      await backend.delete(s, from);
+      await backend.set(s, to + suffix, value);
+      await backend.delete(s, from + suffix);
     }
     return true;
   }, false);
@@ -107,7 +118,9 @@ export function createDraftStore(backend, { onUnavailable } = {}) {
     await backend.set(VERSIONS, key, [version, ...list].slice(0, limit));
     return true;
   }, false);
-  store.versions = (key) => guard(async () => (await read(VERSIONS, key)) || [], []);
+  // A copy kept so it is not lost: its own list, so auto-saves never push it out.
+  store.keep = (key, version, { limit = 20 } = {}) => store.pushVersion(key + KEPT, version, { limit });
+  store.versions = (key) => guard(async () => merge((await read(VERSIONS, key + KEPT)) || [], (await read(VERSIONS, key)) || []), []);
 
   return store;
 }

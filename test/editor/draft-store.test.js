@@ -64,4 +64,32 @@ describe('draft store', () => {
     assert.equal(calls.length, 1);
     assert.equal(s.available, false);
   });
+  it('kept copies have their own list: auto-save versions never push them out', async () => {
+    const s = createDraftStore(memoryBackend());
+    await s.keep('post:s:a', { n: 'kept', at: '2026-01-01T00:00:00.000Z', offered: true });
+    for (let i = 10; i < 35; i++) await s.pushVersion('post:s:a', { n: i, at: `2026-01-01T00:00:${i}.000Z` });
+    const v = await s.versions('post:s:a');
+    assert.equal(v.length, 21);
+    assert.equal(v[0].n, 34);
+    assert.equal(v[20].n, 'kept'); // the oldest, still there
+  });
+
+  it('kept copies are capped at 20 by their own count; versions lists both newest first', async () => {
+    const s = createDraftStore(memoryBackend());
+    for (let i = 10; i < 35; i++) await s.keep('k', { n: `k${i}`, at: `2026-01-01T00:00:${i}.000Z`, discarded: true });
+    await s.pushVersion('k', { n: 'saved', at: '2026-01-01T00:00:20.500Z' });
+    const v = await s.versions('k');
+    assert.equal(v.length, 21);
+    assert.equal(v[0].n, 'k34');
+    assert.equal(v.filter((x) => x.discarded).length, 20);
+    assert.equal(v.findIndex((x) => x.n === 'saved'), v.findIndex((x) => x.n === 'k20') - 1); // between k21 and k20
+  });
+
+  it('rekey moves kept copies too', async () => {
+    const s = createDraftStore(memoryBackend());
+    await s.keep('post:s:new-1', { n: 1, offered: true });
+    await s.rekey('post:s:new-1', 'post:s:doc_9');
+    assert.deepEqual(await s.versions('post:s:new-1'), []);
+    assert.deepEqual(await s.versions('post:s:doc_9'), [{ n: 1, offered: true }]);
+  });
 });

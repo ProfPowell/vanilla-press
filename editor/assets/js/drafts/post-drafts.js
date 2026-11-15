@@ -55,7 +55,7 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
         await enqueue(async () => {
           const have = await store.versions(k);
           if (have.some((v) => v.offered && v.at === local.at)) return;
-          await store.pushVersion(k, {
+          await store.keep(k, {
             meta: clone(local.meta), blocks: clone(local.blocks), regions: clone(local.regions) ?? {},
             updated: local.baseUpdated ?? null, at: local.at, offered: true,
           });
@@ -136,7 +136,7 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
         latest = null;
         if (!rec) return;
         // Keep it as a version first; only remove the copy once that is safe.
-        const kept = await store.pushVersion(k, {
+        const kept = await store.keep(k, {
           meta: rec.meta, blocks: rec.blocks, regions: rec.regions,
           updated: rec.baseUpdated, at: now(), discarded: true,
         });
@@ -160,7 +160,7 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
         if (!k) return false;
         const [newest] = await store.versions(k);
         if (newest && sameContent(newest, snapshot)) return true;
-        return store.pushVersion(k, {
+        return store.keep(k, {
           meta: clone(snapshot.meta), blocks: clone(snapshot.blocks), regions: clone(snapshot.regions) ?? {},
           updated: baseUpdated, at: now(), offered: true,
         });

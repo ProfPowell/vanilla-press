@@ -240,4 +240,34 @@ describe('post drafts', () => {
     await d.keepCurrent({ ...base, meta: { ...base.meta, status: 'published' } });
     assert.equal((await d.versions()).length, 3);
   });
+  it('an offered copy outlives 25 confirmed saves', async () => {
+    const { mk } = setup();
+    const d = mk();
+    await d.open('d1', serverDoc());
+    d.edited(snap('old work'));
+    await d.flush();
+    const d2 = mk();
+    await d2.open('d1', serverDoc());
+    for (let i = 0; i < 25; i++) {
+      d2.edited(snap(`save ${i}`));
+      await d2.saveConfirmed(d2.saveStarted(), { docId: 'd1', updated: `U${i}`, ...snap(`save ${i}`) });
+    }
+    const v = await d2.versions();
+    assert.equal(v.filter((x) => !x.offered && !x.discarded).length, 20);
+    assert.ok(v.some((x) => x.offered && x.blocks[0].text === 'old work'));
+  });
+
+  it('a discarded copy outlives 25 confirmed saves', async () => {
+    const { mk } = setup();
+    const d = mk();
+    await d.open('d1', serverDoc());
+    d.edited(snap('thrown away'));
+    await d.flush();
+    await d.discard();
+    for (let i = 0; i < 25; i++) {
+      d.edited(snap(`save ${i}`));
+      await d.saveConfirmed(d.saveStarted(), { docId: 'd1', updated: `U${i}`, ...snap(`save ${i}`) });
+    }
+    assert.ok((await d.versions()).some((x) => x.discarded && x.blocks[0].text === 'thrown away'));
+  });
 });

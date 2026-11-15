@@ -211,4 +211,19 @@ describe('post drafts', () => {
     assert.equal(await store.get('post:s:d1'), null);
     assert.equal(await mk().open('d1', { ...serverDoc('U2'), blocks: [{ text: 'mine' }] }), null);
   });
+
+  it('a version-only confirm keeps the copy another tab wrote', async () => {
+    const { store, mk } = setup();
+    const d = mk();
+    await d.open('d1', serverDoc());
+    d.edited(snap('mine'));
+    const token = d.saveStarted();
+    await d.flush();
+    await store.put('post:s:d1', { ...(await store.get('post:s:d1')), blocks: [{ text: 'other tab' }] });
+    await d.saveConfirmed(token, { docId: 'd1', updated: 'U2', ...snap('mine') }, { versionOnly: true });
+    assert.equal((await store.get('post:s:d1')).blocks[0].text, 'other tab');
+    const v = await d.versions();
+    assert.equal(v[0].blocks[0].text, 'mine');
+    assert.equal(v[0].updated, 'U2');
+  });
 });

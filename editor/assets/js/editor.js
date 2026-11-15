@@ -281,6 +281,12 @@ export function initEditor() {
       componentSettingsPlugin(),
       // Keeps the palette's insert position right while the media picker is open
       insertTargetPlugin(),
+      // While another tab edits this post, toolbar and menu commands change nothing
+      // either (editable: false stops typing only); the editor's own upkeep still runs
+      new Plugin({
+        filterTransaction: (tr) => !tr.docChanged || !postDrafts || postDrafts.canSave()
+          || tr.getMeta('addToHistory') === false || !!tr.getMeta(SERVER_NORMALIZED) || !!tr.getMeta(REGIONS_META),
+      }),
     ],
   });
 
@@ -594,6 +600,8 @@ function noticesMessage(saved) {
  */
 export async function saveDocument() {
   if (!editorView) return false;
+  // Another tab edits this post: saving from here would overwrite its work
+  if (postDrafts && !postDrafts.canSave()) return false;
 
   const docId = getCurrentDocId();
   // The page the editor opens on (or shows after a delete) is not stored
@@ -619,7 +627,9 @@ export async function saveDocument() {
     const regions = toRegionsAst(editorView.state.doc);
     const meta = metaToSave(getCurrentMeta());
 
-    const saved = await api.updateDocument(docId, { meta, blocks, regions });
+    const request = api.updateDocument(docId, { meta, blocks, regions });
+    inFlight = request;
+    const saved = await request.finally(() => { if (inFlight === request) inFlight = null; });
     postDrafts?.saveConfirmed(token, { docId, updated: saved?.meta?.updated ?? null, meta: saved?.meta ?? meta, blocks, regions });
     applyDropped(saved?.dropped);
     setSaveStatus('saved', noticesMessage(saved));
@@ -630,6 +640,9 @@ export async function saveDocument() {
     return false;
   }
 }
+
+/** The in-flight update, so a tab handing editing on can wait for it. */
+let inFlight = null;
 
 /** The in-flight create, so rapid auto-saves create one document, not several. */
 let creating = null;
@@ -820,11 +833,12 @@ function initPostDrafts() {
     },
     load: loadDocument,
     saveNow: saveDocument,
+    // Handing editing to another tab: the pending auto-save now, or the save under way
     flushSave: () => {
-      if (!saveTimer) return;
+      if (!saveTimer) return inFlight || creating;
       clearTimeout(saveTimer);
       saveTimer = null;
-      saveDocument();
+      return saveDocument();
     },
   });
   postDrafts.installPageEvents({ isUnsaved: () => saveStatus !== 'saved' });

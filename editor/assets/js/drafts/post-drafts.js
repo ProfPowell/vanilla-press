@@ -98,8 +98,17 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
     /** Mark the start of a save; the token is the current edit count. */
     saveStarted() { return seq; },
 
-    /** The server accepted a save started with `token`. */
-    saveConfirmed(token, { docId: id, updated, meta, blocks, regions }) {
+    /**
+     * The server accepted a save started with `token`. With `versionOnly`
+     * (the save came from a tab that has since stopped editing) it is only
+     * kept as a version: the copy, which another tab may now write, stays.
+     */
+    saveConfirmed(token, { docId: id, updated, meta, blocks, regions }, { versionOnly = false } = {}) {
+      if (versionOnly) {
+        const entry = { meta: clone(meta), blocks: clone(blocks), regions: clone(regions) ?? {}, updated, at: now() };
+        const k = postKey(siteId, id);
+        return enqueue(() => store.pushVersion(k, entry));
+      }
       const oldKey = key;
       const newKey = postKey(siteId, id);
       const clean = seq === token;
@@ -139,6 +148,9 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
     versions() {
       return enqueue(async () => (key ? store.versions(key) : []));
     },
+
+    /** The key the copy is kept under (null before the first open). */
+    get key() { return key; },
 
     /** Resolves when everything queued so far has been written. */
     flush() { return chain.then(() => {}); },

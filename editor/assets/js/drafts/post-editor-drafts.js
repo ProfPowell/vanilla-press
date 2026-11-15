@@ -57,13 +57,14 @@ const quiet = (p) => Promise.resolve(p).catch((err) => console.warn('Local copy:
  * @param {(record: object) => Promise<string>} opts.createCopy create a draft post from a copy; resolves its id
  * @param {(id: string) => Promise|void} opts.load open a post
  * @param {() => Promise|void} opts.saveNow save the open post now
- * @param {() => void} [opts.flushSave] run a pending auto-save now
+ * @param {() => Promise|void} [opts.flushSave] run a pending auto-save now; settles when it is done
  * @param {number} [opts.retryMs] retry interval while the app can't be reached
  * @param {number} [opts.lockWait] tab lock answer wait (tests)
+ * @param {number} [opts.handoffWait] how long a takeover waits for the other tab's last save
  */
 export function createEditorDrafts({
   store, siteId, bar, getView, snapshot, restore, createCopy, load, saveNow, flushSave,
-  retryMs = 10000, lockWait,
+  retryMs = 10000, lockWait, handoffWait = 3000,
 }) {
   const drafts = createPostDrafts({ store, siteId });
   let gen = 0;          // bumped when another post (or the new post page) opens
@@ -76,6 +77,8 @@ export function createEditorDrafts({
   let lockKey = null;
   let locked = false;
   let lockedAtHide = false;
+  let lockEpoch = 0;    // bumped each time this tab stops editing
+  let handoff = null;   // a takeover waiting for the other tab's last save: { timer, done }
   let showing = null;   // 'lock' | 'failure' | 'offer' | 'storage' | null
   let unprotected = false;
 
@@ -109,7 +112,7 @@ export function createEditorDrafts({
   }
 
   function scheduleRetry() {
-    if (retry) return;
+    if (retry || readOnly()) return;
     retry = setTimeout(() => {
       retry = null;
       quiet(saveNow());
@@ -120,12 +123,24 @@ export function createEditorDrafts({
 
   const setEditable = (on) => getView()?.setProps({ editable: () => on });
 
+  /** Another tab edits this post, or this tab is taking over and waits for its last save. */
+  const readOnly = () => locked || handoff != null;
+
+  function endHandoff() {
+    if (!handoff) return null;
+    const { timer, done } = handoff;
+    clearTimeout(timer);
+    handoff = null;
+    return done;
+  }
+
   function releaseLock() {
     if (!lock) return;
     const old = lock;
     lock = null;
     lockKey = null;
     old.release();
+    if (endHandoff()) setEditable(true);
     if (locked) {
       locked = false;
       setEditable(true);
@@ -143,20 +158,34 @@ export function createEditorDrafts({
       wait: lockWait,
       onLocked: () => {
         if (lock !== l) return;
+        // The edits not saved yet go now, while this tab may still save; then nothing more from here
+        const last = Promise.resolve(flushSave?.()).catch(() => {});
         locked = true;
+        lockEpoch++;
+        stopRetry();
+        endHandoff();
         setEditable(false);
-        flushSave?.();
         barShow('lock', { tone: 'info', text: LOCKED, actions: [{ label: 'Edit here instead', run: () => l.takeOver() }] });
+        last.finally(() => l.handedOff());
       },
       onUnlocked: () => {
         if (lock !== l) return;
         locked = false;
-        setEditable(true);
         barClear('lock');
-        getView()?.focus();
-        // This tab may be behind what the other tab saved: show the post as it is now
-        if (postId != null) quiet(load(postId));
+        // This tab is behind what the other tab saved: once its last save is
+        // done (or after a while), show the post as it is now, then edit
+        const id = postId;
+        const done = async () => {
+          if (lock !== l || endHandoff() !== done) return;
+          if (id != null && postId === id) await quiet(load(id));
+          if (lock !== l || locked) return;
+          setEditable(true);
+          getView()?.focus();
+        };
+        endHandoff();
+        handoff = { timer: setTimeout(done, handoffWait), done };
       },
+      onSaved: () => handoff?.done(),
     });
     lock = l;
     lockKey = key;
@@ -188,6 +217,21 @@ export function createEditorDrafts({
       drafts.edited(snapshot());
     }
     return true;
+  }
+
+  /**
+   * Opening failed part way: say copies may not be kept, and keep recording
+   * when the controller did get onto this post (else nothing is written
+   * rather than written under another post's key).
+   */
+  function recover(g, id) {
+    api.storageUnavailable();
+    if (g !== gen) return;
+    const k = drafts.key;
+    const onPost = id != null ? k === postKey(siteId, id) : Boolean(k?.startsWith(postKey(siteId, 'new-')));
+    if (!onPost) return;
+    settle(gen);
+    if (id != null) quiet(lockPost(id));
   }
 
   function offerCopy(g, offer, local, serverDoc) {
@@ -228,6 +272,7 @@ export function createEditorDrafts({
   const api = {
     /** The open post changed (text or settings). */
     edited() {
+      if (readOnly()) return; // the other tab's copy is the one that counts
       if (!ready) {
         missed = true;
         return;
@@ -238,8 +283,8 @@ export function createEditorDrafts({
 
     /** A stored post is now in the editor (call right after showing it). */
     async openPost(doc) {
+      const g = begin(doc.id);
       try {
-        const g = begin(doc.id);
         const offer = await drafts.open(doc.id, doc);
         const local = offer ? await store.get(postKey(siteId, doc.id)) : null;
         if (!settle(g)) return;
@@ -248,13 +293,14 @@ export function createEditorDrafts({
         offerCopy(g, offer, local, doc);
       } catch (err) {
         console.warn('Local copy:', err);
+        recover(g, doc.id);
       }
     },
 
     /** The new post page is in the editor; offer a never-saved post's copy unless told not to. */
     async openNew({ offerPending = true } = {}) {
+      const g = begin(null);
       try {
-        const g = begin(null);
         const pending = offerPending ? await drafts.pendingNew() : null;
         if (g !== gen) return;
         const offer = await drafts.open(null, null, pending ? { adoptKey: pending.key } : {});
@@ -262,12 +308,18 @@ export function createEditorDrafts({
         offerCopy(g, offer, pending.record, null);
       } catch (err) {
         console.warn('Local copy:', err);
+        recover(g, null);
       }
     },
 
     /** Before a save request: a token for `saveConfirmed`. */
     saveStarted() {
-      return ready ? { gen, seq: drafts.saveStarted() } : null;
+      return ready && !readOnly() ? { gen, epoch: lockEpoch, seq: drafts.saveStarted() } : null;
+    },
+
+    /** False while another tab edits this post (or this tab waits to take over): no save may start. */
+    canSave() {
+      return !readOnly();
     },
 
     /**
@@ -278,6 +330,8 @@ export function createEditorDrafts({
      */
     saveConfirmed(token, saved) {
       if (!token || token.gen !== gen) return Promise.resolve();
+      // Started before this tab stopped editing: the shared copy is the other tab's now
+      if (token.epoch !== lockEpoch || readOnly()) return quiet(drafts.saveConfirmed(token.seq, saved, { versionOnly: true }));
       if (saved.docId !== postId) {
         postId = saved.docId; // a new post got its id
         quiet(lockPost(saved.docId));

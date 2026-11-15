@@ -8,6 +8,7 @@
  *   owned    the editing tab's answer to `open`
  *   take     a tab is taking over editing
  *   release  the editing tab is going away
+ *   saved    a tab that stood down for a `take` has finished its last save
  *
  * Two tabs asking at once are settled by tab id: the lower one edits.
  *
@@ -21,8 +22,9 @@
  * @param {number} [opts.wait] ms to wait for an `owned` reply
  * @param {() => void} [opts.onLocked] this tab must become read-only
  * @param {() => void} [opts.onUnlocked] this tab may edit
+ * @param {() => void} [opts.onSaved] the tab this one took over from has finished its last save
  */
-export function createTabLock({ key, channel, wait = 150, onLocked, onUnlocked } = {}) {
+export function createTabLock({ key, channel, wait = 150, onLocked, onUnlocked, onSaved } = {}) {
   const ownChannel = !channel;
   const bus = channel ?? new BroadcastChannel('vp-edit-lock');
   const tab = globalThis.crypto.randomUUID();
@@ -84,6 +86,9 @@ export function createTabLock({ key, channel, wait = 150, onLocked, onUnlocked }
         // Waiting tabs ask again; the tie-break picks one.
         if (locked) claim();
         break;
+      case 'saved':
+        if (owner) onSaved?.();
+        break;
     }
   }
 
@@ -112,6 +117,11 @@ export function createTabLock({ key, channel, wait = 150, onLocked, onUnlocked }
     send('take');
   }
 
+  /** After standing down: tell the new editing tab this tab's last save is done (or failed). */
+  function handedOff() {
+    if (!closed) send('saved');
+  }
+
   /** Stop taking part; hand editing on if this tab had it. */
   function release() {
     if (closed) return;
@@ -126,6 +136,7 @@ export function createTabLock({ key, channel, wait = 150, onLocked, onUnlocked }
   return {
     claim,
     takeOver,
+    handedOff,
     release,
     get owner() { return owner; },
   };

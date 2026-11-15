@@ -121,3 +121,24 @@ test('a channel the caller passed stays open after release', async () => {
   assert.doesNotThrow(() => a.channel.postMessage({ type: 'noop' }));
   closeAll(a, b);
 });
+
+test('the tab that gave up editing tells the taker once its last save is done', async () => {
+  const name = 'vp-test-' + Math.random();
+  const ca = new BroadcastChannel(name);
+  const cb = new BroadcastChannel(name);
+  const saved = [];
+  let a;
+  a = createTabLock({ key: 'p1', channel: ca, wait: WAIT, onLocked: () => setTimeout(() => a.handedOff(), 5) });
+  const b = createTabLock({ key: 'p1', channel: cb, wait: WAIT, onSaved: () => saved.push('b') });
+  try {
+    await a.claim();
+    await b.claim();
+    assert.equal(b.owner, false);
+    b.takeOver();
+    assert.deepEqual(saved, []);
+    await settle();
+    assert.deepEqual(saved, ['b']);
+  } finally {
+    a.release(); b.release(); ca.close(); cb.close();
+  }
+});

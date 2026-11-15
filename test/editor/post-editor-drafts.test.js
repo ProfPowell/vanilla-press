@@ -225,3 +225,87 @@ describe('post editor drafts, repeats', () => {
     drafts.release();
   });
 });
+
+describe('post editor drafts, two tabs', () => {
+  /** Tab a edits d1; tab b opens it read-only. */
+  async function twoTabs({ aExtra = {}, bExtra = {} } = {}) {
+    const a = setup({ extra: aExtra });
+    await a.drafts.openPost(serverDoc());
+    const b = setup({ store: a.store, extra: bExtra });
+    await b.drafts.openPost(serverDoc());
+    assert.equal(b.view.editable, false);
+    return { a, b };
+  }
+
+  it('a read-only tab records nothing, starts no save and does not retry', async () => {
+    const { a, b } = await twoTabs();
+    a.type('active');
+    await a.drafts.flush();
+    b.type('read-only');
+    await b.drafts.flush();
+    assert.equal((await a.store.get('post:s:d1')).blocks[0].text, 'active');
+    assert.equal(b.drafts.saveStarted(), null);
+    assert.equal(b.drafts.canSave(), false);
+    assert.equal(a.drafts.canSave(), true);
+    b.drafts.saveFailed(new TypeError('Failed to fetch'));
+    await sleep(40);
+    assert.equal(b.calls.saves, 0);
+  });
+
+  it('the tab that loses the lock stops retrying and its late save leaves the copy alone', async () => {
+    const { a, b } = await twoTabs();
+    a.type('one');
+    const token = a.drafts.saveStarted();
+    a.drafts.saveFailed(new TypeError('Failed to fetch'));
+    b.bar.shown.actions[0].run();
+    await sleep(20);
+    assert.equal(a.view.editable, false);
+    assert.equal(b.view.editable, true);
+    b.type('b work');
+    await b.drafts.flush();
+    await a.drafts.saveConfirmed(token, { docId: 'd1', updated: 'U2', meta: { title: 'T' }, blocks: [{ text: 'one' }], regions: {} });
+    await a.drafts.flush();
+    assert.equal((await a.store.get('post:s:d1')).blocks[0].text, 'b work');
+    assert.ok((await a.store.versions('post:s:d1')).some((v) => v.blocks[0].text === 'one' && v.updated === 'U2'));
+    await sleep(30);
+    assert.equal(a.calls.saves, 0);
+  });
+
+  it('Edit here instead waits for the other tab to finish saving', async () => {
+    let done;
+    const { b } = await twoTabs({ aExtra: { flushSave: () => new Promise((r) => { done = r; }) } });
+    b.bar.shown.actions[0].run();
+    await sleep(30);
+    assert.deepEqual(b.calls.loads, []);
+    assert.equal(b.view.editable, false);
+    assert.equal(b.drafts.canSave(), false);
+    done();
+    await sleep(20);
+    assert.deepEqual(b.calls.loads, ['d1']);
+    assert.equal(b.view.editable, true);
+  });
+
+  it('Edit here instead gives up waiting after a while', async () => {
+    const { b } = await twoTabs({ aExtra: { flushSave: () => new Promise(() => {}) }, bExtra: { handoffWait: 30 } });
+    b.bar.shown.actions[0].run();
+    await sleep(15);
+    assert.deepEqual(b.calls.loads, []);
+    await sleep(40);
+    assert.deepEqual(b.calls.loads, ['d1']);
+    assert.equal(b.view.editable, true);
+  });
+});
+
+describe('post editor drafts, storage throwing', () => {
+  it('a post whose copy cannot be read is still protected from then on', async () => {
+    const store = createDraftStore(memoryBackend());
+    store.get = () => Promise.reject(new Error('broken'));
+    const { bar, drafts, type } = setup({ store });
+    await drafts.openPost(serverDoc());
+    assert.deepEqual(bar.shown, { tone: 'warn', text: UNPROTECTED });
+    type('kept');
+    await drafts.flush();
+    assert.deepEqual(await store.keys('post:s:d1'), ['post:s:d1']);
+    assert.notEqual(drafts.saveStarted(), null);
+  });
+});

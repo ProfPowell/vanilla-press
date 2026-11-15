@@ -4,10 +4,15 @@
 
 .le-page {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  /* The bar, the save bar (unsaved changes kept in this browser; hidden by default), the panes */
+  grid-template-rows: auto auto minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
+
+.le-page > .le-bar { grid-row: 1; }
+.le-page > save-bar { grid-row: 2; }
+.le-page > .le-panes { grid-row: 3; }
 
 /* THE BAR: two rows. Row 1 says where you are (back, file) and holds the
  * actions; row 2 holds the layout's info fields and the status. Under 48rem

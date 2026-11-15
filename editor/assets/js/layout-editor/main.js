@@ -19,6 +19,12 @@
  * (preview-pane.js) mounts in `[data-le-preview]` and re-renders after each
  * edit; head edits live in meta (outside ProseMirror) and count as edits.
  *
+ * Every edit is also kept in this browser (drafts/layout-drafts.js) until a
+ * save has it. Reopening a layout with such a copy offers it back in the
+ * `<save-bar>`: Restore (or, when the file changed since, Keep my copy, whose
+ * next save meets the changed-on-disk conflict instead of writing over the
+ * file) puts it in the editor unsaved; Discard throws it away.
+ *
  * @module editor/layout-editor/main
  */
 
@@ -41,6 +47,10 @@ import { layoutTextRuleSpecs, toggleLayoutMark } from './text-rules.js';
 import { charSuggestPlugin } from '../chars/char-suggest.js';
 import { invisiblesPlugin } from '../chars/invisibles.js';
 import { mountCharInsert } from '../chars/char-insert.js';
+import { relativeTime } from '../components/save-bar.js';
+import { createLayoutDrafts } from '../drafts/layout-drafts.js';
+import { describeLayoutDifferences } from '../drafts/draft-logic.js';
+import { openDraftStore, UNPROTECTED } from '../drafts/post-editor-drafts.js';
 
 /** Cook's VB page layouts (cook-ssg/layouts PAGE_LAYOUTS), without the empty value. */
 export const PAGE_LAYOUTS = ['stack', 'sidebar-left', 'sidebar-right', 'holy-grail', 'app-shell', 'dashboard', 'article', 'landing'];
@@ -55,13 +65,14 @@ const problemText = (p) => (typeof p === 'string' ? p : p?.line ? `Line ${p.line
 /**
  * Open a layout in the editor page's markup under `root`.
  * @param {{ root: Element, site: string, kind: 'layout'|'include', name: string, fetch?: typeof fetch,
- *   navigate?: (href: string) => void }} opts
+ *   navigate?: (href: string) => void, store?: object }} opts `store`: where local copies are kept
+ *   (default: this browser's IndexedDB, else memory with a warning)
  * @returns {Promise<{ view: EditorView|null, save: () => Promise<boolean>, isDirty: () => boolean,
  *   hash: () => string|null, meta: () => Object, tree: () => Object, headDialog: Object, palette: LayoutPalette,
  *   preview: () => Object|null,
  *   destroy: () => void }>}
  */
-export async function openLayoutEditor({ root, site, kind, name, fetch = globalThis.fetch, navigate = (href) => { window.location.href = href; } }) {
+export async function openLayoutEditor({ root, site, kind, name, fetch = globalThis.fetch, navigate = (href) => { window.location.href = href; }, store = null }) {
   const $ = (sel) => root.querySelector(sel);
   const els = {
     back: $('[data-le-back]'),
@@ -81,6 +92,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     inspector: $('[data-le-inspector]'),
     preview: $('[data-le-preview]'),
     confirm: $('confirm-panel[data-confirm]'),
+    bar: $('save-bar'),
   };
   const url = `/api/sites/${encodeURIComponent(site)}/layout-files/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`;
   const backHref = `/app/site.html?site=${encodeURIComponent(site)}&section=layouts`;
@@ -134,6 +146,100 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   /** The preview pane, once the layout is open. */
   let preview = null;
 
+  // LOCAL COPY
+  // -----------------------------
+  /** What the save bar shows: 'offer' | 'storage' | null. */
+  let showing = null;
+  let unprotected = false;
+  /** Bumped by each load, so an old load's offer is not shown. */
+  let loads = 0;
+  const drafts = createLayoutDrafts({
+    store: store || openDraftStore({ onUnavailable: () => storageUnavailable() }),
+    siteId: site, kind, name,
+  });
+
+  /** The layout as it is in the editor (null when it can't be read). */
+  function current() {
+    if (!view || !meta) return null;
+    try {
+      return { tree: docToTree(view.state.doc, meta), meta };
+    } catch (err) {
+      console.warn('Local copy:', err);
+      return null;
+    }
+  }
+
+  function recordEdit() {
+    const snap = current();
+    if (snap) drafts.edited(snap);
+  }
+
+  /** Copies can't be kept in this browser: say so whenever the bar is free. */
+  function storageUnavailable() {
+    unprotected = true;
+    if (!showing) {
+      showing = 'storage';
+      els.bar?.show?.({ tone: 'warn', text: UNPROTECTED });
+    }
+  }
+
+  function barDone() {
+    showing = null;
+    if (unprotected) storageUnavailable();
+    else els.bar?.clear?.();
+  }
+
+  /**
+   * The person chose to throw their changes away (Leave, Reload): so goes
+   * their copy, but not one still offered and not chosen about.
+   */
+  function dropCopy() {
+    return drafts.offeredCopy() ? Promise.resolve() : drafts.discard();
+  }
+
+  /** Put a copy in the editor, unsaved, against the hash it was made on. */
+  function mountCopy(rec) {
+    hash = rec.baseHash ?? hash;
+    mount(rec.tree, rec.meta);
+    setDirty(true);
+  }
+
+  /** Offer a copy back in the save bar (`opened`: the layout as loaded). */
+  function offerCopy(offer, opened) {
+    const take = () => {
+      const rec = drafts.take();
+      if (rec) mountCopy(rec);
+    };
+    const discard = () => {
+      // Work typed since the layout opened is not what was discarded: keep it
+      drafts.discard(dirty ? current() : null);
+    };
+    const act = (fn) => () => {
+      if (showing === 'offer') barDone();
+      try {
+        fn();
+      } catch (err) {
+        console.error('Local copy:', err);
+        showStatus(`Couldn't restore your changes: ${err.message}`, { tone: 'error' });
+      }
+      view?.focus();
+    };
+    showing = 'offer';
+    if (offer.kind === 'stale') {
+      els.bar?.show?.({
+        tone: 'warn',
+        text: `Unsaved changes from ${relativeTime(offer.at)}, made before this layout was changed elsewhere`,
+        actions: [{ label: 'Discard', run: act(discard) }, { label: 'Keep my copy', run: act(take) }],
+      });
+      return;
+    }
+    els.bar?.showRestore?.(offer, {
+      differences: describeLayoutDifferences(drafts.offeredCopy(), opened),
+      onRestore: act(take),
+      onDiscard: act(discard),
+    });
+  }
+
   // STATUS
   // -----------------------------
   function showStatus(text, { tone = 'info', problems = [], reload = false } = {}) {
@@ -172,6 +278,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         confirm: 'Reload',
       });
       if (!discard) return;
+      await dropCopy();
     }
     await load();
   }
@@ -180,6 +287,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     if (value) edits++;
     dirty = value;
     root.toggleAttribute?.('data-le-dirty', value);
+    if (value) recordEdit();
     // An error (Cook's problems, changed on disk) stays up until the next save or reload
     if (value && els.status.dataset.tone !== 'error') showStatus('Unsaved changes');
     if (value) preview?.schedule();
@@ -286,6 +394,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       confirm: 'Leave',
     });
     if (leave) {
+      await dropCopy();
       dirty = false;
       navigate(els.back.href);
     }
@@ -295,6 +404,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     e.preventDefault();
     e.returnValue = '';
   };
+  const onPageHide = () => { drafts.flush().catch(() => {}); };
 
   els.back.href = backHref;
   els.label.addEventListener('input', onLabel);
@@ -308,12 +418,14 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   // Emoji and Symbols in the bar
   if (els.chars) mountCharInsert(els.chars, { getView: () => view });
   globalThis.addEventListener?.('beforeunload', onBeforeUnload);
+  globalThis.addEventListener?.('pagehide', onPageHide);
 
   // THE CANVAS
   // -----------------------------
-  function mount(tree) {
+  /** Show `tree` on the canvas (with `withMeta` in place of the tree's own, for a kept copy). */
+  function mount(tree, withMeta = null) {
     const converted = treeToDoc(tree, layoutSchema);
-    meta = converted.meta;
+    meta = withMeta ?? converted.meta;
     const state = EditorState.create({
       schema: layoutSchema,
       doc: converted.doc,
@@ -386,6 +498,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     dirty = false;
     root.toggleAttribute?.('data-le-dirty', false);
     showStatus('');
+    await openCopy();
     if (!els.preview) return;
     if (preview) preview.schedule();
     else {
@@ -398,6 +511,22 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     }
   }
 
+  /** After a load: offer a copy kept in this browser, if there is one. */
+  async function openCopy() {
+    const g = ++loads;
+    if (showing === 'offer') barDone();
+    const now = current();
+    const opened = now && structuredClone(now);
+    let offer = null;
+    try {
+      offer = await drafts.open(hash, opened);
+    } catch (err) {
+      console.warn('Local copy:', err);
+      storageUnavailable();
+    }
+    if (offer && g === loads) offerCopy(offer, opened);
+  }
+
   // SAVE
   // -----------------------------
   /** @returns {Promise<boolean>} whether the layout was written */
@@ -407,6 +536,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     els.save.disabled = true;
     showStatus('Saving…');
     const sent = edits;
+    const token = drafts.saveStarted();
     try {
       let tree;
       try {
@@ -456,6 +586,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         return false;
       }
       hash = data.hash;
+      drafts.saveConfirmed(token, hash).catch((err) => console.warn('Local copy:', err));
       if (edits !== sent) {
         // Edited while the save ran: those edits are not in the file yet
         showStatus('Unsaved changes');
@@ -536,6 +667,8 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     headDialog,
     palette,
     preview: () => preview,
+    /** Resolves when the local copy is written. */
+    flushCopy: () => drafts.flush(),
     destroy() {
       view?.destroy();
       view = null;
@@ -553,6 +686,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       els.head.removeEventListener('click', onHead);
       els.back.removeEventListener('click', onBack);
       globalThis.removeEventListener?.('beforeunload', onBeforeUnload);
+      globalThis.removeEventListener?.('pagehide', onPageHide);
     },
   };
 }

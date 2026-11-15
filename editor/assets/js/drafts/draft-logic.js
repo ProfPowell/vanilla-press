@@ -1,7 +1,7 @@
 /**
- * Pure decisions about local copies of a post: the keys they are stored
- * under, whether to offer one back when a post is reopened, and a short,
- * plain description of how it differs from the saved post.
+ * Pure decisions about local copies of a post (or a layout): the keys they
+ * are stored under, whether to offer one back when it is reopened, and a
+ * short, plain description of how it differs from the saved one.
  *
  * @module editor/drafts/draft-logic
  */
@@ -98,4 +98,49 @@ export function describeDifferences(local, serverDoc) {
   }
   if (!lines.length && !sameContent(local, serverDoc)) lines.push('Other settings changed');
   return lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), '…and more'] : lines;
+}
+
+// --- layouts and includes (the layout editor) ---
+
+/** Key for a layout or include: `layout:<site>:<kind>:<name>`. */
+export const layoutKey = (siteId, kind, name) => `layout:${siteId ?? 'local'}:${kind}:${name}`;
+
+/**
+ * True when two layout snapshots have the same tree and meta. Key order
+ * does not matter.
+ * @param {{ tree?: object, meta?: object }|null} a
+ * @param {{ tree?: object, meta?: object }|null} b
+ */
+export function sameLayout(a, b) {
+  const whole = (s) => ({ tree: s?.tree ?? null, meta: s?.meta ?? null });
+  return stable(whole(a)) === stable(whole(b));
+}
+
+/**
+ * What to offer when a layout is opened: nothing without a copy or when it
+ * is the file as it is; `stale` when the file changed since the copy began.
+ * @param {{ tree: object, meta: object, baseHash: string|null, at: string }|null} local
+ * @param {string|null} serverHash
+ * @param {{ tree: object, meta: object }|null} [server] the layout as opened
+ * @returns {null | { kind: 'restore' | 'stale', at: string }}
+ */
+export function layoutOffer(local, serverHash, server = null) {
+  if (!local) return null;
+  if (server && sameLayout(local, server)) return null;
+  const kind = (local.baseHash ?? null) !== (serverHash ?? null) ? 'stale' : 'restore';
+  return { kind, at: local.at };
+}
+
+/** Plain lines describing how a layout copy differs from the layout as opened. */
+export function describeLayoutDifferences(local, server) {
+  const a = local?.tree || {};
+  const b = server?.tree || {};
+  const lines = [];
+  if (!same(a.info?.label, b.info?.label)) lines.push('Label changed');
+  if (!same(a.info?.description, b.info?.description)) lines.push('Description changed');
+  if (!same(a.pageLayout, b.pageLayout)) lines.push('Page structure changed');
+  if (stable(a.head ?? []) !== stable(b.head ?? [])) lines.push('Head changed');
+  if (stable([a.body ?? [], a.slots ?? []]) !== stable([b.body ?? [], b.slots ?? []])) lines.push('Blocks changed');
+  if (!lines.length && !sameLayout(local, server)) lines.push('Other settings changed');
+  return lines;
 }

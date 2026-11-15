@@ -179,7 +179,7 @@ export function createEditorDrafts({
       wait: lockWait,
       onLocked: () => {
         if (lock !== l) return;
-        // The edits not saved yet go now, while this tab may still save; then nothing more from here
+        // The edits not saved yet go now, while this tab may still save; then nothing more from here.
         const last = Promise.resolve(flushSave?.()).catch(() => {});
         locked = true;
         lockEpoch++;
@@ -193,10 +193,10 @@ export function createEditorDrafts({
         if (lock !== l) return;
         locked = false;
         barClear('lock');
-        // This tab is behind what the other tab saved: once its last save is
-        // done (or after a while), show the post as it is now, then edit
-        // Read-only (no edits recorded, no saves) until the post is replaced:
-        // a failed reload must not let the stale view write over the other tab's work
+        // This tab is behind what the other tab saved: once that tab's last
+        // save is done (or after a while), reload the post, then edit here.
+        // Until the reload works the tab stays read-only (no edits recorded,
+        // no saves), so a stale view never writes over the other tab's work.
         const id = postId;
         const done = async () => {
           const h = handoff;

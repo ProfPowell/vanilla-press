@@ -30,6 +30,11 @@ before(async () => {
   // linkedom has no selection to focus: the canvas's focus after Restore does nothing here
   const { EditorView } = await import('prosemirror-view');
   EditorView.prototype.focus = function focus() {};
+  // …nor document.getSelection, which ProseMirror reads when the canvas turns read-only and back
+  win.document.getSelection ??= () => ({
+    rangeCount: 0, anchorNode: null, anchorOffset: 0, focusNode: null, focusOffset: 0,
+    removeAllRanges() {}, addRange() {}, collapse() {}, extend() {},
+  });
   ({ openLayoutEditor } = await import('../../editor/assets/js/layout-editor/main.js'));
 });
 after(() => { for (const k of GLOBALS) globalThis[k] = saved[k]; });
@@ -106,22 +111,57 @@ describe('layout editor local copy', { skip: !HAVE_COOK && 'needs the linked Coo
     ed.destroy();
   });
 
-  it('edits before choosing never write over the offered copy; Discard keeps them instead', async () => {
+  it('while an offer waits, nothing can be edited or saved', async () => {
     const store = createDraftStore(memoryBackend());
     await leaveEdited(store, 'Article');
     const root = freshRoot();
-    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch: stubFetch(starterTree()), store });
+    const fetch = stubFetch(starterTree());
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch, store });
+    const before = ed.tree();
     const input = root.querySelector('[data-le-label]');
+    assert.equal(input.disabled, true);
+    assert.equal(root.querySelector('[data-le-save]').disabled, true);
+    assert.equal(root.querySelector('[data-le-add]').disabled, true);
+    assert.equal(root.querySelector('[data-le-inspector]').hasAttribute('inert'), true);
+    assert.equal(ed.view.editable, false);
+    // Attempts change nothing
     input.value = 'Typed meanwhile';
     input.dispatchEvent(new win.Event('input', { bubbles: true }));
+    ed.view.dispatch(ed.view.state.tr.insertText('x', 4));
+    assert.equal(await ed.save(), false);
+    assert.deepEqual(ed.tree(), before);
+    assert.equal(input.value, 'Blog post');
+    assert.equal(ed.isDirty(), false);
+    assert.equal(fetch.calls.filter((c) => c.method === 'PUT').length, 0);
     await ed.flushCopy();
     assert.equal((await store.get(KEY)).tree.info.label, 'Article');
-    click(root, 'Discard');
-    await ed.flushCopy();
-    assert.equal((await store.get(KEY)).tree.info.label, 'Typed meanwhile');
-    assert.equal(ed.tree().info.label, 'Typed meanwhile');
     ed.destroy();
   });
+
+  for (const [choice, hash, label] of [['Restore', 'h1', 'Article'], ['Discard', 'h1', 'Blog post'], ['Keep my copy', 'h2', 'Article']]) {
+    it(`after ${choice}, editing and Save come back and edits are recorded`, async () => {
+      const store = createDraftStore(memoryBackend());
+      await leaveEdited(store, 'Article');
+      const root = freshRoot();
+      const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch: stubFetch(starterTree(), { hash }), store });
+      click(root, choice);
+      assert.equal(ed.tree().info.label, label);
+      assert.equal(root.querySelector('[data-le-save]').disabled, false);
+      assert.equal(root.querySelector('[data-le-inspector]').hasAttribute('inert'), false);
+      assert.equal(ed.view.editable, true);
+      const input = root.querySelector('[data-le-label]');
+      assert.equal(input.disabled, false);
+      input.value = 'Later';
+      input.dispatchEvent(new win.Event('input', { bubbles: true }));
+      ed.view.dispatch(ed.view.state.tr.insertText('x', 4));
+      assert.equal(ed.isDirty(), true);
+      await ed.flushCopy();
+      const rec = await store.get(KEY);
+      assert.equal(rec.tree.info.label, 'Later');
+      assert.deepEqual(rec.tree.body, ed.tree().body);
+      ed.destroy();
+    });
+  }
 
   it('Discard with nothing typed removes the copy', async () => {
     const store = createDraftStore(memoryBackend());
@@ -166,20 +206,24 @@ describe('layout editor local copy', { skip: !HAVE_COOK && 'needs the linked Coo
     ed.destroy();
   });
 
-  it('leaving without saving, when asked, lets the copy go', async () => {
+  it('Reload after Keep my copy meets the 409 keeps the copy and offers it again', async () => {
     const store = createDraftStore(memoryBackend());
+    await leaveEdited(store, 'Article', { hash: 'h0' });
     const root = freshRoot();
-    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch: stubFetch(starterTree()), store, navigate() {} });
-    const input = root.querySelector('[data-le-label]');
-    input.value = 'Article';
-    input.dispatchEvent(new win.Event('input', { bubbles: true }));
-    await ed.flushCopy();
-    assert.ok(await store.get(KEY));
-    root.querySelector('[data-le-back]').dispatchEvent(new win.Event('click', { bubbles: true, cancelable: true }));
+    const fetch = stubFetch(starterTree(), { hash: 'h1', put: [409, { error: 'This layout changed on disk since you opened it' }] });
+    const ed = await openLayoutEditor({ root, site: 's1', kind: 'layout', name: 'post', fetch, store });
+    click(root, 'Keep my copy');
+    assert.equal(await ed.save(), false);
+    const reload = [...root.querySelectorAll('[data-le-status] button')].find((b) => b.textContent === 'Reload');
+    reload.click();
     root.querySelector('confirm-panel').confirmBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
+    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
     await ed.flushCopy();
-    assert.equal(await store.get(KEY), null);
+    const rec = await store.get(KEY);
+    assert.equal(rec.tree.info.label, 'Article');
+    assert.equal(rec.baseHash, 'h0');
+    assert.equal(ed.tree().info.label, 'Blog post');
+    assert.deepEqual(labels(root), ['Discard', 'Keep my copy']);
     ed.destroy();
   });
 

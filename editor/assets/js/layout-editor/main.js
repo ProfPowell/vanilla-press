@@ -23,7 +23,9 @@
  * save has it. Reopening a layout with such a copy offers it back in the
  * `<save-bar>`: Restore (or, when the file changed since, Keep my copy, whose
  * next save meets the changed-on-disk conflict instead of writing over the
- * file) puts it in the editor unsaved; Discard throws it away.
+ * file) puts it in the editor unsaved; Discard throws it away. Until one is
+ * chosen the layout can't be edited or saved. A copy goes only once a save
+ * has it: leaving or reloading keeps it, to be offered again.
  *
  * @module editor/layout-editor/main
  */
@@ -153,6 +155,8 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   let unprotected = false;
   /** Bumped by each load, so an old load's offer is not shown. */
   let loads = 0;
+  /** An offer waits for a choice: nothing can be edited or saved. */
+  let waiting = false;
   const drafts = createLayoutDrafts({
     store: store || openDraftStore({ onUnavailable: () => storageUnavailable() }),
     siteId: site, kind, name,
@@ -189,12 +193,15 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     else els.bar?.clear?.();
   }
 
-  /**
-   * The person chose to throw their changes away (Leave, Reload): so goes
-   * their copy, but not one still offered and not chosen about.
-   */
-  function dropCopy() {
-    return drafts.offeredCopy() ? Promise.resolve() : drafts.discard();
+  /** While an offer waits: the canvas, inspector and bar controls take no edits, and Save is off. */
+  function setWaiting(on) {
+    waiting = on;
+    view?.setProps({ editable: () => !on });
+    for (const el of [els.label, els.description, els.pageLayout, els.abstract, els.add, els.save]) el.disabled = on;
+    // Head is off whenever it is hidden (fillBar)
+    els.head.disabled = on || els.head.hidden;
+    // The canvas stays readable (read-only); the inspector and Emoji and Symbols take no input
+    for (const el of [els.inspector, els.chars]) el?.toggleAttribute('inert', on);
   }
 
   /** Put a copy in the editor, unsaved, against the hash it was made on. */
@@ -216,6 +223,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
     };
     const act = (fn) => () => {
       if (showing === 'offer') barDone();
+      setWaiting(false);
       try {
         fn();
       } catch (err) {
@@ -225,6 +233,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       view?.focus();
     };
     showing = 'offer';
+    setWaiting(true);
     if (offer.kind === 'stale') {
       els.bar?.show?.({
         tone: 'warn',
@@ -278,7 +287,6 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
         confirm: 'Reload',
       });
       if (!discard) return;
-      await dropCopy();
     }
     await load();
   }
@@ -355,6 +363,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
 
   /** Set (or, when empty and it was never there, leave out) an info key. */
   function setInfo(key, value) {
+    if (waiting) return fillBar(); // shows the value as it is
     if (value === '' && !(key in meta.info)) return;
     meta.info[key] = value;
     setDirty(true);
@@ -363,22 +372,25 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   const onLabel = () => setInfo('label', els.label.value);
   const onDescription = () => setInfo('description', els.description.value);
   const onPageLayout = () => {
+    if (waiting) return fillBar();
     const value = selectValue(els.pageLayout);
     meta.pageLayout = value === NO_PAGE_LAYOUT ? null : value;
     setDirty(true);
   };
   const onAbstract = () => {
+    if (waiting) return fillBar();
     if (els.abstract.checked) meta.info.abstract = true;
     else delete meta.info.abstract;
     setDirty(true);
   };
   const onAdd = () => {
-    if (!view) return;
+    if (!view || waiting) return;
     view.focus();
     palette.open(view);
   };
   const onSave = () => { save(); };
   const onHead = () => {
+    if (waiting) return;
     if (meta?.kind === 'base') headDialog.open();
     else if (childHasHeadRegion() && ensureHeadPiece()) {
       pieceHead = { head: structuredClone(view.state.doc.nodeAt(headPiecePos()).attrs.items || []) };
@@ -394,7 +406,6 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       confirm: 'Leave',
     });
     if (leave) {
-      await dropCopy();
       dirty = false;
       navigate(els.back.href);
     }
@@ -463,6 +474,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
       nodeViews: nodeViews(() => meta, () => parentSlots),
       dispatchTransaction(tr) {
         if (!view) return;
+        if (waiting && tr.docChanged) return; // an offer waits for a choice
         view.updateState(view.state.apply(tr));
         if (tr.docChanged) setDirty(true);
         inspector?.update(view.state);
@@ -515,6 +527,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   async function openCopy() {
     const g = ++loads;
     if (showing === 'offer') barDone();
+    if (waiting) setWaiting(false);
     const now = current();
     const opened = now && structuredClone(now);
     let offer = null;
@@ -531,7 +544,7 @@ export async function openLayoutEditor({ root, site, kind, name, fetch = globalT
   // -----------------------------
   /** @returns {Promise<boolean>} whether the layout was written */
   async function save() {
-    if (!view || saving) return false;
+    if (!view || saving || waiting) return false;
     saving = true;
     els.save.disabled = true;
     showStatus('Saving…');

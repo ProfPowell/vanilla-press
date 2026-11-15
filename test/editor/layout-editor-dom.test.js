@@ -24,6 +24,12 @@ before(async () => {
   win = parseHTML(PAGE);
   for (const k of GLOBALS) { saved[k] = globalThis[k]; globalThis[k] = k === 'window' ? win : win[k]; }
   win.HTMLElement.prototype.scrollIntoView ??= function scrollIntoView() {};
+  // linkedom has no document.getSelection; ProseMirror reads it when the canvas turns
+  // read-only (a reload offers the unsaved copy back) and editable again
+  win.document.getSelection ??= () => ({
+    rangeCount: 0, anchorNode: null, anchorOffset: 0, focusNode: null, focusOffset: 0,
+    removeAllRanges() {}, addRange() {}, collapse() {}, extend() {},
+  });
   ({ openLayoutEditor } = await import('../../editor/assets/js/layout-editor/main.js'));
 });
 after(() => { for (const k of GLOBALS) globalThis[k] = saved[k]; });

@@ -174,6 +174,16 @@ describe('layout drafts: controller', () => {
     assert.equal((await store.get(KEY)).tree.body[0].inline[0].text, 'early');
   });
 
+  it('a new open forgets edits from before it (a reload): they are not written as a copy', async () => {
+    const { store, mk } = setup();
+    const d = mk();
+    await d.open('h1', server());
+    d.edited(snap('thrown away by the reload'));
+    assert.equal(await d.open('h2', server()), null);
+    await d.flush();
+    assert.equal(await store.get(KEY), null);
+  });
+
   it('never writes over the offered copy before the person chooses', async () => {
     const { store, mk } = setup();
     await leaveCopy(mk, 'mine');

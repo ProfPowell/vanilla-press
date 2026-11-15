@@ -5,10 +5,11 @@
  * `saveStarted`/`saveConfirmed` around a save.
  *
  * A copy offered back by `open` is never written over before the person
- * chooses: edits made meanwhile are held in memory, `take()` (Restore, Keep
- * my copy) hands the copy over and records from then on, and `discard()`
- * removes it (or replaces it with the work typed since, in one write). All
- * store writes go through one promise chain, so they never overlap.
+ * chooses (the editor takes no edits meanwhile; any that come are not
+ * recorded): `take()` (Restore, Keep my copy) hands the copy over and
+ * records from then on, and `discard()` removes it (or replaces it with
+ * work typed before the offer, in one write). All store writes go through
+ * one promise chain, so they never overlap.
  *
  * @module editor/drafts/layout-drafts
  */
@@ -64,6 +65,7 @@ export function createLayoutDrafts({ store, siteId, kind, name, now = () => new 
       scheduled = false;
       opened = false;
       held = null;
+      latest = null; // edits from before this open (a reload) are not this layout's
       baseHash = serverHash ?? null;
       try {
         await chain;
@@ -80,6 +82,7 @@ export function createLayoutDrafts({ store, siteId, kind, name, now = () => new 
 
     /** Record a change. Coalesced: the last snapshot always lands. */
     edited(snapshot) {
+      if (held) return; // the offered copy waits for a choice
       seq++;
       latest = { tree: clone(snapshot.tree), meta: clone(snapshot.meta) };
       schedule();

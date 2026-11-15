@@ -467,6 +467,8 @@ export class MetaPanel extends HTMLElement {
   async refreshVersions() {
     const list = this.querySelector('versions-list');
     if (!list) return;
+    // The first render runs while editor.js is still loading: wait for it
+    await null;
     const docId = getCurrentDocId();
     let versions = [];
     try { versions = await getPostVersions(); } catch { /* none to show */ }

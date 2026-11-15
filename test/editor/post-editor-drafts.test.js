@@ -211,6 +211,19 @@ describe('post editor drafts', () => {
     assert.equal(a.view.editable, false);
     assert.deepEqual(b.calls.loads, ['d1']); // shows what the other tab saved
   });
+
+  it('a read-only tab turns Post settings off, and on again once it edits here', async () => {
+    const a = setup();
+    await a.drafts.openPost(serverDoc());
+    const b = setup({ store: a.store });
+    await b.drafts.openPost(serverDoc());
+    assert.equal(b.settings.editable, false);
+    assert.equal(a.settings.editable, true);
+    b.bar.shown.actions[0].run();
+    await sleep(20);
+    assert.equal(b.settings.editable, true);
+    assert.equal(a.settings.editable, false);
+  });
 });
 
 describe('post editor drafts, repeats', () => {

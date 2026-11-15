@@ -7,7 +7,8 @@ import { registerHooks } from 'node:module';
 // needs its save hooks, so they are stubbed (resolve hook, panel-only).
 const EDITOR_STUB = 'data:text/javascript,' + encodeURIComponent(
   'const n = () => {}; export const saveDocument = n, loadDocument = n, handleSaveError = n, loadVersionOnDisk = n,'
-  + ' setSlugHandEdited = n, refreshMetaLine = n, metaEdited = n, deleteDoc = n, exportDocument = n, getEditorDoc = n;');
+  + ' setSlugHandEdited = n, refreshMetaLine = n, metaEdited = n, deleteDoc = n, exportDocument = n, getEditorDoc = n,'
+  + ' getPostVersions = async () => [], versionDifferences = () => [], canRestoreVersion = () => true, restoreVersion = n;');
 registerHooks({
   resolve(specifier, context, next) {
     if (/\/editor\.js$/.test(specifier)) {

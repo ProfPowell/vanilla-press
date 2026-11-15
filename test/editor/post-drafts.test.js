@@ -193,4 +193,22 @@ describe('post drafts', () => {
     await d.discard();
     assert.equal((await backend.get('drafts', 'post:s:d1')).blocks[0].text, 'precious');
   });
+
+  it('a restored copy is cleared once its save is confirmed', async () => {
+    const { store, mk } = setup();
+    const d = mk();
+    await d.open('d1', serverDoc());
+    d.edited(snap('mine'));
+    await d.flush();
+    // Reopened: the copy is offered, the editor restores it (an edit) and saves it
+    const d2 = mk();
+    const offer = await d2.open('d1', serverDoc());
+    assert.equal(offer.kind, 'restore');
+    const local = await store.get('post:s:d1');
+    d2.edited({ meta: local.meta, blocks: local.blocks, regions: local.regions });
+    const token = d2.saveStarted();
+    await d2.saveConfirmed(token, { docId: 'd1', updated: 'U2', ...snap('mine') });
+    assert.equal(await store.get('post:s:d1'), null);
+    assert.equal(await mk().open('d1', { ...serverDoc('U2'), blocks: [{ text: 'mine' }] }), null);
+  });
 });

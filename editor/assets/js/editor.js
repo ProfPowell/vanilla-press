@@ -58,7 +58,8 @@ import './components/save-bar.js';
 import { initPatterns } from './patterns.js';
 import { enabledDescriptors, unrepresentable, withoutDropped } from './component-model.js';
 import { initSiteMode } from './site-mode.js';
-import { saveErrorMessage } from './site-context.js';
+import { saveErrorMessage, SITE } from './site-context.js';
+import { openDraftStore, createEditorDrafts } from './drafts/post-editor-drafts.js';
 
 // Re-export meta-state functions for convenience
 export { getCurrentMeta, setCurrentMeta, getCurrentDocId } from './meta-state.js';
@@ -79,6 +80,8 @@ let saveHold = null;
  * set when the slug is edited in the meta panel.
  */
 let slugHandEdited = false;
+/** Local copies of the open post, the save bar and the tab lock (drafts/post-editor-drafts.js). */
+let postDrafts = null;
 
 /** Whether a loaded post's slug was set by hand. A new post's `untitled-<stamp>` follows its first title. */
 const handEditedOnLoad = (meta) => slugIsHandEdited(meta) && !isPlaceholderSlug(meta.slug);
@@ -138,6 +141,7 @@ export function refreshMetaLine() {
 /** A Post settings field changed the meta: auto-save it like an edit to the text. */
 export function metaEdited() {
   setSaveStatus('unsaved');
+  postDrafts?.edited();
   debouncedSave();
 }
 
@@ -320,6 +324,7 @@ export function initEditor() {
       // its own (the blank new post must not be created by it).
       if (contentChanged(transaction, oldDoc, newState.doc) && !transaction.getMeta(SERVER_NORMALIZED) && !transaction.getMeta(REGIONS_META)) {
         setSaveStatus('unsaved');
+        postDrafts?.edited();
         debouncedSave();
       }
     },
@@ -329,6 +334,7 @@ export function initEditor() {
   window.__editorView = editorView;
   window.__editorSchema = schema;
 
+  initPostDrafts();
   initPatterns();
   loadComponents();
   initSiteMode();
@@ -347,9 +353,11 @@ export function initEditor() {
   // Load document from URL hash or show empty (the collection default's regions)
   const hashDoc = window.location.hash.match(/^#doc-(.+)/);
   if (hashDoc) {
-    loadDocument(hashDoc[1]);
+    // A post that failed to open leaves the new post page
+    loadDocument(hashDoc[1]).then(() => { if (isNewPage()) postDrafts.openNew(); });
   } else {
     syncRegions();
+    postDrafts.openNew();
   }
 
   editorView.focus();
@@ -515,6 +523,8 @@ export async function loadDocument(id) {
     // paragraph); its layout's regions follow the body
     const regions = regionPlanFor(getCurrentMeta(), doc.regions, listing, collections);
     setEditorDoc(fromBlockAst(doc.blocks || [], schema, { title: getCurrentMeta().title || '', regions }));
+    // Its local copy (offered back when it differs) and the tab lock; not waited for
+    postDrafts?.openPost(doc);
 
     // Update URL hash
     window.location.hash = `doc-${doc.id}`;
@@ -527,8 +537,13 @@ export async function loadDocument(id) {
       window.__onMetaUpdate(getCurrentMeta());
     }
 
-    if (saveHold) setSaveStatus('error', saveHold);
-    else setSaveStatus(conflicts.has(doc.id) ? 'conflict' : 'saved');
+    if (saveHold) {
+      setSaveStatus('error', saveHold);
+      postDrafts?.saveWarning(saveHold);
+    } else if (conflicts.has(doc.id)) {
+      setSaveStatus('conflict');
+      postDrafts?.saveWarning(conflicts.get(doc.id));
+    } else setSaveStatus('saved');
     notifyConflict();
   } catch (err) {
     console.error('Error loading document:', err);
@@ -586,23 +601,29 @@ export async function saveDocument() {
   if (!docId || docId === 'doc_new') return createFromEditor();
   if (saveHold) {
     setSaveStatus('error', saveHold);
+    postDrafts?.saveWarning(saveHold);
     return false;
   }
   if (conflicts.has(docId)) {
     setSaveStatus('conflict');
+    postDrafts?.saveWarning(conflicts.get(docId));
     return false;
   }
 
   setSaveStatus('saving');
 
   try {
+    // The token marks which edits this save holds (same tick as the snapshot)
+    const token = postDrafts?.saveStarted();
     const blocks = toBlockAst(editorView.state.doc);
     const regions = toRegionsAst(editorView.state.doc);
     const meta = metaToSave(getCurrentMeta());
 
     const saved = await api.updateDocument(docId, { meta, blocks, regions });
+    postDrafts?.saveConfirmed(token, { docId, updated: saved?.meta?.updated ?? null, meta: saved?.meta ?? meta, blocks, regions });
     applyDropped(saved?.dropped);
     setSaveStatus('saved', noticesMessage(saved));
+    postDrafts?.saveSucceeded();
     return true;
   } catch (err) {
     handleSaveError(docId, err);
@@ -626,13 +647,18 @@ function createFromEditor() {
     if (!meta.slug || meta.slug === 'untitled') meta.slug = 'untitled-' + Date.now().toString(36);
     if (!meta.collection) meta.collection = 'posts';
     try {
+      const token = postDrafts?.saveStarted();
       const { doc: pmDoc } = editorView.state;
-      const doc = await api.createDocument({ meta, blocks: toBlockAst(pmDoc), regions: toRegionsAst(pmDoc) });
+      const blocks = toBlockAst(pmDoc);
+      const regions = toRegionsAst(pmDoc);
+      const doc = await api.createDocument({ meta, blocks, regions });
       setCurrentDocId(doc.id);
       setCurrentMeta({ slug: doc.meta.slug });
       window.location.hash = `doc-${doc.id}`;
+      postDrafts?.saveConfirmed(token, { docId: doc.id, updated: doc.meta?.updated ?? null, meta: doc.meta ?? meta, blocks, regions });
       applyDropped(doc.dropped);
       setSaveStatus('saved', noticesMessage(doc));
+      postDrafts?.saveSucceeded();
       document.querySelector('doc-browser')?.refresh();
       return true;
     } catch (err) {
@@ -659,11 +685,16 @@ export function handleSaveError(docId, err) {
     conflicts.set(docId, err.message);
     setSaveStatus('conflict');
     notifyConflict();
+    postDrafts?.saveWarning(err.message);
   } else if (err.status === 422 || err.status >= 500 || (err.status === 400 && err.data?.errors?.length)) {
     // A 400 with `errors` failed validation: say what to fix (auto-save keeps trying)
     setSaveStatus('error', saveErrorMessage(err));
+    postDrafts?.saveFailed(err);
   } else {
+    // No answer (the app can't be reached) or another refusal: loud, in the
+    // save bar; the edits are kept in this browser and saving is retried
     setSaveStatus('unsaved');
+    postDrafts?.saveFailed(err);
   }
 }
 
@@ -744,6 +775,7 @@ function clearIfCurrent(id) {
     });
     slugHandEdited = false;
     setEditorDoc(fromBlockAst([], schema));
+    postDrafts?.openNew({ offerPending: false });
     syncRegions();
     window.location.hash = '';
 
@@ -751,6 +783,77 @@ function clearIfCurrent(id) {
       window.__onMetaUpdate(getCurrentMeta());
     }
   }
+}
+
+// --- Local copies ---
+
+/** The new post page: no stored post yet. */
+const isNewPage = () => !getCurrentDocId() || getCurrentDocId() === 'doc_new';
+
+/** Keep every edit in this browser, offer it back, and show save problems in the save bar. */
+function initPostDrafts() {
+  const bar = document.querySelector('save-bar');
+  postDrafts = createEditorDrafts({
+    store: openDraftStore({ onUnavailable: () => postDrafts?.storageUnavailable() }),
+    siteId: SITE,
+    bar,
+    getView: () => editorView,
+    snapshot: () => ({
+      meta: metaToSave(getCurrentMeta()),
+      blocks: toBlockAst(editorView.state.doc),
+      regions: toRegionsAst(editorView.state.doc),
+    }),
+    restore: restoreLocalCopy,
+    createCopy: async (record) => {
+      const doc = await api.createDocument({
+        meta: {
+          ...record.meta,
+          slug: 'untitled-' + Date.now().toString(36),
+          title: `${record.meta?.title || 'Untitled'} (restored)`,
+          status: 'draft',
+        },
+        blocks: record.blocks,
+        regions: record.regions,
+      });
+      document.querySelector('doc-browser')?.refresh();
+      return doc.id;
+    },
+    load: loadDocument,
+    saveNow: saveDocument,
+    flushSave: () => {
+      if (!saveTimer) return;
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      saveDocument();
+    },
+  });
+  postDrafts.installPageEvents({ isUnsaved: () => saveStatus !== 'saved' });
+}
+
+/**
+ * Put a local copy (`{ meta, blocks, regions }`) in the editor in one
+ * undoable step, then save it.
+ * @param {{ meta: Object, blocks: Object[], regions?: Object }} record
+ */
+async function restoreLocalCopy(record) {
+  const docId = getCurrentDocId();
+  const listing = await layoutsListing();
+  const collections = await collectionsConfig();
+  if (!editorView || getCurrentDocId() !== docId) return;
+  // The copy's meta is as it was sent: '' layout and no theme went as null
+  const meta = { ...getCurrentMeta(), ...record.meta, updated: getCurrentMeta().updated };
+  if (meta.layout == null) meta.layout = '';
+  for (const k of ['theme', 'themeScope']) if (meta[k] == null) delete meta[k];
+  resetCurrentMeta(meta);
+  slugHandEdited = handEditedOnLoad(getCurrentMeta());
+  const regions = regionPlanFor(getCurrentMeta(), record.regions, listing, collections);
+  const next = fromBlockAst(record.blocks || [], schema, { title: getCurrentMeta().title || '', regions });
+  getBlockPalette().close();
+  const { tr } = editorView.state;
+  // Its regions may differ from the open post's: let the region guard pass it
+  editorView.dispatch(tr.replaceWith(0, tr.doc.content.size, next.content).setMeta(REGIONS_META, true));
+  if (window.__onMetaUpdate) window.__onMetaUpdate(getCurrentMeta());
+  metaEdited();
 }
 
 // --- Debounced auto-save ---

@@ -69,4 +69,10 @@ describe('frontMatter imageAlt', () => {
     assert.ok(!frontMatter(doc, { layout: 'post', imageAlt: '' }).includes('imageAlt'));
     assert.ok(!frontMatter(doc, { layout: 'post' }).includes('imageAlt'));
   });
+
+  it('writes section after layout; absent stays absent', () => {
+    const fm = frontMatter({ id: 'd', meta: { title: 'T', section: 'teaching' } }, { layout: 'post' });
+    assert.match(fm, /layout: "post"\nsection: "teaching"\nvp_id:/);
+    assert.doesNotMatch(frontMatter({ id: 'd', meta: { title: 'T' } }, { layout: 'post' }), /section/);
+  });
 });

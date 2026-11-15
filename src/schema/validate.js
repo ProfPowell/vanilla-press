@@ -17,6 +17,7 @@ import { validCredit } from '../media/credit.js';
 export const LAYOUT_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 // A region fills a layout slot; Cook's slot names are `[\w-]+` (`head` is reserved).
 export const REGION_NAME = /^[A-Za-z0-9_-]+$/;
+const SECTION_ID = /^[a-z0-9][a-z0-9-]*$/;
 const WRAPS = ['text', 'template', 'script'];
 
 /**
@@ -77,6 +78,10 @@ export function validate(doc, { components } = {}) {
     const { layout } = doc.meta;
     if (layout !== undefined && layout !== null && layout !== '' && !(typeof layout === 'string' && LAYOUT_NAME.test(layout))) {
       errors.push('meta.layout must be a layout name (letters, digits, _, -, .; no slash or leading dot)');
+    }
+    const { section } = doc.meta;
+    if (section !== undefined && section !== null && section !== '' && !(typeof section === 'string' && SECTION_ID.test(section))) {
+      errors.push('meta.section must be a section id (a-z, 0-9, -)');
     }
     if (doc.meta.status && !validStatuses.includes(doc.meta.status)) {
       errors.push(`meta.status "${doc.meta.status}" is not valid (expected: ${validStatuses.join(', ')})`);

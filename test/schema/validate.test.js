@@ -415,3 +415,13 @@ describe('validate layout and regions', () => {
     assert.ok(errors.some((e) => e.startsWith('regions.aside[1]')), errors.join('; '));
   });
 });
+
+describe('validate section', () => {
+  const doc = (section) => ({ id: 'd1', meta: { title: 'T', slug: 't', collection: 'posts', status: 'draft', ...(section === undefined ? {} : { section }) }, blocks: [] });
+  it('accepts an optional slug-like section', () => {
+    for (const s of [undefined, null, '', 'teaching', 'a-1']) assert.equal(validate(doc(s)).valid, true, String(s));
+  });
+  it('rejects a non slug-like or non-string section', () => {
+    for (const s of ['Bad', 'a b', '-x', 'x_y', 5]) assert.equal(validate(doc(s)).valid, false, String(s));
+  });
+});

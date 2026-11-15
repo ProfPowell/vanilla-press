@@ -46,6 +46,7 @@ describe('migrate documents', () => {
     const cols = db.prepare('PRAGMA table_info(documents)').all().map((c) => c.name);
     assert.ok(cols.includes('layout'));
     assert.ok(cols.includes('regions'));
+    assert.ok(cols.includes('section'));
     db.close();
   });
 });

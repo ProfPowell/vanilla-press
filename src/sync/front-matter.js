@@ -42,6 +42,7 @@ export function frontMatter(doc, { layout, imageAlt }) {
     ['theme', m.theme],
     ['themeScope', m.theme ? (m.themeScope || 'page') : ''],
     ['layout', layout],
+    ['section', m.section],
     ['slug', m.slug],
     ['vp_id', doc.id],
   ];

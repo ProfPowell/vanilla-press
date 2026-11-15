@@ -514,6 +514,18 @@ describe('FTS triggers', () => {
   });
 });
 
+describe('section', () => {
+  it('round trips meta.section; absent stays absent', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    saveDocument(db, { id: 'sec01', meta: { title: 'S', slug: 's', collection: 'posts', section: 'teaching' }, blocks: [] });
+    saveDocument(db, { id: 'sec02', meta: { title: 'N', slug: 'n', collection: 'posts' }, blocks: [] });
+    assert.equal(getDocument(db, 'sec01').meta.section, 'teaching');
+    assert.equal(getDocument(db, 'sec02').meta.section, undefined);
+    db.close();
+  });
+});
+
 describe('layout and regions', () => {
   const para = (value) => ({ type: 'paragraph', children: [{ type: 'text', value }] });
   const withRegions = () => ({

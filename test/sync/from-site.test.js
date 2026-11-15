@@ -177,3 +177,16 @@ describe('regions through site files', () => {
     assert.equal(back.meta.layout, 'sidebar-right');
   });
 });
+
+describe('section through site files', () => {
+  it('syncDocument writes meta.section and syncFromSite restores it', () => {
+    const d = simple();
+    d.meta.section = 'teaching';
+    const saved = saveDocument(db, d);
+    syncDocument(ws, saved, { collectionsConfig: {} });
+    assert.equal(JSON.parse(readFileSync(join(tmp, REL), 'utf8')).meta.section, 'teaching');
+    db.prepare('DELETE FROM documents WHERE id = ?').run(d.id);
+    syncFromSite(ws, db);
+    assert.equal(getDocument(db, d.id).meta.section, 'teaching');
+  });
+});

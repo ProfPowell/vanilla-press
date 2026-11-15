@@ -166,6 +166,19 @@ describe('API', () => {
       assert.equal(bad.status, 400);
     });
 
+    it('a PUT without section keeps the stored one', async () => {
+      const made = await api('/api/documents', {
+        method: 'POST',
+        body: { meta: { title: 'Sec', slug: 'sec-doc', collection: 'pages', section: 'teaching' }, blocks: [] },
+      });
+      assert.equal(made.data.meta.section, 'teaching');
+      const put = await api(`/api/documents/${made.data.id}`, { method: 'PUT', body: { meta: { title: 'Sec 2' } } });
+      assert.equal(put.data.meta.section, 'teaching');
+      assert.equal((await api(`/api/documents/${made.data.id}`)).data.meta.section, 'teaching');
+      const bad = await api(`/api/documents/${made.data.id}`, { method: 'PUT', body: { meta: { section: 'Bad Id' } } });
+      assert.equal(bad.status, 400);
+    });
+
     it('lists documents', async () => {
       const { status, data } = await api('/api/documents');
 

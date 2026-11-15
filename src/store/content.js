@@ -57,6 +57,7 @@ function rowToDocument(row) {
       theme: row.theme || undefined,
       themeScope: (row.theme && row.theme_scope) || undefined,
       layout: row.layout || undefined,
+      section: row.section || undefined,
     },
     blocks: JSON.parse(row.blocks),
   };
@@ -136,8 +137,8 @@ export function saveDocument(db, doc) {
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO documents (id, title, slug, collection, status, description, author_id, created, updated, published, tags, image, theme, theme_scope, layout, regions, blocks, plaintext)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO documents (id, title, slug, collection, status, description, author_id, created, updated, published, tags, image, theme, theme_scope, layout, section, regions, blocks, plaintext)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       slug = excluded.slug,
@@ -152,6 +153,7 @@ export function saveDocument(db, doc) {
       theme = excluded.theme,
       theme_scope = excluded.theme_scope,
       layout = excluded.layout,
+      section = excluded.section,
       regions = excluded.regions,
       blocks = excluded.blocks,
       plaintext = excluded.plaintext
@@ -171,6 +173,7 @@ export function saveDocument(db, doc) {
     meta.theme || null,
     (meta.theme && meta.themeScope) || null,
     meta.layout || null,
+    meta.section || null,
     regions ? JSON.stringify(regions) : null,
     JSON.stringify(blocks),
     plaintext,

@@ -516,4 +516,25 @@ describe('post editor drafts, while an offer waits', () => {
     assert.equal(view.editable, false);
     assert.equal(drafts.canSave(), false);
   });
+  it('Restore from the bar keeps what it replaces as an "Unsaved copy" first', async () => {
+    const store = await leftCopy('mine');
+    const { bar, drafts, calls } = setup({ store });
+    await drafts.openPost(serverDoc('d1', 'U1', 'server text'));
+    await bar.click('onRestore');
+    assert.equal(calls.restore.length, 1);
+    const versions = await drafts.versions();
+    // The snapshot (the post as shown, 'a' in this harness) is kept; so is the offered copy
+    assert.ok(versions.some((v) => v.offered && v.blocks[0].text === 'a'));
+    assert.ok(versions.some((v) => v.offered && v.blocks[0].text === 'mine'));
+  });
+
+  it('when what Restore replaces cannot be kept, nothing is restored and storage is warned about', async () => {
+    const store = await leftCopy('mine');
+    const { bar, drafts, calls } = setup({ store });
+    await drafts.openPost(serverDoc());
+    store.keep = async () => false;
+    await bar.click('onRestore');
+    assert.equal(calls.restore.length, 0);
+    assert.equal(bar.shown?.text, UNPROTECTED);
+  });
 });

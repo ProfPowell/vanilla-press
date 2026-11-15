@@ -271,6 +271,18 @@ export function createEditorDrafts({
     if (id != null) quiet(lockPost(id));
   }
 
+  /**
+   * Put `record` in the editor, keeping what is there now as a version
+   * first; if that can't be kept, nothing is replaced (and storage is warned about).
+   */
+  async function keepThenRestore(record) {
+    if (!(await drafts.keepCurrent(snapshot()))) {
+      api.storageUnavailable();
+      return;
+    }
+    await restore(record);
+  }
+
   function offerCopy(g, offer, local, serverDoc) {
     // The other-tab notice or a save problem stays on screen; the copy is
     // kept (as a version, and offered again next time).
@@ -293,7 +305,7 @@ export function createEditorDrafts({
     };
     bar?.showRestore(offer, {
       differences: describeDifferences(local, serverDoc),
-      onRestore: act(() => restore(local)),
+      onRestore: act(() => keepThenRestore(local)),
       onRestoreAsNew: act(async () => {
         const id = await createCopy(local);
         // The copy lives on in the new post; let this post's copy go unless typed over since
@@ -439,12 +451,7 @@ export function createEditorDrafts({
     async restoreVersion(version) {
       if (readOnly()) return;
       try {
-        // What is in the editor now stays as a version; if that can't be kept, nothing is replaced
-        if (!(await drafts.keepCurrent(snapshot()))) {
-          api.storageUnavailable();
-          return;
-        }
-        await restore(version);
+        await keepThenRestore(version);
       } catch (err) {
         console.error('Restoring a version:', err);
         api.saveFailed(err);

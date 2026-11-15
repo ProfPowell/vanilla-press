@@ -54,6 +54,7 @@ import './components/theme-picker.js';
 import './components/component-settings.js';
 import './components/more-menu.js';
 import './components/confirm-panel.js';
+import './components/save-bar.js';
 import { initPatterns } from './patterns.js';
 import { enabledDescriptors, unrepresentable, withoutDropped } from './component-model.js';
 import { initSiteMode } from './site-mode.js';

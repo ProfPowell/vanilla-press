@@ -434,3 +434,46 @@ editor-shell.site-mode .editor-pane {
     padding: var(--size-l) var(--size-m) var(--size-2xl);
   }
 }
+
+/* The save bar: a full-width strip under the header that stays until a save
+ * problem is resolved, or an unsaved local copy is restored or discarded */
+save-bar {
+  display: block;
+  padding: var(--size-xs, 0.5rem) var(--size-m, 1rem);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-warning-subtle);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-s);
+}
+
+save-bar[hidden] {
+  display: none;
+}
+
+save-bar[data-tone="error"] {
+  background: var(--color-error-subtle);
+  color: var(--color-error-text);
+}
+
+save-bar[data-tone="info"] {
+  background: var(--color-surface-raised, var(--color-warning-subtle));
+  color: var(--color-text);
+}
+
+save-bar .save-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-xs, 0.5rem);
+}
+
+save-bar .save-bar-text {
+  flex: 1 1 16rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+save-bar .save-bar-differences {
+  margin: var(--size-xs, 0.5rem) 0 0;
+  padding-left: var(--size-l, 1.5rem);
+}

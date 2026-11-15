@@ -226,4 +226,18 @@ describe('post drafts', () => {
     assert.equal(v[0].blocks[0].text, 'mine');
     assert.equal(v[0].updated, 'U2');
   });
+
+  it('keepCurrent keeps a copy that differs only in theme or status, and skips an identical one', async () => {
+    const { mk } = setup();
+    const d = mk();
+    await d.open('d1', serverDoc());
+    const base = { meta: { title: 'T', status: 'draft' }, blocks: [{ text: 'a' }], regions: {} };
+    await d.saveConfirmed(d.saveStarted(), { docId: 'd1', updated: 'U2', ...base });
+    assert.equal(await d.keepCurrent(base), true);
+    assert.equal((await d.versions()).length, 1);
+    await d.keepCurrent({ ...base, meta: { ...base.meta, theme: 'dark' } });
+    assert.equal((await d.versions()).length, 2);
+    await d.keepCurrent({ ...base, meta: { ...base.meta, status: 'published' } });
+    assert.equal((await d.versions()).length, 3);
+  });
 });

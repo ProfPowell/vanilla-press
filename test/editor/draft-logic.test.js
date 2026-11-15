@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { postKey, newPostKey, restoreOffer, describeDifferences } from '../../editor/assets/js/drafts/draft-logic.js';
+import { postKey, newPostKey, restoreOffer, describeDifferences, sameContent } from '../../editor/assets/js/drafts/draft-logic.js';
 
 const server = () => ({
   id: 'd1',
@@ -61,5 +61,24 @@ describe('describeDifferences', () => {
     const lines = describeDifferences(l, server());
     assert.equal(lines.length, 7);
     assert.equal(lines[6], '…and more');
+  });
+});
+
+describe('same content beyond the listed fields', () => {
+  it('offers a copy that differs only in theme', () => {
+    const l = local({ meta: { ...server().meta, theme: 'dark' } });
+    assert.equal(restoreOffer(l, server()).kind, 'restore');
+  });
+  it('offers nothing when only `updated` differs', () => {
+    assert.equal(restoreOffer(local({ meta: { ...server().meta, updated: 'U9' } }), server()), null);
+  });
+  it('ignores key order and null versus missing', () => {
+    const a = { meta: { b: 1, a: { y: 1, x: 2 }, theme: null }, blocks: [] };
+    const b = { meta: { a: { x: 2, y: 1 }, b: 1 }, blocks: [], regions: {} };
+    assert.equal(sameContent(a, b), true);
+  });
+  it('says "Other settings changed" for a theme-only change', () => {
+    const l = local({ meta: { ...server().meta, theme: 'dark' } });
+    assert.deepEqual(describeDifferences(l, server()), ['Other settings changed']);
   });
 });

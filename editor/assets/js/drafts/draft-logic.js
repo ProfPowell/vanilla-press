@@ -26,13 +26,29 @@ const metaOf = (doc) => doc?.meta || {};
 const regionsOf = (doc) => doc?.regions || {};
 const blocksOf = (list) => (Array.isArray(list) ? list : []);
 
-/** True when the local copy has the same content as the server's post. */
-function sameContent(local, serverDoc) {
-  const a = metaOf(local);
-  const b = metaOf(serverDoc);
-  if (META_FIELDS.some(([k]) => !same(a[k], b[k]))) return false;
-  return same(blocksOf(local.blocks), blocksOf(serverDoc?.blocks))
-    && same(regionsOf(local), regionsOf(serverDoc));
+const SERVER_MANAGED = new Set(['updated', 'created']);
+
+/** JSON with sorted keys; null and missing values are the same thing. */
+function stable(value) {
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).filter((k) => value[k] != null).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stable(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/**
+ * True when two posts have the same content: every meta field (but the
+ * server-managed `updated`/`created`), the blocks and the regions. Key order
+ * does not matter.
+ * @param {{ meta?: object, blocks?: object[], regions?: object }|null} a
+ * @param {{ meta?: object, blocks?: object[], regions?: object }|null} b
+ */
+export function sameContent(a, b) {
+  const meta = (doc) => Object.fromEntries(Object.entries(metaOf(doc)).filter(([k]) => !SERVER_MANAGED.has(k)));
+  const whole = (doc) => ({ meta: meta(doc), blocks: blocksOf(doc?.blocks), regions: regionsOf(doc) });
+  return stable(whole(a)) === stable(whole(b));
 }
 
 /**
@@ -80,5 +96,6 @@ export function describeDifferences(local, serverDoc) {
     const line = blockLine(capitalise(name), ra[name], rb[name]);
     if (line) lines.push(line);
   }
+  if (!lines.length && !sameContent(local, serverDoc)) lines.push('Other settings changed');
   return lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), '…and more'] : lines;
 }

@@ -8,7 +8,7 @@
  * @module editor/drafts/post-drafts
  */
 
-import { postKey, newPostKey, restoreOffer, describeDifferences } from './draft-logic.js';
+import { postKey, newPostKey, restoreOffer, sameContent } from './draft-logic.js';
 
 const clone = (value) => (value === undefined ? value : JSON.parse(JSON.stringify(value)));
 
@@ -159,7 +159,7 @@ export function createPostDrafts({ store, siteId, now = () => new Date().toISOSt
       return enqueue(async () => {
         if (!k) return false;
         const [newest] = await store.versions(k);
-        if (newest && describeDifferences(newest, snapshot).length === 0) return true;
+        if (newest && sameContent(newest, snapshot)) return true;
         return store.pushVersion(k, {
           meta: clone(snapshot.meta), blocks: clone(snapshot.blocks), regions: clone(snapshot.regions) ?? {},
           updated: baseUpdated, at: now(), offered: true,

@@ -228,6 +228,27 @@ export function createEditorDrafts({
     return l.claim();
   }
 
+  /**
+   * Hold a never-saved post's key, so no other new post page takes its copy.
+   * Resolves true when this tab holds it (or tabs can't talk to each other).
+   */
+  async function holdNewKey(key) {
+    if (typeof BroadcastChannel === 'undefined') return true;
+    if (lock && lockKey === key) return lock.owner;
+    releaseLock();
+    const l = createTabLock({ key, wait: lockWait });
+    lock = l;
+    lockKey = key;
+    await l.claim();
+    if (l.owner) return true;
+    if (lock === l) {
+      lock = null;
+      lockKey = null;
+    }
+    l.release();
+    return false;
+  }
+
   // --- opening a post ---
 
   function begin(id) {
@@ -348,14 +369,23 @@ export function createEditorDrafts({
       }
     },
 
-    /** The new post page is in the editor; offer a never-saved post's copy unless told not to. */
+    /**
+     * The new post page is in the editor; offer a never-saved post's copy
+     * unless told not to, or another new post page has it open (then this
+     * one starts its own).
+     */
     async openNew({ offerPending = true } = {}) {
       const g = begin(null);
       try {
         const pending = offerPending ? await drafts.pendingNew() : null;
         if (g !== gen) return;
-        const offer = await drafts.open(null, null, pending ? { adoptKey: pending.key } : {});
-        if (!settle(g) || !offer || !pending) return;
+        // Another new post page may have it open: take its copy only when this tab gets its key
+        const adopt = pending ? await holdNewKey(pending.key) : false;
+        if (g !== gen) return;
+        const offer = await drafts.open(null, null, adopt ? { adoptKey: pending.key } : {});
+        if (g !== gen) return;
+        if (!adopt) await holdNewKey(drafts.key);
+        if (!settle(g) || !offer || !adopt) return;
         offerCopy(g, offer, pending.record, null);
       } catch (err) {
         console.warn('Local copy:', err);

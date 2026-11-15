@@ -10,7 +10,8 @@
  *   release  the editing tab is going away
  *   saved    a tab that stood down for a `take` has finished its last save
  *
- * Two tabs asking at once are settled by tab id: the lower one edits.
+ * Two tabs asking at once are settled by tab id: the lower one edits (it
+ * asks again on hearing a higher one, so neither can miss the other).
  *
  * @module editor/drafts/tab-lock
  */
@@ -74,6 +75,9 @@ export function createTabLock({ key, channel, wait = 150, onLocked, onUnlocked, 
       case 'open':
         if (owner) send('owned');
         else if (settle && data.tab < tab) loseClaim();
+        // Both claiming and this tab wins the tie: ask again, so a tab that
+        // missed this tab's `open` (it was not listening yet) hears it and yields
+        else if (settle) send('open');
         break;
       case 'owned':
         if (settle) loseClaim();

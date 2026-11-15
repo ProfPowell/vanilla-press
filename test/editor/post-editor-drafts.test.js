@@ -178,6 +178,7 @@ describe('post editor drafts', () => {
     await first.drafts.openNew();
     first.type('never saved');
     await first.drafts.flush();
+    first.drafts.release(); // that tab is gone
     const { bar, drafts, calls } = setup({ store: first.store });
     await drafts.openNew();
     assert.equal(bar.offer.kind, 'restore');
@@ -536,5 +537,56 @@ describe('post editor drafts, while an offer waits', () => {
     await bar.click('onRestore');
     assert.equal(calls.restore.length, 0);
     assert.equal(bar.shown?.text, UNPROTECTED);
+  });
+});
+
+describe('post editor drafts, two new post tabs', () => {
+  it('a new post page does not take the copy of a new post still open in another tab', async () => {
+    const a = setup();
+    await a.drafts.openNew();
+    a.type('from tab A');
+    await a.drafts.flush();
+    const b = setup({ store: a.store });
+    await b.drafts.openNew();
+    assert.equal(b.bar.offer, null);
+    b.type('from tab B');
+    await b.drafts.flush();
+    const keys = await a.store.keys('post:s:new-');
+    assert.equal(keys.length, 2);
+    const texts = await Promise.all(keys.map(async (k) => (await a.store.get(k)).blocks[0].text));
+    assert.deepEqual(texts.sort(), ['from tab A', 'from tab B']);
+  });
+
+  it('two tabs opening the new post page at once: only one adopts the left copy', async () => {
+    const first = setup();
+    await first.drafts.openNew();
+    first.type('left behind');
+    await first.drafts.flush();
+    first.drafts.release();
+    const b = setup({ store: first.store });
+    const c = setup({ store: first.store });
+    await Promise.all([b.drafts.openNew(), c.drafts.openNew()]);
+    const offered = [b, c].filter((t) => t.bar.offer);
+    assert.equal(offered.length, 1);
+    const other = offered[0] === b ? c : b;
+    other.type('the other tab');
+    await other.drafts.flush();
+    const left = (await first.store.keys('post:s:new-')).map(async (k) => (await first.store.get(k)).blocks[0].text);
+    assert.ok((await Promise.all(left)).includes('left behind'));
+  });
+
+  it('once saved, the adopted key is free for nobody: the copy moved to the post id', async () => {
+    const first = setup();
+    await first.drafts.openNew();
+    first.type('left behind');
+    await first.drafts.flush();
+    first.drafts.release();
+    const b = setup({ store: first.store });
+    await b.drafts.openNew();
+    assert.equal(b.bar.offer.kind, 'restore');
+    await b.bar.click('onRestore');
+    b.type('restored');
+    await b.drafts.saveConfirmed(b.drafts.saveStarted(), { docId: 'd5', updated: 'U1', meta: { title: 'T' }, blocks: [{ text: 'restored' }], regions: {} });
+    assert.deepEqual(await first.store.keys('post:s:new-'), []);
   });
 });

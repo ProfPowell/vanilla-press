@@ -142,3 +142,34 @@ test('the tab that gave up editing tells the taker once its last save is done', 
     a.release(); b.release(); ca.close(); cb.close();
   }
 });
+
+test('a tab that claims while a lower tab is still claiming is locked, whichever heard whom', async () => {
+  // The first tab's `open` goes before the second listens; the second's id is higher
+  const ids = ['tab-1', 'tab-2'];
+  const real = globalThis.crypto.randomUUID;
+  globalThis.crypto.randomUUID = () => ids.shift();
+  const name = 'vp-test-' + Math.random();
+  const chA = new BroadcastChannel(name);
+  let a;
+  let b;
+  try {
+    a = createTabLock({ key: 'p1', channel: chA, wait: WAIT });
+    // B is not listening yet: it misses A's `open`
+    const claimA = a.claim();
+    await sleep(WAIT / 4);
+    const chB2 = new BroadcastChannel(name);
+    b = createTabLock({ key: 'p1', channel: chB2, wait: WAIT });
+    try {
+      await Promise.all([claimA, b.claim()]);
+      assert.equal(a.owner, true);
+      assert.equal(b.owner, false);
+    } finally {
+      b.release();
+      chB2.close();
+    }
+  } finally {
+    globalThis.crypto.randomUUID = real;
+    a?.release();
+    chA.close();
+  }
+});

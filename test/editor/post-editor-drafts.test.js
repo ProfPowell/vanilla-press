@@ -309,3 +309,60 @@ describe('post editor drafts, storage throwing', () => {
     assert.notEqual(drafts.saveStarted(), null);
   });
 });
+
+describe('post editor drafts, reload after a takeover', () => {
+  async function takeOverWith(load) {
+    const a = setup();
+    await a.drafts.openPost(serverDoc());
+    a.type('active');
+    await a.drafts.flush();
+    const b = setup({ store: a.store, extra: { load } });
+    await b.drafts.openPost(serverDoc());
+    b.bar.shown.actions[0].run();
+    return { a, b };
+  }
+
+  it('a failed reload leaves the tab read-only and the shared copy alone', async () => {
+    let works = false;
+    const loads = [];
+    const { a, b } = await takeOverWith(async (id) => { loads.push(id); return works; });
+    await sleep(30);
+    assert.deepEqual(loads, ['d1']);
+    assert.equal(b.view.editable, false);
+    assert.equal(b.drafts.canSave(), false);
+    assert.equal(b.drafts.saveStarted(), null);
+    assert.equal(b.bar.shown.tone, 'error');
+    assert.equal(b.bar.shown.text, "Couldn't reload this post. Try again");
+    b.type('stale');
+    await b.drafts.flush();
+    assert.equal((await a.store.get('post:s:d1')).blocks[0].text, 'active');
+    // Try again: works this time, and the takeover finishes
+    works = true;
+    const retry = b.bar.shown.actions.find((x) => x.label === 'Try again');
+    await retry.run();
+    assert.deepEqual(loads, ['d1', 'd1']);
+    assert.equal(b.view.editable, true);
+    assert.equal(b.drafts.canSave(), true);
+    assert.equal(b.bar.shown, null);
+  });
+
+  it('a reload makes the tab editable only once the post is replaced', async () => {
+    let finish;
+    const seen = [];
+    let bRef;
+    const { b } = await takeOverWith((id) => new Promise((r) => {
+      seen.push({ id, editable: bRef.view.editable, canSave: bRef.drafts.canSave() });
+      finish = () => r(true);
+    }));
+    bRef = b;
+    await sleep(30);
+    assert.equal(seen.length, 1);
+    assert.deepEqual(seen[0], { id: 'd1', editable: false, canSave: false });
+    assert.equal(b.view.editable, false);
+    assert.equal(b.drafts.canSave(), false);
+    finish();
+    await sleep(5);
+    assert.equal(b.view.editable, true);
+    assert.equal(b.drafts.canSave(), true);
+  });
+});

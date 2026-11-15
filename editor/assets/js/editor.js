@@ -507,6 +507,7 @@ export function getEditorView() {
 /**
  * Load a document from the API into the editor.
  * @param {string} id
+ * @returns {Promise<boolean>} false when it could not be opened (the editor is unchanged)
  */
 export async function loadDocument(id) {
   try {
@@ -551,10 +552,12 @@ export async function loadDocument(id) {
       postDrafts?.saveWarning(conflicts.get(doc.id));
     } else setSaveStatus('saved');
     notifyConflict();
+    return true;
   } catch (err) {
     console.error('Error loading document:', err);
     // The header's save pill (a status region) shows it in the app and in vp serve alike
     setSaveStatus('error', `Couldn't open the post: ${err.message}`);
+    return false;
   }
 }
 

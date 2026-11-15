@@ -6,7 +6,7 @@
  * and passes what this needs from the editor as callbacks.
  *
  * The save bar shows one thing at a time. In order of what stays on screen:
- * the other-tab notice, a save problem, an offer to restore, the storage
+ * the other-tab notice (or a failed reload after taking over), a save problem, an offer to restore, the storage
  * warning (shown again whenever nothing else is).
  *
  * @module editor/drafts/post-editor-drafts
@@ -20,6 +20,7 @@ import { saveFailureMessage, isNetworkFailure } from './save-failure.js';
 
 export const UNPROTECTED = "Unsaved work isn't protected in this browser";
 const LOCKED = 'This post is open in another tab';
+const RELOAD_FAILED = "Couldn't reload this post. Try again";
 
 /**
  * A draft store usable at once: IndexedDB once it opens, else memory (with
@@ -55,7 +56,7 @@ const quiet = (p) => Promise.resolve(p).catch((err) => console.warn('Local copy:
  * @param {() => { meta: object, blocks: object[], regions: object }} opts.snapshot the post as it is now
  * @param {(record: object) => Promise|void} opts.restore put a local copy in the editor and save it
  * @param {(record: object) => Promise<string>} opts.createCopy create a draft post from a copy; resolves its id
- * @param {(id: string) => Promise|void} opts.load open a post
+ * @param {(id: string) => Promise<boolean|void>} opts.load open a post; resolves false when it failed
  * @param {() => Promise|void} opts.saveNow save the open post now
  * @param {() => Promise|void} [opts.flushSave] run a pending auto-save now; settles when it is done
  * @param {number} [opts.retryMs] retry interval while the app can't be reached
@@ -140,7 +141,10 @@ export function createEditorDrafts({
     lock = null;
     lockKey = null;
     old.release();
-    if (endHandoff()) setEditable(true);
+    if (endHandoff()) {
+      setEditable(true);
+      barClear('reload');
+    }
     if (locked) {
       locked = false;
       setEditable(true);
@@ -174,11 +178,26 @@ export function createEditorDrafts({
         barClear('lock');
         // This tab is behind what the other tab saved: once its last save is
         // done (or after a while), show the post as it is now, then edit
+        // Read-only (no edits recorded, no saves) until the post is replaced:
+        // a failed reload must not let the stale view write over the other tab's work
         const id = postId;
         const done = async () => {
-          if (lock !== l || endHandoff() !== done) return;
-          if (id != null && postId === id) await quiet(load(id));
-          if (lock !== l || locked) return;
+          const h = handoff;
+          if (lock !== l || !h || h.done !== done || h.loading) return;
+          clearTimeout(h.timer);
+          h.loading = true;
+          let ok = true;
+          if (id != null && postId === id) {
+            try { ok = (await load(id)) !== false; } catch { ok = false; }
+          }
+          if (lock !== l || handoff !== h) return; // stood down or released meanwhile
+          h.loading = false;
+          if (!ok) {
+            barShow('reload', { tone: 'error', text: RELOAD_FAILED, actions: [{ label: 'Try again', run: done }] });
+            return;
+          }
+          handoff = null;
+          barClear('reload');
           setEditable(true);
           getView()?.focus();
         };
@@ -345,13 +364,13 @@ export function createEditorDrafts({
       if (!msg) return;
       if (isNetworkFailure(err)) scheduleRetry();
       else stopRetry();
-      if (showing !== 'lock') barShow('failure', msg);
+      if (showing !== 'lock' && showing !== 'reload') barShow('failure', msg);
     },
 
     /** Saving is paused (a conflict, or content the editor can't show). */
     saveWarning(text) {
       stopRetry();
-      if (showing !== 'lock') barShow('failure', { tone: 'warn', text });
+      if (showing !== 'lock' && showing !== 'reload') barShow('failure', { tone: 'warn', text });
     },
 
     /** A save worked: the save problem is over. */

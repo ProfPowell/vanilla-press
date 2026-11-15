@@ -43,12 +43,24 @@ export function idbBackend({ name = 'vp-drafts' } = {}) {
     open.onblocked = () => reject(new Error('IndexedDB is blocked'));
     open.onsuccess = () => {
       const db = open.result;
-      const store = (s, mode) => db.transaction(s, mode).objectStore(s);
+      const store = (s) => db.transaction(s, 'readonly').objectStore(s);
+      // Writes finish when the transaction commits, so quota and commit
+      // failures reject instead of looking like success.
+      const write = (s, fn) => new Promise((res, rej) => {
+        let tx;
+        try {
+          tx = db.transaction(s, 'readwrite');
+          fn(tx.objectStore(s));
+        } catch (err) { return rej(err); }
+        tx.oncomplete = () => res();
+        tx.onabort = () => rej(tx.error || new Error('IndexedDB write aborted'));
+        tx.onerror = () => rej(tx.error || new Error('IndexedDB write failed'));
+      });
       resolve({
-        get: (s, key) => wrap(store(s, 'readonly').get(key)),
-        set: (s, key, value) => wrap(store(s, 'readwrite').put(value, key)).then(() => {}),
-        delete: (s, key) => wrap(store(s, 'readwrite').delete(key)).then(() => {}),
-        keys: (s) => wrap(store(s, 'readonly').getAllKeys()).then((k) => k.map(String)),
+        get: (s, key) => wrap(store(s).get(key)),
+        set: (s, key, value) => write(s, (os) => { os.put(value, key); }),
+        delete: (s, key) => write(s, (os) => { os.delete(key); }),
+        keys: (s) => wrap(store(s).getAllKeys()).then((k) => k.map(String)),
       });
     };
   });

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
@@ -87,6 +88,21 @@ describe('social-links preview', () => {
     assert.equal(el.innerHTML, '<ul><li>a</li></ul>');
     applyPreview(el, { kind: 'none' }, 's');
     assert.equal(el.innerHTML, '');
+  });
+  it('marks the element while a note shows, so the editor CSS can display it (VB hides an element with no li)', () => {
+    const el = document.createElement('social-links');
+    applyPreview(el, { kind: 'empty' }, 's');
+    assert.equal(el.hasAttribute('data-preview-note'), true);
+    applyPreview(el, { kind: 'html', html: '<ul><li>a</li></ul>' }, 's');
+    assert.equal(el.hasAttribute('data-preview-note'), false);
+    applyPreview(el, { kind: 'old' }, 's');
+    assert.equal(el.hasAttribute('data-preview-note'), true);
+    applyPreview(el, { kind: 'none' }, 's');
+    assert.equal(el.hasAttribute('data-preview-note'), false);
+  });
+  it('the editor CSS displays a noted element', () => {
+    const css = readFileSync(new URL('../../editor/assets/css/_component-settings.css', import.meta.url), 'utf8');
+    assert.match(css, /social-links\[data-preview-note\]\s*\{[^}]*display:\s*block/);
   });
   it('a too-old Cook gets a short note', () => {
     const el = document.createElement('social-links');

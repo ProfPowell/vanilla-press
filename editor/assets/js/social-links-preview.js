@@ -46,6 +46,8 @@ export function previewPlan(result, error) {
  * @param {string|null} siteId
  */
 export function applyPreview(el, plan, siteId) {
+  // VB hides a <social-links> with no <li>; a note has none, so mark it for the editor CSS.
+  el.toggleAttribute('data-preview-note', plan.kind === 'empty' || plan.kind === 'old');
   if (plan.kind === 'html') {
     el.innerHTML = plan.html;
   } else if (plan.kind === 'empty' || plan.kind === 'old') {

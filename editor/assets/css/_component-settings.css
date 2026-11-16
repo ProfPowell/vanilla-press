@@ -115,3 +115,11 @@ component-settings .choose-media {
 component-settings .choose-media:hover {
   background: var(--color-surface-raised);
 }
+
+/* The social-links preview note (empty or old Cook) has no <li>, which VB's
+ * `social-links:not(:has(li))` would hide. Show it while a note is up. */
+social-links[data-preview-note] {
+  display: block;
+  color: var(--color-text-muted, inherit);
+  font-size: var(--font-size-s, 0.875em);
+}

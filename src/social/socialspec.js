@@ -49,7 +49,18 @@ export function validateContact(v) {
   v = clean(v);
   if (!Object.keys(v).length) return null;
   if (typeof v.name !== 'string' || !v.name.trim()) bad('Contact: a name is required');
-  if (v.email !== undefined && v.email !== '' && (typeof v.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email))) {
+  const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (Array.isArray(v.email)) {
+    const list = [];
+    v.email.forEach((e, i) => {
+      if (typeof e === 'string' && e.trim() === '') return;
+      if (typeof e !== 'string' || !EMAIL.test(e.trim())) bad(`Contact: email ${i + 1} does not look like an email address`);
+      list.push(e.trim());
+    });
+    if (list.length > 1) v.email = list;
+    else if (list.length === 1) v.email = list[0];
+    else delete v.email;
+  } else if (v.email !== undefined && v.email !== '' && (typeof v.email !== 'string' || !EMAIL.test(v.email))) {
     bad('Contact: the email does not look like an email address');
   }
   if (v.url !== undefined && v.url !== '' && (typeof v.url !== 'string' || !isUrl(v.url, true))) bad('Contact: the URL must start with https://');

@@ -86,6 +86,15 @@ test('previewDocument: no scripts possible, html passes through for the sandbox'
   assert.match(previewDocument(''), /<body>/);
 });
 
+test('contact emails: several addresses round-trip through the form', () => {
+  assert.equal(contactForm({ name: 'T', email: ['a@b.c', 'd@e.f'] }).email, 'a@b.c\nd@e.f');
+  const f = (email) => ({ name: 'T', email, url: '', org: '', title: '' });
+  assert.deepEqual(toContactPut(f('a@b.c, d@e.f\n g@h.i ,,\n')), { name: 'T', email: ['a@b.c', 'd@e.f', 'g@h.i'] });
+  assert.deepEqual(toContactPut(f(' a@b.c ')), { name: 'T', email: 'a@b.c' });
+  assert.deepEqual(toContactPut(f(contactForm({ name: 'T', email: ['a@b.c', 'd@e.f'] }).email)).email, ['a@b.c', 'd@e.f']);
+  assert.deepEqual(toContactPut(f(' , \n')), { name: 'T' });
+});
+
 test('toContactPut: keeps the stored contact other keys, known fields come from the form', () => {
   const original = { name: 'Old', phone: '+1 555', nickname: 'T' };
   assert.deepEqual(toContactPut({ name: 'New', email: '', url: '', org: '', title: '' }, original), { phone: '+1 555', nickname: 'T', name: 'New' });

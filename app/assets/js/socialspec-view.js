@@ -35,7 +35,10 @@ export function toAboutPut(form, original) {
 const CONTACT_FIELDS = ['name', 'email', 'url', 'org', 'title'];
 
 export function contactForm(contact) {
-  return Object.fromEntries(CONTACT_FIELDS.map((k) => [k, text(contact?.[k])]));
+  const form = Object.fromEntries(CONTACT_FIELDS.map((k) => [k, text(contact?.[k])]));
+  // Several addresses show one per line.
+  if (Array.isArray(contact?.email)) form.email = contact.email.filter((e) => typeof e === 'string').join('\n');
+  return form;
 }
 
 /** The PUT value: null (remove) when nothing is left. Keys of the stored contact that are not form fields are kept. */
@@ -44,7 +47,12 @@ export function toContactPut(form, original) {
   for (const [k, v] of Object.entries(original || {})) if (!CONTACT_FIELDS.includes(k)) out[k] = v;
   for (const k of CONTACT_FIELDS) {
     const v = text(form[k]).trim();
-    if (v) out[k] = v;
+    if (!v) continue;
+    if (k === 'email') {
+      // Commas or new lines separate addresses; one stays a string, several become a list.
+      const list = v.split(/[,\n]/).map((e) => e.trim()).filter(Boolean);
+      if (list.length) out.email = list.length === 1 ? list[0] : list;
+    } else out[k] = v;
   }
   return Object.keys(out).length ? out : null;
 }

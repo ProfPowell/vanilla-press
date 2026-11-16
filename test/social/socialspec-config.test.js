@@ -78,6 +78,16 @@ test('validateAbout', () => {
   assert.equal(msg(() => validateAbout('x')), 'About must be an object');
 });
 
+test('validateContact: email may be a list', () => {
+  assert.deepEqual(validateContact({ name: 'N', email: ['a@b.co', 'c@d.co'] }).email, ['a@b.co', 'c@d.co']);
+  assert.equal(validateContact({ name: 'N', email: ['a@b.co', '', '  '] }).email, 'a@b.co'); // one address stays a string
+  assert.ok(!('email' in validateContact({ name: 'N', email: ['', ' '] })));
+  assert.equal(validateContact({ name: 'N', email: [' a@b.co ', 'c@d.co'] }).email[0], 'a@b.co');
+  assert.equal(msg(() => validateContact({ name: 'N', email: ['a@b.co', 'nope'] })), 'Contact: email 2 does not look like an email address');
+  assert.equal(msg(() => validateContact({ name: 'N', email: [3] })), 'Contact: email 1 does not look like an email address');
+  assert.equal(msg(() => validateContact({ name: 'N', email: 7 })), 'Contact: the email does not look like an email address');
+});
+
 test('validateContact', () => {
   assert.equal(validateContact(null), null);
   assert.equal(validateContact({}), null);

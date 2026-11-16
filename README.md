@@ -49,6 +49,18 @@ The **Programs** screen of a site manages hand-written programs (demos, games, s
 - **Goes live at once:** every change on this screen is one commit, pushed straight away (no `[CI Skip]`), so the site rebuilds. Without a repo, or when the push fails, the change stays on this computer and the screen says so; a commit whose push failed shows as pending in the backup status and goes with the next backup.
 - **Checked before every commit:** the commit takes every new or changed folder in the areas live, including ones put there by hand, so VP first checks them with the import rules. A likely secret (`*.pem`, `id_rsa`, a private key block), a symlink, a dotfile other than `.DS_Store`, a file over the limits or names that differ only by case refuses the change with the file named: nothing is committed, and the files and your change stay on this computer until you remove or fix that file.
 
+## Social
+
+The **Social** screen of a site keeps its social details in `config/social.json`. Cook reads that file and builds the pages and `/.well-known` files from it. Each panel saves only its own key and leaves the others (and any keys you added by hand) alone.
+
+- **Accounts** (key `accounts`; needs Cook 2.10.0): your profiles on Bluesky, Mastodon, GitHub and so on. Each account is checked against the service before it is saved, checked again when you open the screen, and flagged if a Bluesky handle now points to a different account.
+- **About** (key `about`; needs Cook 2.11.0): a summary and a Markdown body (or a file), with a preview of the body shown in a sandboxed frame. Nothing from the preview reaches the page around it.
+- **Contact** (key `contact`; needs Cook 2.11.0): name, email, URL, organisation and title. **The email is public**: it goes into the site's published contact files, so use an address you are happy to see published.
+- **Following** (key `following`; needs Cook 2.11.0): the feeds you follow, each with a title, feed URL, site URL, category and a Public checkbox. **Import OPML** merges a file into the list: feeds already listed are left untouched, new ones are added as public, and entries without a usable feed URL are skipped (the result says how many were added, skipped and already there). The file may be up to 2 MB. **Export OPML** downloads `following.opml` with the public entries.
+- **Older Cook:** on a site whose Cook is too old for the About, Contact and Following panels, they are disabled and the screen says to update `cook-ssg` to 2.11.0 or later. Nothing is written.
+- **Goes live at once:** every save is one commit, `Social: <panel>` (for example `Social: following`), pushed straight away (no `[CI Skip]`), so the site rebuilds. Without a repo, or when the push fails, the change stays on this computer and the screen says so.
+- **No credentials:** `config/social.json` is committed to git and holds only public details. Passwords, tokens and app keys are never stored there, and VP never asks for them.
+
 ## Components in the app
 
 Posts can hold web components (a browser window around a screenshot, a code block, a marquee, and so on). Type `/` in the editor and pick one from the palette; select it to change its attributes in the settings panel. Each site chooses which component packages it uses on its Components screen: turning one on runs `npm install` for it in the site, so the dependency lands in the site's `package.json`, and Cook (2.5+) then loads that package's script on the pages that use it. Vanilla Breeze's own elements need no package. A draft can hold any component, but Publish and Update refuse a post that uses a package the site has not turned on.

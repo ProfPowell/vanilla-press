@@ -116,3 +116,33 @@ export function deleteLayoutFile(siteId, kind, name) {
 export function publishLayoutFiles(siteId, files) {
   return api(`/api/sites/${encodeURIComponent(siteId)}/layout-files/publish`, { method: 'POST', body: { files } });
 }
+
+const socialBase = (siteId) => `/api/sites/${encodeURIComponent(siteId)}/social`;
+
+/** The stored accounts: `{ accounts, cookReady, needsCook }`. */
+export function getSocial(siteId) {
+  return api(socialBase(siteId));
+}
+
+/** Every stored account checked again: `{ results }`. Never writes. */
+export function recheckSocial(siteId) {
+  return api(`${socialBase(siteId)}/recheck`);
+}
+
+/** Check one new account: `{ service, status, handle, displayName?, avatar?, message? }`. */
+export function checkSocial(siteId, service, input) {
+  return api(`${socialBase(siteId)}/check`, { method: 'POST', body: { service, input } });
+}
+
+/** Save the whole list: `{ accounts, committed, note? }`. */
+export function saveSocial(siteId, accounts, saveUnchecked = false) {
+  return api(`${socialBase(siteId)}/accounts`, { method: 'PUT', body: { accounts, ...(saveUnchecked ? { saveUnchecked: true } : {}) } });
+}
+
+/** The rendered list for the editor preview: `{ html }`. */
+export function socialLinksPreview(siteId, services, variant) {
+  const q = new URLSearchParams();
+  if (services) q.set('services', services);
+  if (variant) q.set('variant', variant);
+  return api(`${socialBase(siteId)}/links${q.size ? `?${q}` : ''}`);
+}

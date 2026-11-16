@@ -33,6 +33,7 @@
       <li><a href="#" data-section="components">Components</a></li>
       <li><a href="#" data-section="theme">Theme</a></li>
       <li><a href="#" data-section="layouts">Layouts</a></li>
+      <li><a href="#" data-section="social">Social</a></li>
     </ul>
     <ul class="rail-list rail-app" aria-label="App">
       <li><a href="/app/services.html">Services</a></li>
@@ -211,6 +212,41 @@
         <p id="components-notice" class="notice" role="status" hidden></p>
         <div id="components-error" class="error" role="alert" hidden></div>
         <ul id="components" class="component-list" aria-labelledby="components-title"></ul>
+      </section>
+
+      <section id="social-section" aria-labelledby="social-title" hidden>
+        <div class="section-head">
+          <div>
+            <h1 id="social-title">Social</h1>
+            <p id="social-summary" class="media-summary"></p>
+          </div>
+          <div class="actions">
+            <button type="button" id="social-add-btn" class="primary" aria-expanded="false" aria-controls="social-add-panel">Add account</button>
+          </div>
+        </div>
+        <p id="social-error" class="error" role="alert" hidden></p>
+        <p id="social-note" class="notice" role="status" hidden></p>
+        <p id="social-old" class="notice" role="status" hidden></p>
+
+        <section id="social-add-panel" class="panel social-add" aria-labelledby="social-add-title" hidden>
+          <h2 id="social-add-title">Add an account</h2>
+          <form id="social-add-form" novalidate>
+            <label for="social-add-service">Service</label>
+            <select id="social-add-service"></select>
+            <div id="social-add-fields"></div>
+            <p id="social-add-error" class="error" role="alert" hidden></p>
+            <div id="social-add-confirm" class="social-confirm" role="status" hidden></div>
+            <div class="actions">
+              <button type="submit" id="social-add-check" class="primary">Check</button>
+              <button type="button" id="social-add-save" hidden>Save</button>
+              <button type="button" id="social-add-unchecked" hidden>Save without checking</button>
+              <button type="button" id="social-add-cancel">Cancel</button>
+            </div>
+          </form>
+        </section>
+
+        <ul id="social-list" class="social-list" aria-labelledby="social-title"></ul>
+        <p id="social-empty" class="empty" hidden>No accounts yet. Add one and it can show on your pages.</p>
       </section>
 
       <section id="layouts-section" aria-labelledby="layouts-title" hidden>

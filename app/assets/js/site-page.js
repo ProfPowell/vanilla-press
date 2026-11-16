@@ -283,6 +283,16 @@ function showSection(section) {
   if (section === 'theme') startTheme();
   else themePage?.then((theme) => theme?.hide());
   if (section === 'layouts') startLayouts();
+  if (section === 'social') startSocial();
+}
+
+// Social is set up on first view, only once; every view reloads and rechecks the accounts.
+let socialPage = null;
+function startSocial() {
+  socialPage ||= import('./social-page.js')
+    .then((m) => m.initSocialSection({ siteId, root: $('social-section') }))
+    .catch((err) => showError(err.message));
+  socialPage.then((social) => social?.show());
 }
 
 // Layouts is set up on first view, only once; every view refreshes the list.

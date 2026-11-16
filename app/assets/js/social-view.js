@@ -60,6 +60,7 @@ function statusOf(account, check) {
 export function accountRow(account, check = null, { index = 0, count = 1 } = {}) {
   const [status, tone] = statusOf(account, check);
   const isLink = account.service === 'link';
+  const current = check?.mismatch && check.currentHandle ? check.currentHandle : '';
   return {
     id: `${account.service}:${isLink ? account.url : account.handle}`,
     icon: ICONS[account.service] || '?',
@@ -70,6 +71,8 @@ export function accountRow(account, check = null, { index = 0, count = 1 } = {})
     avatar: check?.avatar || '',
     status,
     tone,
+    currentHandle: current,
+    useLabel: current ? `Use @${current}` : '',
     hidden: !!account.hidden,
     canMoveUp: index > 0,
     canMoveDown: index < count - 1,
@@ -100,4 +103,21 @@ export function addFormFor(serviceId) {
 export function toPutEntry(a) {
   if (a.service === 'link') return { service: 'link', label: a.label, url: a.url, hidden: !!a.hidden };
   return { service: a.service, handle: a.handle, hidden: !!a.hidden };
+}
+
+/**
+ * Recheck results as a map of row id -> result. Results are matched to the list the recheck
+ * started from (`snapshot`, by position in that list), then keyed by identity, so a reorder,
+ * hide or remove made while it ran cannot attach a result to the wrong account.
+ * @param {object[]} snapshot - the accounts when the recheck began
+ * @param {{ index: number }[]} results
+ * @returns {Map<string, object>}
+ */
+export function mergeChecks(snapshot, results) {
+  const map = new Map();
+  for (const r of results || []) {
+    const a = snapshot[r.index];
+    if (a) map.set(accountRow(a).id, r);
+  }
+  return map;
 }

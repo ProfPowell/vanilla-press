@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { accountRow, moveAccount, addFormFor, toPutEntry, SERVICE_NAMES, COOK_TOO_OLD } from '../../app/assets/js/social-view.js';
+import { accountRow, moveAccount, addFormFor, toPutEntry, mergeChecks, SERVICE_NAMES, COOK_TOO_OLD } from '../../app/assets/js/social-view.js';
 
 const bsky = { service: 'bluesky', handle: 'tpowell.bsky.social', did: 'did:plc:x' };
 const gh = { service: 'github', handle: 'ProfPowell', hidden: true };
@@ -74,4 +74,31 @@ test('names and the old-Cook notice', () => {
 test('toPutEntry: stored shape, always says hidden so a row can be shown again', () => {
   assert.deepEqual(toPutEntry({ service: 'github', handle: 'x', did: 'd', checked: 'yes', hidden: false }), { service: 'github', handle: 'x', hidden: false });
   assert.deepEqual(toPutEntry({ service: 'link', label: 'L', url: 'https://a.b', hidden: true }), { service: 'link', label: 'L', url: 'https://a.b', hidden: true });
+});
+
+test('mergeChecks: results belong to the list the recheck started from, matched by identity', () => {
+  const snapshot = [bsky, gh];
+  const results = [{ index: 0, status: 'ok', displayName: 'Tom' }, { index: 1, status: 'ok', displayName: 'Prof' }];
+  // the list was reordered while the recheck ran
+  const map = mergeChecks(snapshot, results);
+  assert.equal(map.get(accountRow(bsky).id).displayName, 'Tom');
+  assert.equal(map.get(accountRow(gh).id).displayName, 'Prof');
+  const current = [gh, bsky];
+  assert.deepEqual(current.map((a) => accountRow(a, map.get(accountRow(a).id)).displayName), ['Prof', 'Tom']);
+});
+
+test('mergeChecks: a result with no snapshot account is ignored', () => {
+  assert.equal(mergeChecks([bsky], [{ index: 3, status: 'ok' }]).size, 0);
+});
+
+test('accountRow: a moved Bluesky handle offers the current handle', () => {
+  const r = accountRow(bsky, { status: 'ok', mismatch: true, currentHandle: 'new.example.com' });
+  assert.equal(r.status, 'This handle now points to a different account');
+  assert.equal(r.tone, 'warn');
+  assert.equal(r.currentHandle, 'new.example.com');
+  assert.equal(r.useLabel, 'Use @new.example.com');
+  const none = accountRow(bsky, { status: 'ok', mismatch: true });
+  assert.equal(none.currentHandle, '');
+  assert.equal(none.useLabel, '');
+  assert.equal(accountRow(bsky, { status: 'ok' }).useLabel, '');
 });

@@ -1,6 +1,6 @@
 # Social accounts and profile links
 
-Date: 2026-11-15 · Status: draft for approval
+Date: 2026-11-15 · Status: approved 2026-11-15
 Repos: `~/src/cook`, `~/src/vanilla-breeze`, `~/src/vanilla-press`, `~/src/thomasapowell.com`
 
 ## Where this sits
@@ -339,6 +339,6 @@ house layout: `api.json`, `styles.css`, `static.html` and, if needed, `logic.js`
 - **Hidden accounts stay available** to feeds as `social.allAccounts`.
 - **No build-time re-check.** Vanilla Press re-checks accounts when the Social
   screen opens.
-- **Bluesky domain handle** (`thomasapowell.com` as your handle): left out of this
-  project. It's a small follow-up once the DID is stored, since Cook would only need
-  to write `/.well-known/atproto-did`.
+- **Bluesky domain handle** (`thomasapowell.com` as your handle): wanted by the user, but
+  only once the site itself is done. It's out of this project. Later, Cook writes
+  `/.well-known/atproto-did` from the stored DID.

@@ -16,7 +16,7 @@ import { syncDocument } from '../sync/to-site.js';
 import { preflightSave } from '../sync/site-files.js';
 import { outputPaths, postUrlPath } from '../sync/paths.js';
 import { GitNotConnectedError, readHead as gitReadHead } from '../git/git.js';
-import { BACKUP_PATHS, THEME_PATHS, postPages } from './site-git.js';
+import { BACKUP_PATHS, THEME_PATHS, FEED_SNAPSHOT_PATHS, postPages } from './site-git.js';
 import {
   refreshThemeSetting, snapshotFile, restoreFile, themeSettingFile, commitWithTheme, themeConflictResolver,
 } from './site-theme.js';
@@ -275,8 +275,9 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
     }
     const label = { publish: 'Publish', update: 'Update', unpublish: 'Unpublish' }[kind];
     // Publish/Update carry the theme setting and custom themes (R3); Unpublish does not.
+    // All three carry the feed snapshots: the build ran, so they are current.
     const themePaths = publish ? [...THEME_PATHS] : [];
-    const commit = () => deps.commitPaths(ws.siteDir, [...BACKUP_PATHS, ...themePaths, ...pages], `${label}: ${saved.meta.title}`);
+    const commit = () => deps.commitPaths(ws.siteDir, [...BACKUP_PATHS, ...themePaths, ...FEED_SNAPSHOT_PATHS, ...pages], `${label}: ${saved.meta.title}`);
     sha = publish ? await commitWithTheme(ws, deps.readHead || gitReadHead, commit) : await commit();
   }
 

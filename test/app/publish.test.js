@@ -268,6 +268,23 @@ describe('setPublished', () => {
     assert.equal(git(fx.site, 'ls-files', '--others', '--exclude-standard'), 'src/posts/mine.html');
   });
 
+  test('publish commit includes data/social-feeds when the build wrote snapshots', async () => {
+    const ws = setup();
+    write(fx.site, 'data/social-feeds/bluesky-alice.example.com.json', JSON.stringify({ fetchedAt: '2026-11-16T00:00:00.000Z', items: [] }));
+    const res = await setPublished({ site: { id: 's' }, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(res.status, 'pushed');
+    assert.ok(remoteFiles().includes('data/social-feeds/bluesky-alice.example.com.json'));
+  });
+
+  test('publish on a site with no data/social-feeds still commits and pushes', async () => {
+    const ws = setup();
+    assert.equal(existsSync(join(fx.site, 'data', 'social-feeds')), false);
+    const res = await setPublished({ site: { id: 's' }, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(res.status, 'pushed');
+    assert.equal(lastRemote(), 'Publish: Hello');
+    assert.ok(!remoteFiles().some((f) => f.startsWith('data/social-feeds')));
+  });
+
   test('unpublish removes the page and pushes', async () => {
     const ws = setup();
     await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });

@@ -25,6 +25,8 @@ export const BACKUP_PATHS = Object.freeze(['content', 'src/media', 'config/vp.js
  * library operations (their own commit), never staged by a backup.
  */
 export const THEME_PATHS = Object.freeze(['config/theme.json', 'src/assets/themes']);
+/** Social feed snapshots Cook writes during every build: committed by Publish, Update and Unpublish, never by a backup. */
+export const FEED_SNAPSHOT_PATHS = Object.freeze(['data/social-feeds']);
 /** The social accounts file: committed by Social saves only, never by a backup. */
 export const SOCIAL_PATHS = Object.freeze(['config/social.json']);
 /** The layouts and includes the layout editor writes: committed by Publish layout only, never by a backup. */

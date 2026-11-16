@@ -4,14 +4,21 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApp } from '../../src/app/server.js';
-import * as cookSocial from './fixtures/cook-social.js';
+import { pathToFileURL } from 'node:url';
+import * as standIn from './fixtures/cook-social.js';
+
+// Opt-in contract run: COOK_SOCIAL_MODULE=<cook>/scripts/social/index.js runs the same
+// routes against Cook's real module. Unset: only the stand-in; the real Cook is never imported.
+const REAL = process.env.COOK_SOCIAL_MODULE;
+const modules = [['stand-in', async () => standIn]];
+if (REAL) modules.push(['real Cook module', () => import(pathToFileURL(REAL).href)]);
 
 const CONNECTED = { isRepo: true, branch: 'main', hasRemote: true, hasUpstream: true };
 const json = (status, data) => ({ status, ok: status >= 200 && status < 300, json: async () => data });
 const BSKY = 'https://public.api.bsky.app/xrpc/';
 
-describe('social routes', () => {
-  let root, app, site, id, cook;
+for (const [label, loadModule] of modules) describe(`social routes (${label})`, () => {
+  let root, app, site, id, cook, cookSocial;
   const commits = [];
   const pushes = [];
   const fakeGit = {
@@ -58,6 +65,7 @@ describe('social routes', () => {
     site = join(root, 'site');
     mkdirSync(join(site, 'src'), { recursive: true });
     writeFileSync(join(site, 'package.json'), JSON.stringify({ name: 'site', devDependencies: { 'cook-ssg': '^2.10.0' } }));
+    cookSocial = await loadModule();
     cook = cookSocial;
     app = await startApp({
       port: 0, env: { VP_CONFIG_DIR: join(root, 'config') }, git: fakeGit, fetch: fakeFetch,
@@ -118,7 +126,7 @@ describe('social routes', () => {
     assert.equal(ok.data.did, 'did:plc:abc');
     const bad = await api('/social/check', { method: 'POST', body: { service: 'bluesky', input: 'not a handle' } });
     assert.equal(bad.status, 400);
-    assert.equal(bad.data.error, 'Not a Bluesky handle');
+    assert.equal(bad.data.error, 'Bluesky handles look like name.bsky.social');
   });
 
   it('PUT saves checked accounts: did stored, about/following kept, commit is only social.json', async () => {
@@ -224,6 +232,28 @@ describe('social routes', () => {
     assert.equal(l.status, 'unchecked');
     assert.equal(readFileSync(join(site, 'config', 'social.json'), 'utf8'), before);
     assert.equal(commits.length, 0);
+  });
+
+  it('GET /social/links renders visible accounts and honours services and variant', async () => {
+    seed({ accounts: [
+      { service: 'github', handle: 'ProfPowell' },
+      { service: 'mastodon', handle: '@tom@hachyderm.io' },
+      { service: 'link', label: 'Blog', url: 'https://blog.example' },
+    ] });
+    const all = await api('/social/links');
+    assert.equal(all.status, 200);
+    assert.equal((all.data.html.match(/<li>/g) || []).length, 3);
+    const some = await api('/social/links?services=github,%20link&variant=icon');
+    assert.equal((some.data.html.match(/<li>/g) || []).length, 2);
+    assert.ok(!some.data.html.includes('hachyderm'));
+  });
+
+  it('POST /social/check on a link is unchecked, parsed by Cook', async () => {
+    const r = await api('/social/check', { method: 'POST', body: { service: 'link', input: 'https://blog.example' } });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.status, 'unchecked');
+    const bad = await api('/social/check', { method: 'POST', body: { service: 'link', input: 'http://blog.example' } });
+    assert.equal(bad.status, 400);
   });
 
   it('GET /social/links returns Cook\'s escaped HTML for the visible accounts', async () => {

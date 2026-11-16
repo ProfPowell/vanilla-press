@@ -17,7 +17,8 @@ import { sendJson } from '../server/router.js';
 import { NEEDS_COOK, SocialError, readSocial, writeSocial } from '../social/config.js';
 import { importCookSocial } from '../social/cook.js';
 import { checkAccount, currentBlueskyHandle } from '../social/check.js';
-import { SOCIAL_PATHS, socialMessage } from './site-git.js';
+import { SOCIAL_PATHS, THEME_PATHS, socialMessage } from './site-git.js';
+import { themeConflictResolver } from './site-theme.js';
 import { GitNotConnectedError } from '../git/git.js';
 
 const NOT_COMMITTED = (why) => `Saved on this computer, but not committed (${why}), so it isn't live yet.`;
@@ -100,9 +101,8 @@ export function mountSocialRoutes(router, prefix, {
   router.add('GET', `${prefix}/social/links`, handle(async (req, res) => {
     const cook = await needCook();
     const { raw } = readSocial(siteDir);
-    const services = req.query.services ? req.query.services.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
-    const opts = { ...(services ? { services } : {}), ...(req.query.variant ? { variant: req.query.variant } : {}) };
-    sendJson(res, 200, { html: cook.renderSocialLinks(cook.normalizeAccounts(raw.accounts).visible, opts) });
+    const opts = { ...(req.query.services ? { services: req.query.services } : {}), ...(req.query.variant ? { variant: req.query.variant } : {}) };
+    sendJson(res, 200, { html: cook.renderSocialLinks(cook.normalizeAccounts(raw).visible, opts) });
   }));
 
   /** Commit config/social.json alone and push it; a failure is a note, never a lost save. */
@@ -121,7 +121,7 @@ export function mountSocialRoutes(router, prefix, {
       return { committed: false, note: NOT_COMMITTED(err.message) };
     }
     try {
-      const pushed = await deps.push(siteDir, {});
+      const pushed = await deps.push(siteDir, { yieldUntracked: [...THEME_PATHS], resolveConflicts: themeConflictResolver(ws) });
       return { ...pushed, status: 'pushed', committed: true };
     } catch (err) {
       const notConnected = err instanceof GitNotConnectedError;
@@ -140,7 +140,7 @@ export function mountSocialRoutes(router, prefix, {
     const { service } = entry;
     if (service === 'link') {
       const out = { service, label: entry.label, url: entry.url };
-      if (!cook.normalizeAccounts([out]).all.length) {
+      if (!cook.normalizeAccounts({ accounts: [out] }).all.length) {
         throw fail('A link needs a label and an https: address.');
       }
       return out;

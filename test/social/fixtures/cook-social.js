@@ -1,81 +1,193 @@
-// Stand-in for cook-ssg/social (Cook 2.10.0). Same names and signatures, simple behaviour.
-export const SERVICES = {
-  bluesky: { name: 'Bluesky' },
-  mastodon: { name: 'Mastodon' },
-  github: { name: 'GitHub' },
-  linkedin: { name: 'LinkedIn' },
-  youtube: { name: 'YouTube' },
-  link: { name: 'Link' },
+// Stand-in for cook-ssg/social (Cook 2.10.0): a copy of cook's scripts/social/{catalog,accounts,render}.js
+// so the contracts match (normalizeAccounts takes the config object; services is a comma string;
+// parseHandle('link', url) gives { handle: url }). The opt-in run with COOK_SOCIAL_MODULE checks the real one.
+
+/** @type {Array<{ id: string, name: string, checkable: boolean }>} */
+export const SERVICES = [
+  { id: 'bluesky', name: 'Bluesky', checkable: true },
+  { id: 'mastodon', name: 'Mastodon', checkable: false },
+  { id: 'github', name: 'GitHub', checkable: true },
+  { id: 'linkedin', name: 'LinkedIn', checkable: false },
+  { id: 'youtube', name: 'YouTube', checkable: false },
+  { id: 'link', name: 'Link', checkable: false },
+];
+
+/** @param {string} id */
+export const serviceById = (id) => SERVICES.find((s) => s.id === id);
+
+
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+const DOMAIN = /^(?=.{3,253}$)(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const GITHUB = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+const MASTODON_USER = /^[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?$/;
+const LINKEDIN_SLUG = /^[A-Za-z0-9_%-]+$/;
+const YOUTUBE = /^@[A-Za-z0-9._-]+$/;
+
+/**
+ * If `s` is a pasted URL on `host` (optional `https?://` and `www.`, optional trailing
+ * slash), return the path after the host; otherwise null. Bare handles never match.
+ */
+const urlPath = (s, host) => {
+  const m = s.match(new RegExp(`^(?:https?://)?(?:www\\.)?${host.replace(/\./g, '\\.')}/(.+?)/*$`, 'i'));
+  return m ? m[1] : null;
 };
 
+const fail = (error) => ({ error });
+
+/** @param {string} v */
+function isHttpsUrl(v) {
+  if (!/^https:\/\//i.test(v)) return false;
+  try {
+    return new URL(v).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Turn what a person typed (or pasted) into the stored handle.
+ * @param {string} service
+ * @param {string} input
+ * @returns {{ handle: string } | { error: string }}
+ */
 export function parseHandle(service, input) {
-  let s = String(input ?? '').trim();
-  if (!SERVICES[service]) return { error: 'Unknown service' };
-  s = s.replace(/^https?:\/\/(www\.)?/, '');
-  if (service === 'bluesky') {
-    s = s.replace(/^bsky\.app\/profile\//, '').replace(/^@/, '').toLowerCase();
-    return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(s) ? { handle: s } : { error: 'Not a Bluesky handle' };
-  }
-  if (service === 'mastodon') {
-    const m = /^@?([\w.-]+)@([\w.-]+)$/.exec(s);
-    return m ? { handle: `@${m[1]}@${m[2].toLowerCase()}` } : { error: 'Not a Mastodon handle' };
-  }
-  if (service === 'github') {
-    s = s.replace(/^github\.com\//, '').replace(/^@/, '');
-    return /^(?!-)(?!.*--)(?!.*-$)[A-Za-z0-9-]{1,39}$/.test(s) ? { handle: s } : { error: 'Not a GitHub handle' };
-  }
-  if (service === 'linkedin') {
-    s = s.replace(/^linkedin\.com\/in\//, '').replace(/^in\//, '').replace(/\/$/, '');
-    return /^[\w-]+$/.test(s) ? { handle: s } : { error: 'Not a LinkedIn slug' };
-  }
-  if (service === 'youtube') {
-    s = s.replace(/^youtube\.com\//, '');
-    return /^@[\w.-]+$/.test(s) ? { handle: s } : { error: 'Not a YouTube handle' };
-  }
-  return { error: 'Use label and url' };
-}
+  if (typeof input !== 'string') return fail('Enter a handle');
+  const raw = input.trim();
+  if (!raw) return fail('Enter a handle');
 
-export function profileUrl(a) {
-  const h = a.handle;
-  switch (a.service) {
-    case 'bluesky': return `https://bsky.app/profile/${h}`;
-    case 'mastodon': { const [, u, i] = h.split('@'); return `https://${i}/@${u}`; }
-    case 'github': return `https://github.com/${h}`;
-    case 'linkedin': return `https://www.linkedin.com/in/${h}`;
-    case 'youtube': return `https://www.youtube.com/${h}`;
-    default: return a.url;
-  }
-}
-
-export function normalizeAccounts(raw) {
-  const all = [];
-  const warnings = [];
-  for (const r of Array.isArray(raw) ? raw : []) {
-    if (!r || !SERVICES[r.service]) { warnings.push('Unknown service'); continue; }
-    let handle = r.handle;
-    let url;
-    let name = SERVICES[r.service].name;
-    if (r.service === 'link') {
-      if (typeof r.url !== 'string' || !r.url.startsWith('https:')) { warnings.push('Bad link URL'); continue; }
-      url = r.url; name = r.label; handle = r.url;
-    } else {
-      const p = parseHandle(r.service, handle);
-      if (p.error) { warnings.push(p.error); continue; }
-      handle = p.handle;
-      url = profileUrl({ service: r.service, handle });
+  switch (service) {
+    case 'bluesky': {
+      const m = (urlPath(raw, 'bsky.app') || '').match(/^profile\/([^/]+)$/i);
+      const handle = (m ? m[1] : raw).replace(/^@/, '').toLowerCase();
+      return DOMAIN.test(handle) ? { handle } : fail('Bluesky handles look like name.bsky.social');
     }
-    const a = { service: r.service, handle, url, name, icon: r.service, hidden: r.hidden === true };
-    if (r.did) a.did = r.did;
-    all.push(a);
+    case 'mastodon': {
+      const s = raw;
+      const m = s.match(/^(?:https?:\/\/)?(?:www\.)?([^/@\s]+)\/@([^/@]+)\/*$/i);
+      let user;
+      let instance;
+      if (m) {
+        [, instance, user] = m;
+      } else {
+        const parts = s.replace(/^@/, '').split('@');
+        if (parts.length !== 2) return fail('Mastodon handles look like @user@instance');
+        [user, instance] = parts;
+      }
+      instance = instance.toLowerCase();
+      if (!MASTODON_USER.test(user) || !DOMAIN.test(instance)) return fail('Mastodon handles look like @user@instance');
+      return { handle: `@${user}@${instance}` };
+    }
+    case 'github': {
+      const p = urlPath(raw, 'github.com');
+      const handle = (p && !p.includes('/') ? p : raw).replace(/^@/, '');
+      return GITHUB.test(handle) ? { handle } : fail('GitHub usernames are 1 to 39 letters, digits or single hyphens');
+    }
+    case 'linkedin': {
+      const m = (urlPath(raw, 'linkedin.com') || '').match(/^in\/([^/]+)$/i) || raw.match(/^in\/([^/]+?)\/*$/i);
+      const slug = m ? m[1] : raw;
+      return LINKEDIN_SLUG.test(slug) ? { handle: slug } : fail('Use the part after linkedin.com/in/');
+    }
+    case 'youtube': {
+      const p = urlPath(raw, 'youtube.com');
+      const handle = p && !p.includes('/') ? p : raw;
+      return YOUTUBE.test(handle) ? { handle } : fail('YouTube handles look like @name');
+    }
+    case 'link':
+      return isHttpsUrl(raw) ? { handle: raw } : fail('Links must start with https://');
+    default:
+      return fail(`Unknown service "${service}"`);
   }
+}
+
+/**
+ * The public profile URL for an account, or null when it can't be built.
+ * @param {{ service?: string, handle?: string, url?: string } | null | undefined} account
+ * @returns {string | null}
+ */
+export function profileUrl(account) {
+  if (!isObj(account)) return null;
+  const { service, handle, url } = account;
+  if (service === 'link') return typeof url === 'string' && isHttpsUrl(url) ? url : null;
+  if (typeof handle !== 'string' || !handle) return null;
+  switch (service) {
+    case 'bluesky': return `https://bsky.app/profile/${handle}`;
+    case 'mastodon': {
+      const m = handle.match(/^@([^@]+)@([^@]+)$/);
+      return m ? `https://${m[2]}/@${m[1]}` : null;
+    }
+    case 'github': return `https://github.com/${handle}`;
+    case 'linkedin': return `https://www.linkedin.com/in/${handle}`;
+    case 'youtube': return `https://www.youtube.com/${handle}`;
+    default: return null;
+  }
+}
+
+/**
+ * Validate the raw contents of config/social.json. A bad entry is skipped with a
+ * warning; the rest still build.
+ * @param {unknown} raw
+ * @returns {{ all: object[], visible: object[], warnings: string[] }}
+ */
+export function normalizeAccounts(raw) {
+  const warnings = [];
+  const all = [];
+  const list = isObj(raw) ? raw.accounts : undefined;
+  if (list !== undefined && !Array.isArray(list)) warnings.push('accounts must be an array; ignoring it');
+
+  (Array.isArray(list) ? list : []).forEach((entry, i) => {
+    const at = `accounts[${i}]`;
+    if (!isObj(entry)) return void warnings.push(`${at}: not an object; skipped`);
+    const svc = typeof entry.service === 'string' ? serviceById(entry.service) : undefined;
+    if (!svc) return void warnings.push(`${at}: unknown service ${JSON.stringify(entry.service)}; skipped`);
+
+    const hidden = entry.hidden === true;
+    if (svc.id === 'link') {
+      const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+      const url = typeof entry.url === 'string' ? entry.url.trim() : '';
+      if (!label) return void warnings.push(`${at}: link needs a label; skipped`);
+      if (!isHttpsUrl(url)) return void warnings.push(`${at}: link url must be https:; skipped`);
+      all.push({ service: 'link', handle: '', url, name: label, icon: 'link', hidden });
+      return;
+    }
+
+    const parsed = parseHandle(svc.id, entry.handle);
+    if ('error' in parsed) return void warnings.push(`${at}: ${svc.id} handle ${JSON.stringify(entry.handle)}: ${parsed.error}; skipped`);
+    const account = {
+      service: svc.id,
+      handle: parsed.handle,
+      url: profileUrl({ service: svc.id, handle: parsed.handle }),
+      name: svc.name,
+      icon: svc.id,
+      hidden,
+    };
+    if (svc.id === 'bluesky' && typeof entry.did === 'string' && entry.did.startsWith('did:')) account.did = entry.did;
+    all.push(account);
+  });
+
   return { all, visible: all.filter((a) => !a.hidden), warnings };
 }
 
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export function renderSocialLinks(accounts, { services, variant = 'icon-label' } = {}) {
+const escapeHtml = (s) =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * @param {Array<{ service: string, url: string, name: string, icon?: string }>} accounts
+ * @param {{ services?: string, variant?: string }} [options] `variant` is for CSS and
+ *   is copied onto the element by the fill step; it does not change the list.
+ * @returns {string} the `<ul>…</ul>`, or '' when nothing matches
+ */
+export function renderSocialLinks(accounts, { services } = {}) {
+  if (!Array.isArray(accounts)) return '';
+  const wanted = typeof services === 'string' && services.trim()
+    ? new Set(services.split(',').map((s) => s.trim()).filter(Boolean))
+    : null;
   const items = accounts
-    .filter((a) => !services || services.includes(a.service))
-    .map((a) => `<li><a href="${esc(a.url)}"${a.service === 'mastodon' ? ' rel="me"' : ''}><span class="social-icon" data-service="${a.service}" aria-hidden="true"></span><span>${esc(a.name)}</span></a></li>`);
+    .filter((a) => a && a.url && (!wanted || wanted.has(a.service)))
+    .map((a) => {
+      const rel = a.service === 'mastodon' ? ' rel="me"' : '';
+      return `<li><a href="${escapeHtml(a.url)}"${rel}><span class="social-icon" data-service="${escapeHtml(a.service)}" aria-hidden="true"></span><span>${escapeHtml(a.name)}</span></a></li>`;
+    });
   return items.length ? `<ul>${items.join('')}</ul>` : '';
 }

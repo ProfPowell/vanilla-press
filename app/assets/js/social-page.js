@@ -12,7 +12,7 @@ import {
 } from './social-view.js';
 import {
   SOCIALSPEC_TOO_OLD, EMAIL_HELPER, PREVIEW_UNAVAILABLE, aboutForm, toAboutPut, contactForm, toContactPut,
-  followingRows, blankRow, toFollowingPut, moveRow, importSummary, previewDocument,
+  followingRows, blankRow, toFollowingPut, moveRow, importSummary, previewDocument, mergeImported,
 } from './socialspec-view.js';
 
 /**
@@ -25,6 +25,8 @@ export function initSocialSection({ siteId, root }) {
   let checks = new Map(); // row id -> recheck result
   let cookReady = true;
   let socialSpecReady = true;
+  let contact = null; // the stored Contact, kept so Save keeps its other keys
+  let followDirty = false; // unsaved edits in the Following list
   let about = null; // the stored About, kept so Save keeps its other keys (file)
   let followRows = [];
   let storedFollowing = [];
@@ -315,6 +317,7 @@ export function initSocialSection({ siteId, root }) {
     field('contact-org').value = c.org;
     field('contact-title-field').value = c.title;
     followRows = followingRows(state.following);
+    followDirty = false;
     renderFollowing();
     for (const panel of ['about', 'contact', 'following']) { panelMessage(panel, 'error', ''); panelMessage(panel, 'note', ''); }
     $('following-import-result').hidden = true;
@@ -366,8 +369,9 @@ export function initSocialSection({ siteId, root }) {
     const value = toContactPut({
       name: field('contact-name').value, email: field('contact-email').value, url: field('contact-url').value,
       org: field('contact-org').value, title: field('contact-title-field').value,
-    });
-    await savePanel('contact', () => saveContact(siteId, value));
+    }, contact);
+    const result = await savePanel('contact', () => saveContact(siteId, value));
+    if (result) contact = result.contact || null;
   });
 
   // Following
@@ -405,6 +409,7 @@ export function initSocialSection({ siteId, root }) {
     const name = e.target.dataset.field;
     if (!row || !name) return;
     row[name] = name === 'public' ? e.target.checked : e.target.value;
+    followDirty = true;
   });
   $('following-list').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-action]');
@@ -414,9 +419,11 @@ export function initSocialSection({ siteId, root }) {
     const { action, key } = btn.dataset;
     if (action === 'up' || action === 'down') {
       followRows = moveRow(followRows, index, action === 'up' ? -1 : 1);
+      followDirty = true;
       renderFollowing(`[data-key="${key}"][data-action="${action}"]:not(:disabled), [data-key="${key}"][data-action]:not(:disabled)`);
     } else if (action === 'remove') {
       followRows = followRows.filter((_, i) => i !== index);
+      followDirty = true;
       renderFollowing('[data-action="remove"], #following-add');
     }
   });
@@ -424,6 +431,7 @@ export function initSocialSection({ siteId, root }) {
     if (busy || !socialSpecReady) return;
     const row = blankRow();
     followRows = [...followRows, row];
+    followDirty = true;
     renderFollowing(`[data-key="${row.key}"] [data-field="title"]`);
   });
   $('following-save').addEventListener('click', async () => {
@@ -432,6 +440,7 @@ export function initSocialSection({ siteId, root }) {
     if (result) {
       storedFollowing = result.following || [];
       followRows = followingRows(storedFollowing);
+      followDirty = false;
       renderFollowing();
     }
   });
@@ -443,10 +452,12 @@ export function initSocialSection({ siteId, root }) {
     $('following-import-result').hidden = true;
     const result = await savePanel('following', async () => importOpml(siteId, await file.text()));
     if (result) {
+      const previous = storedFollowing;
       storedFollowing = result.following || [];
-      followRows = followingRows(storedFollowing);
+      // With unsaved edits, keep them and add only the imported feeds; Save then commits everything.
+      followRows = followDirty ? mergeImported(followRows, previous, storedFollowing) : followingRows(storedFollowing);
       renderFollowing();
-      $('following-import-result').textContent = importSummary(result);
+      $('following-import-result').textContent = importSummary(result) + (followDirty ? ' Your unsaved changes are kept; Save Following to publish them.' : '');
       $('following-import-result').hidden = false;
     }
   });
@@ -477,6 +488,7 @@ export function initSocialSection({ siteId, root }) {
       cookReady = state.cookReady !== false;
       socialSpecReady = state.socialSpecReady === true;
       about = state.about || null;
+      contact = state.contact || null;
       storedFollowing = Array.isArray(state.following) ? state.following : [];
       fillSpecPanels(state);
     } catch (err) {

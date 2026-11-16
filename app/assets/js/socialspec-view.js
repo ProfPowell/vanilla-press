@@ -35,9 +35,10 @@ export function contactForm(contact) {
   return Object.fromEntries(CONTACT_FIELDS.map((k) => [k, text(contact?.[k])]));
 }
 
-/** The PUT value: null (remove) when every field is empty. */
-export function toContactPut(form) {
+/** The PUT value: null (remove) when nothing is left. Keys of the stored contact that are not form fields are kept. */
+export function toContactPut(form, original) {
   const out = {};
+  for (const [k, v] of Object.entries(original || {})) if (!CONTACT_FIELDS.includes(k)) out[k] = v;
   for (const k of CONTACT_FIELDS) {
     const v = text(form[k]).trim();
     if (v) out[k] = v;
@@ -91,6 +92,17 @@ export function moveRow(list, index, delta) {
   const next = list.slice();
   [next[index], next[to]] = [next[to], next[index]];
   return next;
+}
+
+/**
+ * After an OPML import while the list has unsaved edits: keep the in-page rows as they are and
+ * append the entries the import added (in `result` but not in the previously stored list and not
+ * already a row).
+ */
+export function mergeImported(currentRows, previousStored, result) {
+  const seen = new Set([...currentRows.map((r) => r.feedUrl.trim()), ...previousStored.map((e) => e.feedUrl)]);
+  const fresh = (Array.isArray(result) ? result : []).filter((e) => !seen.has(e.feedUrl));
+  return [...currentRows, ...followingRows(fresh)];
 }
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SOCIALSPEC_TOO_OLD, EMAIL_HELPER, PREVIEW_UNAVAILABLE, aboutForm, toAboutPut, contactForm, toContactPut,
-  followingRows, blankRow, toFollowingPut, moveRow, importSummary, previewDocument,
+  followingRows, blankRow, toFollowingPut, moveRow, importSummary, previewDocument, mergeImported,
 } from '../../app/assets/js/socialspec-view.js';
 
 test('exact copy', () => {
@@ -84,4 +84,25 @@ test('previewDocument: no scripts possible, html passes through for the sandbox'
   assert.match(doc, /default-src 'none'/);
   assert.doesNotMatch(doc, /script-src/);
   assert.match(previewDocument(''), /<body>/);
+});
+
+test('toContactPut: keeps the stored contact other keys, known fields come from the form', () => {
+  const original = { name: 'Old', phone: '+1 555', nickname: 'T' };
+  assert.deepEqual(toContactPut({ name: 'New', email: '', url: '', org: '', title: '' }, original), { phone: '+1 555', nickname: 'T', name: 'New' });
+  assert.deepEqual(toContactPut({ name: '', email: '', url: '', org: '', title: '' }, original), { phone: '+1 555', nickname: 'T' });
+  assert.equal(toContactPut({ name: '', email: '', url: '', org: '', title: '' }, { name: 'Old' }), null);
+});
+
+test('mergeImported: keeps in-page rows, appends only entries new from the import', () => {
+  const current = followingRows([{ title: 'Edited', feedUrl: 'https://a.test/f' }, { feedUrl: 'https://mine.test/f' }]);
+  current.push({ ...blankRow(), title: 'half typed' });
+  const stored = [{ feedUrl: 'https://a.test/f', public: true }, { feedUrl: 'https://removed.test/f', public: true }];
+  const result = [...stored, { title: 'New', feedUrl: 'https://new.test/f', public: true }, { feedUrl: 'https://mine.test/f', public: true }];
+  const out = mergeImported(current, stored, result);
+  assert.equal(out.length, 4);
+  assert.equal(out[0], current[0]);
+  assert.equal(out[2], current[2]);
+  assert.equal(out[3].feedUrl, 'https://new.test/f');
+  assert.equal(out[3].public, true);
+  assert.equal(current.length, 3);
 });

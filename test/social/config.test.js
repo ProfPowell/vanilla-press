@@ -22,7 +22,7 @@ test('stand-in fixture exports the Cook social interface', () => {
 });
 
 test('missing file reads as empty', () => {
-  assert.deepEqual(readSocial(site()), { raw: {}, accounts: [] });
+  assert.deepEqual(readSocial(site()), { raw: {}, accounts: [], about: null, contact: null, following: [] });
 });
 
 test('round trip, new file has accounts first and a trailing newline', () => {

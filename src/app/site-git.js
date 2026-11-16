@@ -25,6 +25,8 @@ export const BACKUP_PATHS = Object.freeze(['content', 'src/media', 'config/vp.js
  * library operations (their own commit), never staged by a backup.
  */
 export const THEME_PATHS = Object.freeze(['config/theme.json', 'src/assets/themes']);
+/** The social accounts file: committed by Social saves only, never by a backup. */
+export const SOCIAL_PATHS = Object.freeze(['config/social.json']);
 /** The layouts and includes the layout editor writes: committed by Publish layout only, never by a backup. */
 export const LAYOUT_PATHS = Object.freeze(['src/layouts', 'src/includes']);
 const MAX_TITLES = 3;
@@ -213,6 +215,15 @@ export function layoutMessage(labels) {
  */
 export function programMessage(text) {
   return `Programs: ${commitTitle([text])}`;
+}
+
+/**
+ * Commit message of a social accounts change: `Social: accounts`, with no CI skip marker
+ * (the push rebuilds the live site, so the links go live).
+ * @returns {string}
+ */
+export function socialMessage() {
+  return 'Social: accounts';
 }
 
 /**

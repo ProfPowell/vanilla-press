@@ -26,6 +26,7 @@ import { mountThemeRoutes } from './theme-routes.js';
 import { mountLayoutRoutes } from './layout-routes.js';
 import { layoutWritesPath } from './layout-writes.js';
 import { mountProgramRoutes } from './program-routes.js';
+import { mountSocialRoutes } from './social-routes.js';
 import { mountServiceRoutes } from './service-routes.js';
 import { createImageSearch } from '../services/image-search.js';
 import { clearTmp } from '../programs/import.js';
@@ -118,6 +119,7 @@ function createLock() {
  *   siteProcess?: { ensureInstalled?: Function, runBuild?: Function },
  *   backup?: { now?: () => number, setTimer?: Function, clearTimer?: Function },
  *   fetch?: typeof fetch,
+ *   cookSocial?: object|(() => Promise<object|null>),
  *   components?: { catalog?: Object[], vpRoot?: string },
  * }} [options] - git and siteProcess override the real functions one by one (for tests);
  *   backup injects the draft-backup timers; fetch is used by the live check;
@@ -135,6 +137,7 @@ export async function startApp({
   siteProcess: siteProcessOverrides = {},
   backup: backupTimers = {},
   fetch: fetchImpl = globalThis.fetch,
+  cookSocial = undefined,
   components: { catalog = CATALOG, vpRoot = ROOT } = {},
 } = {}) {
   // Looked up on each use, so a caller can swap a function after start (tests do).
@@ -255,6 +258,9 @@ export async function startApp({
       mountProgramRoutes(router, prefix, {
         site, ws, db, backup, writes, deps: git, liveRefs: createLivePrograms(ws.siteDir, git),
         programsUrl: () => programsUrl,
+      });
+      mountSocialRoutes(router, prefix, {
+        site, ws, db, backup, writes, deps: git, fetch: fetchImpl, cookSocial,
       });
       const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);

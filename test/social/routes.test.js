@@ -16,6 +16,8 @@ if (REAL) modules.push(['real Cook module', () => import(pathToFileURL(REAL).hre
 const CONNECTED = { isRepo: true, branch: 'main', hasRemote: true, hasUpstream: true };
 const json = (status, data) => ({ status, ok: status >= 200 && status < 300, json: async () => data });
 const BSKY = 'https://public.api.bsky.app/xrpc/';
+// The test's own HTTP client, captured so a test can make globalThis.fetch throw.
+const httpFetch = globalThis.fetch.bind(globalThis);
 
 for (const [label, loadModule] of modules) describe(`social routes (${label})`, () => {
   let root, app, site, id, cook, cookSocial;
@@ -50,7 +52,7 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
   async function api(path, { method = 'GET', body } = {}) {
     const opts = { method };
     if (body !== undefined) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(body); }
-    const res = await fetch(`${app.url}/api/sites/${id}${path}`, opts);
+    const res = await httpFetch(`${app.url}/api/sites/${id}${path}`, opts);
     const text = await res.text();
     let data = text;
     try { data = JSON.parse(text); } catch { /* not JSON */ }
@@ -73,7 +75,7 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
       port: 0, env: { VP_CONFIG_DIR: join(root, 'config') }, git: fakeGit, fetch: fakeFetch,
       cookSocial: () => cook,
     });
-    const res = await fetch(`${app.url}/api/sites`, {
+    const res = await httpFetch(`${app.url}/api/sites`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: site, name: 'Site' }),
     });
     id = (await res.json()).id;
@@ -311,36 +313,44 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
     ] });
     snapshot('bluesky-alice.example.com.json', [item(3), item(2), item(1)]);
     const before = fetchCalls;
+    // Any network use in the server (route or Cook module) through the global fetch fails the test.
+    const globalFetch = globalThis.fetch;
+    let globalCalls = 0;
+    globalThis.fetch = async (url) => { globalCalls += 1; throw new Error(`/social/feed must not fetch: ${url}`); };
+    try {
+      const all = await api('/social/feed');
+      assert.equal(all.status, 200);
+      assert.equal((all.data.html.match(/<article /g) || []).length, 3, 'visible accounts only: the hidden github one has no snapshot anyway');
+      assert.ok(all.data.html.includes('post 3 &lt;b&gt;&amp;&lt;/b&gt;'), 'Cook escapes the text');
+      assert.ok(all.data.html.includes('class="social-feed-counts"'));
+      assert.ok(all.data.html.includes('class="social-feed-state"'));
+      assert.ok(all.data.html.includes('data-infinite'));
 
-    const all = await api('/social/feed');
-    assert.equal(all.status, 200);
-    assert.equal((all.data.html.match(/<article /g) || []).length, 3, 'visible accounts only: the hidden github one has no snapshot anyway');
-    assert.ok(all.data.html.includes('post 3 &lt;b&gt;&amp;&lt;/b&gt;'), 'Cook escapes the text');
-    assert.ok(all.data.html.includes('class="social-feed-counts"'));
-    assert.ok(all.data.html.includes('class="social-feed-state"'));
-    assert.ok(all.data.html.includes('data-infinite'));
+      const some = await api('/social/feed?tags=webdev&items=5&hide-counts=true&accounts=bluesky:alice.example.com,github:carol-dev');
+      assert.equal(some.status, 200);
+      assert.equal((some.data.html.match(/<article /g) || []).length, 1);
+      assert.ok(!some.data.html.includes('social-feed-counts'));
 
-    const some = await api('/social/feed?tags=webdev&items=5&hide-counts=true&accounts=bluesky:alice.example.com,github:carol-dev');
-    assert.equal(some.status, 200);
-    assert.equal((some.data.html.match(/<article /g) || []).length, 1);
-    assert.ok(!some.data.html.includes('social-feed-counts'));
+      const one = await api('/social/feed?items=1');
+      assert.equal((one.data.html.match(/<article /g) || []).length, 1);
 
-    const one = await api('/social/feed?items=1');
-    assert.equal((one.data.html.match(/<article /g) || []).length, 1);
+      // A named hidden account with no snapshot: "Nothing yet", no crash
+      const hidden = await api('/social/feed?accounts=github:carol-dev');
+      assert.equal(hidden.status, 200);
+      assert.ok(hidden.data.html.includes('social-feed-empty'));
 
-    // A named hidden account with no snapshot: "Nothing yet", no crash
-    const hidden = await api('/social/feed?accounts=github:carol-dev');
-    assert.equal(hidden.status, 200);
-    assert.ok(hidden.data.html.includes('social-feed-empty'));
+      // No feed accounts at all: empty html, so the editor shows its "add them in Social" note
+      seed({ accounts: [{ service: 'link', label: 'Blog', url: 'https://blog.example' }] });
+      const none = await api('/social/feed');
+      assert.deepEqual(none.data, { html: '' });
+      seed({});
+      assert.deepEqual((await api('/social/feed')).data, { html: '' });
 
-    // No feed accounts at all: empty html, so the editor shows its "add them in Social" note
-    seed({ accounts: [{ service: 'link', label: 'Blog', url: 'https://blog.example' }] });
-    const none = await api('/social/feed');
-    assert.deepEqual(none.data, { html: '' });
-    seed({});
-    assert.deepEqual((await api('/social/feed')).data, { html: '' });
-
-    assert.equal(fetchCalls, before, 'the preview never touches the network');
+      assert.equal(fetchCalls, before, 'the preview never touches the network');
+      assert.equal(globalCalls, 0, 'nor the global fetch');
+    } finally {
+      globalThis.fetch = globalFetch;
+    }
 
     // Cook without renderSocialFeed (2.11.x): 409 naming 2.12.0
     const { renderSocialFeed, ...older } = cookSocial;

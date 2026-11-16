@@ -141,6 +141,13 @@ describe('social-feed preview', () => {
     applyFeedPreview(el, previewPlan(null, new Error('boom')), 's');
     assert.equal(el.innerHTML, '');
   });
+  it('the filled preview is inert: no state script and no data-infinite, so the live element never fetches (even after a reconnect)', () => {
+    const el = document.createElement('social-feed');
+    applyFeedPreview(el, { kind: 'html', html: FILLED }, 's');
+    assert.ok(el.querySelector('activity-feed article[data-id="bluesky:1"]'), 'the entries still show');
+    assert.ok(!el.querySelector('script.social-feed-state'), 'VB reads its state (and so its accounts) from this script');
+    assert.equal(el.querySelector('activity-feed').hasAttribute('data-infinite'), false, 'no load-more');
+  });
   it('the editor CSS displays a noted element', () => {
     const css = readFileSync(new URL('../../editor/assets/css/_component-settings.css', import.meta.url), 'utf8');
     assert.match(css, /social-feed\[data-preview-note\][^{]*\{[^}]*display:\s*block/);

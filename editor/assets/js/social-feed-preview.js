@@ -36,6 +36,18 @@ export function socialFeedQuery(attrs) {
 }
 
 /**
+ * Leave the filled preview display-only. VB's element reads its accounts and
+ * cursors from the state script, so with it present a reconnect (ProseMirror
+ * moving the node view's DOM) would fetch from Bluesky, Mastodon or GitHub
+ * from the editor; `data-infinite` would ask for more on scroll.
+ * @param {Element} el
+ */
+function makeInert(el) {
+  for (const s of el.querySelectorAll(':scope > script.social-feed-state')) s.remove();
+  for (const feed of el.querySelectorAll(':scope > activity-feed[data-infinite]')) feed.removeAttribute('data-infinite');
+}
+
+/**
  * Draw a plan (`previewPlan` from social-links-preview) into the element, replacing what is there.
  * @param {Element} el
  * @param {{ kind: 'html', html: string }|{ kind: 'empty' }|{ kind: 'old' }|{ kind: 'none' }} plan
@@ -46,6 +58,7 @@ export function applyFeedPreview(el, plan, siteId) {
   const doc = el.ownerDocument;
   if (plan.kind === 'html') {
     el.innerHTML = plan.html;
+    makeInert(el);
   } else if (plan.kind === 'old') {
     el.replaceChildren(doc.createTextNode(FEED_OLD_COOK_COPY));
   } else if (plan.kind === 'empty') {

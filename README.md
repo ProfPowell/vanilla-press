@@ -54,11 +54,12 @@ The **Programs** screen of a site manages hand-written programs (demos, games, s
 The **Social** screen of a site keeps its social details in `config/social.json`. Cook reads that file and builds the pages and `/.well-known` files from it. Each panel saves only its own key and leaves the others (and any keys you added by hand) alone.
 
 - **Accounts** (key `accounts`; needs Cook 2.10.0): your profiles on Bluesky, Mastodon, GitHub and so on. Each account is checked against the service before it is saved, checked again when you open the screen, and flagged if a Bluesky handle now points to a different account.
-- **About** (key `about`; needs Cook 2.11.0): a summary and a Markdown body (or a file), with a preview of the body shown in a sandboxed frame. Nothing from the preview reaches the page around it.
+- **About** (key `about`; needs Cook 2.11.0): a summary and a Markdown body, with a preview of the body shown in a sandboxed frame. Nothing from the preview reaches the page around it. A `file` key set by hand in `config/social.json` is kept when you save.
 - **Contact** (key `contact`; needs Cook 2.11.0): name, email, URL, organisation and title. **The email is public**: it goes into the site's published contact files, so use an address you are happy to see published.
 - **Following** (key `following`; needs Cook 2.11.0): the feeds you follow, each with a title, feed URL, site URL, category and a Public checkbox. **Import OPML** merges a file into the list: feeds already listed are left untouched, new ones are added as public, and entries without a usable feed URL are skipped (the result says how many were added, skipped and already there). The file may be up to 2 MB. **Export OPML** downloads `following.opml` with the public entries.
 - **Older Cook:** on a site whose Cook is too old for the About, Contact and Following panels, they are disabled and the screen says to update `cook-ssg` to 2.11.0 or later. Nothing is written.
 - **Goes live at once:** every save is one commit, `Social: <panel>` (for example `Social: following`), pushed straight away (no `[CI Skip]`), so the site rebuilds. Without a repo, or when the push fails, the change stays on this computer and the screen says so.
+- **Ownership:** `config/social.json` is written only by this screen and read by Cook. The tests use a stand-in `cook-ssg/social` module (`test/social/fixtures/cook-social.js`); set `COOK_SOCIAL_MODULE` to a real Cook's `scripts/social/index.js` to run `test/social` against it (opt-in).
 - **No credentials:** `config/social.json` is committed to git and holds only public details. Passwords, tokens and app keys are never stored there, and VP never asks for them.
 
 ## Components in the app

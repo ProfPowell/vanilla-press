@@ -5,7 +5,7 @@
 /** @type {Array<{ id: string, name: string, checkable: boolean }>} */
 export const SERVICES = [
   { id: 'bluesky', name: 'Bluesky', checkable: true },
-  { id: 'mastodon', name: 'Mastodon', checkable: false },
+  { id: 'mastodon', name: 'Mastodon', checkable: true },
   { id: 'github', name: 'GitHub', checkable: true },
   { id: 'linkedin', name: 'LinkedIn', checkable: false },
   { id: 'youtube', name: 'YouTube', checkable: false },
@@ -64,7 +64,7 @@ export function parseHandle(service, input) {
     }
     case 'mastodon': {
       const s = raw;
-      const m = s.match(/^(?:https?:\/\/)?(?:www\.)?([^/@\s]+)\/@([^/@]+)\/*$/i);
+      const m = s.match(/^(?:https?:\/\/)?([^/@\s]+)\/@([^/@]+)\/*$/i);
       let user;
       let instance;
       if (m) {

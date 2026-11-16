@@ -8,6 +8,8 @@ export const UNCHECKED_MESSAGE = "Not checked: open the link to make sure it's y
 export const UNREACHABLE_MESSAGE = 'Not checked yet';
 export const MISMATCH_MESSAGE = 'This handle now points to a different account';
 
+export const SKIPPED_NOTE = 'Cook will skip this entry';
+
 export const SERVICE_NAMES = {
   bluesky: 'Bluesky', mastodon: 'Mastodon', github: 'GitHub', linkedin: 'LinkedIn', youtube: 'YouTube', link: 'Link',
 };
@@ -20,19 +22,6 @@ const ICONS = { bluesky: 'B', mastodon: 'M', github: 'G', linkedin: 'in', youtub
 const PLACEHOLDERS = {
   bluesky: 'name.bsky.social', mastodon: '@user@instance', github: 'ProfPowell', linkedin: 'in/your-name', youtube: '@channel',
 };
-
-function profileUrl(a) {
-  const h = String(a.handle || '');
-  switch (a.service) {
-    case 'bluesky': return `https://bsky.app/profile/${h}`;
-    case 'mastodon': { const [, user, instance] = h.split('@'); return `https://${instance}/@${user}`; }
-    case 'github': return `https://github.com/${h}`;
-    case 'linkedin': return `https://www.linkedin.com/in/${h.replace(/^in\//, '')}`;
-    case 'youtube': return `https://www.youtube.com/${h}`;
-    case 'link': return a.url || '';
-    default: return '';
-  }
-}
 
 function linkHost(url) {
   try { return new URL(url).host; } catch { return String(url || ''); }
@@ -60,13 +49,17 @@ function statusOf(account, check) {
 export function accountRow(account, check = null, { index = 0, count = 1 } = {}) {
   const [status, tone] = statusOf(account, check);
   const isLink = account.service === 'link';
+  const skipped = account.valid === false;
   const current = check?.mismatch && check.currentHandle ? check.currentHandle : '';
   return {
     id: `${account.service}:${isLink ? account.url : account.handle}`,
     icon: ICONS[account.service] || '?',
     name: isLink ? account.label : SERVICE_NAMES[account.service] || account.service,
     handle: isLink ? linkHost(account.url) : account.handle,
-    url: profileUrl(account),
+    // Cook's own url (GET /social): a hand-edited entry shows what the built site will link to.
+    url: skipped ? '' : account.profileUrl || '',
+    skipped,
+    skippedNote: skipped ? SKIPPED_NOTE : '',
     displayName: check?.displayName || '',
     avatar: check?.avatar || '',
     status,

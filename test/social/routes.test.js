@@ -97,7 +97,24 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
     seed({ accounts: [{ service: 'github', handle: 'ProfPowell' }] });
     const r = await api('/social');
     assert.equal(r.status, 200);
-    assert.deepEqual(r.data, { accounts: [{ service: 'github', handle: 'ProfPowell' }], cookReady: true, needsCook: null });
+    assert.deepEqual(r.data, { accounts: [{ service: 'github', handle: 'ProfPowell', profileUrl: 'https://github.com/ProfPowell', valid: true }], cookReady: true, needsCook: null });
+  });
+
+  it('GET /social gives Cook\'s url and valid per account, however the file was hand-edited', async () => {
+    seed({ accounts: [
+      { service: 'mastodon', handle: 'tpowell@mastodon.social' },
+      { service: 'link', label: 'Evil', url: 'javascript:alert(1)' },
+      { service: 'github', handle: 'ProfPowell' },
+      { service: 'nope', handle: 'x' },
+    ] });
+    const r = await api('/social');
+    assert.deepEqual(r.data.accounts.map((a) => [a.valid, a.profileUrl]), [
+      [true, 'https://mastodon.social/@tpowell'],
+      [false, null],
+      [true, 'https://github.com/ProfPowell'],
+      [false, null],
+    ]);
+    assert.equal(file().accounts[0].profileUrl, undefined, 'the file is not annotated');
   });
 
   it('a site without Cook social: GET says needsCook, every other route is 409', async () => {
@@ -141,7 +158,9 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
       { service: 'bluesky', handle: 'tpowell.bsky.social', did: 'did:plc:abc', checked: 'yes' },
       { service: 'github', handle: 'ProfPowell', hidden: true, checked: 'yes' },
     ]);
-    assert.deepEqual(r.data.accounts, f.accounts);
+    assert.deepEqual(r.data.accounts, f.accounts.map((a) => ({
+      ...a, valid: true, profileUrl: a.service === 'github' ? 'https://github.com/ProfPowell' : 'https://bsky.app/profile/tpowell.bsky.social',
+    })));
     assert.deepEqual(f.about, { name: 'Tom' });
     assert.deepEqual(f.following, [1]);
     assert.equal(commits.length, 1);

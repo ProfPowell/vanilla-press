@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { accountRow, moveAccount, addFormFor, toPutEntry, mergeChecks, replaceAccount, SERVICE_NAMES, COOK_TOO_OLD } from '../../app/assets/js/social-view.js';
 
-const bsky = { service: 'bluesky', handle: 'tpowell.bsky.social', did: 'did:plc:x' };
-const gh = { service: 'github', handle: 'ProfPowell', hidden: true };
-const li = { service: 'linkedin', handle: 'your-name' };
-const link = { service: 'link', label: 'My <shop>', url: 'https://example.com/a' };
-const mast = { service: 'mastodon', handle: '@me@example.social' };
+const bsky = { service: 'bluesky', handle: 'tpowell.bsky.social', did: 'did:plc:x', profileUrl: 'https://bsky.app/profile/tpowell.bsky.social', valid: true };
+const gh = { service: 'github', handle: 'ProfPowell', hidden: true, profileUrl: 'https://github.com/ProfPowell', valid: true };
+const li = { service: 'linkedin', handle: 'your-name', profileUrl: 'https://www.linkedin.com/in/your-name', valid: true };
+const link = { service: 'link', label: 'My <shop>', url: 'https://example.com/a', profileUrl: 'https://example.com/a', valid: true };
+const mast = { service: 'mastodon', handle: '@me@example.social', profileUrl: 'https://example.social/@me', valid: true };
 
 test('accountRow: name, handle, profile url and icon per service', () => {
   const r = accountRow(bsky, { status: 'ok', displayName: 'Tom' }, { index: 0, count: 2 });
@@ -18,11 +18,22 @@ test('accountRow: name, handle, profile url and icon per service', () => {
   assert.equal(accountRow(mast).url, 'https://example.social/@me');
   assert.equal(accountRow(gh).url, 'https://github.com/ProfPowell');
   assert.equal(accountRow(li).url, 'https://www.linkedin.com/in/your-name');
-  assert.equal(accountRow({ service: 'youtube', handle: '@chan' }).url, 'https://www.youtube.com/@chan');
+  assert.equal(accountRow({ service: 'youtube', handle: '@chan', profileUrl: 'https://www.youtube.com/@chan' }).url, 'https://www.youtube.com/@chan');
   const l = accountRow(link);
   assert.equal(l.name, 'My <shop>');
   assert.equal(l.url, 'https://example.com/a');
   assert.equal(l.handle, 'example.com');
+});
+
+test('accountRow: uses the url Cook computed; an invalid entry has no href and a note', () => {
+  const ok = accountRow({ ...mast, profileUrl: 'https://cook.example/@me', valid: true });
+  assert.equal(ok.url, 'https://cook.example/@me', 'Cook\'s url, not one built here');
+  assert.equal(ok.skipped, false);
+  const bad = accountRow({ service: 'link', label: 'x', url: 'javascript:alert(1)', profileUrl: null, valid: false });
+  assert.equal(bad.url, '');
+  assert.equal(bad.skipped, true);
+  assert.equal(bad.skippedNote, 'Cook will skip this entry');
+  assert.equal(accountRow({ service: 'link', label: 'x', url: 'javascript:alert(1)' }).url, '', 'no Cook url, no href');
 });
 
 test('accountRow: status words and tone', () => {

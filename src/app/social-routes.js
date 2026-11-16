@@ -65,10 +65,20 @@ export function mountSocialRoutes(router, prefix, {
     return cook;
   }
 
+  /**
+   * Each stored account plus Cook's own answer for it: `profileUrl` (null when Cook
+   * would not build one) and `valid` (false when Cook skips the entry at build time).
+   * Display only; the file is never written with these.
+   */
+  const annotate = (cook, accounts) => accounts.map((a) => {
+    const [account] = cook.normalizeAccounts({ accounts: [a] }).all;
+    return { ...(isObj(a) ? a : {}), profileUrl: account?.url ?? null, valid: !!account };
+  });
+
   router.add('GET', `${prefix}/social`, handle(async (req, res) => {
     const { accounts } = readSocial(siteDir);
-    const cookReady = !!(await loadCook());
-    sendJson(res, 200, { accounts, cookReady, needsCook: cookReady ? null : NEEDS_COOK });
+    const cook = await loadCook();
+    sendJson(res, 200, { accounts: cook ? annotate(cook, accounts) : accounts, cookReady: !!cook, needsCook: cook ? null : NEEDS_COOK });
   }));
 
   router.add('POST', `${prefix}/social/check`, handle(async (req, res) => {
@@ -190,6 +200,6 @@ export function mountSocialRoutes(router, prefix, {
       return goLive();
     }));
     const { committed, note } = out;
-    sendJson(res, 200, { accounts: next, committed, ...(note ? { note } : {}) });
+    sendJson(res, 200, { accounts: annotate(cook, next), committed, ...(note ? { note } : {}) });
   }));
 }

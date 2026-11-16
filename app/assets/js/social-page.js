@@ -4,10 +4,16 @@
  * Every reorder, hide and remove is one PUT of the whole list.
  * @module social-page
  */
-import { h, getSocial, recheckSocial, checkSocial, saveSocial } from './app-api.js';
+import {
+  h, getSocial, recheckSocial, checkSocial, saveSocial, saveAbout, saveContact, saveFollowing, previewAbout, importOpml, followingOpmlUrl,
+} from './app-api.js';
 import {
   accountRow, mergeChecks, moveAccount, replaceAccount, addFormFor, toPutEntry, COOK_TOO_OLD, SERVICE_NAMES, SERVICE_IDS,
 } from './social-view.js';
+import {
+  SOCIALSPEC_TOO_OLD, EMAIL_HELPER, PREVIEW_UNAVAILABLE, aboutForm, toAboutPut, contactForm, toContactPut,
+  followingRows, blankRow, toFollowingPut, moveRow, importSummary, previewDocument,
+} from './socialspec-view.js';
 
 /**
  * @param {{ siteId: string, root: HTMLElement }} opts
@@ -18,6 +24,11 @@ export function initSocialSection({ siteId, root }) {
   let accounts = [];
   let checks = new Map(); // row id -> recheck result
   let cookReady = true;
+  let socialSpecReady = true;
+  let about = null; // the stored About, kept so Save keeps its other keys (file)
+  let followRows = [];
+  let storedFollowing = [];
+  let previewing = false;
   let busy = false;
   let pending = null; // the account waiting for Save in the Add panel: { entry, unchecked, replaceId? }
   let offeredHandle = ''; // the handle "Use @handle" filled in
@@ -45,6 +56,14 @@ export function initSocialSection({ siteId, root }) {
     for (const el of root.querySelectorAll('#social-list button, #social-add-btn, #social-add-panel button, #social-add-panel select, #social-add-panel input')) {
       el.disabled = off || el.dataset.edge === 'true';
     }
+    const specOff = busy || !socialSpecReady;
+    for (const el of root.querySelectorAll('.socialspec-panel button, .socialspec-panel input, .socialspec-panel textarea')) {
+      el.disabled = specOff || el.dataset.edge === 'true';
+    }
+    const exp = $('following-export');
+    exp.setAttribute('aria-disabled', String(specOff));
+    exp.style.pointerEvents = specOff ? 'none' : '';
+    exp.hidden = !socialSpecReady || !storedFollowing.some((e) => e.public !== false);
   }
 
   // --- The list ---
@@ -253,6 +272,186 @@ export function initSocialSection({ siteId, root }) {
   $('social-add-save').addEventListener('click', savePending);
   $('social-add-unchecked').addEventListener('click', savePending);
 
+  // --- About, Contact and Following (Cook 2.11.0) ---
+  const field = (id) => $(id);
+  const panelMessage = (panel, kind, message) => {
+    const el = $(`${panel}-${kind}`);
+    el.textContent = message || '';
+    el.hidden = !message;
+  };
+  /** Run a panel's one PUT: busy while in flight, 400 messages and the commit note beside the panel. */
+  async function savePanel(panel, call) {
+    if (busy || !socialSpecReady) return;
+    setBusy(true);
+    panelMessage(panel, 'error', '');
+    panelMessage(panel, 'note', '');
+    try {
+      const result = await call();
+      const note = result.committed === false ? result.note || 'Saved, but not committed.' : '';
+      panelMessage(panel, 'note', note);
+      return result;
+    } catch (err) {
+      panelMessage(panel, 'error', err.data?.needsCook ? SOCIALSPEC_TOO_OLD : err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function renderSpecGate() {
+    $('socialspec-old').textContent = socialSpecReady ? '' : SOCIALSPEC_TOO_OLD;
+    $('socialspec-old').hidden = socialSpecReady;
+    applyDisabled();
+  }
+
+  function fillSpecPanels(state) {
+    const a = aboutForm(state.about);
+    field('about-summary').value = a.summary;
+    field('about-body').value = a.body;
+    setPreview(false);
+    const c = contactForm(state.contact);
+    field('contact-name').value = c.name;
+    field('contact-email').value = c.email;
+    field('contact-url').value = c.url;
+    field('contact-org').value = c.org;
+    field('contact-title-field').value = c.title;
+    followRows = followingRows(state.following);
+    renderFollowing();
+    for (const panel of ['about', 'contact', 'following']) { panelMessage(panel, 'error', ''); panelMessage(panel, 'note', ''); }
+    $('following-import-result').hidden = true;
+  }
+
+  $('contact-email-help').textContent = EMAIL_HELPER;
+
+  // About
+  function setPreview(on) {
+    previewing = on;
+    $('about-edit').hidden = on;
+    $('about-preview').hidden = !on;
+    $('about-preview-btn').textContent = on ? 'Edit' : 'Preview';
+    $('about-preview-btn').setAttribute('aria-pressed', String(on));
+    if (!on) { $('about-preview-note').hidden = true; $('about-preview-frame').srcdoc = ''; }
+  }
+  $('about-preview-btn').addEventListener('click', async () => {
+    if (busy || !socialSpecReady) return;
+    if (previewing) { setPreview(false); field('about-body').focus(); return; }
+    panelMessage('about', 'error', '');
+    setBusy(true);
+    try {
+      const { html } = await previewAbout(siteId, field('about-body').value);
+      // The HTML is the owner's Markdown with raw HTML passed through: only ever a sandboxed iframe, never this page.
+      setPreview(true);
+      $('about-preview-frame').srcdoc = previewDocument(html);
+    } catch (err) {
+      if (err.status === 409) {
+        setPreview(true);
+        $('about-preview-note').textContent = PREVIEW_UNAVAILABLE;
+        $('about-preview-note').hidden = false;
+      } else {
+        panelMessage('about', 'error', err.message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  });
+  $('about-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const value = toAboutPut({ summary: field('about-summary').value, body: field('about-body').value }, about);
+    const result = await savePanel('about', () => saveAbout(siteId, value));
+    if (result) about = result.about || null;
+  });
+
+  // Contact
+  $('contact-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const value = toContactPut({
+      name: field('contact-name').value, email: field('contact-email').value, url: field('contact-url').value,
+      org: field('contact-org').value, title: field('contact-title-field').value,
+    });
+    await savePanel('contact', () => saveContact(siteId, value));
+  });
+
+  // Following
+  function followRow(row, index) {
+    const input = (name, label, type = 'text') => {
+      const id = `follow-${row.key}-${name}`;
+      return h('div', { class: 'theme-field' },
+        h('label', { for: id }, label),
+        h('input', { type, id, 'data-field': name, value: row[name], autocomplete: 'off', spellcheck: 'false' }));
+    };
+    const btn = (action, label, extra = {}) => h('button', {
+      type: 'button', 'data-action': action, 'data-key': String(row.key), 'aria-label': `${label} feed ${index + 1}`, ...extra,
+    }, label);
+    const pubId = `follow-${row.key}-public`;
+    return h('li', { class: 'follow-row', 'data-key': String(row.key) },
+      input('title', 'Title'),
+      input('feedUrl', 'Feed URL', 'url'),
+      input('siteUrl', 'Site URL', 'url'),
+      h('label', { class: 'follow-public', for: pubId },
+        h('input', { type: 'checkbox', id: pubId, 'data-field': 'public', checked: row.public }), 'Public'),
+      h('span', { class: 'actions' },
+        btn('up', 'Move up', { 'data-edge': String(index === 0) }),
+        btn('down', 'Move down', { 'data-edge': String(index === followRows.length - 1) }),
+        btn('remove', 'Remove', { class: 'danger-text' })));
+  }
+  function renderFollowing(focusSel) {
+    $('following-list').replaceChildren(...followRows.map(followRow));
+    $('following-empty').hidden = followRows.length > 0;
+    applyDisabled();
+    if (focusSel) $('following-list').querySelector(focusSel)?.focus();
+  }
+  const rowOf = (el) => followRows.find((r) => String(r.key) === el.closest('.follow-row')?.dataset.key);
+  $('following-list').addEventListener('input', (e) => {
+    const row = rowOf(e.target);
+    const name = e.target.dataset.field;
+    if (!row || !name) return;
+    row[name] = name === 'public' ? e.target.checked : e.target.value;
+  });
+  $('following-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn || busy || !socialSpecReady) return;
+    const index = followRows.findIndex((r) => String(r.key) === btn.dataset.key);
+    if (index < 0) return;
+    const { action, key } = btn.dataset;
+    if (action === 'up' || action === 'down') {
+      followRows = moveRow(followRows, index, action === 'up' ? -1 : 1);
+      renderFollowing(`[data-key="${key}"][data-action="${action}"]:not(:disabled), [data-key="${key}"][data-action]:not(:disabled)`);
+    } else if (action === 'remove') {
+      followRows = followRows.filter((_, i) => i !== index);
+      renderFollowing('[data-action="remove"], #following-add');
+    }
+  });
+  $('following-add').addEventListener('click', () => {
+    if (busy || !socialSpecReady) return;
+    const row = blankRow();
+    followRows = [...followRows, row];
+    renderFollowing(`[data-key="${row.key}"] [data-field="title"]`);
+  });
+  $('following-save').addEventListener('click', async () => {
+    const list = toFollowingPut(followRows);
+    const result = await savePanel('following', () => saveFollowing(siteId, list));
+    if (result) {
+      storedFollowing = result.following || [];
+      followRows = followingRows(storedFollowing);
+      renderFollowing();
+    }
+  });
+  $('following-import').addEventListener('click', () => { if (!busy && socialSpecReady) $('following-file').click(); });
+  $('following-file').addEventListener('change', async () => {
+    const file = $('following-file').files[0];
+    $('following-file').value = '';
+    if (!file || busy || !socialSpecReady) return;
+    $('following-import-result').hidden = true;
+    const result = await savePanel('following', async () => importOpml(siteId, await file.text()));
+    if (result) {
+      storedFollowing = result.following || [];
+      followRows = followingRows(storedFollowing);
+      renderFollowing();
+      $('following-import-result').textContent = importSummary(result);
+      $('following-import-result').hidden = false;
+    }
+  });
+  $('following-export').href = followingOpmlUrl(siteId);
+
   // --- Load ---
   let latest = 0;
   async function recheck() {
@@ -276,11 +475,16 @@ export function initSocialSection({ siteId, root }) {
       const state = await getSocial(siteId);
       accounts = Array.isArray(state.accounts) ? state.accounts : [];
       cookReady = state.cookReady !== false;
+      socialSpecReady = state.socialSpecReady === true;
+      about = state.about || null;
+      storedFollowing = Array.isArray(state.following) ? state.following : [];
+      fillSpecPanels(state);
     } catch (err) {
-      if (err.data?.cookReady === false) { cookReady = false; accounts = []; } else { showError(err.message); return; }
+      if (err.data?.cookReady === false) { cookReady = false; socialSpecReady = false; accounts = []; } else { showError(err.message); return; }
     }
     checks = new Map();
     render();
+    renderSpecGate();
     if (cookReady) await recheck();
   }
 

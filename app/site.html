@@ -247,6 +247,83 @@
 
         <ul id="social-list" class="social-list" aria-labelledby="social-title"></ul>
         <p id="social-empty" class="empty" hidden>No accounts yet. Add one and it can show on your pages.</p>
+
+        <p id="socialspec-old" class="notice" role="status" hidden></p>
+
+        <section id="about-panel" class="panel socialspec-panel" aria-labelledby="about-title">
+          <h2 id="about-title">About</h2>
+          <p class="muted">A short summary and a longer Markdown text, published at /.well-known/about.md.</p>
+          <form id="about-form" novalidate>
+            <div class="theme-field">
+              <label for="about-summary">Summary</label>
+              <input type="text" id="about-summary" autocomplete="off">
+            </div>
+            <div class="theme-field" id="about-edit">
+              <label for="about-body">About text (Markdown)</label>
+              <textarea id="about-body" rows="10" spellcheck="true"></textarea>
+            </div>
+            <div id="about-preview" class="about-preview" hidden>
+              <p id="about-preview-note" class="notice" role="status" hidden></p>
+              <iframe id="about-preview-frame" title="About text preview" sandbox="" referrerpolicy="no-referrer"></iframe>
+            </div>
+            <p id="about-error" class="error" role="alert" hidden></p>
+            <p id="about-note" class="notice" role="status" hidden></p>
+            <div class="actions">
+              <button type="submit" id="about-save" class="primary">Save About</button>
+              <button type="button" id="about-preview-btn" aria-pressed="false">Preview</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="contact-panel" class="panel socialspec-panel" aria-labelledby="contact-title">
+          <h2 id="contact-title">Contact</h2>
+          <p class="muted">Published at /.well-known/contact.vcf. Clear every field and save to remove it.</p>
+          <form id="contact-form" novalidate>
+            <div class="theme-field">
+              <label for="contact-name">Name</label>
+              <input type="text" id="contact-name" autocomplete="off">
+            </div>
+            <div class="theme-field">
+              <label for="contact-email">Email</label>
+              <input type="email" id="contact-email" autocomplete="off" aria-describedby="contact-email-help">
+              <p id="contact-email-help" class="muted"></p>
+            </div>
+            <div class="theme-field">
+              <label for="contact-url">URL</label>
+              <input type="url" id="contact-url" autocomplete="off">
+            </div>
+            <div class="theme-field">
+              <label for="contact-org">Organization</label>
+              <input type="text" id="contact-org" autocomplete="off">
+            </div>
+            <div class="theme-field">
+              <label for="contact-title-field">Title</label>
+              <input type="text" id="contact-title-field" autocomplete="off">
+            </div>
+            <p id="contact-error" class="error" role="alert" hidden></p>
+            <p id="contact-note" class="notice" role="status" hidden></p>
+            <div class="actions">
+              <button type="submit" id="contact-save" class="primary">Save Contact</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="following-panel" class="panel socialspec-panel" aria-labelledby="following-title">
+          <h2 id="following-title">Following</h2>
+          <p class="muted">Feeds you follow. The public ones are published at /.well-known/following.opml.</p>
+          <ul id="following-list" class="follow-list" aria-labelledby="following-title"></ul>
+          <p id="following-empty" class="empty" hidden>You are not following anything yet.</p>
+          <p id="following-error" class="error" role="alert" hidden></p>
+          <p id="following-note" class="notice" role="status" hidden></p>
+          <p id="following-import-result" class="notice" role="status" hidden></p>
+          <div class="actions">
+            <button type="button" id="following-add">Add feed</button>
+            <button type="button" id="following-import">Import OPML…</button>
+            <input type="file" id="following-file" accept=".opml,.xml,text/xml,text/x-opml,application/xml" hidden>
+            <a id="following-export" class="btn" href="#" download="following.opml" hidden>Export OPML</a>
+            <button type="button" id="following-save" class="primary">Save Following</button>
+          </div>
+        </section>
       </section>
 
       <section id="layouts-section" aria-labelledby="layouts-title" hidden>

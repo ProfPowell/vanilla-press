@@ -146,3 +146,33 @@ export function socialLinksPreview(siteId, services, variant) {
   if (variant) q.set('variant', variant);
   return api(`${socialBase(siteId)}/links${q.size ? `?${q}` : ''}`);
 }
+
+/** Save the About section (null removes it): `{ about, committed, note? }`. */
+export function saveAbout(siteId, about) {
+  return api(`${socialBase(siteId)}/about`, { method: 'PUT', body: { about } });
+}
+
+/** Save the Contact section (null removes it): `{ contact, committed, note? }`. */
+export function saveContact(siteId, contact) {
+  return api(`${socialBase(siteId)}/contact`, { method: 'PUT', body: { contact } });
+}
+
+/** Save the whole Following list: `{ following, committed, note? }`. */
+export function saveFollowing(siteId, following) {
+  return api(`${socialBase(siteId)}/following`, { method: 'PUT', body: { following } });
+}
+
+/** The About Markdown rendered on the server the way the build renders it: `{ html }`. 409 when the site's packages are not installed. */
+export function previewAbout(siteId, body) {
+  return api(`${socialBase(siteId)}/about/preview`, { method: 'POST', body: { body } });
+}
+
+/** Merge an OPML file's text into the list: `{ following, added, skipped, unchanged, committed, note? }`. */
+export function importOpml(siteId, opml) {
+  return api(`${socialBase(siteId)}/following/import`, { method: 'POST', body: { opml } });
+}
+
+/** Where the OPML export downloads from. */
+export function followingOpmlUrl(siteId) {
+  return `${socialBase(siteId)}/following.opml`;
+}

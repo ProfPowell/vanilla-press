@@ -31,6 +31,15 @@ describe('editor api client', () => {
     assert.deepEqual(calls, [{ url: '/api/social/links?services=github&variant=icon', method: 'GET' }]);
   });
 
+  it('social and socialFeed: GET /social and GET /social/feed with the query', async () => {
+    await api.social();
+    await api.socialFeed({ accounts: 'github:carol-dev', items: '5', 'hide-counts': 'true' });
+    assert.deepEqual(calls, [
+      { url: '/api/social', method: 'GET' },
+      { url: '/api/social/feed?accounts=github%3Acarol-dev&items=5&hide-counts=true', method: 'GET' },
+    ]);
+  });
+
   it('components: GET /components and PUT /components/<encoded pkg>', async () => {
     await api.listComponents();
     await api.setComponent('@profpowell/browser-window', true);

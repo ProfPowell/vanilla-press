@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { SOCIAL_FILE, NEEDS_COOK, SocialError, readSocial, writeSocial } from '../../src/social/config.js';
 import { importCookSocial } from '../../src/social/cook.js';
 import * as fixture from './fixtures/cook-social.js';
@@ -19,6 +19,19 @@ test('constants', () => {
 test('stand-in fixture exports the Cook social interface', () => {
   for (const k of ['SERVICES', 'parseHandle', 'profileUrl', 'normalizeAccounts', 'renderSocialLinks']) assert.ok(k in fixture, k);
   assert.deepEqual(fixture.parseHandle('bluesky', '@Tpowell.bsky.social'), { handle: 'tpowell.bsky.social' });
+});
+
+test('stand-in fixture exports the Cook 2.12.0 <social-feed> helpers', () => {
+  for (const k of ['renderSocialFeed', 'feedAccounts', 'parseFeedAttrs', 'readSnapshot', 'snapshotPath']) assert.equal(typeof fixture[k], 'function', k);
+});
+
+// Opt-in: with COOK_SOCIAL_MODULE set, the verbatim copies must still match Cook's files.
+test('cook-feeds copies match Cook byte for byte (COOK_SOCIAL_MODULE only)', { skip: !process.env.COOK_SOCIAL_MODULE }, () => {
+  const cookDir = dirname(process.env.COOK_SOCIAL_MODULE);
+  const here = new URL('./fixtures/cook-feeds/', import.meta.url);
+  for (const f of ['catalog.js', 'accounts.js', 'feeds/core.js', 'feeds/block.js', 'feeds/snapshots.js']) {
+    assert.equal(readFileSync(new URL(f, here), 'utf8'), readFileSync(join(cookDir, f), 'utf8'), f);
+  }
 });
 
 test('missing file reads as empty', () => {

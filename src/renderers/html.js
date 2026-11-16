@@ -433,7 +433,7 @@ function renderComponentAttrs(attrs) {
 }
 
 /** Components written with no children whatever a node holds: Cook fills them. */
-const ALWAYS_EMPTY = new Set(['social-links']);
+const ALWAYS_EMPTY = new Set(['social-links', 'social-feed']);
 
 /**
  * Render a block-position component node. Exported so the markdown renderer

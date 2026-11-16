@@ -216,6 +216,19 @@ export const api = {
     return request('/social/links', { query });
   },
 
+  /** The site's Social data (GET /social): { accounts, cookReady, ... }; each account has `service`, `handle`, `hidden`. */
+  social() {
+    return request('/social');
+  },
+
+  /**
+   * A `<social-feed>` as Cook draws it from the feed snapshots: { html } ('' when no feed
+   * accounts). Query: accounts, tags, items, hide-counts. 409 when Cook is older than 2.12.0.
+   */
+  socialFeed(query = {}) {
+    return request('/social/feed', { query });
+  },
+
   // --- App only (per-site base, `?site=`) ---
 
   /**

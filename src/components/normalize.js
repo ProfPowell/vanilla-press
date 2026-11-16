@@ -11,12 +11,13 @@
  * A string attribute takes numbers and `true` as their text; `false` (which
  * renders as no attribute) leaves it out. Number and boolean attributes take
  * their text forms ("60", "true", "false").
- * @param {'string'|'number'|'boolean'|undefined} type
+ * An `accounts` attribute (social-feed's list of account keys) is a string.
+ * @param {'string'|'number'|'boolean'|'accounts'|undefined} type
  * @param {unknown} value
  * @returns {unknown}
  */
 export function coerceAttr(type, value) {
-  if (type === 'string') {
+  if (type === 'string' || type === 'accounts') {
     if (typeof value === 'number' && Number.isFinite(value)) return String(value);
     if (value === true) return 'true';
     if (value === false) return undefined;

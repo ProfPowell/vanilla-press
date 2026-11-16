@@ -72,6 +72,17 @@ describe('formFields', () => {
   });
 });
 
+describe('formFields: accounts', () => {
+  it('formFields maps type accounts to control accounts', () => {
+    const [f] = formFields(d('x-a', 'none', { attributes: [{ name: 'accounts', type: 'accounts', description: 'Which accounts' }] }));
+    assert.deepEqual(f, { name: 'accounts', label: 'Accounts', control: 'accounts', advanced: false, description: 'Which accounts' });
+  });
+  it('coerce keeps an accounts value as text; empty leaves it out', () => {
+    assert.equal(coerce({ name: 'accounts', type: 'accounts' }, 'bluesky:a.example.com,github:b'), 'bluesky:a.example.com,github:b');
+    assert.equal(coerce({ name: 'accounts', type: 'accounts' }, ''), undefined);
+  });
+});
+
 describe('settingsFields', () => {
   it('is formFields with each attribute definition attached', () => {
     const attrs = [{ name: 'title', type: 'string' }, { name: 'speed', type: 'number' }];

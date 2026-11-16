@@ -32,7 +32,9 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
   const defaults = { ...fakeGit };
   // Account answers by handle; anything else is "unreachable" via a 503.
   let answers;
+  let fetchCalls = 0;
   const fakeFetch = async (url) => {
+    fetchCalls += 1;
     if (typeof url === 'string' && url.startsWith(BSKY)) {
       const u = new URL(url);
       if (u.pathname.endsWith('resolveHandle')) {
@@ -288,5 +290,65 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
     assert.ok(r.data.html.includes('https://x.example/?a=1&amp;b=2'));
     assert.ok(r.data.html.includes('rel="me"'));
     assert.ok(!r.data.html.includes('github'));
+  });
+
+  const item = (n, extra = {}) => ({
+    id: `bluesky:${n}`, service: 'bluesky', source: 'bluesky:alice.example.com', url: `https://bsky.app/profile/alice.example.com/post/${n}`,
+    date: `2026-11-0${n}T12:00:00.000Z`, text: `post ${n} <b>&</b>`, tags: n === 1 ? ['webdev'] : [], reposted: false,
+    author: { name: 'Alice', handle: 'alice.example.com', avatar: 'https://cdn.example/a.jpg', url: 'https://bsky.app/profile/alice.example.com' },
+    counts: { replies: 1, reposts: 2, likes: 3 }, ...extra,
+  });
+  const snapshot = (name, items) => {
+    mkdirSync(join(site, 'data', 'social-feeds'), { recursive: true });
+    writeFileSync(join(site, 'data', 'social-feeds', name), JSON.stringify({ fetchedAt: '2026-11-10T00:00:00.000Z', items }));
+  };
+
+  it('GET /social/feed returns snapshot html; 409 on old Cook; never calls fetch', async () => {
+    seed({ accounts: [
+      { service: 'bluesky', handle: 'alice.example.com', did: 'did:plc:alice' },
+      { service: 'github', handle: 'carol-dev', hidden: true },
+      { service: 'link', label: 'Blog', url: 'https://blog.example' },
+    ] });
+    snapshot('bluesky-alice.example.com.json', [item(3), item(2), item(1)]);
+    const before = fetchCalls;
+
+    const all = await api('/social/feed');
+    assert.equal(all.status, 200);
+    assert.equal((all.data.html.match(/<article /g) || []).length, 3, 'visible accounts only: the hidden github one has no snapshot anyway');
+    assert.ok(all.data.html.includes('post 3 &lt;b&gt;&amp;&lt;/b&gt;'), 'Cook escapes the text');
+    assert.ok(all.data.html.includes('class="social-feed-counts"'));
+    assert.ok(all.data.html.includes('class="social-feed-state"'));
+    assert.ok(all.data.html.includes('data-infinite'));
+
+    const some = await api('/social/feed?tags=webdev&items=5&hide-counts=true&accounts=bluesky:alice.example.com,github:carol-dev');
+    assert.equal(some.status, 200);
+    assert.equal((some.data.html.match(/<article /g) || []).length, 1);
+    assert.ok(!some.data.html.includes('social-feed-counts'));
+
+    const one = await api('/social/feed?items=1');
+    assert.equal((one.data.html.match(/<article /g) || []).length, 1);
+
+    // A named hidden account with no snapshot: "Nothing yet", no crash
+    const hidden = await api('/social/feed?accounts=github:carol-dev');
+    assert.equal(hidden.status, 200);
+    assert.ok(hidden.data.html.includes('social-feed-empty'));
+
+    // No feed accounts at all: empty html, so the editor shows its "add them in Social" note
+    seed({ accounts: [{ service: 'link', label: 'Blog', url: 'https://blog.example' }] });
+    const none = await api('/social/feed');
+    assert.deepEqual(none.data, { html: '' });
+    seed({});
+    assert.deepEqual((await api('/social/feed')).data, { html: '' });
+
+    assert.equal(fetchCalls, before, 'the preview never touches the network');
+
+    // Cook without renderSocialFeed (2.11.x): 409 naming 2.12.0
+    const { renderSocialFeed, ...older } = cookSocial;
+    cook = older;
+    const old = await api('/social/feed');
+    assert.equal(old.status, 409);
+    assert.equal(old.data.needsCook, '2.12.0');
+    cook = null;
+    assert.equal((await api('/social/feed')).status, 409);
   });
 });

@@ -6,6 +6,11 @@
  * text and code kinds get a textarea for their content. Every edit is
  * applied at once through the callback the editor passes to `show()`.
  *
+ * An `accounts` attribute (`<social-feed>`) is a fieldset: "All accounts"
+ * (the empty value) and one checkbox per Bluesky, Mastodon or GitHub account
+ * from `GET /social`, hidden ones marked. Unticking All ticks every visible
+ * account; the value is the comma list of ticked keys.
+ *
  * Shown and hidden by componentSettingsPlugin (blocks/component-view.js).
  * Showing it never opens a hidden settings panel: it sets `component-open`
  * on <editor-shell> and fires `component-settings-change` (bubbles,
@@ -15,6 +20,8 @@
  */
 
 import { settingsFields, coerce } from '../component-model.js';
+import { accountChoices, accountsValue, parseKeys } from '../accounts-field.js';
+import { api } from '../api-client.js';
 import { pickerKind } from '../media-insert.js';
 import { openMediaPicker } from './media-picker.js';
 import { mediaItemSrc } from '../../../../src/media/usage.js';
@@ -50,6 +57,7 @@ export class ComponentSettings extends HTMLElement {
     this._fields = [];
     this._apply = null;
     this._node = null;
+    this._accounts = null;
 
     this.addEventListener('input', (e) => this.onEdit(e));
     this.addEventListener('change', (e) => this.onEdit(e));
@@ -82,6 +90,7 @@ export class ComponentSettings extends HTMLElement {
     this.hidden = true;
     this._key = null;
     this._node = null;
+    this._accounts = null;
     this.replaceChildren();
     this.announce(false);
   }
@@ -96,8 +105,10 @@ export class ComponentSettings extends HTMLElement {
     const { tag } = node.attrs;
     const desc = descriptor || { tag, attributes: [], defaults: {}, advanced: [] };
     this._fields = settingsFields(desc);
+    this._accounts = null;
 
     const control = (field) => {
+      if (field.control === 'accounts') return this.accountsControl(field);
       const id = `cs-${field.name}`;
       const hintId = field.description ? `${id}-hint` : null;
       let input;
@@ -152,6 +163,62 @@ export class ComponentSettings extends HTMLElement {
   }
 
   /**
+   * The `accounts` fieldset. Its account checkboxes arrive with `GET /social`;
+   * until then (or if that fails) only "All accounts" shows.
+   * @param {{ name: string, label: string, description?: string }} field
+   */
+  accountsControl(field) {
+    const id = `cs-${field.name}`;
+    const hintId = field.description ? `${id}-hint` : null;
+    const all = el('input', { type: 'checkbox', id: `${id}-all`, 'data-accounts-all': '' });
+    const list = el('div', { class: 'accounts-list' });
+    const state = { field, choices: [], all, list };
+    this._accounts = state;
+    api.social().then(
+      (res) => {
+        if (this._accounts !== state) return;
+        state.choices = accountChoices(res?.accounts);
+        list.replaceChildren(...state.choices.map((c, i) => el('div', { class: 'field-check' },
+          el('input', { type: 'checkbox', id: `${id}-${i}`, 'data-account-key': c.key }),
+          el('label', { for: `${id}-${i}` }, c.label))));
+        if (!state.choices.length) list.append(el('p', { class: 'muted' }, 'No Bluesky, Mastodon or GitHub accounts in Social yet.'));
+        this.syncValues();
+      },
+      () => {
+        if (this._accounts === state) list.replaceChildren(el('p', { class: 'muted' }, "Your accounts in Social couldn't be loaded."));
+      },
+    );
+    return el('fieldset', { class: 'field field-accounts', 'data-accounts': field.name, 'aria-describedby': hintId },
+      el('legend', {}, field.label),
+      el('div', { class: 'field-check' }, all, el('label', { for: all.id }, 'All accounts')),
+      list,
+      hintId ? el('small', { id: hintId, class: 'hint' }, field.description) : null);
+  }
+
+  /** The accounts fieldset from the node's value: All when empty (each visible account shown ticked, locked). */
+  syncAccounts(attrs) {
+    const state = this._accounts;
+    if (!state) return;
+    const keys = parseKeys(attrs[state.field.name]).map((k) => k.toLowerCase());
+    const isAll = keys.length === 0;
+    state.all.checked = isAll;
+    for (const box of state.list.querySelectorAll('input[data-account-key]')) {
+      const key = box.dataset.accountKey;
+      const choice = state.choices.find((c) => c.key === key);
+      box.checked = isAll ? !choice?.hidden : keys.includes(key.toLowerCase());
+      box.disabled = isAll;
+    }
+  }
+
+  /** The new `accounts` value after a change in its fieldset. */
+  accountsEdit(target) {
+    const { choices, list } = this._accounts;
+    if (target.matches('[data-accounts-all]')) return accountsValue({ all: target.checked }, choices);
+    const keys = [...list.querySelectorAll('input[data-account-key]')].filter((b) => b.checked).map((b) => b.dataset.accountKey);
+    return accountsValue({ all: false, keys }, choices);
+  }
+
+  /**
    * A Choose… button for a media URL field: the picked file's `/media/<file>`
    * goes into the input and through its usual edit path.
    */
@@ -179,6 +246,7 @@ export class ComponentSettings extends HTMLElement {
       if (field.control === 'checkbox') input.checked = value;
       else if (input.value !== value) input.value = value;
     }
+    this.syncAccounts(attrs);
     const textarea = this.querySelector('[data-value]');
     if (textarea && textarea !== document.activeElement) {
       const value = node.attrs.value ?? '';
@@ -197,10 +265,12 @@ export class ComponentSettings extends HTMLElement {
       this._apply({ value: target.value });
       return;
     }
-    const name = target.dataset.attr;
+    const isAccounts = this._accounts && target.matches('[data-accounts-all], [data-account-key]');
+    const name = isAccounts ? this._accounts.field.name : target.dataset.attr;
     const field = this._fields.find(f => f.name === name);
     if (!field) return;
-    const raw = field.control === 'checkbox' ? target.checked : target.value;
+    let raw = field.control === 'checkbox' ? target.checked : target.value;
+    if (isAccounts) raw = this.accountsEdit(target);
     const next = { ...(this._node.attrs.attrs || {}) };
     const value = coerce(field.attrDef, raw);
     if (value === undefined || value === false) delete next[name];

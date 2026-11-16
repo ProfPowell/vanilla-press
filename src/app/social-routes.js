@@ -10,6 +10,8 @@
  * Needs Cook's `cook-ssg/social` (2.10.0): without it GET says `cookReady: false`
  * and every other route answers 409. The About, Contact and Following routes (and OPML
  * import/export) need Cook 2.11.0 (`renderOpml`): older answers 409 with `needsCook`.
+ * The `<social-feed>` preview (GET /social/feed) needs Cook 2.12.0 (`renderSocialFeed`) and
+ * reads only the feed snapshots under data/social-feeds: it never touches the network.
  *
  * @module app/social-routes
  */
@@ -28,6 +30,7 @@ import { GitNotConnectedError } from '../git/git.js';
 const MAX_OPML = 2 * 1024 * 1024;
 const NEEDS_SPEC = '2.11.0';
 const NEEDS_SEVERAL_EMAILS = '2.11.1';
+const NEEDS_FEED = '2.12.0';
 const NOT_COMMITTED = (why) => `Saved on this computer, but not committed (${why}), so it isn't live yet.`;
 const NOT_PUSHED = (why) => `Committed on this computer, but not pushed to GitHub (${why}), so it isn't live yet. The next backup or Publish pushes it.`;
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -125,6 +128,27 @@ export function mountSocialRoutes(router, prefix, {
     const { raw } = readSocial(siteDir);
     const opts = { ...(req.query.services ? { services: req.query.services } : {}), ...(req.query.variant ? { variant: req.query.variant } : {}) };
     sendJson(res, 200, { html: cook.renderSocialLinks(cook.normalizeAccounts(raw).visible, opts) });
+  }));
+
+  // The editor's <social-feed> preview: Cook's markup from the snapshots, the accounts chosen
+  // by Cook's own rule (feedAccounts). '' when the block has no feed accounts.
+  router.add('GET', `${prefix}/social/feed`, handle(async (req, res) => {
+    const cook = await loadCook();
+    if (typeof cook?.renderSocialFeed !== 'function' || typeof cook.readSnapshot !== 'function'
+      || typeof cook.feedAccounts !== 'function') {
+      throw new SocialError(409, `This site's Cook is too old to preview the social feed; update cook-ssg to ${NEEDS_FEED} or later`,
+        { cookReady: !!cook, needsCook: NEEDS_FEED });
+    }
+    const q = isObj(req.query) ? req.query : {};
+    const hideCounts = q['hide-counts'] !== undefined && q['hide-counts'] !== 'false';
+    const attrs = {
+      accounts: q.accounts ?? null, tags: q.tags ?? null, items: q.items ?? null, 'hide-counts': hideCounts ? '' : null,
+    };
+    const { raw } = readSocial(siteDir);
+    const { accounts } = cook.feedAccounts(cook.normalizeAccounts(raw), attrs.accounts);
+    if (!accounts.length) return sendJson(res, 200, { html: '' });
+    const itemsByKey = Object.fromEntries(accounts.map((a) => [a.key, cook.readSnapshot(siteDir, a) || []]));
+    sendJson(res, 200, { html: cook.renderSocialFeed(attrs, { accounts, itemsByKey }) });
   }));
 
   /** Commit config/social.json alone and push it; a failure is a note, never a lost save. */

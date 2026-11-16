@@ -123,3 +123,43 @@ social-links[data-preview-note] {
   color: var(--color-text-muted, inherit);
   font-size: var(--font-size-s, 0.875em);
 }
+
+/* The social-feed preview note (no accounts, or old Cook) looks the same. */
+social-feed[data-preview-note] {
+  display: block;
+  color: var(--color-text-muted, inherit);
+  font-size: var(--font-size-s, 0.875em);
+}
+
+/* The accounts control (social-feed): a fieldset of checkboxes. */
+component-settings .field-accounts {
+  border: 0;
+  margin: 0 0 var(--size-s);
+  padding: 0;
+  min-inline-size: 0;
+}
+
+/* A long handle wraps beside its checkbox, not under it */
+component-settings .field-accounts .field-check {
+  flex-wrap: nowrap;
+  align-items: start;
+}
+
+component-settings .field-accounts .field-check label {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+component-settings .field-accounts > legend {
+  padding: 0;
+  font-size: var(--font-size-s);
+  color: var(--color-text-muted);
+  margin-block-end: var(--size-2xs, 0.25rem);
+}
+
+component-settings .field-accounts .accounts-list {
+  display: grid;
+  gap: var(--size-2xs, 0.25rem);
+  margin-block-start: var(--size-2xs, 0.25rem);
+  padding-inline-start: var(--size-m, 1.25rem);
+}

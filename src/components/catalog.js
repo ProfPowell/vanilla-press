@@ -277,6 +277,21 @@ export const CATALOG = [
         ],
       },
       {
+        // Cook fills it at build from config/social.json and the feed snapshots; the editor
+        // saves it empty and previews it from the snapshots. `accounts` holds account keys
+        // (`<service>:<handle>`, comma list; empty = every visible account) and gets its own control.
+        tag: 'social-feed', label: 'Social feed', icon: 'share', group: 'Embeds',
+        description: 'Recent posts and releases from your accounts, from Social.',
+        kind: 'none', defaults: { items: 12 }, advanced: ['height', 'hide-counts'],
+        attributes: [
+          { name: 'accounts', type: 'accounts', description: 'Which accounts to show (default: all visible ones).' },
+          { name: 'tags', type: 'string', description: 'Comma list of hashtags, without #, to show only posts that use one (Bluesky and Mastodon).' },
+          { name: 'items', type: 'number', description: 'How many posts to show first, 1 to 50 (default 12).' },
+          { name: 'height', type: 'string', description: 'Height of the scrolling list, in rem, em, px or vh (default 32rem).' },
+          { name: 'hide-counts', type: 'boolean', description: 'Hide reply, repost and like counts.' },
+        ],
+      },
+      {
         tag: 'qr-code', label: 'QR code', icon: 'qr', group: 'Embeds',
         description: 'A QR code for a link or text.',
         kind: 'none', defaults: { value: '' }, advanced: ['size', 'color', 'background', 'error-correction'],

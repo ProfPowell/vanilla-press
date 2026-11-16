@@ -393,8 +393,10 @@ function validateComponent(node, path, errors, ctx, inline) {
         }
         continue;
       }
-      if (typeof value !== def.type) {
-        errors.push(`${path}: component "${tag}" attr "${name}" must be a ${def.type}`);
+      // An `accounts` attribute (social-feed) is a string with its own editor control
+      const type = def.type === 'accounts' ? 'string' : def.type;
+      if (typeof value !== type) {
+        errors.push(`${path}: component "${tag}" attr "${name}" must be a ${type}`);
       } else if (def.enum && !def.enum.includes(value)) {
         errors.push(`${path}: component "${tag}" attr "${name}" value "${value}" not in allowed values (${def.enum.join(', ')})`);
       }

@@ -28,6 +28,7 @@ import { SITE } from '../site-context.js';
 import {
   SOCIAL_LINKS_TAG, socialPreviewQuery, previewPlan, applyPreview,
 } from '../social-links-preview.js';
+import { SOCIAL_FEED_TAG, socialFeedQuery, applyFeedPreview } from '../social-feed-preview.js';
 import { isMissingMedia, missingText } from '../media-check.js';
 
 const COMPONENT_TYPES = new Set(['component_leaf', 'component_blocks', 'component_inline']);
@@ -126,18 +127,25 @@ class BaseComponentView {
   }
 
   /**
-   * For <social-links>: draw the site's real links inside the element.
+   * For <social-links>: draw the site's real links inside the element; for
+   * <social-feed>, the feed from the site's snapshots.
    * Display-only: a leaf node is an atom, so nothing in the element is read
    * back into the doc, and the renderer writes the element empty.
    */
   previewLinks() {
-    if (this.kind !== 'leaf' || this.node.attrs.tag !== SOCIAL_LINKS_TAG) return;
+    if (this.kind !== 'leaf') return;
+    const tag = this.node.attrs.tag;
+    // <social-feed>: the feed as Cook draws it from the snapshots, the same display-only way
+    const feed = tag === SOCIAL_FEED_TAG;
+    if (!feed && tag !== SOCIAL_LINKS_TAG) return;
     const mine = ++this.linksCheck;
-    api.socialLinks(socialPreviewQuery(this.node.attrs.attrs)).then(
+    const attrs = this.node.attrs.attrs;
+    const draw = feed ? applyFeedPreview : applyPreview;
+    (feed ? api.socialFeed(socialFeedQuery(attrs)) : api.socialLinks(socialPreviewQuery(attrs))).then(
       (res) => [previewPlan(res)],
       (err) => [previewPlan(null, err)],
     ).then(([plan]) => {
-      if (mine === this.linksCheck && views.has(this)) applyPreview(this.el, plan, SITE);
+      if (mine === this.linksCheck && views.has(this)) draw(this.el, plan, SITE);
     });
   }
 

@@ -59,14 +59,17 @@ function labelFor(name) {
 /**
  * Settings-form fields, one per declared attribute, in declaration order.
  * @param {ComponentDescriptor} descriptor
- * @returns {Array<{ name: string, label: string, control: 'text'|'number'|'checkbox'|'select',
+ * An `accounts` attribute (a comma list of Social account keys) gets the
+ * `accounts` control: an "All accounts" checkbox plus one per account.
+ * @returns {Array<{ name: string, label: string, control: 'text'|'number'|'checkbox'|'select'|'accounts',
  *   options?: string[], advanced: boolean, description?: string, inputmode?: 'url' }>}
  */
 export function formFields(descriptor) {
   const advanced = new Set(descriptor.advanced || []);
   return (descriptor.attributes || []).map(attr => {
     let control = 'text';
-    if (attr.type === 'boolean') control = 'checkbox';
+    if (attr.type === 'accounts') control = 'accounts';
+    else if (attr.type === 'boolean') control = 'checkbox';
     else if (attr.type === 'number') control = 'number';
     else if (Array.isArray(attr.enum) && attr.enum.length) control = 'select';
 

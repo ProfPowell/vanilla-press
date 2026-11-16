@@ -17,7 +17,7 @@ const vpRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const NO_PUBLISHED_MANIFEST = new Set(['@profpowell/border-wc']);
 
 // Added to Vanilla Breeze after the installed manifest was generated; its `attributes` hint stands in.
-const NOT_IN_MANIFEST_YET = new Set(['social-links']);
+const NOT_IN_MANIFEST_YET = new Set(['social-links', 'social-feed']);
 
 const elements = CATALOG.flatMap((e) => e.elements.map((el) => ({ pkg: e.package, el })));
 
@@ -35,7 +35,7 @@ describe('component catalog', () => {
     assert.equal(vb.bundled, true);
     assert.deepEqual(vb.elements.map((e) => e.tag).sort(), [
       'accordion-wc', 'audio-player', 'carousel-wc', 'diagram-wc', 'foot-notes', 'geo-map',
-      'image-gallery', 'qr-code', 'social-embed', 'social-links', 'video-player', 'youtube-player',
+      'image-gallery', 'qr-code', 'social-embed', 'social-feed', 'social-links', 'video-player', 'youtube-player',
     ]);
   });
 
@@ -66,7 +66,8 @@ describe('component catalog', () => {
         const byName = new Map(el.attributes.map((a) => [a.name, a]));
         assert.equal(byName.size, el.attributes.length, `${el.tag} hint repeats a name`);
         for (const a of el.attributes) {
-          assert.ok(['string', 'number', 'boolean'].includes(a.type), `${el.tag} ${a.name} type ${a.type}`);
+          // 'accounts' is a string of account keys with its own settings control (social-feed)
+          assert.ok(['string', 'number', 'boolean', 'accounts'].includes(a.type), `${el.tag} ${a.name} type ${a.type}`);
           if (a.enum) assert.ok(Array.isArray(a.enum) && a.enum.length && a.type === 'string', `${el.tag} ${a.name} enum`);
         }
         for (const k of [...Object.keys(el.defaults), ...el.advanced]) assert.ok(byName.has(k), `${el.tag} ${k} not in its hint`);

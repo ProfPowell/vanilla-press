@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** @typedef {{ name: string, type: 'string'|'number'|'boolean', enum?: string[], description?: string, default?: string }} AttrDef */
+/** @typedef {{ name: string, type: 'string'|'number'|'boolean'|'accounts', enum?: string[], description?: string, default?: string }} AttrDef */
 
 const QUOTED = /^(['"])(.*)\1$/;
 

@@ -2,6 +2,11 @@
 // and of renderOpml and renderVcard from socialspec.js (the SocialSpec renderers Vanilla Press calls)
 // so the contracts match (normalizeAccounts takes the config object; services is a comma string;
 // parseHandle('link', url) gives { handle: url }). The opt-in run with COOK_SOCIAL_MODULE checks the real one.
+// The <social-feed> helpers (Cook 2.12.0) are verbatim copies of cook's scripts/social/{catalog,accounts}.js and
+// feeds/{core,block,snapshots}.js under ./cook-feeds (same layout, so their imports are unchanged), re-exported here.
+
+export { renderSocialFeed, feedAccounts, parseFeedAttrs } from './cook-feeds/feeds/block.js';
+export { readSnapshot, snapshotPath } from './cook-feeds/feeds/snapshots.js';
 
 /** @type {Array<{ id: string, name: string, checkable: boolean }>} */
 export const SERVICES = [

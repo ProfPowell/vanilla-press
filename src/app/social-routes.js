@@ -25,6 +25,7 @@ import { SOCIAL_PATHS, THEME_PATHS, socialMessage } from './site-git.js';
 import { themeConflictResolver } from './site-theme.js';
 import { GitNotConnectedError } from '../git/git.js';
 
+const MAX_OPML = 2 * 1024 * 1024;
 const NEEDS_SPEC = '2.11.0';
 const NOT_COMMITTED = (why) => `Saved on this computer, but not committed (${why}), so it isn't live yet.`;
 const NOT_PUSHED = (why) => `Committed on this computer, but not pushed to GitHub (${why}), so it isn't live yet. The next backup or Publish pushes it.`;
@@ -263,7 +264,11 @@ export function mountSocialRoutes(router, prefix, {
   // The request is JSON ({ opml: "<text>" }): the router refuses other content types.
   router.add('POST', `${prefix}/social/following/import`, handle(async (req, res) => {
     await needSpec();
-    const { entries, skipped } = parseOpml(body(req).opml);
+    const { opml } = body(req);
+    if (typeof opml === 'string' && opml.length > MAX_OPML) {
+      throw new SocialError(413, 'That file is too large to import (the limit is 2 MB).');
+    }
+    const { entries, skipped } = parseOpml(opml);
     let added = 0;
     const out = await backup.commitAndPush(() => writes(async () => {
       const { following: stored } = readSocial(siteDir);
@@ -274,10 +279,11 @@ export function mountSocialRoutes(router, prefix, {
         seen.add(e.feedUrl);
         fresh.push({ ...e, public: true });
       }
-      const merged = validateFollowing([...stored, ...fresh]);
-      added = fresh.length;
+      // Only the new entries are validated; stored ones (even hand-edited) are kept as they are.
+      const checked = validateFollowing(fresh);
+      added = checked.length;
       if (added) {
-        writeSocialSection(siteDir, 'following', merged);
+        writeSocialSection(siteDir, 'following', [...stored, ...checked]);
         return goLive('following');
       }
       return { committed: false, unchanged: true };

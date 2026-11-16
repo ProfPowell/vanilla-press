@@ -16,10 +16,33 @@ function decode(s) {
   });
 }
 
+/** Attributes of a tag body, in one pass (no backtracking). Values may be quoted or bare. */
 function attrs(text) {
   const out = {};
-  for (const m of text.matchAll(/([^\s=/]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
-    out[m[1].toLowerCase()] = decode(m[2] ?? m[3]);
+  const n = text.length;
+  let i = 0;
+  const ws = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r';
+  while (i < n) {
+    while (i < n && (ws(text[i]) || text[i] === '/')) i += 1;
+    const start = i;
+    while (i < n && !ws(text[i]) && text[i] !== '=' && text[i] !== '/') i += 1;
+    const name = text.slice(start, i).toLowerCase();
+    while (i < n && ws(text[i])) i += 1;
+    if (text[i] !== '=') continue;
+    i += 1;
+    while (i < n && ws(text[i])) i += 1;
+    let value;
+    if (text[i] === '"' || text[i] === "'") {
+      const end = text.indexOf(text[i], i + 1);
+      const stop = end === -1 ? n : end;
+      value = text.slice(i + 1, stop);
+      i = stop + 1;
+    } else {
+      const vs = i;
+      while (i < n && !ws(text[i])) i += 1;
+      value = text.slice(vs, i);
+    }
+    if (name) out[name] = decode(value);
   }
   return out;
 }
@@ -34,19 +57,44 @@ const isHttp = (u) => { try { return /^https?:$/.test(new URL(u).protocol); } ca
  */
 export function parseOpml(text) {
   if (typeof text !== 'string' || !text.trim()) throw invalid();
-  const src = text
-    .replace(/^﻿/, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, '')
-    .replace(/<\?[\s\S]*?\?>/g, '')
-    .replace(/<!DOCTYPE[^>]*>/gi, '');
+  const src = text.replace(/^\uFEFF/, '');
   const stack = [];
   const entries = [];
   let skipped = 0;
   let sawOpml = false;
   let sawBody = false;
-  for (const m of src.matchAll(/<(\/)?([A-Za-z][\w:.-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/)?>/g)) {
-    const [, closing, rawName, rest, selfClose] = m;
+  // One forward pass: every step moves `pos` past what it read, so nothing is rescanned.
+  const skipPast = (from, close) => {
+    const end = src.indexOf(close, from);
+    if (end === -1) throw invalid();
+    return end + close.length;
+  };
+  let pos = 0;
+  for (;;) {
+    const i = src.indexOf('<', pos);
+    if (i === -1) break;
+    if (src.startsWith('<!--', i)) { pos = skipPast(i + 4, '-->'); continue; }
+    if (src.startsWith('<![CDATA[', i)) { pos = skipPast(i + 9, ']]>'); continue; }
+    if (src.startsWith('<?', i)) { pos = skipPast(i + 2, '?>'); continue; }
+    if (src.startsWith('<!', i)) { pos = skipPast(i + 2, '>'); continue; }
+    // A tag: walk to the closing `>`, outside quotes.
+    let j = i + 1;
+    let quote = '';
+    for (; j < src.length; j += 1) {
+      const c = src[j];
+      if (quote) { if (c === quote) quote = ''; } else if (c === '"' || c === "'") quote = c; else if (c === '>') break;
+    }
+    if (j >= src.length) throw invalid();
+    pos = j + 1;
+    const inner = src.slice(i + 1, j);
+    const closing = inner[0] === '/';
+    const selfClose = !closing && inner.endsWith('/');
+    const body = inner.slice(closing ? 1 : 0, selfClose ? -1 : undefined);
+    let k = 0;
+    while (k < body.length && /[\w:.-]/.test(body[k])) k += 1;
+    const rawName = body.slice(0, k);
+    const rest = body.slice(k);
+    if (!/^[A-Za-z]/.test(rawName)) throw invalid();
     const name = rawName.toLowerCase();
     if (closing) {
       const open = stack.pop();
@@ -60,7 +108,8 @@ export function parseOpml(text) {
       const a = node.a;
       const label = (a.text || a.title || '').trim();
       const feedUrl = (a.xmlurl || '').trim();
-      const parent = [...stack].reverse().find((n) => n.name === 'outline');
+      let parent;
+      for (let p = stack.length - 1; p >= 0 && !parent; p -= 1) if (stack[p].name === 'outline') parent = stack[p];
       if (!feedUrl) {
         // A folder has children (not self-closed); a bare outline with no feed is a skipped entry.
         if (selfClose) skipped += 1;

@@ -198,6 +198,25 @@ for (const [label, loadModule] of modules) describe(`SocialSpec routes (${label}
       assert.deepEqual(f.about, { summary: 's' });
     });
 
+    it('a bad hand-edited stored entry does not block an import, and stored entries stay byte-identical', async () => {
+      const stored = [1, { title: 7, feedUrl: 'ftp://old/f' }, { title: 'NoPublic', feedUrl: 'https://n.example/f' }];
+      seed({ ...HAND, following: stored });
+      const r = await imp(wrap('<outline text="B" xmlUrl="https://b.example/f"/>'));
+      assert.equal(r.status, 200, JSON.stringify(r.data));
+      assert.equal(r.data.added, 1);
+      const f = file().following;
+      assert.deepEqual(f.slice(0, 3), stored);
+      assert.equal('public' in f[2], false);
+      assert.deepEqual(f[3], { title: 'B', feedUrl: 'https://b.example/f', public: true });
+    });
+
+    it('an import over 2 MB is 413 with a plain message', async () => {
+      const r = await imp(wrap('<outline text="A" xmlUrl="https://a.example/f"/>' + ' '.repeat(2 * 1024 * 1024)));
+      assert.equal(r.status, 413);
+      assert.match(r.data.error, /too large/i);
+      assert.equal(commits.length, 0);
+    });
+
     it('a file with nothing new changes and commits nothing', async () => {
       seed({ ...HAND, following: [{ title: 'A', feedUrl: 'https://a.example/f', public: true }] });
       const r = await imp(wrap('<outline text="A" xmlUrl="https://a.example/f"/>'));

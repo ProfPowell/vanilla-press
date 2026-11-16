@@ -51,3 +51,19 @@ test('invalid input is a plain 400', () => {
     assert.throws(() => parseOpml(bad), (e) => e instanceof SocialError && e.status === 400 && /OPML/.test(e.message), String(bad));
   }
 });
+
+test('large malformed input fails fast (linear scan)', () => {
+  const shapes = [
+    '<opml><body><outline x="' + '<a '.repeat(350000),
+    '<opml><body>' + '<!-- '.repeat(200000),
+    '<opml><body>' + '<![CDATA['.repeat(120000),
+    '<opml><body>' + '<?x '.repeat(250000),
+    '<opml><body><outline ' + 'a'.repeat(1000000),
+    '<opml><body>' + '<outline>'.repeat(120000),
+  ];
+  for (const text of shapes) {
+    const t = Date.now();
+    assert.throws(() => parseOpml(text), (e) => e instanceof SocialError && e.status === 400);
+    assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
+  }
+});

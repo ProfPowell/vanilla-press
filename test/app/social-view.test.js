@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { accountRow, moveAccount, addFormFor, toPutEntry, mergeChecks, SERVICE_NAMES, COOK_TOO_OLD } from '../../app/assets/js/social-view.js';
+import { accountRow, moveAccount, addFormFor, toPutEntry, mergeChecks, replaceAccount, SERVICE_NAMES, COOK_TOO_OLD } from '../../app/assets/js/social-view.js';
 
 const bsky = { service: 'bluesky', handle: 'tpowell.bsky.social', did: 'did:plc:x' };
 const gh = { service: 'github', handle: 'ProfPowell', hidden: true };
@@ -101,4 +101,22 @@ test('accountRow: a moved Bluesky handle offers the current handle', () => {
   assert.equal(none.currentHandle, '');
   assert.equal(none.useLabel, '');
   assert.equal(accountRow(bsky, { status: 'ok' }).useLabel, '');
+});
+
+test('replaceAccount: swaps in place, keeps hidden, drops the old did', () => {
+  const old = { ...bsky, hidden: true };
+  const list = [gh, old, li];
+  const out = replaceAccount(list, accountRow(old).id, { service: 'bluesky', handle: 'new.example.com' });
+  assert.deepEqual(out.map((a) => a.handle), ['ProfPowell', 'new.example.com', 'your-name']);
+  assert.equal(out[1].hidden, true);
+  assert.equal('did' in out[1], false);
+  assert.equal(list[1], old);
+});
+
+test('replaceAccount: a visible account stays visible; an unknown id appends', () => {
+  const out = replaceAccount([bsky], accountRow(bsky).id, { service: 'bluesky', handle: 'n.example.com' });
+  assert.equal(out[0].hidden, false);
+  const added = replaceAccount([bsky], 'nope', { service: 'github', handle: 'x' });
+  assert.equal(added.length, 2);
+  assert.equal(added[1].handle, 'x');
 });

@@ -6,7 +6,7 @@
  */
 import { h, getSocial, recheckSocial, checkSocial, saveSocial } from './app-api.js';
 import {
-  accountRow, mergeChecks, moveAccount, addFormFor, toPutEntry, COOK_TOO_OLD, SERVICE_NAMES, SERVICE_IDS,
+  accountRow, mergeChecks, moveAccount, replaceAccount, addFormFor, toPutEntry, COOK_TOO_OLD, SERVICE_NAMES, SERVICE_IDS,
 } from './social-view.js';
 
 /**
@@ -20,6 +20,7 @@ export function initSocialSection({ siteId, root }) {
   let cookReady = true;
   let busy = false;
   let pending = null; // the account waiting for Save in the Add panel: { entry, unchecked, replaceId? }
+  let offeredHandle = ''; // the handle "Use @handle" filled in
   let replaceId = null; // set when the Add panel was opened from "Use @handle"
 
   const rowId = (a) => accountRow(a).id;
@@ -161,6 +162,7 @@ export function initSocialSection({ siteId, root }) {
     replaceId = rowId(old);
     serviceEl.value = 'bluesky';
     renderFields();
+    offeredHandle = row.currentHandle;
     fieldsEl.querySelector('[name="handle"]').value = row.currentHandle;
     $('social-add-form').requestSubmit();
   }
@@ -183,7 +185,11 @@ export function initSocialSection({ siteId, root }) {
   });
   $('social-add-cancel').addEventListener('click', closeAdd);
   serviceEl.addEventListener('change', () => { replaceId = null; renderFields(); });
-  fieldsEl.addEventListener('input', resetConfirm);
+  fieldsEl.addEventListener('input', () => {
+    // typing a different handle than the one offered makes this a new account, not a replacement
+    if (replaceId && fieldsEl.querySelector('[name="handle"]')?.value.trim() !== offeredHandle) replaceId = null;
+    resetConfirm();
+  });
 
   const addError = (message) => {
     $('social-add-error').textContent = message;
@@ -240,8 +246,7 @@ export function initSocialSection({ siteId, root }) {
   async function savePending() {
     if (!pending || busy) return;
     const { entry, unchecked, replaceId: old } = pending;
-    const at = old ? accounts.findIndex((a) => rowId(a) === old) : -1;
-    const list = at >= 0 ? accounts.map((a, i) => (i === at ? entry : a)) : [...accounts, entry];
+    const list = old ? replaceAccount(accounts, old, entry) : [...accounts, entry];
     if (await putList(list, { saveUnchecked: unchecked })) { recheck(); closeAdd(); }
   }
   $('social-add-save').addEventListener('click', savePending);

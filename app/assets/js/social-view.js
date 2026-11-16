@@ -121,3 +121,14 @@ export function mergeChecks(snapshot, results) {
   }
   return map;
 }
+
+/**
+ * The list with the account whose row id is `id` replaced by `entry`, in the same position and
+ * keeping its `hidden` setting (the old `did` and `checked` are not carried over). An unknown id
+ * appends the entry.
+ */
+export function replaceAccount(list, id, entry) {
+  const at = list.findIndex((a) => accountRow(a).id === id);
+  if (at < 0) return [...list, entry];
+  return list.map((a, i) => (i === at ? { ...entry, hidden: !!a.hidden } : a));
+}

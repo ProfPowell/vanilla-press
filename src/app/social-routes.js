@@ -8,19 +8,24 @@
  * `committed: false` with a note. Every response is JSON.
  *
  * Needs Cook's `cook-ssg/social` (2.10.0): without it GET says `cookReady: false`
- * and every other route answers 409.
+ * and every other route answers 409. The About, Contact and Following routes (and OPML
+ * import/export) need Cook 2.11.0 (`renderOpml`): older answers 409 with `needsCook`.
  *
  * @module app/social-routes
  */
 
 import { sendJson } from '../server/router.js';
-import { NEEDS_COOK, SocialError, readSocial, writeSocial } from '../social/config.js';
+import { NEEDS_COOK, SocialError, readSocial, writeSocial, writeSocialSection } from '../social/config.js';
+import { validateAbout, validateContact, validateFollowing } from '../social/socialspec.js';
+import { parseOpml } from '../social/opml.js';
+import { importMarked } from '../social/marked.js';
 import { importCookSocial } from '../social/cook.js';
 import { checkAccount, currentBlueskyHandle } from '../social/check.js';
 import { SOCIAL_PATHS, THEME_PATHS, socialMessage } from './site-git.js';
 import { themeConflictResolver } from './site-theme.js';
 import { GitNotConnectedError } from '../git/git.js';
 
+const NEEDS_SPEC = '2.11.0';
 const NOT_COMMITTED = (why) => `Saved on this computer, but not committed (${why}), so it isn't live yet.`;
 const NOT_PUSHED = (why) => `Committed on this computer, but not pushed to GitHub (${why}), so it isn't live yet. The next backup or Publish pushes it.`;
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -32,16 +37,18 @@ const CHECKED = { ok: 'yes', unchecked: 'never' };
  * @param {{ site: object, ws: object, backup: object, writes: Function,
  *   deps: { commitPaths: Function, push: Function, gitStatus: Function },
  *   fetch?: typeof fetch, timeoutMs?: number,
- *   cookSocial?: object|(() => Promise<object|null>|object|null) }} context - cookSocial: a
- *   stand-in for the site's `cook-ssg/social` (tests); timeoutMs: each account check's limit
+ *   cookSocial?: object|(() => Promise<object|null>|object|null),
+ *   marked?: object|((siteDir: string) => Promise<object|null>|object|null) }} context - cookSocial: a
+ *   stand-in for the site's `cook-ssg/social` (tests); marked: a stand-in for the site's `marked`; timeoutMs: each account check's limit
  */
 export function mountSocialRoutes(router, prefix, {
-  ws, backup, writes, deps, fetch: fetchImpl = globalThis.fetch, timeoutMs = 8000, cookSocial,
+  site, ws, backup, writes, deps, fetch: fetchImpl = globalThis.fetch, timeoutMs = 8000, cookSocial, marked,
 }) {
   const siteDir = ws.siteDir;
   const loadCook = async () => (typeof cookSocial === 'function'
     ? cookSocial(siteDir)
     : cookSocial ?? importCookSocial(siteDir));
+  const loadMarked = async () => (typeof marked === 'function' ? marked(siteDir) : marked ?? importMarked(siteDir));
   const body = (req) => (isObj(req.body) ? req.body : {});
   const check = (account) => checkAccount(account, { fetch: fetchImpl, timeoutMs });
 
@@ -76,9 +83,12 @@ export function mountSocialRoutes(router, prefix, {
   });
 
   router.add('GET', `${prefix}/social`, handle(async (req, res) => {
-    const { accounts } = readSocial(siteDir);
+    const { accounts, about, contact, following } = readSocial(siteDir);
     const cook = await loadCook();
-    sendJson(res, 200, { accounts: cook ? annotate(cook, accounts) : accounts, cookReady: !!cook, needsCook: cook ? null : NEEDS_COOK });
+    sendJson(res, 200, {
+      accounts: cook ? annotate(cook, accounts) : accounts, cookReady: !!cook, needsCook: cook ? null : NEEDS_COOK,
+      about, contact, following, socialSpecReady: typeof cook?.renderOpml === 'function',
+    });
   }));
 
   router.add('POST', `${prefix}/social/check`, handle(async (req, res) => {
@@ -116,7 +126,7 @@ export function mountSocialRoutes(router, prefix, {
   }));
 
   /** Commit config/social.json alone and push it; a failure is a note, never a lost save. */
-  async function goLive() {
+  async function goLive(panel = 'accounts') {
     let status;
     try {
       status = await deps.gitStatus(siteDir);
@@ -126,7 +136,7 @@ export function mountSocialRoutes(router, prefix, {
     if (!status.isRepo) return { status: 'saved', committed: false, note: NOT_COMMITTED('this site folder is not a git repository') };
     let sha;
     try {
-      sha = await deps.commitPaths(siteDir, [...SOCIAL_PATHS], socialMessage());
+      sha = await deps.commitPaths(siteDir, [...SOCIAL_PATHS], socialMessage(panel));
     } catch (err) {
       return { committed: false, note: NOT_COMMITTED(err.message) };
     }
@@ -201,5 +211,95 @@ export function mountSocialRoutes(router, prefix, {
     }));
     const { committed, note } = out;
     sendJson(res, 200, { accounts: annotate(cook, next), committed, ...(note ? { note } : {}) });
+  }));
+
+  /** The site's Cook when it has the SocialSpec renderers (2.11.0), else a 409 naming the version. */
+  async function needSpec() {
+    const cook = await loadCook();
+    if (typeof cook?.renderOpml !== 'function') {
+      throw new SocialError(409, `This site's Cook is too old for this; update cook-ssg to ${NEEDS_SPEC} or later`,
+        { needsCook: NEEDS_SPEC });
+    }
+    return cook;
+  }
+
+  /** Validate, then write one section and commit it; null removes the key. */
+  async function saveSection(panel, value) {
+    return backup.commitAndPush(() => writes(async () => {
+      writeSocialSection(siteDir, panel, value);
+      return goLive(panel);
+    }));
+  }
+  const reply = (res, data, { committed, note }) => sendJson(res, 200, { ...data, committed, ...(note ? { note } : {}) });
+
+  router.add('PUT', `${prefix}/social/about`, handle(async (req, res) => {
+    await needSpec();
+    const about = validateAbout(body(req).about ?? null);
+    reply(res, { about }, await saveSection('about', about));
+  }));
+
+  router.add('PUT', `${prefix}/social/contact`, handle(async (req, res) => {
+    await needSpec();
+    const contact = validateContact(body(req).contact ?? null);
+    reply(res, { contact }, await saveSection('contact', contact));
+  }));
+
+  router.add('PUT', `${prefix}/social/following`, handle(async (req, res) => {
+    await needSpec();
+    const following = validateFollowing(body(req).following ?? null);
+    reply(res, { following }, await saveSection('following', following.length ? following : null));
+  }));
+
+  router.add('POST', `${prefix}/social/about/preview`, handle(async (req, res) => {
+    const text = body(req).body ?? '';
+    if (typeof text !== 'string') throw new SocialError(400, 'The about text must be text.');
+    const m = await loadMarked();
+    if (!m || typeof m.parse !== 'function') {
+      throw new SocialError(409, "This site's Cook isn't installed here, so the preview can't be shown.", { needsCook: NEEDS_SPEC });
+    }
+    sendJson(res, 200, { html: text.trim() ? await m.parse(text) : '' });
+  }));
+
+  // The request is JSON ({ opml: "<text>" }): the router refuses other content types.
+  router.add('POST', `${prefix}/social/following/import`, handle(async (req, res) => {
+    await needSpec();
+    const { entries, skipped } = parseOpml(body(req).opml);
+    let added = 0;
+    const out = await backup.commitAndPush(() => writes(async () => {
+      const { following: stored } = readSocial(siteDir);
+      const seen = new Set(stored.filter((e) => isObj(e) && typeof e.feedUrl === 'string').map((e) => e.feedUrl));
+      const fresh = [];
+      for (const e of entries) {
+        if (seen.has(e.feedUrl)) continue;
+        seen.add(e.feedUrl);
+        fresh.push({ ...e, public: true });
+      }
+      const merged = validateFollowing([...stored, ...fresh]);
+      added = fresh.length;
+      if (added) {
+        writeSocialSection(siteDir, 'following', merged);
+        return goLive('following');
+      }
+      return { committed: false, unchanged: true };
+    }));
+    const { following } = readSocial(siteDir);
+    sendJson(res, 200, {
+      following, added, skipped, unchanged: entries.length - added,
+      committed: out.committed, ...(out.note ? { note: out.note } : {}),
+    });
+  }));
+
+  router.add('GET', `${prefix}/social/following.opml`, handle(async (req, res) => {
+    const cook = await needSpec();
+    const { following } = readSocial(siteDir);
+    const xml = cook.renderOpml(following, { title: `${site?.name || 'My site'} follows` });
+    if (!xml) throw new SocialError(404, 'There is nothing public to export yet.');
+    const buf = Buffer.from(xml, 'utf8');
+    res.writeHead(200, {
+      'Content-Type': 'text/x-opml; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="following.opml"',
+      'Content-Length': buf.length,
+    });
+    res.end(buf);
   }));
 }

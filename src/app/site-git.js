@@ -218,12 +218,13 @@ export function programMessage(text) {
 }
 
 /**
- * Commit message of a social accounts change: `Social: accounts`, with no CI skip marker
- * (the push rebuilds the live site, so the links go live).
+ * Commit message of a social change: `Social: accounts` (or about, contact, following), with no
+ * CI skip marker (the push rebuilds the live site, so the change goes live).
+ * @param {string} [panel]
  * @returns {string}
  */
-export function socialMessage() {
-  return 'Social: accounts';
+export function socialMessage(panel = 'accounts') {
+  return `Social: ${panel}`;
 }
 
 /**

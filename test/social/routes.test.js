@@ -97,7 +97,7 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
     seed({ accounts: [{ service: 'github', handle: 'ProfPowell' }] });
     const r = await api('/social');
     assert.equal(r.status, 200);
-    assert.deepEqual(r.data, { accounts: [{ service: 'github', handle: 'ProfPowell', profileUrl: 'https://github.com/ProfPowell', valid: true }], cookReady: true, needsCook: null });
+    assert.deepEqual(r.data, { accounts: [{ service: 'github', handle: 'ProfPowell', profileUrl: 'https://github.com/ProfPowell', valid: true }], cookReady: true, needsCook: null, about: null, contact: null, following: [], socialSpecReady: true });
   });
 
   it('GET /social gives Cook\'s url and valid per account, however the file was hand-edited', async () => {
@@ -120,7 +120,7 @@ for (const [label, loadModule] of modules) describe(`social routes (${label})`, 
   it('a site without Cook social: GET says needsCook, every other route is 409', async () => {
     cook = null;
     const g = await api('/social');
-    assert.deepEqual(g.data, { accounts: [], cookReady: false, needsCook: '2.10.0' });
+    assert.deepEqual(g.data, { accounts: [], cookReady: false, needsCook: '2.10.0', about: { name: 'Tom' }, contact: null, following: [1], socialSpecReady: false });
     for (const [path, method, body] of [
       ['/social/check', 'POST', { service: 'github', input: 'x' }],
       ['/social/recheck', 'GET'],

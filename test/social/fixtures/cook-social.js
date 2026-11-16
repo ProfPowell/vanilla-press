@@ -1,4 +1,5 @@
-// Stand-in for cook-ssg/social (Cook 2.10.0): a copy of cook's scripts/social/{catalog,accounts,render}.js
+// Stand-in for cook-ssg/social (Cook 2.11.0): a copy of cook's scripts/social/{catalog,accounts,render}.js
+// and of renderOpml from socialspec.js (the only SocialSpec renderer Vanilla Press calls)
 // so the contracts match (normalizeAccounts takes the config object; services is a comma string;
 // parseHandle('link', url) gives { handle: url }). The opt-in run with COOK_SOCIAL_MODULE checks the real one.
 
@@ -190,4 +191,44 @@ export function renderSocialLinks(accounts, { services } = {}) {
       return `<li><a href="${escapeHtml(a.url)}"${rel}><span class="social-icon" data-service="${escapeHtml(a.service)}" aria-hidden="true"></span><span>${escapeHtml(a.name)}</span></a></li>`;
     });
   return items.length ? `<ul>${items.join('')}</ul>` : '';
+}
+
+const nonEmpty = (v) => typeof v === 'string' && v.trim() !== '';
+
+const escapeXml = (s) =>
+  String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+/**
+ * OPML 2.0 subscription list. Public entries only, in the order given.
+ * @param {Array<{ title?: string, feedUrl?: string, siteUrl?: string, public?: boolean }>} following
+ * @param {{ title?: string }} [options]
+ * @returns {string|null} null when there is no public entry with a feedUrl
+ */
+export function renderOpml(following, { title } = {}) {
+  if (!Array.isArray(following)) return null;
+  const outlines = following
+    .filter((e) => e && e.public !== false && nonEmpty(e.feedUrl))
+    .map((e) => {
+      const text = escapeXml(nonEmpty(e.title) ? e.title : e.feedUrl);
+      const html = nonEmpty(e.siteUrl) ? ` htmlUrl="${escapeXml(e.siteUrl)}"` : '';
+      return `    <outline type="rss" text="${text}" title="${text}" xmlUrl="${escapeXml(e.feedUrl)}"${html}/>`;
+    });
+  if (!outlines.length) return null;
+  const head = escapeXml(nonEmpty(title) ? title : 'Following');
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<opml version="2.0">',
+    '  <head>',
+    `    <title>${head}</title>`,
+    '  </head>',
+    '  <body>',
+    ...outlines,
+    '  </body>',
+    '</opml>',
+    '',
+  ].join('\n');
 }

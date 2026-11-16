@@ -120,6 +120,7 @@ function createLock() {
  *   backup?: { now?: () => number, setTimer?: Function, clearTimer?: Function },
  *   fetch?: typeof fetch,
  *   cookSocial?: object|(() => Promise<object|null>),
+ *   marked?: object|((siteDir: string) => Promise<object|null>),
  *   components?: { catalog?: Object[], vpRoot?: string },
  * }} [options] - git and siteProcess override the real functions one by one (for tests);
  *   backup injects the draft-backup timers; fetch is used by the live check;
@@ -138,6 +139,7 @@ export async function startApp({
   backup: backupTimers = {},
   fetch: fetchImpl = globalThis.fetch,
   cookSocial = undefined,
+  marked = undefined,
   components: { catalog = CATALOG, vpRoot = ROOT } = {},
 } = {}) {
   // Looked up on each use, so a caller can swap a function after start (tests do).
@@ -260,7 +262,7 @@ export async function startApp({
         programsUrl: () => programsUrl,
       });
       mountSocialRoutes(router, prefix, {
-        site, ws, db, backup, writes, deps: git, fetch: fetchImpl, cookSocial,
+        site, ws, db, backup, writes, deps: git, fetch: fetchImpl, cookSocial, marked,
       });
       const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);

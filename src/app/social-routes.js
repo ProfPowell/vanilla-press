@@ -27,6 +27,7 @@ import { GitNotConnectedError } from '../git/git.js';
 
 const MAX_OPML = 2 * 1024 * 1024;
 const NEEDS_SPEC = '2.11.0';
+const NEEDS_SEVERAL_EMAILS = '2.11.1';
 const NOT_COMMITTED = (why) => `Saved on this computer, but not committed (${why}), so it isn't live yet.`;
 const NOT_PUSHED = (why) => `Committed on this computer, but not pushed to GitHub (${why}), so it isn't live yet. The next backup or Publish pushes it.`;
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -240,8 +241,16 @@ export function mountSocialRoutes(router, prefix, {
   }));
 
   router.add('PUT', `${prefix}/social/contact`, handle(async (req, res) => {
-    await needSpec();
+    const cook = await needSpec();
     const contact = validateContact(body(req).contact ?? null);
+    // Cook 2.11.0 ignores a list email and would publish a card with none: probe the site's Cook.
+    if (Array.isArray(contact?.email)) {
+      const probe = cook.renderVcard?.({ name: 'x', email: ['a@b.co', 'c@d.co'] })?.text;
+      if (typeof probe !== 'string' || (probe.match(/^EMAIL[;:]/gm) || []).length < 2) {
+        throw new SocialError(409, `Several email addresses need cook-ssg ${NEEDS_SEVERAL_EMAILS} or later; save one address or update Cook`,
+          { needsCook: NEEDS_SEVERAL_EMAILS });
+      }
+    }
     reply(res, { contact }, await saveSection('contact', contact));
   }));
 

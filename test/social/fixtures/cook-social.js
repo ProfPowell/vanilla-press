@@ -1,5 +1,5 @@
 // Stand-in for cook-ssg/social (Cook 2.11.0): a copy of cook's scripts/social/{catalog,accounts,render}.js
-// and of renderOpml from socialspec.js (the only SocialSpec renderer Vanilla Press calls)
+// and of renderOpml and renderVcard from socialspec.js (the SocialSpec renderers Vanilla Press calls)
 // so the contracts match (normalizeAccounts takes the config object; services is a comma string;
 // parseHandle('link', url) gives { handle: url }). The opt-in run with COOK_SOCIAL_MODULE checks the real one.
 
@@ -231,4 +231,57 @@ export function renderOpml(following, { title } = {}) {
     '</opml>',
     '',
   ].join('\n');
+}
+
+// --- renderVcard (Cook 2.11.1), copied from cook's scripts/social/socialspec.js ---
+const escapeVcardText = (s) =>
+  String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/\r\n|\r|\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+
+/** Fold one content line at 75 octets (RFC 6350), never splitting a character. */
+function fold(line) {
+  if (Buffer.byteLength(line) <= 75) return line;
+  const parts = [];
+  let cur = '';
+  let curBytes = 0;
+  let limit = 75;
+  for (const ch of line) {
+    const n = Buffer.byteLength(ch);
+    if (curBytes + n > limit) {
+      parts.push(cur);
+      cur = '';
+      curBytes = 0;
+      limit = 74; // continuation lines carry a leading space
+    }
+    cur += ch;
+    curBytes += n;
+  }
+  parts.push(cur);
+  return parts.join('\r\n ');
+}
+
+/**
+ * vCard 4.0 for contact.vcf.
+ * @param {{ name?: string, email?: string|string[], url?: string, org?: string, title?: string }} contact
+ * @param {{ siteUrl?: string }} [options] `URL` defaults to siteUrl
+ * @returns {{ text: string|null, warning?: string }}
+ */
+export function renderVcard(contact, { siteUrl } = {}) {
+  const c = contact && typeof contact === 'object' ? contact : {};
+  if (!nonEmpty(c.name)) {
+    return { text: null, warning: 'social: contact has no name, so contact.vcf was not written (FN is required)' };
+  }
+  const lines = ['BEGIN:VCARD', 'VERSION:4.0', `FN:${escapeVcardText(c.name.trim())}`];
+  if (nonEmpty(c.org)) lines.push(`ORG:${escapeVcardText(c.org.trim())}`);
+  if (nonEmpty(c.title)) lines.push(`TITLE:${escapeVcardText(c.title.trim())}`);
+  const emails = (Array.isArray(c.email) ? c.email : [c.email]).filter(nonEmpty);
+  emails.forEach((e, i) => lines.push(`${i === 0 ? 'EMAIL;PREF=1' : 'EMAIL'}:${escapeVcardText(e.trim())}`));
+  const url = nonEmpty(c.url) ? c.url : siteUrl;
+  // URI value type: not text-escaped (RFC 6350); only strip whitespace so it cannot break a line.
+  if (nonEmpty(url)) lines.push(`URL:${String(url).replace(/\s+/g, '')}`);
+  lines.push('END:VCARD');
+  return { text: lines.map(fold).join('\r\n') + '\r\n' };
 }

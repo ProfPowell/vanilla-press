@@ -295,7 +295,7 @@ export function initSocialSection({ siteId, root }) {
       panelMessage(panel, 'note', note);
       return result;
     } catch (err) {
-      panelMessage(panel, 'error', err.data?.needsCook ? SOCIALSPEC_TOO_OLD : err.message);
+      panelMessage(panel, 'error', err.data?.needsCook && err.data.needsCook !== '2.11.1' ? SOCIALSPEC_TOO_OLD : err.message);
     } finally {
       setBusy(false);
     }

@@ -170,6 +170,38 @@ for (const [label, loadModule] of modules) describe(`SocialSpec routes (${label}
     assert.equal(file().contact.name, 'T');
   });
 
+  describe('several contact emails need Cook 2.11.1', () => {
+    const MANY = { name: 'T', email: ['a@b.co', 'c@d.co'] };
+    const put = (contact) => api('/social/contact', { method: 'PUT', body: { contact } });
+    // Cook 2.11.0 behaviour: renderVcard only looks at a string email.
+    const old = () => ({
+      ...cookSocial,
+      renderVcard: (c) => ({ text: `BEGIN:VCARD\r\nFN:${c.name}\r\n${typeof c.email === 'string' ? `EMAIL;PREF=1:${c.email}\r\n` : ''}END:VCARD\r\n` }),
+    });
+
+    it('2.11.0-like module: several addresses answer 409 and the file is unchanged', async () => {
+      seed({ ...HAND, contact: { name: 'Keep' } });
+      cook = old();
+      const r = await put(MANY);
+      assert.equal(r.status, 409);
+      assert.equal(r.data.error, 'Several email addresses need cook-ssg 2.11.1 or later; save one address or update Cook');
+      assert.equal(r.data.needsCook, '2.11.1');
+      assert.deepEqual(file().contact, { name: 'Keep' });
+      assert.equal(commits.length, 0);
+    });
+    it('2.11.0-like module: a single address is saved', async () => {
+      cook = old();
+      const r = await put({ name: 'T', email: ['a@b.co', ' '] });
+      assert.equal(r.status, 200);
+      assert.equal(file().contact.email, 'a@b.co');
+    });
+    it('a module with renderVcard that handles lists saves several addresses', async () => {
+      const r = await put(MANY);
+      assert.equal(r.status, 200);
+      assert.deepEqual(file().contact.email, ['a@b.co', 'c@d.co']);
+    });
+  });
+
   describe('OPML import', () => {
     const imp = (opml) => api('/social/following/import', { method: 'POST', body: { opml } });
 

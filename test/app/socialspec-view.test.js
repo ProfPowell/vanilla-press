@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SOCIALSPEC_TOO_OLD, EMAIL_HELPER, PREVIEW_UNAVAILABLE, aboutForm, toAboutPut, contactForm, toContactPut,
-  followingRows, blankRow, toFollowingPut, moveRow, importSummary, previewDocument, mergeImported,
+  followingRows, blankRow, editable, toFollowingPut, moveRow, importSummary, previewDocument, mergeImported,
 } from '../../app/assets/js/socialspec-view.js';
 
 test('exact copy', () => {
@@ -71,8 +71,8 @@ test('moveRow: swaps, clamps, never mutates', () => {
 });
 
 test('importSummary: counts, plurals, nothing new', () => {
-  assert.equal(importSummary({ added: 3, skipped: 1, unchanged: 2 }), 'Added 3 feeds, skipped 1 without a feed address, 2 already in your list.');
-  assert.equal(importSummary({ added: 1, skipped: 0, unchanged: 0 }), 'Added 1 feed.');
+  assert.equal(importSummary({ added: 3, skipped: 1, unchanged: 2 }), 'Added 3 feeds (private: tick Public to publish them), skipped 1 without a feed address, 2 already in your list.');
+  assert.equal(importSummary({ added: 1, skipped: 0, unchanged: 0 }), 'Added 1 feed (private: tick Public to publish it).');
   assert.equal(importSummary({ added: 0, skipped: 0, unchanged: 4 }), 'Nothing new to add: 4 already in your list.');
   assert.equal(importSummary({ added: 0, skipped: 2, unchanged: 0 }), 'Nothing new to add: skipped 2 without a feed address.');
 });
@@ -103,6 +103,30 @@ test('mergeImported: keeps in-page rows, appends only entries new from the impor
   assert.equal(out[0], current[0]);
   assert.equal(out[2], current[2]);
   assert.equal(out[3].feedUrl, 'https://new.test/f');
-  assert.equal(out[3].public, true);
+  assert.equal(out[3].public, false);
   assert.equal(current.length, 3);
+});
+
+test('toAboutPut keeps hand-added keys of the stored about', () => {
+  assert.deepEqual(toAboutPut({ summary: 'S', body: '' }, { lang: 'en', summary: 'old', file: 'a.md' }), { summary: 'S', lang: 'en', file: 'a.md' });
+  assert.deepEqual(toAboutPut({ summary: '', body: '' }, { lang: 'en' }), { lang: 'en' });
+});
+
+test('toFollowingPut keeps hand-added keys of each row\'s stored entry', () => {
+  const rows = followingRows([{ title: 'A', feedUrl: 'https://a.test/f', note: 'mine', public: true }, { feedUrl: 'https://b.test/f', tags: ['x'] }]);
+  rows[0].title = 'A2';
+  assert.deepEqual(toFollowingPut(rows), [
+    { title: 'A2', feedUrl: 'https://a.test/f', note: 'mine', public: true },
+    { feedUrl: 'https://b.test/f', tags: ['x'], public: true },
+  ]);
+  rows[1].siteUrl = '';
+  rows[0].category = '';
+  assert.equal(toFollowingPut(rows)[0].category, undefined);
+});
+
+test('editable: panels are enabled only after a successful load of a ready site', () => {
+  assert.equal(editable({ loaded: false, ready: true }), false);
+  assert.equal(editable({ loaded: true, ready: false }), false);
+  assert.equal(editable({ loaded: true, ready: true }), true);
+  assert.equal(editable({}), false);
 });

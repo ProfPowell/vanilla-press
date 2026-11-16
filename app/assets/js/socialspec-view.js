@@ -7,6 +7,9 @@ export const SOCIALSPEC_TOO_OLD = "This site's Cook is too old for this; update 
 export const EMAIL_HELPER = 'This address is public. Use one you are happy to see scraped.';
 export const PREVIEW_UNAVAILABLE = "Preview isn't available until the site's packages are installed. Install them, then try again.";
 
+/** Edits are allowed only once GET /social has succeeded and the site's Cook supports the section. */
+export const editable = ({ loaded = false, ready = false } = {}) => loaded === true && ready === true;
+
 const text = (v) => (typeof v === 'string' ? v : '');
 
 // --- About ---
@@ -16,14 +19,14 @@ export function aboutForm(about) {
   return { summary: text(about?.summary), body: text(about?.body) };
 }
 
-/** The PUT value: null (remove) when both are blank; `file` and other keys of the stored about are kept. */
+/** The PUT value: null (remove) when nothing is left; `file` and other keys of the stored about are kept. */
 export function toAboutPut(form, original) {
   const summary = text(form.summary).trim();
   const body = text(form.body);
   const out = {};
   if (summary) out.summary = summary;
   if (body.trim()) out.body = body;
-  if (original?.file) out.file = original.file;
+  for (const [k, v] of Object.entries(original || {})) if (k !== 'summary' && k !== 'body') out[k] = v;
   return Object.keys(out).length ? out : null;
 }
 
@@ -48,6 +51,7 @@ export function toContactPut(form, original) {
 
 // --- Following ---
 
+const FOLLOW_FIELDS = ['title', 'feedUrl', 'siteUrl', 'category', 'public'];
 let nextKey = 1;
 /** An empty new row. `key` is only for keeping rows apart in the page. */
 export function blankRow() {
@@ -62,10 +66,11 @@ export function followingRows(list) {
     siteUrl: text(e?.siteUrl),
     category: text(e?.category),
     public: e?.public !== false,
+    orig: e && typeof e === 'object' && !Array.isArray(e) ? e : null, // the stored entry, so Save keeps its other keys
   }));
 }
 
-/** The PUT list: blank rows dropped, optional fields omitted when empty, category kept. */
+/** The PUT list: blank rows dropped, optional fields omitted when empty, other keys of a row's stored entry kept. */
 export function toFollowingPut(rows) {
   const out = [];
   for (const r of rows) {
@@ -74,13 +79,16 @@ export function toFollowingPut(rows) {
     const siteUrl = text(r.siteUrl).trim();
     const category = text(r.category).trim();
     if (!title && !feedUrl && !siteUrl && !category) continue;
-    out.push({
+    const entry = {};
+    for (const [k, v] of Object.entries(r.orig || {})) if (!FOLLOW_FIELDS.includes(k)) entry[k] = v;
+    Object.assign(entry, {
       ...(title ? { title } : {}),
       feedUrl,
       ...(siteUrl ? { siteUrl } : {}),
       ...(category ? { category } : {}),
       public: r.public !== false,
     });
+    out.push(entry);
   }
   return out;
 }
@@ -96,13 +104,13 @@ export function moveRow(list, index, delta) {
 
 /**
  * After an OPML import while the list has unsaved edits: keep the in-page rows as they are and
- * append the entries the import added (in `result` but not in the previously stored list and not
+ * append the entries the import added (always private until ticked) (in `result` but not in the previously stored list and not
  * already a row).
  */
 export function mergeImported(currentRows, previousStored, result) {
   const seen = new Set([...currentRows.map((r) => r.feedUrl.trim()), ...previousStored.map((e) => e.feedUrl)]);
   const fresh = (Array.isArray(result) ? result : []).filter((e) => !seen.has(e.feedUrl));
-  return [...currentRows, ...followingRows(fresh)];
+  return [...currentRows, ...followingRows(fresh).map((r) => ({ ...r, public: false }))];
 }
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -115,7 +123,8 @@ export function importSummary({ added = 0, skipped = 0, unchanged = 0 }) {
     const parts = [unchanged ? same : '', skipped ? skip : ''].filter(Boolean);
     return parts.length ? `Nothing new to add: ${parts.join(', ')}.` : 'Nothing new to add.';
   }
-  const parts = [`Added ${plural(added, 'feed', 'feeds')}`, skipped ? skip : '', unchanged ? same : ''].filter(Boolean);
+  const priv = `(private: tick Public to publish ${added === 1 ? 'it' : 'them'})`;
+  const parts = [`Added ${plural(added, 'feed', 'feeds')} ${priv}`, skipped ? skip : '', unchanged ? same : ''].filter(Boolean);
   return `${parts.join(', ')}.`;
 }
 

@@ -16,7 +16,7 @@
 
 import { sendJson } from '../server/router.js';
 import { NEEDS_COOK, SocialError, readSocial, writeSocial, writeSocialSection } from '../social/config.js';
-import { validateAbout, validateContact, validateFollowing } from '../social/socialspec.js';
+import { validateAbout, validateContact, validateFollowing, isUrl } from '../social/socialspec.js';
 import { parseOpml } from '../social/opml.js';
 import { importMarked } from '../social/marked.js';
 import { importCookSocial } from '../social/cook.js';
@@ -268,19 +268,27 @@ export function mountSocialRoutes(router, prefix, {
     if (typeof opml === 'string' && opml.length > MAX_OPML) {
       throw new SocialError(413, 'That file is too large to import (the limit is 2 MB).');
     }
-    const { entries, skipped } = parseOpml(opml);
+    const parsed = parseOpml(opml);
+    const { entries } = parsed;
+    let skipped = parsed.skipped;
+    let invalid = 0;
     let added = 0;
     const out = await backup.commitAndPush(() => writes(async () => {
       const { following: stored } = readSocial(siteDir);
       const seen = new Set(stored.filter((e) => isObj(e) && typeof e.feedUrl === 'string').map((e) => e.feedUrl));
-      const fresh = [];
+      const checked = [];
       for (const e of entries) {
         if (seen.has(e.feedUrl)) continue;
+        // Only the new entries are validated, one by one: a malformed one is skipped, not fatal.
+        // Stored ones (even hand-edited) are kept as they are. New feeds start private.
+        let ok;
+        try { [ok] = validateFollowing([{ ...e, public: false }]); } catch (err) {
+          if (err instanceof SocialError) { invalid += 1; continue; }
+          throw err;
+        }
         seen.add(e.feedUrl);
-        fresh.push({ ...e, public: true });
+        checked.push(ok);
       }
-      // Only the new entries are validated; stored ones (even hand-edited) are kept as they are.
-      const checked = validateFollowing(fresh);
       added = checked.length;
       if (added) {
         writeSocialSection(siteDir, 'following', [...stored, ...checked]);
@@ -289,8 +297,9 @@ export function mountSocialRoutes(router, prefix, {
       return { committed: false, unchanged: true };
     }));
     const { following } = readSocial(siteDir);
+    skipped += invalid;
     sendJson(res, 200, {
-      following, added, skipped, unchanged: entries.length - added,
+      following, added, skipped, unchanged: entries.length - added - invalid,
       committed: out.committed, ...(out.note ? { note: out.note } : {}),
     });
   }));
@@ -298,7 +307,12 @@ export function mountSocialRoutes(router, prefix, {
   router.add('GET', `${prefix}/social/following.opml`, handle(async (req, res) => {
     const cook = await needSpec();
     const { following } = readSocial(siteDir);
-    const xml = cook.renderOpml(following, { title: `${site?.name || 'My site'} follows` });
+    // Same filters as Cook's writer: an absolute http(s) feedUrl is required; a non-absolute siteUrl is left out.
+    // The title uses the site's name (Cook's writer uses its siteTitle data, which VP does not read).
+    const kept = following
+      .filter((e) => isObj(e) && isUrl(e.feedUrl, false))
+      .map((e) => (e.siteUrl !== undefined && !isUrl(e.siteUrl, false) ? { ...e, siteUrl: undefined } : e));
+    const xml = cook.renderOpml(kept, { title: `${site?.name || 'My site'} follows` });
     if (!xml) throw new SocialError(404, 'There is nothing public to export yet.');
     const buf = Buffer.from(xml, 'utf8');
     res.writeHead(200, {

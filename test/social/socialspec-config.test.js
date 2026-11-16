@@ -44,7 +44,7 @@ test('each section write keeps accounts, other sections and hand keys', () => {
   assert.deepEqual(Object.keys(out.following[0]), ['title', 'feedUrl', 'public']);
 });
 
-test('writing to a new file puts accounts first when present later; new keys append', () => {
+test('writing to a new file creates it with the section; accounts written later are added alongside', () => {
   const dir = site();
   writeSocialSection(dir, 'about', { summary: 'x' });
   assert.deepEqual(read(dir), { about: { summary: 'x' } });
@@ -83,7 +83,8 @@ test('validateContact', () => {
   assert.equal(validateContact({}), null);
   assert.deepEqual(validateContact({ name: 'N', email: 'a@b.co', url: 'https://x.org', org: 'O', title: 'T' }), { name: 'N', email: 'a@b.co', url: 'https://x.org', org: 'O', title: 'T' });
   assert.equal(msg(() => validateContact({ email: 'a@b.co' })), 'Contact: a name is required');
-  assert.equal(msg(() => validateContact({ name: ' ' })), 'Contact: a name is required');
+  assert.equal(validateContact({ name: ' ' }), null); // blank means absent
+  assert.equal(msg(() => validateContact({ name: ' ', email: 'a@b.co' })), 'Contact: a name is required');
   assert.equal(msg(() => validateContact({ name: 'N', email: 'nope' })), 'Contact: the email does not look like an email address');
   assert.equal(msg(() => validateContact({ name: 'N', url: 'http://x.org' })), 'Contact: the URL must start with https://');
   assert.equal(msg(() => validateContact({ name: 'N', org: 3 })), 'Contact: the organization must be text');
@@ -102,4 +103,20 @@ test('validateFollowing', () => {
   assert.equal(msg(() => validateFollowing([{ feedUrl: 'https://a.org', public: 'yes' }])), 'Following 1: public must be true or false');
   assert.equal(msg(() => validateFollowing([{ feedUrl: 'https://a.org', title: 4 }])), 'Following 1: the title must be text');
   assert.equal(msg(() => validateFollowing([{ feedUrl: 'https://a.org', category: 4 }])), 'Following 1: the category must be text');
+});
+
+test('validators trim strings and treat empty strings as absent', () => {
+  assert.deepEqual(validateFollowing([]), []);
+  assert.deepEqual(validateFollowing([{ title: ' A ', feedUrl: ' https://a.test/f ', siteUrl: ' ', category: '' }]), [{ title: 'A', feedUrl: 'https://a.test/f', public: true }]);
+  assert.deepEqual(validateContact({ name: ' N ', email: '', url: '  ', org: ' O ' }), { name: 'N', org: 'O' });
+  assert.deepEqual(validateContact({ name: 'N', email: ' a@b.co ' }), { name: 'N', email: 'a@b.co' });
+  assert.deepEqual(validateAbout({ summary: '  ', body: '  ' }), null);
+  assert.deepEqual(validateAbout({ summary: ' Hi ', file: ' a.md ' }), { summary: 'Hi', file: 'a.md' });
+});
+
+test('isUrl-backed checks: absolute http(s) with a host only', () => {
+  for (const u of ['https:/a.com/f', 'https://@', 'ftp://a.com', '/feed', 'https://']) {
+    assert.match(msg(() => validateFollowing([{ feedUrl: u }])), /feed URL must start with/, u);
+  }
+  assert.equal(validateFollowing([{ feedUrl: 'http://a.com/f' }])[0].feedUrl, 'http://a.com/f');
 });

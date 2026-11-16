@@ -187,8 +187,8 @@ for (const [label, loadModule] of modules) describe(`SocialSpec routes (${label}
       assert.deepEqual([r.data.added, r.data.skipped, r.data.unchanged], [2, 1, 2]);
       assert.deepEqual(file().following, [
         { title: 'Mine', feedUrl: 'https://a.example/f', category: 'Keep', public: false, extra: 1 },
-        { title: 'B', feedUrl: 'https://b.example/f', siteUrl: 'https://b.example/', category: 'Tech', public: true },
-        { title: 'https://c.example/f', feedUrl: 'https://c.example/f', public: true },
+        { title: 'B', feedUrl: 'https://b.example/f', siteUrl: 'https://b.example/', category: 'Tech', public: false },
+        { title: 'https://c.example/f', feedUrl: 'https://c.example/f', public: false },
       ]);
       assert.deepEqual(r.data.following, file().following);
       assert.deepEqual(commits, [{ paths: ['config/social.json'], message: 'Social: following' }]);
@@ -207,7 +207,18 @@ for (const [label, loadModule] of modules) describe(`SocialSpec routes (${label}
       const f = file().following;
       assert.deepEqual(f.slice(0, 3), stored);
       assert.equal('public' in f[2], false);
-      assert.deepEqual(f[3], { title: 'B', feedUrl: 'https://b.example/f', public: true });
+      assert.deepEqual(f[3], { title: 'B', feedUrl: 'https://b.example/f', public: false });
+    });
+
+    it('one malformed feed URL does not abort the import: it is counted as skipped', async () => {
+      seed({ ...HAND });
+      const r = await imp(wrap(`
+        <outline text="Bad" xmlUrl="https:/bad.example/feed"/>
+        <outline text="Good" xmlUrl="https://good.example/f"/>
+        <outline text="BadSite" xmlUrl="https://s.example/f" htmlUrl="https:/nope"/>`));
+      assert.equal(r.status, 200, JSON.stringify(r.data));
+      assert.deepEqual([r.data.added, r.data.skipped], [1, 2]);
+      assert.deepEqual(file().following, [{ title: 'Good', feedUrl: 'https://good.example/f', public: false }]);
     });
 
     it('an import over 2 MB is 413 with a plain message', async () => {
@@ -255,7 +266,23 @@ for (const [label, loadModule] of modules) describe(`SocialSpec routes (${label}
       seed({ ...HAND });
       const r = await api('/social/following/import', { method: 'POST', body: { opml: text } });
       assert.equal(r.status, 200);
-      assert.deepEqual(file().following, [{ title: 'A & "B" <c>', feedUrl: 'https://a.example/f?x=1&y=2', siteUrl: 'https://a.example/', public: true }]);
+      assert.deepEqual(file().following, [{ title: 'A & "B" <c>', feedUrl: 'https://a.example/f?x=1&y=2', siteUrl: 'https://a.example/', public: false }]);
+    });
+
+    it('applies the same filters as Cook\'s writer: no relative feeds, no relative siteUrl', async () => {
+      seed({ ...HAND, following: [
+        { title: 'Rel', feedUrl: '/feed.xml', public: true },
+        { title: 'NoSite', feedUrl: 'https://n.example/f', siteUrl: '/about', public: true },
+        { title: 'Plain', feedUrl: 'http://p.example/f', siteUrl: 'http://p.example/', public: true },
+      ] });
+      const { res, text } = await raw('/social/following.opml');
+      assert.equal(res.status, 200);
+      assert.ok(!text.includes('/feed.xml'));
+      assert.ok(!text.includes('htmlUrl="/about"'));
+      assert.match(text, /xmlUrl="https:\/\/n\.example\/f"/);
+      assert.match(text, /htmlUrl="http:\/\/p\.example\/"/);
+      seed({ ...HAND, following: [{ title: 'Rel', feedUrl: '/feed.xml', public: true }] });
+      assert.equal((await api('/social/following.opml')).status, 404);
     });
 
     it('is 404 with nothing public, and 409 with an old Cook', async () => {

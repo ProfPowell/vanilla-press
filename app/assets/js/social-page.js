@@ -12,7 +12,7 @@ import {
 } from './social-view.js';
 import {
   SOCIALSPEC_TOO_OLD, EMAIL_HELPER, PREVIEW_UNAVAILABLE, aboutForm, toAboutPut, contactForm, toContactPut,
-  followingRows, blankRow, toFollowingPut, moveRow, importSummary, previewDocument, mergeImported,
+  followingRows, blankRow, editable, toFollowingPut, moveRow, importSummary, previewDocument, mergeImported,
 } from './socialspec-view.js';
 
 /**
@@ -24,6 +24,7 @@ export function initSocialSection({ siteId, root }) {
   let accounts = [];
   let checks = new Map(); // row id -> recheck result
   let cookReady = true;
+  let loaded = false; // true after a successful GET /social; until then nothing can be saved
   let socialSpecReady = true;
   let contact = null; // the stored Contact, kept so Save keeps its other keys
   let followDirty = false; // unsaved edits in the Following list
@@ -36,6 +37,7 @@ export function initSocialSection({ siteId, root }) {
   let offeredHandle = ''; // the handle "Use @handle" filled in
   let replaceId = null; // set when the Add panel was opened from "Use @handle"
 
+  const specOn = () => editable({ loaded, ready: socialSpecReady });
   const rowId = (a) => accountRow(a).id;
   const showError = (message) => {
     $('social-error').textContent = message || '';
@@ -54,18 +56,18 @@ export function initSocialSection({ siteId, root }) {
     applyDisabled();
   }
   function applyDisabled() {
-    const off = busy || !cookReady;
+    const off = busy || !editable({ loaded, ready: cookReady });
     for (const el of root.querySelectorAll('#social-list button, #social-add-btn, #social-add-panel button, #social-add-panel select, #social-add-panel input')) {
       el.disabled = off || el.dataset.edge === 'true';
     }
-    const specOff = busy || !socialSpecReady;
+    const specOff = busy || !specOn();
     for (const el of root.querySelectorAll('.socialspec-panel button, .socialspec-panel input, .socialspec-panel textarea')) {
       el.disabled = specOff || el.dataset.edge === 'true';
     }
     const exp = $('following-export');
     exp.setAttribute('aria-disabled', String(specOff));
     exp.style.pointerEvents = specOff ? 'none' : '';
-    exp.hidden = !socialSpecReady || !storedFollowing.some((e) => e.public !== false);
+    exp.hidden = !specOn() || !storedFollowing.some((e) => e.public !== false);
   }
 
   // --- The list ---
@@ -139,7 +141,7 @@ export function initSocialSection({ siteId, root }) {
 
   $('social-list').addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-action]');
-    if (!btn || busy || !cookReady) return;
+    if (!btn || busy || !editable({ loaded, ready: cookReady })) return;
     const index = Number(btn.dataset.index);
     const action = btn.dataset.action;
     if (action === 'use-handle') { useCurrentHandle(index); return; }
@@ -235,7 +237,7 @@ export function initSocialSection({ siteId, root }) {
 
   $('social-add-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (busy || !cookReady) return;
+    if (busy || !editable({ loaded, ready: cookReady })) return;
     const service = serviceEl.value;
     const val = (name) => fieldsEl.querySelector(`[name="${name}"]`)?.value.trim() || '';
     addError('');
@@ -283,7 +285,7 @@ export function initSocialSection({ siteId, root }) {
   };
   /** Run a panel's one PUT: busy while in flight, 400 messages and the commit note beside the panel. */
   async function savePanel(panel, call) {
-    if (busy || !socialSpecReady) return;
+    if (busy || !specOn()) return;
     setBusy(true);
     panelMessage(panel, 'error', '');
     panelMessage(panel, 'note', '');
@@ -335,7 +337,7 @@ export function initSocialSection({ siteId, root }) {
     if (!on) { $('about-preview-note').hidden = true; $('about-preview-frame').srcdoc = ''; }
   }
   $('about-preview-btn').addEventListener('click', async () => {
-    if (busy || !socialSpecReady) return;
+    if (busy || !specOn()) return;
     if (previewing) { setPreview(false); field('about-body').focus(); return; }
     panelMessage('about', 'error', '');
     setBusy(true);
@@ -413,7 +415,7 @@ export function initSocialSection({ siteId, root }) {
   });
   $('following-list').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-action]');
-    if (!btn || busy || !socialSpecReady) return;
+    if (!btn || busy || !specOn()) return;
     const index = followRows.findIndex((r) => String(r.key) === btn.dataset.key);
     if (index < 0) return;
     const { action, key } = btn.dataset;
@@ -428,7 +430,7 @@ export function initSocialSection({ siteId, root }) {
     }
   });
   $('following-add').addEventListener('click', () => {
-    if (busy || !socialSpecReady) return;
+    if (busy || !specOn()) return;
     const row = blankRow();
     followRows = [...followRows, row];
     followDirty = true;
@@ -444,11 +446,11 @@ export function initSocialSection({ siteId, root }) {
       renderFollowing();
     }
   });
-  $('following-import').addEventListener('click', () => { if (!busy && socialSpecReady) $('following-file').click(); });
+  $('following-import').addEventListener('click', () => { if (!busy && specOn()) $('following-file').click(); });
   $('following-file').addEventListener('change', async () => {
     const file = $('following-file').files[0];
     $('following-file').value = '';
-    if (!file || busy || !socialSpecReady) return;
+    if (!file || busy || !specOn()) return;
     $('following-import-result').hidden = true;
     const result = await savePanel('following', async () => importOpml(siteId, await file.text()));
     if (result) {
@@ -491,8 +493,9 @@ export function initSocialSection({ siteId, root }) {
       contact = state.contact || null;
       storedFollowing = Array.isArray(state.following) ? state.following : [];
       fillSpecPanels(state);
+      loaded = true;
     } catch (err) {
-      if (err.data?.cookReady === false) { cookReady = false; socialSpecReady = false; accounts = []; } else { showError(err.message); return; }
+      if (err.data?.cookReady === false) { cookReady = false; socialSpecReady = false; accounts = []; } else { showError(err.message); applyDisabled(); return; }
     }
     checks = new Map();
     render();

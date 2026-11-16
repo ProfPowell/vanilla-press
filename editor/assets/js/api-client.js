@@ -211,6 +211,11 @@ export const api = {
     return request('/components');
   },
 
+  /** The site's profile links as Cook draws them: { html } ('' when none). 409 when Cook is too old. */
+  socialLinks(query = {}) {
+    return request('/social/links', { query });
+  },
+
   // --- App only (per-site base, `?site=`) ---
 
   /**

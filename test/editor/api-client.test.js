@@ -26,6 +26,11 @@ describe('editor api client', () => {
     assert.deepEqual(calls, [{ url: '/api/documents/x/update', method: 'POST' }]);
   });
 
+  it('socialLinks: GET /social/links with the query', async () => {
+    await api.socialLinks({ services: 'github', variant: 'icon' });
+    assert.deepEqual(calls, [{ url: '/api/social/links?services=github&variant=icon', method: 'GET' }]);
+  });
+
   it('components: GET /components and PUT /components/<encoded pkg>', async () => {
     await api.listComponents();
     await api.setComponent('@profpowell/browser-window', true);

@@ -432,6 +432,9 @@ function renderComponentAttrs(attrs) {
   }).join('');
 }
 
+/** Components written with no children whatever a node holds: Cook fills them. */
+const ALWAYS_EMPTY = new Set(['social-links']);
+
 /**
  * Render a block-position component node. Exported so the markdown renderer
  * can emit the same raw HTML.
@@ -442,7 +445,9 @@ export function renderComponentBlock(block) {
   const { tag } = block;
   if (!isSafeComponentTag(tag)) return '';
   let inner = '';
-  if (Array.isArray(block.children) && block.children.length) {
+  if (ALWAYS_EMPTY.has(tag)) {
+    // Filled at build; a filled element would be left alone by the build
+  } else if (Array.isArray(block.children) && block.children.length) {
     inner = block.children.map(renderBlock).join('\n');
   } else if (typeof block.value === 'string') {
     const v = block.value;

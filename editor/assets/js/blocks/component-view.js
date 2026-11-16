@@ -23,6 +23,11 @@ import { enabledDescriptors } from '../component-model.js';
 import {
   loadComponent, createComponentElement, syncAttributes, setComponentValue,
 } from '../component-loader.js';
+import { api } from '../api-client.js';
+import { SITE } from '../site-context.js';
+import {
+  SOCIAL_LINKS_TAG, socialPreviewQuery, previewPlan, applyPreview,
+} from '../social-links-preview.js';
 import { isMissingMedia, missingText } from '../media-check.js';
 
 const COMPONENT_TYPES = new Set(['component_leaf', 'component_blocks', 'component_inline']);
@@ -111,11 +116,29 @@ class BaseComponentView {
     this.missingNote.contentEditable = 'false';
     this.missingNote.hidden = true;
     this.fileCheck = 0;
+    this.linksCheck = 0;
     this.dom.append(this.note, this.missingNote, this.el);
 
     views.add(this);
     this.refresh();
     this.checkFile();
+    this.previewLinks();
+  }
+
+  /**
+   * For <social-links>: draw the site's real links inside the element.
+   * Display-only: a leaf node is an atom, so nothing in the element is read
+   * back into the doc, and the renderer writes the element empty.
+   */
+  previewLinks() {
+    if (this.kind !== 'leaf' || this.node.attrs.tag !== SOCIAL_LINKS_TAG) return;
+    const mine = ++this.linksCheck;
+    api.socialLinks(socialPreviewQuery(this.node.attrs.attrs)).then(
+      (res) => [previewPlan(res)],
+      (err) => [previewPlan(null, err)],
+    ).then(([plan]) => {
+      if (mine === this.linksCheck && views.has(this)) applyPreview(this.el, plan, SITE);
+    });
   }
 
   /** For a pdf-viewer: ask whether its src is a library file that no longer exists. */
@@ -158,8 +181,10 @@ class BaseComponentView {
     if (this.kind === 'leaf' && (node.attrs.value !== this.node.attrs.value || node.attrs.wrap !== this.node.attrs.wrap)) {
       setComponentValue(this.el, node.attrs.value, node.attrs.wrap);
     }
+    const prev = this.node;
     this.node = node;
     if (srcChanged) this.checkFile();
+    if (JSON.stringify(this.node.attrs.attrs) !== JSON.stringify(prev.attrs.attrs)) this.previewLinks();
     if (this.contentDOM) this.keepOwnNodes();
     return true;
   }

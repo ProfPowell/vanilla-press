@@ -265,6 +265,18 @@ export const CATALOG = [
         kind: 'none', defaults: { zoom: 12 }, advanced: ['marker-color', 'provider', 'tile-url', 'interactive', 'static-only', 'src'],
       },
       {
+        // Cook fills it at build from config/social.json; the editor saves it empty and
+        // previews the real links. Not in an older VB manifest, so `attributes` stands in.
+        tag: 'social-links', label: 'Profile links', icon: 'share', group: 'Embeds',
+        description: "Links to this site's accounts, from Social.",
+        kind: 'none', defaults: { variant: 'icon-label' }, advanced: ['color'],
+        attributes: [
+          { name: 'services', type: 'string', description: 'Comma list of service ids to show (default: all).' },
+          { name: 'variant', type: 'string', enum: ['icon', 'label', 'icon-label'], description: 'How each link shows (default icon-label).' },
+          { name: 'color', type: 'boolean', description: 'Use each service\'s brand colour.' },
+        ],
+      },
+      {
         tag: 'qr-code', label: 'QR code', icon: 'qr', group: 'Embeds',
         description: 'A QR code for a link or text.',
         kind: 'none', defaults: { value: '' }, advanced: ['size', 'color', 'background', 'error-correction'],

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { saveDocument } from '../../src/store/content.js';
 import { resolveWorkspace, openWorkspaceDb } from '../../src/workspace/workspace.js';
 import {
-  readSetting, writeSetting, migrateVpTheme, ensureThemeSetting, themeState,
+  readSetting, writeSetting, migrateVpTheme, ensureThemeSetting, themeState, refreshThemeSetting,
   saveCustomTheme, importCustomTheme, renameCustomTheme, deleteCustomTheme, ThemeError,
 } from '../../src/app/site-theme.js';
 import { makeGitSite, write, git } from './git-site-fixture.js';
@@ -102,6 +102,18 @@ describe('site theme store', () => {
     assert.equal(readSetting(ws).mode, 'auto');
     writeSetting(ws, { ...readSetting(ws), name: 'swiss' });
     assert.equal(ensureThemeSetting(ws).name, 'swiss'); // kept
+  });
+
+  it('refreshThemeSetting keeps the applied theme\'s hand-written files entry (a site theme VB does not list)', () => {
+    write(site, 'src/assets/themes/house.css', '[data-theme~="house"]{--x:1}\n');
+    write(site, 'config/theme.json', JSON.stringify({
+      name: 'house', mode: 'auto', files: { house: '/assets/themes/house.css', swiss: '/old/swiss.css' },
+    }, null, 2) + '\n');
+    refreshThemeSetting(ws);
+    const s = readSetting(ws);
+    assert.equal(s.name, 'house');
+    assert.equal(s.files.house, '/assets/themes/house.css');
+    assert.equal(s.files.swiss, '/assets/vendor/vanilla-breeze/themes/swiss.css', 'VB entries are still recomputed');
   });
 
   it('saveCustomTheme writes a scoped file and a custom entry with a unique id', () => {

@@ -89,6 +89,11 @@ export function writeSetting(ws, setting, { keepApplied = null } = {}) {
       vbUrl, vbIds: cat.themes.map((t) => t.id), builtIns: cat.builtIns, custom: s.custom, adjust: s.adjust,
     }),
   };
+  // The applied theme never loses its stylesheet: a site's own theme that neither VB nor
+  // the custom library lists (a hand-written src/assets/themes file) keeps its entry.
+  for (const id of [s.name, s.adjust].filter(Boolean)) {
+    if (!(id in out.files) && s.files[id]) out.files[id] = s.files[id];
+  }
   const modes = modesFor(s.custom);
   // A library change on a site with no VB copy yet (a fresh clone, before the first build) can't
   // recompute the VB entries: the ones it didn't touch (every id but the old custom ones) and vb stay.

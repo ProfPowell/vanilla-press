@@ -323,9 +323,17 @@ describe('media access', () => {
     assert.equal(JSON.parse(jsonText())[0].access, 'private');
   });
 
-  it('an empty or null level in media.json is public', () => {
-    writeJson([entry({ access: '' }), entry({ id: 'bbbb2222', filename: 'b.png', access: null })]);
+  it('an absent or null level in media.json is public', () => {
+    writeJson([entry(), entry({ id: 'bbbb2222', filename: 'b.png', access: null })]);
     loadMediaJson(ws, db);
     assert.deepEqual(rows().map((r) => r.access), ['public', 'public']);
+  });
+
+  it('an empty level in media.json is private (as the site and Cook read it), and a rewrite keeps it', () => {
+    writeJson([entry({ access: '' }), entry({ id: 'bbbb2222', filename: 'b.png', access: 7 })]);
+    loadMediaJson(ws, db);
+    assert.deepEqual(rows().map((r) => r.access), ['private', 'private']);
+    writeMediaJson(ws, db);
+    assert.deepEqual(JSON.parse(jsonText()).map((e) => e.access), ['private', 'private']);
   });
 });

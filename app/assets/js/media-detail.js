@@ -8,6 +8,7 @@ import {
   ALT_PLACEHOLDER, ALT_HINT, detailModel, altForCheckbox, createAltSaver, deleteDecision, refusedDeleteMessage,
   CREDIT_FIELDS, CREDIT_NOTE, creditFormValues, creditFromForm, displaySrc,
 } from '../../../src/media/library-view.js';
+import { validAccess } from '../../../src/schema/content-schema.js';
 import { creditText } from '../../../src/media/credit.js';
 import { exportFormat } from '../../../src/media/types.js';
 import { uploadMedia } from '../../../editor/assets/js/media-upload.js';
@@ -214,6 +215,41 @@ export function createMediaDetail({ siteId, base, root, host }) {
     return form;
   }
 
+  /**
+   * Who can see this: public, friends or private. Saves at once through the media PUT
+   * (`{ access }`); an unknown stored level shows as private.
+   */
+  function accessField(item) {
+    const levelOf = (stored) => (!stored ? 'public' : validAccess.includes(stored) ? stored : 'private');
+    const options = validAccess.map((level) => h('option', { value: level }, level[0].toUpperCase() + level.slice(1)));
+    const choose = (level) => {
+      for (const o of options) o.selected = o.value === level; // wins once the user has changed the select
+      for (const o of options) o.toggleAttribute('selected', o.value === level); // the initial choice
+    };
+    const select = h('select', { id: 'media-access', 'aria-describedby': 'media-access-hint' }, ...options);
+    choose(levelOf(item.access));
+    select.addEventListener('change', async () => {
+      const access = select.value;
+      setStatus('');
+      try {
+        const fresh = await api(`${base}/media/${encodeURIComponent(item.id)}`, { method: 'PUT', body: { access } });
+        host.replaceItem(fresh);
+        if (shownId === item.id) setStatus('Access saved');
+      } catch (err) {
+        const name = host.getItem(item.id)?.filename || 'a file';
+        host.showError(`Couldn't save who can see ${name}. ${err.message} Select the file and try again.`);
+        if (shownId === item.id) {
+          choose(levelOf(host.getItem(item.id)?.access));
+          setStatus('');
+        }
+      }
+    });
+    return h('div', { class: 'detail-group' },
+      h('label', { for: 'media-access', class: 'detail-label' }, 'Who can see this'),
+      select,
+      h('p', { id: 'media-access-hint', class: 'detail-hint' }, 'Friends and Private files are left out of the public site.'));
+  }
+
   function urlField(model) {
     const code = h('code', { class: 'detail-url', id: 'media-url' }, model.url);
     const copy = h('button', { type: 'button' }, 'Copy');
@@ -369,6 +405,7 @@ export function createMediaDetail({ siteId, base, root, host }) {
         model.dims ? h('p', { class: 'detail-muted' }, model.dims) : null),
       model.showAlt ? altField(item) : null,
       model.showCredit ? creditField(item) : null,
+      item.linked ? null : accessField(item),
       urlField(model),
       usedInList(model),
       message,

@@ -7,6 +7,7 @@
 
 import { collectionOutput } from '../../../src/sync/paths.js';
 import { mediaFileOf } from '../../../src/media/usage.js';
+import { validAccess } from '../../../src/schema/content-schema.js';
 import { SAFE_ID, ADJUST_ID } from '../../../src/themes/theme-setting.js';
 
 const NOT_LIVE_NOTE = "Your saved edits aren't on the live site yet. Update builds the site and pushes them.";
@@ -166,5 +167,40 @@ export function appearanceModel(meta, { setting, themes, siteId = '', expanded =
       ? `This site's Vanilla Breeze has no theme "${theme}". Pick another theme for this post.`
       : null,
     adjustHref: `/app/site.html?site=${encodeURIComponent(siteId)}&section=theme`,
+  };
+}
+
+const ACCESS_LABELS = { public: 'Public', friends: 'Friends', private: 'Private' };
+
+/** Rank of a level: public 0, friends 1, private 2; absent is public, an unknown level is private. */
+const accessRank = (level) => {
+  if (level == null || level === '') return 0;
+  const i = validAccess.indexOf(level);
+  return i < 0 ? validAccess.length - 1 : i;
+};
+
+/**
+ * The "Who can see this" select and its section line. The choices below the
+ * section's level are disabled (not removed). A stored level below the section's
+ * is shown as the section's, with a note; the stored value itself is not changed here.
+ * @param {{ access?: string }} meta
+ * @param {{ label?: string, access?: string|null }|null} [section] - the post's section, when the site has one
+ * @returns {{ options: Array<{ value: string, label: string, disabled?: boolean }>, value: string,
+ *   line: string|null, note: string|null }}
+ */
+export function accessModel(meta, section = null) {
+  const floor = accessRank(section?.access);
+  const stored = accessRank(meta?.access);
+  const effective = Math.max(floor, stored);
+  const floorName = validAccess[floor];
+  return {
+    options: validAccess.map((value, i) => (i < floor
+      ? { value, label: ACCESS_LABELS[value], disabled: true }
+      : { value, label: ACCESS_LABELS[value] })),
+    value: validAccess[effective],
+    line: floor > 0 ? `Section: ${section.label || 'section'} — 🔒 ${ACCESS_LABELS[floorName]}` : null,
+    note: floor > stored
+      ? `This post's section is ${ACCESS_LABELS[floorName]}, so the post is too. Its own setting is ${ACCESS_LABELS[validAccess[stored]]}.`
+      : null,
   };
 }

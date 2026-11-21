@@ -220,3 +220,38 @@ describe('layoutChoices', () => {
     assert.equal(layoutChoices(null, {}).length, 1);
   });
 });
+
+import { accessModel } from '../../editor/assets/js/settings-view.js';
+
+describe('accessModel', () => {
+  const enabled = (m) => m.options.filter((o) => !o.disabled).map((o) => o.value);
+  it('public by default, no section: all three choices, no line', () => {
+    const m = accessModel({}, null);
+    assert.deepEqual(m.options.map((o) => o.label), ['Public', 'Friends', 'Private']);
+    assert.equal(m.value, 'public');
+    assert.equal(m.line, null);
+    assert.equal(m.note, null);
+    assert.deepEqual(enabled(m), ['public', 'friends', 'private']);
+  });
+  it("a friends section: the line, Public disabled, stored level kept when higher", () => {
+    const m = accessModel({ access: 'private' }, { label: 'Art', access: 'friends' });
+    assert.equal(m.line, 'Section: Art — 🔒 Friends');
+    assert.equal(m.value, 'private');
+    assert.deepEqual(enabled(m), ['friends', 'private']);
+    assert.equal(m.note, null);
+  });
+  it('a stored level below the section shows the section level, with a note, and never rewrites', () => {
+    const m = accessModel({ access: 'public' }, { label: 'Art', access: 'private' });
+    assert.equal(m.line, 'Section: Art — 🔒 Private');
+    assert.equal(m.value, 'private');
+    assert.deepEqual(enabled(m), ['private']);
+    assert.match(m.note, /Private/);
+  });
+  it('a public or unknown section shows nothing', () => {
+    assert.equal(accessModel({}, { label: 'Art', access: 'public' }).line, null);
+    assert.equal(accessModel({}, { label: 'Art', access: null }).line, null);
+  });
+  it('an unknown stored level is shown as private', () => {
+    assert.equal(accessModel({ access: 'members' }, null).value, 'private');
+  });
+});

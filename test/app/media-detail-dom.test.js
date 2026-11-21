@@ -140,3 +140,32 @@ describe('a linked (Unsplash) item', () => {
     assert.equal($('.detail-linked-note'), null);
   });
 });
+
+describe('Who can see this (media access)', () => {
+  const chosen = () => [...win.document.querySelectorAll('#media-access option')].find((o) => o.hasAttribute('selected'))?.value; // (linkedom doesn't reflect option.selected)
+  it('shows the stored level, public when none', () => {
+    detail.show(items[0]);
+    assert.equal(chosen(), 'public');
+    assert.deepEqual([...win.document.querySelectorAll('#media-access option')].map((o) => o.value), ['public', 'friends', 'private']);
+    items[1].access = 'friends';
+    detail.show(items[1]);
+    assert.equal(chosen(), 'friends');
+  });
+
+  it('an unknown stored level shows as private', () => {
+    items[0].access = 'members';
+    detail.show(items[0]);
+    assert.equal(chosen(), 'private');
+  });
+
+  it('changing it saves { access } through the media PUT, at once', async () => {
+    detail.show(items[0]);
+    const select = $('#media-access');
+    for (const o of select.querySelectorAll('option')) o.toggleAttribute('selected', o.value === 'private');
+    select.dispatchEvent(new win.Event('change', { bubbles: true }));
+    await tick();
+    assert.deepEqual(puts.map((p) => p.body), [{ access: 'private' }]);
+    assert.equal(puts[0].url, '/api/sites/s/media/a');
+    assert.equal(items[0].access, 'private');
+  });
+});

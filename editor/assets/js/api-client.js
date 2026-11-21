@@ -121,6 +121,11 @@ export const api = {
     return request('/layouts');
   },
 
+  /** The site's sections: { sections: [{ id, label, access|null }] } (GET /sections). */
+  getSections() {
+    return request('/sections');
+  },
+
   /** Full-text search. */
   search(query) {
     return request('/search', { query: { q: query } });

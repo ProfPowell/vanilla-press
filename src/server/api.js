@@ -31,6 +31,7 @@ import {
   getCollectionsConfig, preflightSave, writeMediaJson, syncAll,
 } from '../sync/site-files.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
+import { readSections } from '../sync/section-access.js';
 import { isMissing, MEDIA_FIELDS } from '../sync/media-library.js';
 import { inspectFile } from '../media/inspect.js';
 import { mediaFilename, editedFilename, uniqueFilename, slugBase } from '../media/names.js';
@@ -348,6 +349,12 @@ export function mountApi(router, db, options) {
   route.add('GET', '/api/collections', (req, res) => {
     const collections = getCollections(db);
     sendJson(res, 200, collections);
+  });
+
+  // --- Sections (config/sections.json: id, label, access) ---
+
+  route.add('GET', '/api/sections', (req, res) => {
+    sendJson(res, 200, { sections: readSections(ws ? ws.siteDir : null) });
   });
 
   // --- Layouts ---

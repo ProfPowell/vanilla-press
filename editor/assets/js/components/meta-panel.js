@@ -24,7 +24,7 @@ import {
   saveDocument, loadDocument, getPostVersions, versionDifferences, canRestoreVersion, restoreVersion, handleSaveError, loadVersionOnDisk, setSlugHandEdited, refreshMetaLine, metaEdited,
 } from '../editor.js';
 import { onMetaUpdate as onSiteMetaUpdate, isSiteMode, altCheckPasses } from '../site-mode.js';
-import { statusBox, collectionOptions, layoutChoices, urlPrefix, featuredModel } from '../settings-view.js';
+import { statusBox, accessModel, collectionOptions, layoutChoices, urlPrefix, featuredModel } from '../settings-view.js';
 import { SITE, displayMediaUrl } from '../site-context.js';
 import { openMediaPicker } from './media-picker.js';
 import './appearance-section.js';
@@ -34,6 +34,8 @@ export class MetaPanel extends HTMLElement {
   connectedCallback() {
     /** The site's `collections` config (Collection choices, URL prefix). */
     this._collections = {};
+    /** The site's sections ([{ id, label, access }]): a post in a Friends or Private section is at least that level. */
+    this._sections = [];
     /** The open published post has saved edits that are not live (site-mode.js sets it). */
     this._liveOutOfDate = false;
     /** The site's layouts listing (GET /api/layouts), for the Layout select; null until fetched or when the fetch failed. */
@@ -43,6 +45,7 @@ export class MetaPanel extends HTMLElement {
     this.collectionsLoaded = this.loadCollections();
     /** Settled once the layouts listing has loaded (or failed): the editor reuses it (no second fetch). */
     this.layoutsLoaded = this.loadLayouts();
+    this.loadSections();
 
     // Listen for meta updates (e.g. from doc loading)
     window.__onMetaUpdate = (meta) => {
@@ -64,6 +67,15 @@ export class MetaPanel extends HTMLElement {
       const parsed = value ? JSON.parse(value) : {};
       this._collections = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     } catch { /* defaults */ }
+    this.syncFromMeta(getCurrentMeta());
+  }
+
+  /** Fetch the site's sections once (for the post's section level); a failure means none. */
+  async loadSections() {
+    try {
+      const { sections } = await api.getSections();
+      this._sections = Array.isArray(sections) ? sections : [];
+    } catch { this._sections = []; }
     this.syncFromMeta(getCurrentMeta());
   }
 
@@ -129,6 +141,13 @@ export class MetaPanel extends HTMLElement {
       </div>
 
       ${status}
+
+      <div class="field">
+        <label for="meta-access">Who can see this</label>
+        <select id="meta-access" aria-describedby="meta-access-line meta-access-note"></select>
+        <p class="hint" id="meta-access-line" data-access-line hidden></p>
+        <p class="hint" id="meta-access-note" data-access-note hidden></p>
+      </div>
 
       <div class="field">
         <label for="meta-slug">URL</label>
@@ -220,6 +239,13 @@ export class MetaPanel extends HTMLElement {
       refreshMetaLine();
       // With no layout of its own, the post's layout is the collection's: its regions follow
       if (!getCurrentMeta().layout) this.fireLayoutChange('');
+      metaEdited();
+    });
+
+    // Saves through the usual document save (metaEdited auto-saves), like every other field
+    this.querySelector('#meta-access').addEventListener('change', (e) => {
+      setCurrentMeta({ access: e.target.value });
+      this.renderAccess(getCurrentMeta());
       metaEdited();
     });
 
@@ -433,6 +459,7 @@ export class MetaPanel extends HTMLElement {
     }
 
     this.renderStatus(meta);
+    this.renderAccess(meta);
     this.renderCollections(meta);
     this.renderLayouts(meta);
     this.renderUrlPrefix(meta);
@@ -518,6 +545,31 @@ export class MetaPanel extends HTMLElement {
     const noteEl = box.querySelector('[data-status-note]');
     noteEl.textContent = note || '';
     noteEl.hidden = !note;
+  }
+
+  /** The "Who can see this" select, clamped to the post's section level, with the section line and note. */
+  renderAccess(meta) {
+    const select = this.querySelector('#meta-access');
+    if (!select) return;
+    const section = this._sections.find((x) => x.id === meta.section) || null;
+    const model = accessModel(meta, section);
+    const same = model.options.length === select.options.length
+      && model.options.every((c, i) => select.options[i].value === c.value && select.options[i].disabled === !!c.disabled);
+    if (!same) {
+      select.replaceChildren(...model.options.map((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.value;
+        opt.textContent = c.label;
+        if (c.disabled) opt.disabled = true;
+        return opt;
+      }));
+    }
+    select.value = model.value;
+    for (const [name, text] of [['line', model.line], ['note', model.note]]) {
+      const el = this.querySelector(`[data-access-${name}]`);
+      el.textContent = text || '';
+      el.hidden = !text;
+    }
   }
 
   /** The Collection select: the config's collections, plus the post's own when not listed. */

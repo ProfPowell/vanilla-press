@@ -438,3 +438,36 @@ describe('GET /api/layouts', () => {
     }
   });
 });
+
+describe('GET /api/sections', () => {
+  it('without a workspace is an empty list', async () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    const { api, close } = await startApi(db, {});
+    try {
+      const { status, data } = await api('/api/sections');
+      assert.equal(status, 200);
+      assert.deepEqual(data, { sections: [] });
+    } finally {
+      await close();
+      db.close();
+    }
+  });
+
+  it("with a workspace lists the site's sections and their levels", async () => {
+    const site = mkdtempSync(join(tmpdir(), 'vp-sections-api-'));
+    mkdirSync(join(site, 'config'), { recursive: true });
+    writeFileSync(join(site, 'config/sections.json'), JSON.stringify([{ id: 'art', label: 'Art', access: 'friends' }, { id: 'news' }]));
+    const ws = resolveWorkspace({ site, repoRoot });
+    const db = openWorkspaceDb(ws);
+    const { api, close } = await startApi(db, { mediaDir: ws.mediaDir, workspace: ws });
+    try {
+      const { data } = await api('/api/sections');
+      assert.deepEqual(data, { sections: [{ id: 'art', label: 'Art', access: 'friends' }, { id: 'news', label: 'news', access: null }] });
+    } finally {
+      await close();
+      db.close();
+      rmSync(site, { recursive: true, force: true });
+    }
+  });
+});

@@ -8,22 +8,40 @@ import { checkBeforeUpload, LARGE_NOTE } from '../../../src/media/limits.js';
 const UNREACHABLE = "Upload failed: the app didn't answer. Is vp still running?";
 
 /**
+ * The multipart form for one upload. `document` (an upload from a document's
+ * editor): its id, level and section, so the server gives the file that
+ * document's level (the media library itself sends none: public).
+ * @param {File} file
+ * @param {{ alt?: string|null, editedFrom?: string, credit?: object, source?: string,
+ *   document?: { id?: string, access?: string, section?: string }|null }} [opts]
+ * @returns {FormData}
+ */
+export function uploadForm(file, { alt, editedFrom, credit, source, document } = {}) {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  if (alt != null) form.append('alt', alt);
+  if (editedFrom) form.append('edited_from', editedFrom);
+  if (credit) form.append('credit', JSON.stringify(credit));
+  if (source) form.append('source', source);
+  if (document?.id) form.append('document', document.id);
+  if (document?.access != null) form.append('document_access', document.access);
+  if (document?.section != null) form.append('document_section', document.section);
+  return form;
+}
+
+/**
  * POST one file to `<base>/media`.
  * @param {string} base e.g. `/api/sites/<id>`
  * @param {File} file
  * @param {{ alt?: string|null, editedFrom?: string, credit?: object, source?: string,
+ *   document?: { id?: string, access?: string, section?: string }|null,
  *   onProgress?: (fraction: number) => void }} [opts] `credit` is a Credit (sent as JSON);
- *   `source` the web image service it came from
+ *   `source` the web image service it came from; `document` see uploadForm
  * @returns {Promise<object>} the new MediaItem plus `large`
  */
-export function uploadMedia(base, file, { alt, editedFrom, credit, source, onProgress } = {}) {
+export function uploadMedia(base, file, { onProgress, ...fields } = {}) {
   return new Promise((resolve, reject) => {
-    const form = new FormData();
-    form.append('file', file, file.name);
-    if (alt != null) form.append('alt', alt);
-    if (editedFrom) form.append('edited_from', editedFrom);
-    if (credit) form.append('credit', JSON.stringify(credit));
-    if (source) form.append('source', source);
+    const form = uploadForm(file, fields);
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${base}/media`);
     xhr.responseType = 'text';

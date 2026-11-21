@@ -18,6 +18,13 @@ const APP_BASE = '/api';
 let workspacePromise = null;
 
 /**
+ * The editor's open document for uploads and web-image copies: () => { id, access,
+ * section } (set by the editor; null elsewhere, e.g. the media library: public).
+ * @type {(() => { id?: string, access?: string, section?: string })|null}
+ */
+let documentContext = null;
+
+/**
  * Make an API request.
  * @param {string} path
  * @param {Object} [options]
@@ -142,7 +149,16 @@ export const api = {
    * @param {{ alt?: string|null, credit?: object, source?: string, onProgress?: (fraction: number) => void }} [opts]
    */
   uploadMedia(file, opts = {}) {
-    return uploadFile(BASE, file, opts);
+    return uploadFile(BASE, file, { ...opts, document: documentContext ? documentContext() : opts.document });
+  },
+
+  /**
+   * Uploads and web-image copies made from now on belong to this document (the
+   * server gives them its level: its own or its section's, whichever is higher).
+   * @param {(() => { id?: string, access?: string, section?: string })|null} fn
+   */
+  setDocumentContext(fn) {
+    documentContext = typeof fn === 'function' ? fn : null;
   },
 
   /**
@@ -165,7 +181,13 @@ export const api = {
    * the library already had that photo.
    */
   importWebImage({ source, id, alt }) {
-    return request('/media/import', { method: 'POST', body: { source, id, alt } });
+    const doc = documentContext ? documentContext() : null;
+    const from = doc ? {
+      ...(doc.id ? { document: doc.id } : {}),
+      ...(doc.access != null ? { documentAccess: doc.access } : {}),
+      ...(doc.section != null ? { documentSection: doc.section } : {}),
+    } : {};
+    return request('/media/import', { method: 'POST', body: { source, id, alt, ...from } });
   },
 
   /** List the media library: MediaItem[]. */

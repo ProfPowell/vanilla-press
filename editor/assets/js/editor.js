@@ -216,6 +216,11 @@ function createSlashPlugin() {
 /** Initialize the editor */
 export function initEditor() {
   const editorEl = document.querySelector('.editor-content');
+  // Files added while editing a post take its level (its own or its section's).
+  api.setDocumentContext(() => {
+    const meta = getCurrentMeta();
+    return { id: getCurrentDocId(), access: meta.access, section: meta.section };
+  });
 
   if (!editorEl) {
     console.error('Editor mount points not found');

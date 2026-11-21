@@ -16,6 +16,20 @@ describe('editor api client', () => {
   });
   afterEach(() => { globalThis.fetch = realFetch; });
 
+  it("importWebImage from the editor carries the open document's id, level and section", async () => {
+    const bodies = [];
+    globalThis.fetch = async (url, opts) => { bodies.push(JSON.parse(opts.body)); return new Response('{}', { status: 200 }); };
+    await api.importWebImage({ source: 'pexels', id: '1' });
+    api.setDocumentContext(() => ({ id: 'doc_a', access: 'friends', section: 'club' }));
+    try {
+      await api.importWebImage({ source: 'pexels', id: '2' });
+    } finally {
+      api.setDocumentContext(null);
+    }
+    assert.deepEqual(bodies[0], { source: 'pexels', id: '1' });
+    assert.deepEqual(bodies[1], { source: 'pexels', id: '2', document: 'doc_a', documentAccess: 'friends', documentSection: 'club' });
+  });
+
   it('updateDocument saves a document: PUT /documents/<id>', async () => {
     await api.updateDocument('x', { meta: {} });
     assert.deepEqual(calls, [{ url: '/api/documents/x', method: 'PUT' }]);

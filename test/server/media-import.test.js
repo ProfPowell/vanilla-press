@@ -96,6 +96,20 @@ describe('media import and credits', () => {
   });
 
   describe('POST /api/media/import', () => {
+    it("a copy made from a document's editor takes the document's level; from the library it is public", async () => {
+      offer(pexels({ id: 'lv1' }), { data: jpeg(40, 30), contentType: 'image/jpeg' });
+      const lib = await call('POST', '/api/media/import', { source: 'pexels', id: 'lv1' });
+      assert.equal(lib.status, 201, JSON.stringify(lib.data));
+      assert.equal(lib.data.access, 'public');
+      offer(pexels({ id: 'lv2' }), { data: jpeg(40, 30), contentType: 'image/jpeg' });
+      const fr = await call('POST', '/api/media/import', { source: 'pexels', id: 'lv2', documentAccess: 'friends' });
+      assert.equal(fr.status, 201, JSON.stringify(fr.data));
+      assert.equal(fr.data.access, 'friends');
+      offer(pexels({ id: 'lv3' }), { data: jpeg(40, 30), contentType: 'image/jpeg' });
+      const odd = await call('POST', '/api/media/import', { source: 'pexels', id: 'lv3', documentAccess: 'family' });
+      assert.equal(odd.data.access, 'private');
+    });
+
     it('stores the bytes with the source and the credit', async () => {
       offer(pexels(), { data: jpeg(40, 30), contentType: 'image/jpeg' });
       const { status, data } = await call('POST', '/api/media/import', { source: 'pexels', id: '123' });

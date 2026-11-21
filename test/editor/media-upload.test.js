@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createUploadQueue } from '../../editor/assets/js/media-upload.js';
+import { createUploadQueue, uploadForm } from '../../editor/assets/js/media-upload.js';
 import { tooLargeMessage, LARGE_NOTE, MAX_BYTES } from '../../src/media/limits.js';
 
 const file = (name, size = 10) => ({ name, size });
@@ -106,4 +106,18 @@ test('uploadMedia options are passed through', async () => {
   q.add([file('a.jpg')]);
   await done(q);
   assert.equal(typeof opts.onProgress, 'function');
+});
+
+test("uploadForm: an upload from a document's editor names the document, its level and section", () => {
+  const f = new File(['x'], 'a.jpg', { type: 'image/jpeg' });
+  const plain = uploadForm(f, {});
+  assert.deepEqual([...plain.keys()], ['file']);
+  const form = uploadForm(f, { document: { id: 'doc_a', access: 'friends', section: 'club' } });
+  assert.equal(form.get('document'), 'doc_a');
+  assert.equal(form.get('document_access'), 'friends');
+  assert.equal(form.get('document_section'), 'club');
+  const newDoc = uploadForm(f, { document: { id: 'doc_new', access: undefined, section: undefined } });
+  assert.equal(newDoc.get('document'), 'doc_new');
+  assert.equal(newDoc.has('document_access'), false);
+  assert.equal(newDoc.has('document_section'), false);
 });

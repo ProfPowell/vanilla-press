@@ -31,7 +31,8 @@ import {
   getCollectionsConfig, preflightSave, writeMediaJson, syncAll,
 } from '../sync/site-files.js';
 import { writeFileAtomic } from '../sync/atomic-write.js';
-import { readSections } from '../sync/section-access.js';
+import { readSections, documentAccess } from '../sync/section-access.js';
+import { higherAccess } from '../access/levels.js';
 import { isMissing, MEDIA_FIELDS } from '../sync/media-library.js';
 import { inspectFile } from '../media/inspect.js';
 import { mediaFilename, editedFilename, uniqueFilename, slugBase } from '../media/names.js';
@@ -463,6 +464,25 @@ export function mountApi(router, db, options) {
     }
   }
 
+  /**
+   * The level a file added from a document's editor defaults to: the document's
+   * effective level (its own `access` or its section's, whichever is higher),
+   * from the stored document (`document`, its id) and the editor's current,
+   * possibly unsaved, `access` and `section`; the higher of the two. Unknown
+   * levels count as private. Nothing given (the media library itself): public.
+   * @param {{ document?: unknown, access?: unknown, section?: unknown }} from
+   * @returns {'public'|'friends'|'private'}
+   */
+  function editorLevel({ document, access, section }) {
+    const siteDir = ws ? ws.siteDir : null;
+    const stored = typeof document === 'string' && document ? getDocument(db, document) : null;
+    const given = access != null || section != null;
+    return higherAccess(
+      stored ? documentAccess(siteDir, stored.meta) : null,
+      given ? documentAccess(siteDir, { access: access ?? undefined, section: typeof section === 'string' ? section : undefined }) : null,
+    );
+  }
+
   /** Whether a media file name is in use, on disk or in the library. */
   const nameTaken = (name) => existsSync(join(mediaDir, name))
     || Boolean(db.prepare('SELECT 1 FROM media WHERE filename = ?').get(name));
@@ -552,12 +572,17 @@ export function mountApi(router, db, options) {
       }
       credit = storedCredit(given);
     }
-    // access: public (default), friends or private; an edited copy keeps the original's unless the upload gives one.
+    // access: public (default), friends or private. Without one given: an upload from a
+    // document's editor (document, document_access, document_section) takes that document's
+    // level, an edited copy keeps the original's; the higher of the two.
     if (fields.access && !validAccess.includes(fields.access)) {
       sendJson(res, 400, { error: `access must be one of: ${validAccess.join(', ')}` });
       return;
     }
-    const access = fields.access || original?.access || 'public';
+    const access = fields.access || higherAccess(
+      original?.access,
+      editorLevel({ document: fields.document, access: fields.document_access, section: fields.document_section }),
+    );
     let source = null;
     if (fields.source) {
       source = mediaSource(fields.source);
@@ -696,10 +721,10 @@ export function mountApi(router, db, options) {
   // Copy a result the app's web image search cached into the library. Only the
   // source and id come from the client: the URL, bytes and credit are the search's.
   route.add('POST', '/api/media/import', jsonErrors(async (req, res) => {
-    const { source, id, alt } = req.body || {};
+    const { source, id, alt, document, documentAccess: docAccess, documentSection } = req.body || {};
     if (typeof source !== 'string' || !source || typeof id !== 'string' || !id
       || (alt !== undefined && alt !== null && typeof alt !== 'string')) {
-      sendJson(res, 400, { error: 'Expected { source, id, alt? }' });
+      sendJson(res, 400, { error: 'Expected { source, id, alt?, document?, documentAccess?, documentSection? }' });
       return;
     }
     if (!options.webImages) {
@@ -753,6 +778,8 @@ export function mountApi(router, db, options) {
       created: new Date().toISOString(),
       source: mediaSource(source) ?? (credit ? 'manual' : null),
       credit,
+      // Copied from a document's editor: that document's level (else public).
+      access: editorLevel({ document, access: docAccess, section: documentSection }),
     };
     storeMedia(row, data);
     sendJson(res, 201, mediaItem(row, await usageMap()));

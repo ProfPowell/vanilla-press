@@ -239,6 +239,75 @@ describe('API with a site workspace', () => {
   });
 });
 
+describe('uploads from a document\'s editor default to its level (access levels)', () => {
+  let site, ws, db, api, close;
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 20, 0, 10, 1, 1, 0x11, 0]);
+  let n = 0;
+  const upload = async (fields = {}) => {
+    const form = new FormData();
+    form.append('file', new Blob([jpeg], { type: 'image/jpeg' }), `up${++n}.jpg`);
+    for (const [k, v] of Object.entries(fields)) form.append(k, v);
+    const res = await api('/api/media', { method: 'POST', form });
+    assert.equal(res.status, 201, JSON.stringify(res.data));
+    return res.data;
+  };
+
+  before(async () => {
+    site = mkdtempSync(join(tmpdir(), 'vp-upload-level-'));
+    mkdirSync(join(site, 'config'), { recursive: true });
+    writeFileSync(join(site, 'config', 'sections.json'), JSON.stringify([
+      { id: 'club', label: 'Club', access: 'friends' }, { id: 'odd', access: 'family' }, { id: 'news' },
+    ]));
+    ws = resolveWorkspace({ site, repoRoot });
+    db = openWorkspaceDb(ws);
+    ({ api, close } = await startApi(db, { mediaDir: ws.mediaDir, workspace: ws }));
+  });
+  after(async () => {
+    await close();
+    db.close();
+    rmSync(site, { recursive: true, force: true });
+  });
+
+  it('an upload from the media library (no document) stays public', async () => {
+    assert.equal((await upload()).access, 'public');
+  });
+
+  it("the editor's document level and section level: the higher one", async () => {
+    assert.equal((await upload({ document_access: 'friends' })).access, 'friends');
+    assert.equal((await upload({ document_access: 'private' })).access, 'private');
+    assert.equal((await upload({ document_section: 'club' })).access, 'friends');
+    assert.equal((await upload({ document_access: 'private', document_section: 'club' })).access, 'private');
+    assert.equal((await upload({ document_access: 'public', document_section: 'news' })).access, 'public');
+  });
+
+  it('unknown levels fail closed to private', async () => {
+    assert.equal((await upload({ document_section: 'odd' })).access, 'private');
+    assert.equal((await upload({ document_access: 'Friends' })).access, 'private');
+  });
+
+  it('a stored document (by id) gives its own and its section level', async () => {
+    const mk = async (meta, slug) => {
+      const r = await api('/api/documents', { method: 'POST', body: postBody({ slug, status: 'draft', ...meta }) });
+      assert.equal(r.status, 201, JSON.stringify(r.data));
+      return r.data.id;
+    };
+    const friendsDoc = await mk({ access: 'friends' }, 'fr-doc');
+    const clubDoc = await mk({ section: 'club' }, 'club-doc');
+    const publicDoc = await mk({}, 'pub-doc');
+    assert.equal((await upload({ document: friendsDoc })).access, 'friends');
+    assert.equal((await upload({ document: clubDoc })).access, 'friends');
+    assert.equal((await upload({ document: publicDoc })).access, 'public');
+    // The editor's unsaved level counts too: the higher one wins.
+    assert.equal((await upload({ document: friendsDoc, document_access: 'private' })).access, 'private');
+  });
+
+  it('a restricted upload is written to media.json with its level', async () => {
+    const item = await upload({ document_access: 'friends' });
+    const entry = JSON.parse(readFileSync(join(site, 'content', 'media.json'), 'utf8')).find((e) => e.id === item.id);
+    assert.equal(entry.access, 'friends');
+  });
+});
+
 describe('API refuses saves whose sync would be rejected', () => {
   let site, ws, db, api, close, id;
   const at = (rel) => join(site, rel);

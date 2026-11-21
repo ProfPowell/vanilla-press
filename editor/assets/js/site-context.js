@@ -164,6 +164,18 @@ export function actionPendingText(action) {
 }
 
 /**
+ * After Publish or Update of a friends or private post: it is not checked live
+ * (only signed-in readers can see it, so the public URL answers the 404).
+ * @param {'publish'|'update'} action
+ * @param {string} access - the post's level; anything but `friends` reads as private
+ * @returns {string}
+ */
+export function restrictedDoneText(action, access) {
+  const done = action === 'update' ? 'Updated' : 'Published';
+  return `${done} ${access === 'friends' ? 'for friends' : 'as private'} (not checked live)`;
+}
+
+/**
  * Whether the backup poll goes on after this outcome. An error may be stale
  * (from an earlier push), so it keeps polling until a newer push succeeds or
  * the poll's time bound runs out.

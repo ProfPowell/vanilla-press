@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   siteFromSearch, apiBase, displayMediaUrl, storedMediaUrl, backupOutcome, publishFailure,
-  keepPollingBackup, createLiveTracker, saveStateText, primaryAction, moreMenuItems, confirmText, savePill, actionPendingText, afterAction, heldOnLoad,
+  keepPollingBackup, createLiveTracker, saveStateText, primaryAction, moreMenuItems, confirmText, savePill, actionPendingText, afterAction, heldOnLoad, restrictedDoneText,
   saveErrorMessage,
 } from '../../editor/assets/js/site-context.js';
 
@@ -232,5 +232,17 @@ describe('saveErrorMessage', () => {
       'The theme was changed on another computer. Review it and apply again.');
     assert.deepEqual(publishFailure({ status: 422, data: { error: 'Build failed', log: 'boom' } }, 'apply'),
       { message: 'Build failed', log: 'boom', reload: false, poll: false });
+  });
+});
+
+describe('restrictedDoneText', () => {
+  it('names the level and says the page was not checked live', () => {
+    assert.equal(restrictedDoneText('publish', 'friends'), 'Published for friends (not checked live)');
+    assert.equal(restrictedDoneText('update', 'friends'), 'Updated for friends (not checked live)');
+    assert.equal(restrictedDoneText('publish', 'private'), 'Published as private (not checked live)');
+    assert.equal(restrictedDoneText('update', 'private'), 'Updated as private (not checked live)');
+  });
+  it('an unknown level reads as private', () => {
+    assert.equal(restrictedDoneText('publish', 'Friends'), 'Published as private (not checked live)');
   });
 });

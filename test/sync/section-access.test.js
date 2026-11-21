@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sectionAccess, readSections } from '../../src/sync/section-access.js';
+import { sectionAccess, readSections, documentAccess } from '../../src/sync/section-access.js';
 
 let dir;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'vp-sectacc-')); mkdirSync(join(dir, 'config')); });
@@ -35,6 +35,28 @@ describe('sectionAccess', () => {
   it('an unknown level is kept (callers fail closed)', () => {
     write([{ id: 'art', access: 'members' }]);
     assert.equal(sectionAccess(dir, 'art'), 'members');
+  });
+  it('a present level that is empty or not text is private (fail closed); null is none', () => {
+    write([{ id: 'a', access: '' }, { id: 'b', access: 1 }, { id: 'c', access: null }]);
+    assert.equal(sectionAccess(dir, 'a'), 'private');
+    assert.equal(sectionAccess(dir, 'b'), 'private');
+    assert.equal(sectionAccess(dir, 'c'), null);
+  });
+});
+
+describe('documentAccess', () => {
+  it('is the higher of the page level and its section level', () => {
+    write([{ id: 'club', access: 'friends' }, { id: 'vault', access: 'private' }, { id: 'odd', access: 'Friends' }, { id: 'news' }]);
+    assert.equal(documentAccess(dir, {}), 'public');
+    assert.equal(documentAccess(dir, { section: 'news' }), 'public');
+    assert.equal(documentAccess(dir, { section: 'nope' }), 'public');
+    assert.equal(documentAccess(dir, { section: 'club' }), 'friends');
+    assert.equal(documentAccess(dir, { access: 'public', section: 'club' }), 'friends');
+    assert.equal(documentAccess(dir, { access: 'private', section: 'club' }), 'private');
+    assert.equal(documentAccess(dir, { access: 'friends', section: 'vault' }), 'private');
+    assert.equal(documentAccess(dir, { section: 'odd' }), 'private');
+    assert.equal(documentAccess(dir, { access: 'bogus' }), 'private');
+    assert.equal(documentAccess(null, { access: 'friends', section: 'club' }), 'friends');
   });
 });
 

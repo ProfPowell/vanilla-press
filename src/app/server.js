@@ -41,6 +41,7 @@ import {
 import { getDocument } from '../store/content.js';
 import { outputPaths } from '../sync/paths.js';
 import { getCollectionsConfig } from '../sync/site-files.js';
+import { documentAccess } from '../sync/section-access.js';
 import { resolveWorkspace, openWorkspaceDb } from '../workspace/workspace.js';
 import { syncFromSite } from '../sync/from-site.js';
 import { createRouter, sendJson } from '../server/router.js';
@@ -329,6 +330,7 @@ export async function startApp({
         else expected.delete(docId);
         sendJson(res, 200, {
           status: result.status, url: result.url,
+          ...(result.restricted ? { restricted: true, access: result.access } : {}),
           ...(result.themeFromElsewhere ? { theme: 'The theme was changed on another computer: the version on GitHub was kept.' } : {}),
         });
       } catch (err) {
@@ -391,6 +393,9 @@ export async function startApp({
       const snapshot = expected.get(doc.id);
       const collectionsConfig = getCollectionsConfig(db);
       const url = snapshot?.url || publicUrl(await readSiteUrl(ws.siteDir), doc, collectionsConfig);
+      // A friends or private page answers the 404 at its public URL: never poll it.
+      const access = documentAccess(ws.siteDir, doc.meta);
+      if (access !== 'public') return sendJson(res, 200, { live: false, url, restricted: true, access });
       const expectedText = snapshot ? snapshot.text : builtPage(ws.siteDir, doc, collectionsConfig);
       const live = Boolean(url && expectedText !== null) &&
         await checkLive({ url, expectedText, fetch: fetchImpl });

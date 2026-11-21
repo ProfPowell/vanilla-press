@@ -58,4 +58,20 @@ describe('mediaAccessWarnings', () => {
     const d = { ...doc('public', []), regions: { aside: [fig('/media/my%20pic.jpg')] } };
     assert.deepEqual(mediaAccessWarnings(d, items), [{ filename: 'my pic.jpg', access: 'friends' }]);
   });
+
+  it('a page in a friends section using a friends image is not warned', () => {
+    assert.deepEqual(mediaAccessWarnings(doc(undefined, [fig('/media/a.jpg')]), media, { sectionAccess: 'friends' }), []);
+    assert.deepEqual(mediaAccessWarnings(doc('public', [fig('/media/a.jpg')]), media, { sectionAccess: 'friends' }), []);
+  });
+  it('the higher of page and section counts: a private page in a friends section uses a private image freely', () => {
+    assert.deepEqual(mediaAccessWarnings(doc('private', [fig('/media/b.jpg')]), media, { sectionAccess: 'friends' }), []);
+    assert.deepEqual(mediaAccessWarnings(doc(undefined, [fig('/media/b.jpg')]), media, { sectionAccess: 'friends' }), [{ filename: 'b.jpg', access: 'private' }]);
+  });
+  it('a section level that is not recognised counts as private', () => {
+    assert.deepEqual(mediaAccessWarnings(doc(undefined, [fig('/media/b.jpg')]), media, { sectionAccess: 'Friends' }), []);
+    assert.deepEqual(mediaAccessWarnings(doc(undefined, [fig('/media/b.jpg')]), media, { sectionAccess: '' }), []);
+  });
+  it('no section level (null) leaves the page level alone', () => {
+    assert.deepEqual(mediaAccessWarnings(doc(undefined, [fig('/media/a.jpg')]), media, { sectionAccess: null }), [{ filename: 'a.jpg', access: 'friends' }]);
+  });
 });

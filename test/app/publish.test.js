@@ -2,7 +2,7 @@ import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { setPublished, readSiteUrl, checkLive, BuildError, PublishRejectedError, normalizeText } from '../../src/app/publish.js';
+import { setPublished, readSiteUrl, checkLive, BuildError, PublishRejectedError, normalizeText, builtPage } from '../../src/app/publish.js';
 import * as realGit from '../../src/git/git.js';
 import { ensureInstalled, runBuild } from '../../src/app/site-process.js';
 import { startApp } from '../../src/app/server.js';
@@ -57,6 +57,42 @@ function edit(ws, id, text, meta = {}) {
 const headFiles = () => git(fx.site, 'ls-tree', '-r', '--name-only', 'HEAD').split('\n');
 const remoteShow = (path) => git(fx.remote, 'show', `main:${path}`);
 const OTHER = 'doc_other001';
+
+/**
+ * A stand-in levels build (as the site's build-levels does): a page's level is the
+ * higher of its front matter `access` and its section's (config/sections.json);
+ * public pages go to dist/, every page at or below a level to dist/_l/<level>/.
+ */
+const BUILD_LEVELS = `
+import { readdirSync, readFileSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+rmSync('dist', { recursive: true, force: true });
+const L = ['public', 'friends', 'private'];
+const rank = (v) => (v == null ? 0 : L.includes(v) ? L.indexOf(v) : 2);
+const sections = existsSync('config/sections.json') ? JSON.parse(readFileSync('config/sections.json', 'utf8')) : [];
+const field = (fm, k) => { const m = new RegExp('^' + k + ': (.*)$', 'm').exec(fm); return m ? JSON.parse(m[1]) : null; };
+function walk(dir) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) { walk(p); continue; }
+    if (!p.endsWith('.html')) continue;
+    const text = readFileSync(p, 'utf8');
+    const fm = (/^---\\n([\\s\\S]*?)\\n---\\n/.exec(text) || [, ''])[1];
+    const sec = sections.find((s) => s.id === field(fm, 'section'));
+    const level = Math.max(rank(field(fm, 'access')), sec && 'access' in sec ? rank(sec.access) : 0);
+    const body = text.replace(/^---\\n[\\s\\S]*?\\n---\\n/, '');
+    const rel = join(p.slice('src/'.length, -'.html'.length), 'index.html');
+    const trees = [['dist', 0], ['dist/_l/friends', 1], ['dist/_l/private', 2]];
+    for (const [root, at] of trees) {
+      if (level > at) continue;
+      const out = join(root, rel);
+      mkdirSync(join(out, '..'), { recursive: true });
+      writeFileSync(out, (root === 'dist' ? '' : '<b>' + root + '</b>') + body);
+    }
+  }
+}
+walk('src');
+`;
 
 describe('setPublished', () => {
   test('publish writes, builds, commits and pushes', async () => {
@@ -423,6 +459,87 @@ describe('setPublished', () => {
     const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
     assert.equal(res.status, 'saved');
     assert.equal(git(fx.site, 'log', '-1', '--format=%s'), 'Publish: Hello');
+  });
+});
+
+describe('restricted posts (access levels)', () => {
+  /** setup() with the levels build and, optionally, sections.json; returns ws. */
+  function setupLevels(sections) {
+    const ws = setup();
+    write(fx.site, 'build.js', BUILD_LEVELS);
+    if (sections) write(fx.site, 'config/sections.json', JSON.stringify(sections));
+    git(fx.site, 'add', '-A');
+    git(fx.site, 'commit', '-m', 'levels build');
+    git(fx.site, 'push');
+    return ws;
+  }
+  const setMeta = (meta) => { const cur = getDocument(db, ID); saveDocument(db, { ...cur, meta: { ...cur.meta, ...meta } }); };
+
+  test('builtPage reads a friends post from dist/_l/friends/, a section-private one from dist/_l/private/', () => {
+    const ws = setupLevels([{ id: 'vault', access: 'private' }, { id: 'odd', access: 'Friends' }]);
+    write(fx.site, 'dist/posts/hello/index.html', '<p>public tree</p>');
+    write(fx.site, 'dist/_l/friends/posts/hello/index.html', '<p>friends tree</p>');
+    write(fx.site, 'dist/_l/private/posts/hello/index.html', '<p>private tree</p>');
+    const d = (meta) => ({ ...hello(meta), id: ID });
+    assert.equal(builtPage(ws.siteDir, d({}), {}), '<p>public tree</p>');
+    assert.equal(builtPage(ws.siteDir, d({ access: 'friends' }), {}), '<p>friends tree</p>');
+    assert.equal(builtPage(ws.siteDir, d({ section: 'vault' }), {}), '<p>private tree</p>');
+    assert.equal(builtPage(ws.siteDir, d({ access: 'friends', section: 'vault' }), {}), '<p>private tree</p>');
+    assert.equal(builtPage(ws.siteDir, d({ section: 'odd' }), {}), '<p>private tree</p>', 'an unrecognised section level is private');
+    assert.equal(builtPage(ws.siteDir, d({ access: 'bogus' }), {}), '<p>private tree</p>');
+  });
+
+  test('publishing a friends post reads its page from the friends tree and reports it restricted', async () => {
+    const ws = setupLevels();
+    setMeta({ access: 'friends' });
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(res.status, 'pushed');
+    assert.equal(res.restricted, true);
+    assert.equal(res.access, 'friends');
+    assert.match(res.expectedText, /dist\/_l\/friends/);
+    assert.match(res.expectedText, /Hi there\./);
+  });
+
+  test('a public post is not restricted (the result is unchanged)', async () => {
+    const ws = setupLevels();
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.ok(!('restricted' in res));
+    assert.ok(!('access' in res));
+    assert.match(res.expectedText, /Hi there\./);
+  });
+
+  test('a post in a friends section using friends media is not warned; its own level is the section\'s', async () => {
+    const ws = setupLevels([{ id: 'club', access: 'friends' }]);
+    mkdirSync(ws.mediaDir, { recursive: true });
+    writeFileSync(join(ws.mediaDir, 'a.jpg'), 'x');
+    writeFileSync(join(ws.mediaDir, 'b.jpg'), 'x');
+    db.prepare("INSERT INTO media (id, filename, mime_type, size, created, access) VALUES ('m1','a.jpg','image/jpeg',1,'2026-01-01','friends')").run();
+    db.prepare("INSERT INTO media (id, filename, mime_type, size, created, access) VALUES ('m2','b.jpg','image/jpeg',1,'2026-01-01','private')").run();
+    const cur = getDocument(db, ID);
+    saveDocument(db, { ...cur, meta: { ...cur.meta, section: 'club' }, blocks: [...cur.blocks, { type: 'figure', attrs: { src: '/media/a.jpg', alt: 'A' } }] });
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(res.kind, 'publish');
+    assert.equal(res.access, 'friends');
+    // A private file in that friends section is still warned.
+    await setPublished({ site: {}, ws, db, docId: ID, publish: false, deps: deps() });
+    const now = getDocument(db, ID);
+    saveDocument(db, { ...now, blocks: [...now.blocks, { type: 'figure', attrs: { src: '/media/b.jpg', alt: 'B' } }] });
+    await assert.rejects(
+      setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() }),
+      (err) => err.status === 409 && JSON.stringify(err.body.accessWarnings) === JSON.stringify([{ filename: 'b.jpg', access: 'private' }]),
+    );
+  });
+
+  test('a section whose level is not recognised makes the post private: private media is not warned', async () => {
+    const ws = setupLevels([{ id: 'odd', access: 'family' }]);
+    mkdirSync(ws.mediaDir, { recursive: true });
+    writeFileSync(join(ws.mediaDir, 'b.jpg'), 'x');
+    db.prepare("INSERT INTO media (id, filename, mime_type, size, created, access) VALUES ('m2','b.jpg','image/jpeg',1,'2026-01-01','private')").run();
+    const cur = getDocument(db, ID);
+    saveDocument(db, { ...cur, meta: { ...cur.meta, section: 'odd' }, blocks: [...cur.blocks, { type: 'figure', attrs: { src: '/media/b.jpg', alt: 'B' } }] });
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: deps() });
+    assert.equal(res.access, 'private');
+    assert.equal(res.restricted, true);
   });
 });
 
@@ -821,6 +938,23 @@ describe('app routes', () => {
     assert.equal((await api(`/api/sites/${siteId}/documents/${ID}/live`)).data.live, false);
     body = `<html><body>${built}</body></html>`;
     assert.deepEqual((await api(`/api/sites/${siteId}/documents/${ID}/live`)).data, { live: true, url: 'https://example.com/posts/hello/' });
+  });
+
+  test('a restricted post: publish says so, and the live check never polls the public URL', async () => {
+    const seen = [];
+    await open({ fetchImpl: async (url) => { seen.push(url); return new Response('', { status: 404 }); } });
+    write(fx.site, 'build.js', BUILD_LEVELS);
+    git(fx.site, 'add', '-A');
+    git(fx.site, 'commit', '-m', 'levels build');
+    git(fx.site, 'push');
+    const put = await api(`/api/sites/${siteId}/documents/${ID}`, { method: 'PUT', body: { meta: { access: 'friends' } } });
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    const res = await api(`/api/sites/${siteId}/documents/${ID}/publish`, { method: 'POST' });
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.deepEqual(res.data, { status: 'pushed', url: 'https://example.com/posts/hello/', restricted: true, access: 'friends' });
+    const live = await api(`/api/sites/${siteId}/documents/${ID}/live`);
+    assert.deepEqual(live.data, { live: false, url: 'https://example.com/posts/hello/', restricted: true, access: 'friends' });
+    assert.deepEqual(seen, []);
   });
 
   test('build failure is a 422 with the log', async () => {

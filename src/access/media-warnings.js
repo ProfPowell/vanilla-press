@@ -1,15 +1,8 @@
 // Which media a page uses that is more restricted than the page. Pure and browser-safe.
 
-import { validAccess } from '../schema/content-schema.js';
+import { accessRank as rank } from './levels.js';
 import { mediaFileOf } from '../media/usage.js';
 import { allBlockLists } from '../schema/blocks.js';
-
-/** Rank of a level: its index in `validAccess`; absent is public, an unknown level is private (fail closed). */
-const rank = (level) => {
-  if (level == null || level === '') return 0;
-  const i = validAccess.indexOf(level);
-  return i < 0 ? validAccess.length - 1 : i;
-};
 
 /** Every `/media/<file>` found in `text` (decoded file names). */
 function filesIn(text) {
@@ -42,13 +35,16 @@ function usedFiles(doc) {
 }
 
 /**
- * Media used by `doc` whose level is above the document's.
+ * Media used by `doc` whose level is above the document's. The document's level
+ * is the higher of its own `meta.access` and `sectionAccess` (its section's level
+ * from sections.json; null for none, an unrecognised value counts as private).
  * @param {{ meta?: { access?: string, image?: string }, blocks?: Array }} doc
  * @param {Array<{ filename: string, access?: string }>} mediaItems
+ * @param {{ sectionAccess?: string|null }} [opts]
  * @returns {Array<{ filename: string, access: string }>}
  */
-export function mediaAccessWarnings(doc, mediaItems) {
-  const docRank = rank(doc?.meta?.access);
+export function mediaAccessWarnings(doc, mediaItems, { sectionAccess = null } = {}) {
+  const docRank = Math.max(rank(doc?.meta?.access), rank(sectionAccess));
   const used = usedFiles(doc);
   const out = [];
   const seen = new Set();

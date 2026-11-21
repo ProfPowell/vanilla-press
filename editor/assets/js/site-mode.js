@@ -31,7 +31,7 @@
 
 import {
   SITE, backupOutcome, publishFailure, keepPollingBackup, createLiveTracker,
-  savePill, primaryAction, moreMenuItems, confirmText, actionPendingText, afterAction, heldOnLoad,
+  savePill, primaryAction, moreMenuItems, confirmText, actionPendingText, afterAction, heldOnLoad, restrictedDoneText,
 } from './site-context.js';
 import { api } from './api-client.js';
 import { postUrlPath } from '../../../src/sync/paths.js';
@@ -456,6 +456,8 @@ async function runAction(action) {
 
     if (result.status === 'saved') return show(els.actionState, 'Saved (not connected to GitHub)');
     if (action === 'unpublish') return show(els.actionState, 'Unpublished', 'done');
+    // A friends or private post is not on the public URL: there is nothing to poll.
+    if (result.restricted) return show(els.actionState, restrictedDoneText(action, result.access), 'done');
     if (!result.url) {
       const done = action === 'update' ? 'Updated' : 'Published';
       return show(els.actionState, `${done} and pushed (set siteUrl to check when it is live)`, 'done');
@@ -464,7 +466,7 @@ async function runAction(action) {
       // An edit saved while this ran is not in it: Live would be wrong for what you see.
       return show(els.actionState, `${action === 'update' ? 'Updated' : 'Published'}; your newest edits are not live yet: click Update`);
     }
-    watchLive(docId, result.url, actionPendingText(action));
+    watchLive(docId, result.url, action);
   } finally {
     busy = false;
     els.primary.disabled = false;
@@ -499,10 +501,12 @@ async function showPublishError(err, action, docId, savesAtAction) {
 
 /**
  * Poll the live check every 10 s for up to 300 s, showing the result in the
- * action slot (`pendingText` until then). Opening another post, or saving an
- * edit to this one, cancels it.
+ * action slot (the action's pending text until then; a friends or private post
+ * ends at once, not checked live). Opening another post, or saving an edit to
+ * this one, cancels it.
  */
-function watchLive(docId, url, pendingText) {
+function watchLive(docId, url, action) {
+  const pendingText = actionPendingText(action);
   const token = live.start(docId);
   const el = els.actionState;
   const started = Date.now();
@@ -514,6 +518,10 @@ function watchLive(docId, url, pendingText) {
     try {
       const res = await api.getLive(docId);
       if (!live.current(token)) return;
+      if (res.restricted) {
+        el.title = '';
+        return show(el, restrictedDoneText(action, res.access));
+      }
       if (res.live) {
         el.title = '';
         return showLink(el, 'Live', res.url || url);

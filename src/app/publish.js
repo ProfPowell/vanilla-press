@@ -24,6 +24,7 @@ import { componentTags } from './components.js';
 import { mediaRefs } from '../media/usage.js';
 import { mediaAccessWarnings } from '../access/media-warnings.js';
 import { isMissing } from '../sync/media-library.js';
+import { sectionAccess, documentAccess } from '../sync/section-access.js';
 
 /** The site's build failed; `log` is the tail of its output. */
 export class BuildError extends Error {
@@ -101,14 +102,18 @@ export function publicUrl(siteUrl, doc, collectionsConfig) {
 }
 
 /**
- * The text of the locally built page for a document (`dist<postUrlPath>index.html`), or null.
+ * The text of the locally built page for a document, or null: `dist<postUrlPath>index.html`
+ * for a public post; a friends or private post (its own level or its section's,
+ * documentAccess) exists only in that level's tree, `dist/_l/<level><postUrlPath>index.html`.
  * @param {string} siteDir
  * @param {Object} doc
  * @param {Object} collectionsConfig
  * @returns {string|null}
  */
 export function builtPage(siteDir, doc, collectionsConfig) {
-  const file = join(siteDir, 'dist', ...postUrlPath(doc, collectionsConfig).split('/').filter(Boolean), 'index.html');
+  const access = documentAccess(siteDir, doc?.meta);
+  const tree = access === 'public' ? ['dist'] : ['dist', '_l', access];
+  const file = join(siteDir, ...tree, ...postUrlPath(doc, collectionsConfig).split('/').filter(Boolean), 'index.html');
   try {
     return readFileSync(file, 'utf8');
   } catch {
@@ -148,7 +153,10 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  *   has `loadsOnLiveSite: false` (R14); publish/update also refuse (422), before building,
  *   a post that refers to a `/media/` file missing from `ws.mediaDir` (M13)
  * @returns {Promise<{ status: 'pushed'|'saved', url: string|null, sha: string|null, rebased: boolean,
- *   kind: 'publish'|'update'|'unpublish', expectedText: string|null }>}
+ *   kind: 'publish'|'update'|'unpublish', expectedText: string|null,
+ *   restricted?: true, access?: 'friends'|'private' }>}
+ *   restricted, access (publish/update of a friends or private post only; its own level or its
+ *   section's): the page is not on the public URL, so there is no live check;
  *   rebased: the push rebased onto commits from elsewhere (the caller re-syncs the store);
  *   themeFromElsewhere (only when true): another computer changed the theme files, GitHub's were kept;
  *   expectedText: the page this build made (publish/update), for the live check
@@ -193,7 +201,9 @@ export async function setPublished({ ws, db, docId, publish, update = false, con
 
   // Media more restricted than the page would be left out of the public build: ask first.
   if (publish && !confirmAccessWarnings) {
-    const accessWarnings = mediaAccessWarnings(previous, db.prepare('SELECT filename, access FROM media').all());
+    const accessWarnings = mediaAccessWarnings(previous, db.prepare('SELECT filename, access FROM media').all(), {
+      sectionAccess: sectionAccess(ws.siteDir, previous.meta.section),
+    });
     if (accessWarnings.length) {
       throw new PublishRejectedError(409, {
         error: `This post uses media that is more restricted than the post: ${accessWarnings.map((w) => `${w.filename} (${w.access})`).join(', ')}. Confirm to publish anyway.`,
@@ -297,7 +307,10 @@ export async function setPublished({ ws, db, docId, publish, update = false, con
 
   const siteUrl = publish ? await (deps.readSiteUrl || readSiteUrl)(ws.siteDir) : null;
   const url = publish ? publicUrl(siteUrl, saved, collectionsConfig) : null;
-  const done = (pushStatus, rebased = false) => ({ status: pushStatus, url, sha, rebased, kind, expectedText });
+  // A friends or private page is not on the public URL: the live check cannot see it.
+  const access = publish ? documentAccess(ws.siteDir, saved.meta) : 'public';
+  const restricted = access !== 'public' ? { restricted: true, access } : {};
+  const done = (pushStatus, rebased = false) => ({ status: pushStatus, url, sha, rebased, kind, expectedText, ...restricted });
 
   // 4. Push (pushes every local commit, including earlier unpushed ones).
   if (!status.isRepo || !status.hasRemote || !status.hasUpstream) return done('saved');

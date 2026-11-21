@@ -7,6 +7,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { higherAccess } from '../access/levels.js';
 
 /**
  * The sections a site defines.
@@ -25,13 +26,15 @@ export function readSections(siteDir) {
     .map((s) => ({
       id: s.id,
       label: typeof s.label === 'string' && s.label ? s.label : s.id,
-      access: typeof s.access === 'string' && s.access ? s.access : null,
+      // Absent or null: no level. Present but empty or not text: private (fail closed).
+      access: s.access == null ? null : typeof s.access === 'string' && s.access ? s.access : 'private',
     }));
 }
 
 /**
  * The access level a section sets, or null (no file, unknown section, or no level).
- * An unrecognised level is returned as written: callers treat it as private.
+ * An unrecognised level is returned as written: callers treat it as private; an
+ * empty or non-text one is returned as `private`.
  * @param {string|null} siteDir
  * @param {string|null|undefined} sectionId
  * @returns {string|null}
@@ -39,4 +42,15 @@ export function readSections(siteDir) {
 export function sectionAccess(siteDir, sectionId) {
   if (!sectionId) return null;
   return readSections(siteDir).find((s) => s.id === sectionId)?.access ?? null;
+}
+
+/**
+ * A document's effective level: the higher of its own `access` and its
+ * section's (an unrecognised level of either counts as private).
+ * @param {string|null} siteDir
+ * @param {{ access?: string, section?: string }|null|undefined} meta
+ * @returns {'public'|'friends'|'private'}
+ */
+export function documentAccess(siteDir, meta) {
+  return higherAccess(meta?.access, sectionAccess(siteDir, meta?.section));
 }

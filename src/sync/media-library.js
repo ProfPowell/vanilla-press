@@ -12,6 +12,7 @@ import { inspectFile } from '../media/inspect.js';
 import { writeMediaJson, MEDIA_FIELDS } from './site-files.js';
 import { storedCredit, mediaSource } from '../media/credit.js';
 import { linkedUrl } from '../media/usage.js';
+import { validAccess } from '../schema/content-schema.js';
 
 export { MEDIA_FIELDS };
 
@@ -70,6 +71,7 @@ export function normalizeEntry(entry) {
     source: mediaSource(entry.source),
     credit: storedCredit(entry.credit),
     url: remote ? remote.href : null,
+    access: validAccess.includes(entry.access) ? entry.access : 'public',
   };
 }
 
@@ -170,6 +172,7 @@ export function adoptStrayFiles(db, mediaDir) {
       source: null,
       credit: null,
       url: null,
+      access: 'public',
     });
     adopted.push(name);
   }

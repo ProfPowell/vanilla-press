@@ -446,6 +446,21 @@ describe('API', () => {
       assert.ok(existsSync(join(MEDIA_DIR, a.data.filename)) && existsSync(join(MEDIA_DIR, b.data.filename)));
     });
 
+    it('media access: public by default, set on upload and by PUT, validated', async () => {
+      const { data: item } = await upload(jpeg(1, 1), 'acc.jpg');
+      assert.equal(item.access, 'public');
+      const put = (body) => api(`/api/media/${item.id}`, { method: 'PUT', body });
+      const set = await put({ access: 'friends' });
+      assert.equal(set.status, 200);
+      assert.equal(set.data.access, 'friends');
+      assert.equal((await api('/api/media')).data.find((m) => m.id === item.id).access, 'friends');
+      assert.equal((await put({ access: 'secret' })).status, 400);
+      assert.equal((await put({ access: 'private', alt: 'x' })).data.alt, 'x');
+      const up = await upload(jpeg(2, 2), 'acc2.jpg', { access: 'private' });
+      assert.equal(up.data.access, 'private');
+      assert.equal((await upload(jpeg(3, 3), 'acc3.jpg', { access: 'nope' })).status, 400);
+    });
+
     it('alt edit keeps three states', async () => {
       const { data: item } = await upload(jpeg(1, 1), 'alt.jpg');
       const put = (alt) => api(`/api/media/${item.id}`, { method: 'PUT', body: { alt } });

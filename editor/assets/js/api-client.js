@@ -240,13 +240,13 @@ export const api = {
   },
 
   /** Publish: build, commit and push. { status: 'pushed'|'saved', url }; errors carry `data` (log, files). */
-  publishDocument(id) {
-    return request(`/documents/${encodeURIComponent(id)}/publish`, { method: 'POST' });
+  publishDocument(id, options = {}) {
+    return request(`/documents/${encodeURIComponent(id)}/publish`, { method: 'POST', ...(options.confirmAccessWarnings ? { body: { confirmAccessWarnings: true } } : {}) });
   },
 
   /** Update a published post: its saved edits go live. Same shape as publishDocument. (Not updateDocument: that is the save.) */
-  updatePost(id) {
-    return request(`/documents/${encodeURIComponent(id)}/update`, { method: 'POST' });
+  updatePost(id, options = {}) {
+    return request(`/documents/${encodeURIComponent(id)}/update`, { method: 'POST', ...(options.confirmAccessWarnings ? { body: { confirmAccessWarnings: true } } : {}) });
   },
 
   /** Unpublish: same shape as publishDocument. */

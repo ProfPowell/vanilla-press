@@ -38,7 +38,7 @@ import { postUrlPath } from '../../../src/sync/paths.js';
 import { getCurrentMeta, getCurrentDocId } from './meta-state.js';
 import { saveDocument, loadDocument, deleteDoc, exportDocument, getEditorDoc } from './editor.js';
 import { toBlockAst, toRegionsAst } from './ast.js';
-import { altWarnings, altWarningText } from './alt-check.js';
+import { altWarnings, altWarningText, accessWarningText } from './alt-check.js';
 import { paneTheme, applyPaneTheme, siteThemes } from './pane-theme.js';
 
 const SETTINGS_KEY = 'vp.settingsHidden';
@@ -434,7 +434,17 @@ async function runAction(action) {
     let result;
     try {
       const call = { publish: api.publishDocument, update: api.updatePost, unpublish: api.unpublishDocument }[action];
-      result = await call.call(api, docId);
+      try {
+        result = await call.call(api, docId);
+      } catch (err) {
+        // Media more restricted than the post: nothing was done; go on only if the owner confirms.
+        const warnings = err?.status === 409 ? err.data?.accessWarnings : null;
+        if (!Array.isArray(warnings) || !warnings.length) throw err;
+        if (!(await els.confirm.ask(accessWarningText(warnings, action)))) {
+          return show(els.actionState, `Not ${action === 'update' ? 'updated' : 'published'}`);
+        }
+        result = await call.call(api, docId, { confirmAccessWarnings: true });
+      }
     } catch (err) {
       return await showPublishError(err, action, docId, savesAtAction);
     }

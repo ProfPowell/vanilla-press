@@ -63,4 +63,13 @@ describe('migrate documents', () => {
     assert.equal(db.prepare("SELECT access FROM documents WHERE id = 'a'").get().access, 'public');
     db.close();
   });
+  it('an old media table gains access, public for every existing item', () => {
+    const db = new Database(':memory:');
+    db.exec(`CREATE TABLE media (id TEXT PRIMARY KEY, filename TEXT NOT NULL, mime_type TEXT NOT NULL, size INTEGER NOT NULL, alt TEXT, created TEXT NOT NULL)`);
+    db.exec(`INSERT INTO media (id, filename, mime_type, size, created) VALUES ('m','a.png','image/png',1,'x')`);
+    migrate(db);
+    migrate(db);
+    assert.equal(db.prepare("SELECT access FROM media WHERE id = 'm'").get().access, 'public');
+    db.close();
+  });
 });

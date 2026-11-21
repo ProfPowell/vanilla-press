@@ -23,6 +23,7 @@ import {
   getAllDocuments,
 } from '../store/content.js';
 import { validate } from '../schema/validate.js';
+import { validAccess } from '../schema/content-schema.js';
 import { normalizeComponents } from '../components/normalize.js';
 import { syncDocument, unsyncDocument, SyncConflictError } from '../sync/to-site.js';
 import { reloadFromSite } from '../sync/from-site.js';
@@ -70,7 +71,7 @@ function generateId() {
  * @param {(e: { docId: string|null, title: string, status: string }) => void} [options.onSynced] - Called after
  *   every successful sync (create, update, delete, reload), and once for POST /api/sync with
  *   `{ docId: null, title: 'all posts' }`. Never called in fixture mode.
- * @param {(e: { filename: string, action: 'upload'|'alt'|'credit'|'delete' }) => void} [options.onMediaChanged] - Called after
+ * @param {(e: { filename: string, action: 'upload'|'alt'|'credit'|'access'|'delete' }) => void} [options.onMediaChanged] - Called after
  *   every media write (upload or import, alt or credit edit, delete); a throwing listener never breaks the response.
  * @param {{ get: (source: string, id: string) => Object|null,
  *   image: (source: string, id: string) => Promise<{ data: Buffer, contentType: string }>,
@@ -433,6 +434,7 @@ export function mountApi(router, db, options) {
       src: row.url || mediaSrc(row.filename),
       missing: isMissing(mediaDir, row.filename, row.url),
       linked: Boolean(row.url),
+      access: row.access || 'public',
       usedIn: usage.get(row.filename) || [],
     };
   }
@@ -463,9 +465,9 @@ export function mountApi(router, db, options) {
     writeFileAtomic(join(mediaDir, row.filename), data);
     try {
       db.prepare(`
-        INSERT INTO media (id, filename, original_name, mime_type, size, width, height, alt, edited_from, created, source, credit)
-        VALUES (@id, @filename, @original_name, @mime_type, @size, @width, @height, @alt, @edited_from, @created, @source, @credit)
-      `).run(row);
+        INSERT INTO media (id, filename, original_name, mime_type, size, width, height, alt, edited_from, created, source, credit, access)
+        VALUES (@id, @filename, @original_name, @mime_type, @size, @width, @height, @alt, @edited_from, @created, @source, @credit, @access)
+      `).run({ ...row, access: row.access || 'public' });
     } catch (err) {
       rmSync(join(mediaDir, row.filename), { force: true });
       throw err;
@@ -543,6 +545,12 @@ export function mountApi(router, db, options) {
       }
       credit = storedCredit(given);
     }
+    // access: public (default), friends or private; an edited copy keeps the original's unless the upload gives one.
+    if (fields.access && !validAccess.includes(fields.access)) {
+      sendJson(res, 400, { error: `access must be one of: ${validAccess.join(', ')}` });
+      return;
+    }
+    const access = fields.access || original?.access || 'public';
     let source = null;
     if (fields.source) {
       source = mediaSource(fields.source);
@@ -576,6 +584,7 @@ export function mountApi(router, db, options) {
       created: new Date().toISOString(),
       source,
       credit,
+      access,
     };
     storeMedia(row, file.data);
 
@@ -591,8 +600,9 @@ export function mountApi(router, db, options) {
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     const hasAlt = 'alt' in body;
     const hasCredit = 'credit' in body;
-    if (!hasAlt && !hasCredit) {
-      sendJson(res, 400, { error: 'Expected { alt?, credit? } with at least one of them' });
+    const hasAccess = 'access' in body;
+    if (!hasAlt && !hasCredit && !hasAccess) {
+      sendJson(res, 400, { error: 'Expected { alt?, credit?, access? } with at least one of them' });
       return;
     }
     const changed = { ...row };
@@ -612,8 +622,15 @@ export function mountApi(router, db, options) {
       // A credit written or cleared by hand is manual; an image from a web service keeps its source.
       if (!isWebSource(row.source)) changed.source = 'manual';
     }
-    db.prepare('UPDATE media SET alt = @alt, credit = @credit, source = @source WHERE id = @id').run(changed);
-    mediaChanged(row.filename, hasCredit ? 'credit' : 'alt');
+    if (hasAccess) {
+      if (!validAccess.includes(body.access)) {
+        sendJson(res, 400, { error: `access must be one of: ${validAccess.join(', ')}` });
+        return;
+      }
+      changed.access = body.access;
+    }
+    db.prepare('UPDATE media SET alt = @alt, credit = @credit, source = @source, access = @access WHERE id = @id').run(changed);
+    mediaChanged(row.filename, hasCredit ? 'credit' : hasAccess && !hasAlt ? 'access' : 'alt');
     sendJson(res, 200, mediaItem(changed, await usageMap()));
   }));
 
@@ -662,6 +679,7 @@ export function mountApi(router, db, options) {
       source: 'unsplash',
       credit: storedCredit(item.credit),
       url: remote.href,
+      access: 'public',
     };
     db.prepare(`INSERT INTO media (${MEDIA_FIELDS.join(', ')}) VALUES (${MEDIA_FIELDS.map((f) => `@${f}`).join(', ')})`).run(row);
     mediaChanged(row.filename, 'upload');

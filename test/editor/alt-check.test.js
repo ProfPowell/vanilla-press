@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { altWarnings, altWarningText } from '../../editor/assets/js/alt-check.js';
+import { altWarnings, altWarningText, accessWarningText } from '../../editor/assets/js/alt-check.js';
 
 const fig = (src, alt) => ({ type: 'figure', attrs: alt === undefined ? { src } : { src, alt } });
 const lib = (filename, alt) => ({ id: `m-${filename}`, filename, src: `/media/${filename}`, kind: 'image', alt });
@@ -82,5 +82,21 @@ describe('altWarningText', () => {
     assert.deepEqual(altWarningText(w, 'update'), {
       heading: '2 images have no alt text', body: BODY, items: ['a.jpg', 'https://x.test/b.png'], confirm: 'Update anyway', tone: 'primary',
     });
+  });
+});
+
+describe('accessWarningText', () => {
+  const w = [{ filename: 'a.jpg', access: 'friends' }, { filename: 'b.jpg', access: 'private' }];
+  it('lists each file with its level and asks to go on', () => {
+    const t = accessWarningText(w, 'publish');
+    assert.deepEqual(t.items, ['a.jpg (friends)', 'b.jpg (private)']);
+    assert.equal(t.heading, '2 files are more restricted than this post');
+    assert.equal(t.confirm, 'Publish anyway');
+    assert.equal(t.tone, 'primary');
+  });
+  it('singular heading and Update wording', () => {
+    const t = accessWarningText(w.slice(0, 1), 'update');
+    assert.equal(t.heading, 'A file is more restricted than this post');
+    assert.equal(t.confirm, 'Update anyway');
   });
 });

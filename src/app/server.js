@@ -315,6 +315,7 @@ export async function startApp({
         // Document writes wait (Ruling O): nothing changes between the build check and the commit.
         const result = await backup.exclusive(() => writes(() => setPublished({
           site, ws, db, docId, publish: action !== 'unpublish', update: action === 'update',
+          confirmAccessWarnings: req.body?.confirmAccessWarnings === true,
           deps: {
             ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
             commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,

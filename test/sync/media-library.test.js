@@ -31,7 +31,7 @@ afterEach(() => {
 
 const entry = (o = {}) => ({
   id: 'aaaa1111', filename: 'a-aaaa11.png', original_name: 'a.png', mime_type: 'image/png',
-  size: 10, width: 3, height: 2, alt: 'An a', edited_from: null, created: '2026-01-01T00:00:00.000Z', source: null, credit: null, url: null, ...o,
+  size: 10, width: 3, height: 2, alt: 'An a', edited_from: null, created: '2026-01-01T00:00:00.000Z', source: null, credit: null, url: null, access: 'public', ...o,
 });
 const writeJson = (entries) => {
   mkdirSync(ws.contentDir, { recursive: true });
@@ -176,7 +176,7 @@ describe('linked (Unsplash) entries', () => {
     writeMediaJson(ws, db);
     const [written] = JSON.parse(readFileSync(join(ws.contentDir, 'media.json'), 'utf8'));
     assert.equal(written.url, URL_U);
-    assert.deepEqual(Object.keys(written), MEDIA_FIELDS);
+    assert.deepEqual(Object.keys(written), MEDIA_FIELDS.filter((f) => f !== 'access'));
   });
 
   it('a url that is not https on images.unsplash.com drops the entry with a warning', () => {
@@ -236,7 +236,7 @@ describe('stray files', () => {
     assert.equal(r.size, PNG_3X2.length);
     const json = JSON.parse(readFileSync(join(ws.contentDir, 'media.json'), 'utf8'));
     assert.equal(json[0].filename, 'stray.png');
-    assert.deepEqual(Object.keys(json[0]), MEDIA_FIELDS);
+    assert.deepEqual(Object.keys(json[0]), MEDIA_FIELDS.filter((f) => f !== 'access'));
   });
 
   it('adopts a large file from its header, and still finds dimensions that sit past 64 KB', () => {
@@ -286,5 +286,38 @@ describe('stray files', () => {
     writeFileSync(join(ws.mediaDir, 'stray.png'), PNG_3X2);
     assert.deepEqual(syncFromSite(ws, db).adopted, ['stray.png']);
     assert.deepEqual(syncFromSite(ws, db).adopted, []);
+  });
+});
+
+describe('media access', () => {
+  const jsonText = () => readFileSync(join(ws.contentDir, 'media.json'), 'utf8');
+
+  it('media.json is byte-identical to before when every item is public', () => {
+    writeJson([entry(), entry({ id: 'bbbb2222', filename: 'b.png', created: '2026-01-02T00:00:00.000Z' })]);
+    loadMediaJson(ws, db);
+    writeMediaJson(ws, db);
+    const plain = jsonText();
+    assert.ok(!plain.includes('"access"'));
+    assert.deepEqual(Object.keys(JSON.parse(plain)[0]), MEDIA_FIELDS.filter((f) => f !== 'access'));
+    assert.equal(rows()[0].access, 'public');
+  });
+
+  it('a non-public level is written, round-trips, and only that item carries it', () => {
+    writeJson([entry({ access: 'friends' }), entry({ id: 'bbbb2222', filename: 'b.png', created: '2026-01-02T00:00:00.000Z' })]);
+    loadMediaJson(ws, db);
+    assert.deepEqual(rows().map((r) => r.access), ['friends', 'public']);
+    writeMediaJson(ws, db);
+    const [a, b] = JSON.parse(jsonText());
+    assert.equal(a.access, 'friends');
+    assert.ok(!('access' in b));
+    db.prepare('DELETE FROM media').run();
+    loadMediaJson(ws, db);
+    assert.deepEqual(rows().map((r) => r.access), ['friends', 'public']);
+  });
+
+  it('an unknown level in media.json is read as public', () => {
+    writeJson([entry({ access: 'secret' })]);
+    loadMediaJson(ws, db);
+    assert.equal(rows()[0].access, 'public');
   });
 });

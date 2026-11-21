@@ -58,3 +58,21 @@ export function altWarningText(warnings, action) {
     tone: 'primary',
   };
 }
+
+/**
+ * The confirmation for the publish warnings about media more restricted than
+ * the post (the server's `accessWarnings`): those files are left out of the public site.
+ * @param {Array<{ filename: string, access: string }>} warnings
+ * @param {'publish'|'update'} action
+ * @returns {{ heading: string, body: string, items: string[], confirm: string, tone: 'primary' }}
+ */
+export function accessWarningText(warnings, action) {
+  const n = warnings.length;
+  return {
+    heading: n === 1 ? 'A file is more restricted than this post' : `${n} files are more restricted than this post`,
+    body: 'The public site will leave these files out, so the post will show them broken. Raise the post\'s level, or lower the files\' in Media.',
+    items: warnings.map((w) => `${w.filename} (${w.access})`),
+    confirm: action === 'update' ? 'Update anyway' : 'Publish anyway',
+    tone: 'primary',
+  };
+}

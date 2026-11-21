@@ -22,6 +22,7 @@ import {
 } from './site-theme.js';
 import { componentTags } from './components.js';
 import { mediaRefs } from '../media/usage.js';
+import { mediaAccessWarnings } from '../access/media-warnings.js';
 import { isMissing } from '../sync/media-library.js';
 
 /** The site's build failed; `log` is the tail of its output. */
@@ -140,6 +141,8 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  *   },
  * }} options - publish/update refuse (422) a post with no title;
  *   update: refuse (422) unless the post is already published;
+ *   confirmAccessWarnings: publish/update of a post that uses media more restricted than the post
+ *   refuse (409, body `accessWarnings`: [{ filename, access }]), before saving or building, until true;
  *   deps.components: the components on for the site; publish/update refuse (422), before
  *   saving or building, a post that uses a component not in it, or one whose descriptor
  *   has `loadsOnLiveSite: false` (R14); publish/update also refuse (422), before building,
@@ -151,7 +154,7 @@ export function builtPage(siteDir, doc, collectionsConfig) {
  *   expectedText: the page this build made (publish/update), for the live check
  * @throws {BuildError|PublishRejectedError|Error} git errors propagate (GitConflictError, ...)
  */
-export async function setPublished({ ws, db, docId, publish, update = false, deps }) {
+export async function setPublished({ ws, db, docId, publish, update = false, confirmAccessWarnings = false, deps }) {
   const collectionsConfig = deps.collectionsConfig || {};
   const previous = getDocument(db, docId);
   if (!previous) throw new PublishRejectedError(404, { error: 'Document not found' });
@@ -184,6 +187,17 @@ export async function setPublished({ ws, db, docId, publish, update = false, dep
     if (missing.length) {
       throw new PublishRejectedError(422, {
         error: `This post uses files missing from src/media: ${missing.join(', ')}. Remove them or add the files, then publish.`,
+      });
+    }
+  }
+
+  // Media more restricted than the page would be left out of the public build: ask first.
+  if (publish && !confirmAccessWarnings) {
+    const accessWarnings = mediaAccessWarnings(previous, db.prepare('SELECT filename, access FROM media').all());
+    if (accessWarnings.length) {
+      throw new PublishRejectedError(409, {
+        error: `This post uses media that is more restricted than the post: ${accessWarnings.map((w) => `${w.filename} (${w.access})`).join(', ')}. Confirm to publish anyway.`,
+        accessWarnings,
       });
     }
   }

@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS media (
   created     TEXT NOT NULL,
   source      TEXT, -- 'openverse' | 'pexels' | 'pixabay' | 'unsplash' | 'manual' | NULL
   credit      TEXT, -- JSON Credit (media/credit.js), or NULL
-  url         TEXT  -- a linked item's remote image (https://images.unsplash.com/...): no file; NULL for a file
+  url         TEXT, -- a linked item's remote image (https://images.unsplash.com/...): no file; NULL for a file
+  access      TEXT NOT NULL DEFAULT 'public' -- 'public' | 'friends' | 'private' (schema/content-schema.js validAccess)
 );
 
 -- Authors table

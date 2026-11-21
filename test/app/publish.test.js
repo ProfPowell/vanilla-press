@@ -208,6 +208,36 @@ describe('setPublished', () => {
     assert.equal(off.kind, 'unpublish');
   });
 
+  test('publish warns, and does nothing, for media more restricted than the page until confirmed', async () => {
+    const ws = setup();
+    mkdirSync(ws.mediaDir, { recursive: true });
+    writeFileSync(join(ws.mediaDir, 'a.jpg'), 'x');
+    db.prepare("INSERT INTO media (id, filename, mime_type, size, created, access) VALUES ('m1','a.jpg','image/jpeg',1,'2026-01-01','friends')").run();
+    const cur = getDocument(db, ID);
+    saveDocument(db, { ...cur, blocks: [...cur.blocks, { type: 'figure', attrs: { src: '/media/a.jpg', alt: 'A' } }] });
+    const localBefore = git(fx.site, 'rev-parse', 'HEAD');
+    let built = 0;
+    const d = { ...deps(), runBuild: async (dir) => { built++; return runBuild(dir); } };
+    await assert.rejects(
+      setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d }),
+      (err) => err instanceof PublishRejectedError && err.status === 409
+        && JSON.stringify(err.body.accessWarnings) === JSON.stringify([{ filename: 'a.jpg', access: 'friends' }]),
+    );
+    assert.equal(built, 0);
+    assert.equal(getDocument(db, ID).meta.status, 'draft');
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), localBefore);
+    // Confirmed: it publishes.
+    const res = await setPublished({ site: {}, ws, db, docId: ID, publish: true, confirmAccessWarnings: true, deps: d });
+    assert.equal(res.kind, 'publish');
+    assert.equal(built, 1);
+    // A page at the media's own level is not warned.
+    await setPublished({ site: {}, ws, db, docId: ID, publish: false, deps: d });
+    const stored = getDocument(db, ID);
+    saveDocument(db, { ...stored, meta: { ...stored.meta, access: 'friends' } });
+    const again = await setPublished({ site: {}, ws, db, docId: ID, publish: true, deps: d });
+    assert.equal(again.kind, 'publish');
+  });
+
   test('a linked (Unsplash) featured image and figure publish as-is: no file is looked for', async () => {
     const ws = setup();
     const U = 'https://images.unsplash.com/photo-1?w=2400&fit=max&q=80&auto=format';

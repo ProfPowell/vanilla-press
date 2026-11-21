@@ -210,6 +210,26 @@ describe('API', () => {
     });
   });
 
+  describe('access', () => {
+    const blocks = [{ type: 'paragraph', children: [{ type: 'text', value: 'x' }] }];
+    it('round-trips, survives saves that omit it, and rejects unknown levels', async () => {
+      const meta = { title: 'Acc', slug: 'acc-doc', collection: 'posts', status: 'draft' };
+      const created = await api('/api/documents', { method: 'POST', body: { meta: { ...meta, access: 'friends' }, blocks } });
+      assert.equal(created.status, 201);
+      assert.equal(created.data.meta.access, 'friends');
+      const id = created.data.id;
+      const put = await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { title: 'Acc 2' } } });
+      assert.equal(put.data.meta.access, 'friends');
+      const again = await api('/api/documents', { method: 'POST', body: { id, meta, blocks } });
+      assert.equal(again.data.meta.access, 'friends');
+      assert.equal((await api(`/api/documents/${id}`)).data.meta.access, 'friends');
+      const bad = await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { access: 'family' } } });
+      assert.equal(bad.status, 400);
+      const pub = await api(`/api/documents/${id}`, { method: 'PUT', body: { meta: { access: 'public' } } });
+      assert.equal(pub.data.meta.access, undefined);
+    });
+  });
+
   describe('collections', () => {
     before(async () => {
       // Seed some documents in different collections

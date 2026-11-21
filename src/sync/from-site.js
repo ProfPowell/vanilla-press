@@ -14,6 +14,11 @@ import { changedOnDisk, recordSynced, readManifest, writeManifest } from './to-s
 import { getCollectionsConfig } from './site-files.js';
 import { syncMediaFromSite } from './media-library.js';
 
+/** A content file that omits `access` is public: it must reset a stored restricted level. */
+function withAccess(doc) {
+  return doc.meta.access ? doc : { ...doc, meta: { ...doc.meta, access: 'public' } };
+}
+
 /** Content files that are not documents (`.vp-manifest.json`: obsolete, ignored). */
 const NON_DOCUMENTS = new Set(['media.json', '.vp-manifest.json']);
 
@@ -92,7 +97,7 @@ export function syncFromSite(ws, db, { replace = false } = {}) {
         skipped.push(id);
         continue;
       }
-      saveDocument(db, doc);
+      saveDocument(db, withAccess(doc));
       recordSynced(ws, id, rel, { collectionsConfig });
       imported.push(id);
     } catch (err) {
@@ -150,7 +155,7 @@ export function reloadFromSite(ws, db, docId) {
     throw new Error(`No content file for document ${docId}`);
   }
   if (found.error) throw new Error(`Invalid content file ${rel}: ${found.error}`);
-  const saved = saveDocument(db, found.doc);
+  const saved = saveDocument(db, withAccess(found.doc));
   recordSynced(ws, docId, rel, { collectionsConfig: getCollectionsConfig(db) });
   return saved;
 }

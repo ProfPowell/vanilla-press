@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { validAccess } from '../../src/schema/content-schema.js';
 import { validate, LAYOUT_NAME, REGION_NAME } from '../../src/schema/validate.js';
 
 const fixture = (name) => JSON.parse(readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8'));
@@ -423,5 +424,23 @@ describe('validate section', () => {
   });
   it('rejects a non slug-like or non-string section', () => {
     for (const s of ['Bad', 'a b', '-x', 'x_y', 5]) assert.equal(validate(doc(s)).valid, false, String(s));
+  });
+});
+
+describe('meta.access', () => {
+  const meta = { title: 't', slug: 's', collection: 'c', status: 'draft' };
+  it('lists the levels in order', () => {
+    assert.deepEqual(validAccess, ['public', 'friends', 'private']);
+  });
+  it('accepts each level and none', () => {
+    for (const access of [...validAccess, undefined]) {
+      const r = validate({ id: 'x', meta: { ...meta, access }, blocks: [] });
+      assert.equal(r.valid, true, r.errors.join(', '));
+    }
+  });
+  it('rejects an unknown level', () => {
+    const r = validate({ id: 'x', meta: { ...meta, access: 'family' }, blocks: [] });
+    assert.equal(r.valid, false);
+    assert.ok(r.errors.some((e) => e.includes('meta.access')));
   });
 });

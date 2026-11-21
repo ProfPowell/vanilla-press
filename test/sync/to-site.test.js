@@ -37,6 +37,21 @@ describe('syncDocument', () => {
     assert.ok(html.endsWith('\n'));
   });
 
+  it('JSON and page carry access only when not public', () => {
+    const base = fixture('simple-post.json');
+    const run = (access) => {
+      const doc = { ...base, meta: { ...base.meta, collection: 'posts', slug: 'acc', status: 'published', ...(access ? { access } : {}) } };
+      syncDocument(ws, doc, {});
+      return [JSON.parse(readFileSync(join(tmp, 'content/posts/acc.json'), 'utf8')), readFileSync(join(tmp, 'src/posts/acc.html'), 'utf8')];
+    };
+    const [pubJson, pubHtml] = run('public');
+    assert.equal('access' in pubJson.meta, false);
+    assert.ok(!pubHtml.includes('access:'));
+    const [json, html] = run('private');
+    assert.equal(json.meta.access, 'private');
+    assert.ok(html.includes('access: "private"'));
+  });
+
   it('draft writes JSON only; unpublishing removes the HTML', () => {
     const doc = simple();
     syncDocument(ws, doc, {});

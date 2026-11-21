@@ -9,7 +9,7 @@
 
 import { SAFE_ID } from '../themes/theme-setting.js';
 import { isSafeComponentTag, isSafeAttrName } from './component-names.js';
-import { blockTypes, inlineTypes, validMarks, requiredMeta, validStatuses } from './content-schema.js';
+import { blockTypes, inlineTypes, validMarks, requiredMeta, validStatuses, validAccess } from './content-schema.js';
 import { validCredit } from '../media/credit.js';
 
 // Must match what Cook accepts. A layout is any `src/layouts/<name>.html`
@@ -82,6 +82,10 @@ export function validate(doc, { components } = {}) {
     const { section } = doc.meta;
     if (section !== undefined && section !== null && section !== '' && !(typeof section === 'string' && SECTION_ID.test(section))) {
       errors.push('meta.section must be a section id (a-z, 0-9, -)');
+    }
+    const { access } = doc.meta;
+    if (access !== undefined && access !== null && !validAccess.includes(access)) {
+      errors.push(`meta.access "${access}" is not valid (expected: ${validAccess.join(', ')})`);
     }
     if (doc.meta.status && !validStatuses.includes(doc.meta.status)) {
       errors.push(`meta.status "${doc.meta.status}" is not valid (expected: ${validStatuses.join(', ')})`);

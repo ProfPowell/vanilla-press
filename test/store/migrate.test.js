@@ -49,4 +49,18 @@ describe('migrate documents', () => {
     assert.ok(cols.includes('section'));
     db.close();
   });
+
+  it('an old database gains access, public for every existing document', () => {
+    const db = new Database(':memory:');
+    db.exec(`CREATE TABLE documents (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, slug TEXT NOT NULL, collection TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft', description TEXT, author_id TEXT, created TEXT NOT NULL,
+      updated TEXT NOT NULL, published TEXT, tags TEXT, blocks TEXT NOT NULL, plaintext TEXT NOT NULL DEFAULT '',
+      UNIQUE(collection, slug))`);
+    db.exec(`INSERT INTO documents (id, title, slug, collection, created, updated, blocks) VALUES ('a','A','a','posts','x','x','[]')`);
+    migrate(db);
+    migrate(db);
+    assert.equal(db.prepare("SELECT access FROM documents WHERE id = 'a'").get().access, 'public');
+    db.close();
+  });
 });

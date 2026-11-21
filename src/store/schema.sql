@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS documents (
   theme_scope TEXT, -- 'page' | 'article' (meta.themeScope)
   layout      TEXT, -- page layout name (meta.layout)
   section     TEXT, -- the post's section id (meta.section)
+  access      TEXT NOT NULL DEFAULT 'public', -- 'public' | 'friends' | 'private' (meta.access; absent when public)
   regions     TEXT, -- JSON object: region name -> block AST array
   blocks      TEXT NOT NULL, -- JSON array of block AST
   plaintext   TEXT NOT NULL DEFAULT '',

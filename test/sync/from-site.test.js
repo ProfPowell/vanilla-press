@@ -190,3 +190,21 @@ describe('section through site files', () => {
     assert.equal(getDocument(db, d.id).meta.section, 'teaching');
   });
 });
+
+describe('access on import', () => {
+  it('a file with access friends imports it; a file without it resets to public', () => {
+    const doc = mk(simple(), { access: 'friends' });
+    saveDocument(db, doc);
+    syncDocument(ws, getDocument(db, doc.id), {});
+    const f = join(tmp, REL);
+    const json = JSON.parse(readFileSync(f, 'utf8'));
+    assert.equal(json.meta.access, 'friends');
+    delete json.meta.access;
+    json.meta.title = 'Now public';
+    writeFileSync(f, JSON.stringify(json, null, 2) + '\n');
+    syncFromSite(ws, db);
+    const back = getDocument(db, doc.id);
+    assert.equal(back.meta.title, 'Now public');
+    assert.equal(back.meta.access, undefined);
+  });
+});

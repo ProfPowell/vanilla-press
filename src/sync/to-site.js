@@ -256,7 +256,10 @@ export function syncDocument(ws, doc, { collectionsConfig, previousDoc, render: 
   const manifest = readManifest(ws);
   const previous = previousPaths(manifest, doc.id, previousDoc, collectionsConfig);
 
-  const jsonText = JSON.stringify(doc, null, 2) + '\n';
+  // `access` is written only when restricted, so public sites' files never change.
+  const { access, ...restMeta } = doc.meta;
+  const jsonDoc = access && access !== 'public' ? doc : { ...doc, meta: restMeta };
+  const jsonText = JSON.stringify(jsonDoc, null, 2) + '\n';
   const htmlText = paths.html ? pageHtml(doc, { layout, mediaAlt, render: renderFn }) : null;
 
   const written = [];

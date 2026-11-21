@@ -110,3 +110,8 @@ export const requiredMeta = ['title', 'slug', 'collection', 'status'];
  * Valid document statuses.
  */
 export const validStatuses = ['draft', 'published', 'archived'];
+
+/**
+ * Access levels, least to most restricted. Absent means 'public'.
+ */
+export const validAccess = ['public', 'friends', 'private'];

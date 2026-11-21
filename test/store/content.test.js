@@ -563,3 +563,32 @@ describe('layout and regions', () => {
     db.close();
   });
 });
+
+describe('document access', () => {
+  const mk = (access) => ({ id: 'acc1', meta: { title: 'T', slug: 't', collection: 'posts', status: 'draft', ...(access ? { access } : {}) }, blocks: [] });
+  const fresh = () => { const d = new Database(':memory:'); migrate(d); return d; };
+
+  it('is public by default and omitted from meta', () => {
+    const d = fresh();
+    assert.equal(saveDocument(d, mk()).meta.access, undefined);
+    assert.equal(d.prepare('SELECT access FROM documents').get().access, 'public');
+    d.close();
+  });
+
+  it('round-trips friends and private', () => {
+    const d = fresh();
+    assert.equal(saveDocument(d, mk('friends')).meta.access, 'friends');
+    assert.equal(getDocument(d, 'acc1').meta.access, 'friends');
+    assert.equal(saveDocument(d, mk('private')).meta.access, 'private');
+    d.close();
+  });
+
+  it('a save without access keeps it; public sets it back', () => {
+    const d = fresh();
+    saveDocument(d, mk('friends'));
+    assert.equal(saveDocument(d, mk()).meta.access, 'friends');
+    const back = saveDocument(d, mk('public'));
+    assert.equal(back.meta.access, undefined);
+    d.close();
+  });
+});

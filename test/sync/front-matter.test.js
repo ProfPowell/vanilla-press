@@ -76,3 +76,21 @@ describe('frontMatter imageAlt', () => {
     assert.doesNotMatch(frontMatter({ id: 'd', meta: { title: 'T' } }, { layout: 'post' }), /section/);
   });
 });
+
+describe('frontMatter access', () => {
+  const withAccess = (access) => ({ ...base, meta: { ...base.meta, section: 'notes', access } });
+
+  it('writes access before section when not public', () => {
+    const out = frontMatter(withAccess('friends'), { layout: 'post' });
+    assert.ok(out.includes('\naccess: "friends"\nsection: "notes"\n'));
+    assert.equal(matter(out).data.access, 'friends');
+    assert.ok(frontMatter(withAccess('private'), { layout: 'post' }).includes('access: "private"'));
+  });
+
+  it('public and missing leave the output unchanged', () => {
+    const plain = frontMatter({ ...base, meta: { ...base.meta, section: 'notes' } }, { layout: 'post' });
+    assert.ok(!plain.includes('access'));
+    assert.equal(frontMatter(withAccess('public'), { layout: 'post' }), plain);
+    assert.equal(frontMatter(withAccess(undefined), { layout: 'post' }), plain);
+  });
+});

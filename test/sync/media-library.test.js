@@ -315,9 +315,17 @@ describe('media access', () => {
     assert.deepEqual(rows().map((r) => r.access), ['friends', 'public']);
   });
 
-  it('an unknown level in media.json is read as public', () => {
-    writeJson([entry({ access: 'secret' })]);
+  it('an unknown level in media.json fails closed to private, and a rewrite keeps it', () => {
+    writeJson([entry({ access: 'Friends' })]);
     loadMediaJson(ws, db);
-    assert.equal(rows()[0].access, 'public');
+    assert.equal(rows()[0].access, 'private');
+    writeMediaJson(ws, db);
+    assert.equal(JSON.parse(jsonText())[0].access, 'private');
+  });
+
+  it('an empty or null level in media.json is public', () => {
+    writeJson([entry({ access: '' }), entry({ id: 'bbbb2222', filename: 'b.png', access: null })]);
+    loadMediaJson(ws, db);
+    assert.deepEqual(rows().map((r) => r.access), ['public', 'public']);
   });
 });

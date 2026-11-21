@@ -4,8 +4,12 @@ import { validAccess } from '../schema/content-schema.js';
 import { mediaFileOf } from '../media/usage.js';
 import { allBlockLists } from '../schema/blocks.js';
 
-/** Rank of a level: its index in `validAccess`; absent or unknown counts as public. */
-const rank = (level) => Math.max(0, validAccess.indexOf(level));
+/** Rank of a level: its index in `validAccess`; absent is public, an unknown level is private (fail closed). */
+const rank = (level) => {
+  if (level == null || level === '') return 0;
+  const i = validAccess.indexOf(level);
+  return i < 0 ? validAccess.length - 1 : i;
+};
 
 /** Every `/media/<file>` found in `text` (decoded file names). */
 function filesIn(text) {

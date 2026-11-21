@@ -47,6 +47,12 @@ describe('mediaAccessWarnings', () => {
     const blocks = [fig('/media/c.jpg'), fig('/media/d.jpg'), fig('/media/gone.jpg'), fig('https://x.example/media/a.jpg')];
     assert.deepEqual(mediaAccessWarnings(doc(undefined, blocks), media), []);
   });
+  it('an unknown media level counts as private: a public page is warned', () => {
+    assert.deepEqual(mediaAccessWarnings(doc('public', [fig('/media/x.jpg')]), [{ filename: 'x.jpg', access: 'Friends' }]), [{ filename: 'x.jpg', access: 'Friends' }]);
+  });
+  it('an unknown document level counts as private: a friends image does not warn', () => {
+    assert.deepEqual(mediaAccessWarnings(doc('bogus', [fig('/media/a.jpg')]), media), []);
+  });
   it('finds a percent-encoded name and region blocks', () => {
     const items = [{ filename: 'my pic.jpg', access: 'friends' }];
     const d = { ...doc('public', []), regions: { aside: [fig('/media/my%20pic.jpg')] } };

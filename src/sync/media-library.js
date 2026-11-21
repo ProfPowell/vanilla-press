@@ -71,7 +71,8 @@ export function normalizeEntry(entry) {
     source: mediaSource(entry.source),
     credit: storedCredit(entry.credit),
     url: remote ? remote.href : null,
-    access: validAccess.includes(entry.access) ? entry.access : 'public',
+    // Absent or empty is public; any other value that is not a level fails closed to private.
+    access: entry.access == null || entry.access === '' ? 'public' : validAccess.includes(entry.access) ? entry.access : 'private',
   };
 }
 

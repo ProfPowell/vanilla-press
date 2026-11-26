@@ -94,3 +94,30 @@ test('usedTags returns distinct sorted tags', () => {
   createItem(db, cat.id, { title: 'B', tags: ['a', 'c'] });
   assert.deepEqual(usedTags(db, cat.id), ['a', 'b', 'c']);
 });
+
+test('a slug collision throws and leaves the other item alone', () => {
+  const { db, cat } = mk();
+  const a = createItem(db, cat.id, { title: 'A' });
+  const b = createItem(db, cat.id, { title: 'B', status: 'published' });
+  assert.throws(() => updateItem(db, a.id, { slug: b.slug }), /already/i);
+  assert.equal(getItem(db, b.id).title, 'B');
+  assert.equal(getItem(db, a.id).slug, 'a');
+});
+
+test('a catalog slug collision throws and leaves the other catalog alone', () => {
+  const { db, cat } = mk();
+  const other = createCatalog(db, { title: 'Coins', design });
+  assert.throws(() => updateCatalog(db, other.id, { slug: cat.slug }), /already/i);
+  assert.equal(getCatalog(db, cat.id).title, 'Retro games');
+  assert.equal(getCatalog(db, other.id).slug, 'coins');
+});
+
+test('slug stays locked after an item is unpublished', () => {
+  const { db, cat } = mk();
+  const it = createItem(db, cat.id, { title: 'Zelda' });
+  updateItem(db, it.id, { status: 'published' });
+  updateItem(db, it.id, { status: 'draft' });
+  assert.throws(() => updateItem(db, it.id, { slug: 'other' }), /slug/i);
+  assert.throws(() => updateCatalog(db, cat.id, { slug: 'other' }), /slug/i);
+  deleteItem(db, it.id);
+});

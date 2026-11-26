@@ -74,6 +74,15 @@ function hasPublished(db, catalogId) {
   return !!db.prepare("SELECT 1 FROM catalog_items WHERE catalog_id = ? AND status = 'published' LIMIT 1").get(catalogId);
 }
 
+// Slugs are part of published URLs: locked once any item was ever published.
+function everPublished(db, catalogId) {
+  return !!db.prepare('SELECT 1 FROM catalog_items WHERE catalog_id = ? AND published IS NOT NULL LIMIT 1').get(catalogId);
+}
+
+function isSlugCollision(e) {
+  return e?.code === 'SQLITE_CONSTRAINT_UNIQUE' || /UNIQUE constraint/.test(e?.message ?? '');
+}
+
 export function createCatalog(db, { title, template = null, design, access = 'public', description = '' }) {
   const taken = new Set(db.prepare('SELECT slug FROM catalogs').all().map((r) => r.slug));
   const slug = uniqueSlug(slugify(title), taken);
@@ -90,12 +99,17 @@ export function createCatalog(db, { title, template = null, design, access = 'pu
 export function updateCatalog(db, id, patch) {
   const cur = getCatalog(db, id);
   if (!cur) return null;
-  if (patch.slug != null && patch.slug !== cur.slug && hasPublished(db, id)) {
-    throw new Error('The slug cannot change while items are published');
+  if (patch.slug != null && patch.slug !== cur.slug && everPublished(db, id)) {
+    throw new Error('The slug cannot change once any item has been published');
   }
   const next = { ...cur, ...patch, id, created: cur.created, updated: now() };
-  db.prepare(`UPDATE catalogs SET slug = ?, title = ?, description = ?, access = ?, template = ?, design = ?, updated = ?
-    WHERE id = ?`).run(next.slug, next.title, next.description, next.access, next.template, JSON.stringify(next.design), next.updated, id);
+  try {
+    db.prepare(`UPDATE catalogs SET slug = ?, title = ?, description = ?, access = ?, template = ?, design = ?, updated = ?
+      WHERE id = ?`).run(next.slug, next.title, next.description, next.access, next.template, JSON.stringify(next.design), next.updated, id);
+  } catch (e) {
+    if (isSlugCollision(e)) throw new Error(`The slug "${next.slug}" is already in use`);
+    throw e;
+  }
   return getCatalog(db, id);
 }
 
@@ -117,15 +131,30 @@ export function getItem(db, id) {
   return row ? rowToItem(row) : null;
 }
 
-function writeItem(db, item) {
-  db.prepare(`INSERT OR REPLACE INTO catalog_items
-    (id, catalog_id, slug, title, status, access, rating, description, video, links, tags, categories, grade, fields, photos, created, updated, published)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    item.id, item.catalogId, item.slug, item.title, item.status, item.access, item.rating ?? null,
+function itemParams(item) {
+  return [
+    item.catalogId, item.slug, item.title, item.status, item.access, item.rating ?? null,
     item.description, item.video, JSON.stringify(item.links), JSON.stringify(item.tags),
     JSON.stringify(item.categories), item.grade ? JSON.stringify(item.grade) : null,
     JSON.stringify(item.fields), JSON.stringify(item.photos), item.created, item.updated, item.published ?? null,
-  );
+  ];
+}
+
+function insertItem(db, item) {
+  db.prepare(`INSERT INTO catalog_items
+    (id, catalog_id, slug, title, status, access, rating, description, video, links, tags, categories, grade, fields, photos, created, updated, published)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(item.id, ...itemParams(item));
+}
+
+function saveItem(db, item) {
+  try {
+    db.prepare(`UPDATE catalog_items SET catalog_id = ?, slug = ?, title = ?, status = ?, access = ?, rating = ?, description = ?,
+      video = ?, links = ?, tags = ?, categories = ?, grade = ?, fields = ?, photos = ?, created = ?, updated = ?, published = ?
+      WHERE id = ?`).run(...itemParams(item), item.id);
+  } catch (e) {
+    if (isSlugCollision(e)) throw new Error(`The slug "${item.slug}" is already in use`);
+    throw e;
+  }
 }
 
 export function createItem(db, catalogId, partial) {
@@ -133,7 +162,7 @@ export function createItem(db, catalogId, partial) {
   const t = now();
   const status = partial.status ?? 'draft';
   const id = newId('item');
-  writeItem(db, {
+  insertItem(db, {
     access: 'public', rating: null, description: '', video: '', links: [], tags: [],
     categories: {}, grade: null, fields: {}, photos: [],
     ...partial,
@@ -154,14 +183,14 @@ export function createItem(db, catalogId, partial) {
 export function updateItem(db, id, patch) {
   const cur = getItem(db, id);
   if (!cur) return null;
-  if (patch.slug != null && patch.slug !== cur.slug && cur.status === 'published') {
+  if (patch.slug != null && patch.slug !== cur.slug && cur.published) {
     throw new Error('The slug cannot change once an item is published');
   }
   const t = now();
   const next = { ...cur, ...patch, id, catalogId: cur.catalogId, created: cur.created, updated: t };
   if (next.status === 'published' && !cur.published) next.published = t;
   else next.published = cur.published;
-  writeItem(db, next);
+  saveItem(db, next);
   return getItem(db, id);
 }
 

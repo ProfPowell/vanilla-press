@@ -98,3 +98,30 @@ test('compareGrades', () => {
   assert.ok(compareGrades(g('psa', '1'), g('other', 'x')) < 0);
   assert.ok(compareGrades(null, g('psa', '1')) > 0);
 });
+
+test('coin proofs are parallel to business strikes, ranked by number', () => {
+  const g = (agency, value) => ({ agency, value });
+  assert.ok(compareGrades(g('pcgs', 'PR-65'), g('pcgs', 'MS-70')) < 0);
+  assert.ok(compareGrades(g('pcgs', 'PR-70'), g('pcgs', 'MS-69')) > 0);
+  assert.ok(compareGrades(g('pcgs', 'PR-60'), g('pcgs', 'MS-70')) < 0);
+  // same number: business strike sorts just below the proof, consistently
+  assert.ok(compareGrades(g('pcgs', 'MS-65'), g('pcgs', 'PR-65')) < 0);
+  assert.ok(compareGrades(g('pcgs', 'PR-65'), g('pcgs', 'MS-65')) > 0);
+  assert.ok(compareGrades(g('pcgs', 'MS-65'), g('pcgs', 'MS-63')) > 0);
+  assert.ok(compareGrades(g('pcgs', 'AU-58'), g('pcgs', 'PR-60')) < 0);
+  assert.ok(compareGrades(g('ngc', 'PF-65'), g('pcgs', 'MS-70')) < 0);
+});
+
+test('WATA scale has the real half-steps', () => {
+  const s = AGENCIES.wata.scale;
+  for (const v of ['0.5', '8.5', '9.0', '9.2', '9.4', '9.6', '9.8', '10']) assert.ok(s.includes(v), v);
+  assert.equal(s.at(-1), '10');
+  assert.ok(compareGrades({ agency: 'wata', value: '9.8' }, { agency: 'wata', value: '9.6' }) > 0);
+  assert.ok(compareGrades({ agency: 'wata', value: '10' }, { agency: 'wata', value: '9.8' }) > 0);
+});
+
+test('trading cards nest game -> set -> subset', () => {
+  const l = designFromTemplate('trading-cards').lists[0];
+  const deep = (cs, n = 1) => cs.some((c) => (n >= 3 ? true : deep(c.children, n + 1)));
+  assert.ok(deep(l.choices));
+});

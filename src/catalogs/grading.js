@@ -21,6 +21,8 @@ const COIN_SCALE_PF = [...SHELDON, ...proof('PF')];
 const CAC_EXTRA = { id: 'cac', label: 'CAC sticker', type: 'bool' };
 
 const HALF_POINTS = trim(range(1, 10, 0.5));
+const WATA_SCALE = ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5',
+  '8.0', '8.5', '9.0', '9.2', '9.4', '9.6', '9.8', '10'];
 const COMIC_SCALE = ['0.5', '1.0', '1.5', '1.8', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0', '5.5', '6.0', '6.5',
   '7.0', '7.5', '8.0', '8.5', '9.0', '9.2', '9.4', '9.6', '9.8', '10.0'];
 const PAGES = { id: 'pages', label: 'Page quality', type: 'text' };
@@ -46,16 +48,26 @@ export const AGENCIES = {
   sgc: { label: 'SGC', scale: HALF_POINTS },
   'cgc-comics': { label: 'CGC Comics', scale: COMIC_SCALE, extras: [PAGES] },
   cbcs: { label: 'CBCS', scale: COMIC_SCALE, extras: [PAGES] },
-  wata: { label: 'WATA', scale: HALF_POINTS, extras: [{ id: 'seal', label: 'Seal rating', type: 'text' }] },
+  wata: { label: 'WATA', scale: WATA_SCALE, extras: [{ id: 'seal', label: 'Seal rating', type: 'text' }] },
   vga: { label: 'VGA', scale: range(10, 100, 5, 0) },
   raw: { label: 'Raw (ungraded)', scale: ['Poor', 'Fair', 'Good', 'Very Good', 'Fine', 'Very Fine', 'Near Mint', 'Mint'] },
 };
+
+// Sheldon grades (MS-65, PR-65, AU-58 ...): business strikes and proofs share
+// one numeric scale, so they rank by number; at equal numbers a proof sorts
+// just above the business strike (a stable tie-break).
+const SHELDON_RE = /^([A-Z]+)-(\d+)$/;
 
 function position(grade) {
   const agency = AGENCIES[grade?.agency];
   if (!agency) return null;
   const i = agency.scale.indexOf(grade.value);
-  return { index: i, pos: i < 0 ? 0 : i / (agency.scale.length - 1) };
+  const m = SHELDON_RE.exec(grade.value ?? '');
+  if (m && i >= 0 && agency.scale.every((v) => SHELDON_RE.test(v))) {
+    const n = Number(m[2]);
+    return { key: n * 2 + (/^(PR|PF)$/.test(m[1]) ? 1 : 0), pos: n / 70 };
+  }
+  return { key: i, pos: i < 0 ? 0 : i / (agency.scale.length - 1) };
 }
 
 /**
@@ -67,6 +79,6 @@ export function compareGrades(a, b) {
   const pa = position(a);
   const pb = position(b);
   if (!pa || !pb) return (pa ? 0 : 1) - (pb ? 0 : 1);
-  if (a.agency === b.agency) return pa.index - pb.index;
+  if (a.agency === b.agency) return pa.key - pb.key;
   return pa.pos - pb.pos;
 }

@@ -194,6 +194,16 @@ export function updateItem(db, id, patch) {
   return getItem(db, id);
 }
 
+/**
+ * Put an item back exactly as it was (`updated` and `published` included), as a
+ * failed publish does.
+ * @param {import('better-sqlite3').Database} db
+ * @param {Object} item - as getItem returned it
+ */
+export function restoreItem(db, item) {
+  saveItem(db, item);
+}
+
 /** @throws {CatalogHasPublishedError} */
 export function deleteItem(db, id) {
   const cur = getItem(db, id);

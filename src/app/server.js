@@ -18,7 +18,6 @@ import { listSites, getSite, addSite, removeSite, listFolders, configDir } from 
 import { createLayoutPreview } from './layout-preview.js';
 import { createPreviews } from './preview.js';
 import * as defaultGit from '../git/git.js';
-import { GitConflictError, GitStashConflictError } from '../git/git.js';
 import * as defaultSiteProcess from './site-process.js';
 import { createBackup, BACKUP_PATHS, THEME_PATHS, pageNotLive } from './site-git.js';
 import { migrateVpTheme } from './site-theme.js';
@@ -37,7 +36,7 @@ import { HOST, listen } from '../server/listen.js';
 import { startProgramServer } from '../programs/program-server.js';
 import { createLiveMedia } from './live-media.js';
 import {
-  setPublished, BuildError, PublishRejectedError, checkLive, readSiteUrl, publicUrl, builtPage,
+  setPublished, publishErrorResponse, checkLive, readSiteUrl, publicUrl, builtPage,
 } from './publish.js';
 import { getDocument } from '../store/content.js';
 import { outputPaths } from '../sync/paths.js';
@@ -269,7 +268,18 @@ export async function startApp({
       mountSocialRoutes(router, prefix, {
         site, ws, db, backup, writes, deps: git, fetch: fetchImpl, cookSocial, marked,
       });
-      mountCatalogRoutes(router, prefix, { db });
+      mountCatalogRoutes(router, prefix, {
+        db, ws,
+        // Collection Publish/Unpublish take the write lock inside the backup queue, as a post's do.
+        publishing: {
+          run: (fn) => backup.exclusive(() => writes(fn)),
+          deps: () => ({
+            ensureInstalled: siteProcess.ensureInstalled, runBuild: siteProcess.runBuild,
+            commitPaths: git.commitPaths, push: git.push, gitStatus: git.gitStatus,
+          }),
+          onBuilt: () => vbCache.delete(site.id), // the build may have vendored or moved the site's VB copy
+        },
+      });
       const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);
       return entry;
@@ -339,12 +349,8 @@ export async function startApp({
           ...(result.themeFromElsewhere ? { theme: 'The theme was changed on another computer: the version on GitHub was kept.' } : {}),
         });
       } catch (err) {
-        if (err instanceof PublishRejectedError) return sendJson(res, err.status, err.body);
-        if (err instanceof BuildError) return sendJson(res, 422, { error: 'Build failed', log: err.log });
-        if (err instanceof GitConflictError || err instanceof GitStashConflictError) {
-          return sendJson(res, 409, { error: err.message, files: err.files });
-        }
-        if (err?.name?.startsWith('Git')) return sendJson(res, 502, { error: err.message });
+        const known = publishErrorResponse(err);
+        if (known) return sendJson(res, known.status, known.body);
         console.error('Publish error:', err);
         sendJson(res, 500, { error: err.message });
       }

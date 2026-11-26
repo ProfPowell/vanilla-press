@@ -53,7 +53,7 @@ export function changedOnDisk(ws, docId, jsonRelPath) {
 }
 
 /** Collection names that would collide with Cook's own src/ directories. */
-const RESERVED_COLLECTIONS = new Set(['layouts', 'includes', 'components', 'media', 'assets']);
+const RESERVED_COLLECTIONS = new Set(['layouts', 'includes', 'components', 'media', 'assets', 'catalogs']);
 
 function validSegment(v) {
   return typeof v === 'string' && v !== '' && !/[/\\]/.test(v) && !v.includes('..') && !v.startsWith('.');

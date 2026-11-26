@@ -17,6 +17,9 @@ import {
 } from '../catalogs/model.js';
 import { TEMPLATES, designFromTemplate } from '../catalogs/templates.js';
 import { AGENCIES } from '../catalogs/grading.js';
+import { removeCatalogFile } from '../sync/catalog-files.js';
+import { publishCatalog } from './catalog-publish.js';
+import { publishErrorResponse } from './publish.js';
 import {
   CatalogHasPublishedError, listCatalogs, getCatalog, createCatalog, updateCatalog, deleteCatalog,
   listItems, getItem, createItem, updateItem, deleteItem, usedTags,
@@ -79,9 +82,14 @@ function removals(oldDesign, newDesign) {
 /**
  * @param {{ add: Function }} router
  * @param {string} prefix - `/api/sites/<id>`
- * @param {{ db: import('better-sqlite3').Database }} context
+ * @param {{
+ *   db: import('better-sqlite3').Database,
+ *   ws?: import('../workspace/workspace.js').Workspace,
+ *   publishing?: { run: (fn: Function) => Promise<any>, deps: () => Object, onBuilt?: () => void },
+ * }} context - publishing: how the publish routes take the site's write lock (`run`) and
+ *   the publishCatalog deps; without it (or ws) the publish routes are not mounted
  */
-export function mountCatalogRoutes(router, prefix, { db }) {
+export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing = null }) {
   const body = (req) => (isObj(req.body) ? req.body : {});
 
   const handle = (fn) => async (req, res) => {
@@ -195,8 +203,9 @@ export function mountCatalogRoutes(router, prefix, { db }) {
   }));
 
   router.add('DELETE', `${prefix}/catalogs/:id`, write((req, res) => {
-    need(req.params.id);
+    const catalog = need(req.params.id);
     deleteCatalog(db, req.params.id);
+    if (ws?.contentDir) removeCatalogFile(ws, catalog.slug); // the next backup commits the removal
     res.writeHead(204);
     res.end();
   }));
@@ -267,4 +276,28 @@ export function mountCatalogRoutes(router, prefix, { db }) {
     res.writeHead(204);
     res.end();
   }));
+
+  if (!ws || !publishing) return;
+
+  // Publish, Unpublish and the collection's own publish (design or level). Not queued by
+  // the server (CATALOG_ACTION_PATH): each takes the write lock here, as a post's publish does.
+  const publishRoute = (changeOf) => async (req, res) => {
+    try {
+      const result = await publishing.run(() => publishCatalog({
+        ws, db, catalogId: req.params.id, change: changeOf(req),
+        confirmRaisePhotoAccess: body(req).confirmRaisePhotoAccess === true,
+        deps: publishing.deps(),
+      }));
+      publishing.onBuilt?.();
+      sendJson(res, 200, { status: result.status, url: result.url, sha: result.sha });
+    } catch (err) {
+      const known = publishErrorResponse(err);
+      if (known) return sendJson(res, known.status, known.body);
+      console.error('Collection publish error:', err);
+      sendJson(res, 500, { error: err.message });
+    }
+  };
+  router.add('POST', `${prefix}/catalogs/:id/publish`, publishRoute(() => null));
+  router.add('POST', `${prefix}/catalogs/:id/items/:itemId/publish`, publishRoute((req) => ({ itemId: req.params.itemId, publish: true })));
+  router.add('POST', `${prefix}/catalogs/:id/items/:itemId/unpublish`, publishRoute((req) => ({ itemId: req.params.itemId, publish: false })));
 }

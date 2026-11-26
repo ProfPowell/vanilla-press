@@ -15,7 +15,9 @@ import { getDocument, saveDocument } from '../store/content.js';
 import { syncDocument } from '../sync/to-site.js';
 import { preflightSave } from '../sync/site-files.js';
 import { outputPaths, postUrlPath } from '../sync/paths.js';
-import { GitNotConnectedError, readHead as gitReadHead } from '../git/git.js';
+import {
+  GitNotConnectedError, GitConflictError, GitStashConflictError, readHead as gitReadHead,
+} from '../git/git.js';
 import { BACKUP_PATHS, THEME_PATHS, FEED_SNAPSHOT_PATHS, postPages } from './site-git.js';
 import {
   refreshThemeSetting, snapshotFile, restoreFile, themeSettingFile, commitWithTheme, themeConflictResolver,
@@ -43,6 +45,38 @@ export class PublishRejectedError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+/**
+ * Install the site's packages if needed and run its build; never throws.
+ * @param {import('../workspace/workspace.js').Workspace} ws
+ * @param {{ ensureInstalled: Function, runBuild: Function }} deps
+ * @returns {Promise<{ ok: boolean, log: string }>}
+ */
+export async function buildCheck(ws, deps) {
+  try {
+    await deps.ensureInstalled(ws.siteDir);
+    return await deps.runBuild(ws.siteDir);
+  } catch (err) {
+    return { ok: false, log: err.message };
+  }
+}
+
+/**
+ * The response for an error a publish action throws: a refused publish (its own
+ * status and body), a failed build (422), a git conflict (409), another git
+ * failure (502); null for anything unexpected.
+ * @param {unknown} err
+ * @returns {{ status: number, body: Object }|null}
+ */
+export function publishErrorResponse(err) {
+  if (err instanceof PublishRejectedError) return { status: err.status, body: err.body };
+  if (err instanceof BuildError) return { status: 422, body: { error: 'Build failed', log: err.log } };
+  if (err instanceof GitConflictError || err instanceof GitStashConflictError) {
+    return { status: 409, body: { error: err.message, files: err.files } };
+  }
+  if (err?.name?.startsWith('Git')) return { status: 502, body: { error: err.message } };
+  return null;
 }
 
 /**
@@ -232,14 +266,7 @@ export async function setPublished({ ws, db, docId, publish, update = false, con
   const settingBefore = carriesTheme ? snapshotFile(settingFile) : null;
 
   // 2. Build check; on failure put the previous version back.
-  const runCheck = async () => {
-    try {
-      await deps.ensureInstalled(ws.siteDir);
-      return await deps.runBuild(ws.siteDir);
-    } catch (err) {
-      return { ok: false, log: err.message };
-    }
-  };
+  const runCheck = () => buildCheck(ws, deps);
   let build;
   try {
     if (carriesTheme) refreshThemeSetting(ws, { create: Boolean(previous.meta.theme) });

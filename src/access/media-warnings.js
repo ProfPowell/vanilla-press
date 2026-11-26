@@ -20,7 +20,7 @@ function filesIn(text) {
  * @param {{ meta?: Object, blocks?: Array, regions?: Object }} doc
  * @returns {Set<string>}
  */
-function usedFiles(doc) {
+export function usedFiles(doc) {
   const found = new Set();
   const add = (url) => { const f = mediaFileOf(url); if (f) found.add(f); };
   add(doc?.meta?.image);

@@ -98,3 +98,38 @@ CREATE TABLE IF NOT EXISTS program_sources (
   source TEXT NOT NULL,
   PRIMARY KEY (area, slug)
 );
+
+-- Collections ("catalogs" internally: "collection" already means a document type)
+CREATE TABLE IF NOT EXISTS catalogs (
+  id          TEXT PRIMARY KEY,
+  slug        TEXT NOT NULL UNIQUE,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  access      TEXT NOT NULL DEFAULT 'public', -- 'public' | 'friends' | 'private'
+  template    TEXT,
+  design      TEXT NOT NULL, -- JSON: fields, lists, grading, sort
+  created     TEXT NOT NULL,
+  updated     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS catalog_items (
+  id          TEXT PRIMARY KEY,
+  catalog_id  TEXT NOT NULL REFERENCES catalogs(id),
+  slug        TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'draft', -- 'draft' | 'published'
+  access      TEXT NOT NULL DEFAULT 'public',
+  rating      INTEGER,
+  description TEXT NOT NULL DEFAULT '',
+  video       TEXT NOT NULL DEFAULT '',
+  links       TEXT NOT NULL DEFAULT '[]',    -- JSON [{label, url}]
+  tags        TEXT NOT NULL DEFAULT '[]',    -- JSON [string]
+  categories  TEXT NOT NULL DEFAULT '{}',    -- JSON {listId: [choiceId]}
+  grade       TEXT,                          -- JSON or NULL
+  fields      TEXT NOT NULL DEFAULT '{}',    -- JSON {fieldId: value}
+  photos      TEXT NOT NULL DEFAULT '[]',    -- JSON [{file, main}]
+  created     TEXT NOT NULL,
+  updated     TEXT NOT NULL,
+  published   TEXT,
+  UNIQUE(catalog_id, slug)
+);

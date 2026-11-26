@@ -284,6 +284,17 @@ function showSection(section) {
   else themePage?.then((theme) => theme?.hide());
   if (section === 'layouts') startLayouts();
   if (section === 'social') startSocial();
+  if (section === 'collections') startCollections();
+  else collectionsPage?.then((collections) => collections?.hide());
+}
+
+// Collections is set up on first view, only once; every view reloads and reads ?catalog= and ?tab=.
+let collectionsPage = null;
+function startCollections() {
+  collectionsPage ||= import('./collections-page.js')
+    .then((m) => m.initCollectionsSection({ siteId, root: $('collections-section') }))
+    .catch((err) => showError(err.message));
+  collectionsPage.then((collections) => collections?.show());
 }
 
 // Social is set up on first view, only once; every view reloads and rechecks the accounts.

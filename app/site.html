@@ -34,6 +34,7 @@
       <li><a href="#" data-section="theme">Theme</a></li>
       <li><a href="#" data-section="layouts">Layouts</a></li>
       <li><a href="#" data-section="social">Social</a></li>
+      <li><a href="#" data-section="collections">Collections</a></li>
     </ul>
     <ul class="rail-list rail-app" aria-label="App">
       <li><a href="/app/services.html">Services</a></li>
@@ -375,6 +376,76 @@
             <div class="theme-dialog-actions">
               <button type="button" data-dialog-cancel>Cancel</button>
               <button type="submit" id="layouts-confirm-ok" class="primary">OK</button>
+            </div>
+          </form>
+        </dialog>
+      </section>
+
+      <section id="collections-section" aria-labelledby="collections-title" hidden>
+        <p id="collections-error" class="error" role="alert" hidden></p>
+
+        <div id="collections-list-view">
+          <div class="section-head">
+            <div>
+              <h1 id="collections-title">Collections</h1>
+              <p id="collections-summary" class="media-summary"></p>
+            </div>
+            <div class="actions">
+              <button type="button" id="collections-new" class="primary" aria-haspopup="dialog">New collection</button>
+            </div>
+          </div>
+          <ul id="collections-list" class="collections-list" aria-labelledby="collections-title"></ul>
+          <p id="collections-empty" class="empty" hidden>No collections yet. Start one from a template.</p>
+        </div>
+
+        <div id="collection-view" hidden>
+          <div class="section-head">
+            <div>
+              <p><a id="collection-back" href="#" class="collection-back">All collections</a></p>
+              <h1 id="collection-title"></h1>
+              <p id="collection-summary" class="media-summary"></p>
+            </div>
+          </div>
+          <div id="collection-tabs" class="filter-group" role="group" aria-label="Collection">
+            <button type="button" data-tab="items" aria-pressed="true">Items</button>
+            <button type="button" data-tab="design" aria-pressed="false">Design</button>
+          </div>
+          <div id="collection-items">
+            <!-- Items list and item editor mount here -->
+            <div id="collection-items-mount"><p class="media-summary">Items are coming soon.</p></div>
+          </div>
+          <div id="collection-design" hidden></div>
+        </div>
+
+        <dialog id="collections-new-dialog" class="theme-dialog" aria-labelledby="collections-new-heading">
+          <form id="collections-new-form" method="dialog" novalidate>
+            <h2 id="collections-new-heading">New collection</h2>
+            <div class="theme-field">
+              <label for="collections-new-title">Title</label>
+              <input type="text" id="collections-new-title" maxlength="120" autocomplete="off" required/>
+            </div>
+            <div class="theme-field">
+              <label for="collections-new-template">Start from</label>
+              <select id="collections-new-template"></select>
+              <p id="collections-new-hint" class="detail-hint"></p>
+            </div>
+            <p id="collections-new-error" class="error" role="alert"></p>
+            <div class="theme-dialog-actions">
+              <button type="button" data-dialog-cancel>Cancel</button>
+              <button type="submit" id="collections-new-ok" class="primary">Create</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog id="collections-confirm-dialog" class="theme-dialog" aria-labelledby="collections-confirm-title" aria-describedby="collections-confirm-desc">
+          <form id="collections-confirm-form" method="dialog" novalidate>
+            <h2 id="collections-confirm-title"></h2>
+            <p id="collections-confirm-desc" class="theme-note"></p>
+            <ul id="collections-confirm-list" class="layouts-confirm-list"></ul>
+            <p id="collections-confirm-error" class="error" role="alert"></p>
+            <div class="theme-dialog-actions">
+              <button type="button" data-dialog-cancel>Cancel</button>
+              <button type="submit" id="collections-confirm-ok" class="primary">OK</button>
             </div>
           </form>
         </dialog>

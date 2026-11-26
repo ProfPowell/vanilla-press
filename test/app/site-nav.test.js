@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SECTIONS, LATER, sectionFromSearch, sectionHref } from '../../app/assets/js/site-nav.js';
 
 test('sections and later items', () => {
-  assert.deepEqual(SECTIONS, ['posts', 'media', 'programs', 'components', 'theme', 'layouts', 'social']);
+  assert.deepEqual(SECTIONS, ['posts', 'media', 'programs', 'components', 'theme', 'layouts', 'social', 'collections']);
   assert.deepEqual(LATER, ['Analytics']);
 });
 
@@ -12,6 +12,7 @@ test('sectionFromSearch: a known section, else posts', () => {
   assert.equal(sectionFromSearch('?site=a&section=theme'), 'theme');
   assert.equal(sectionFromSearch('?site=a&section=programs'), 'programs');
   assert.equal(sectionFromSearch('?site=a&section=social'), 'social');
+  assert.equal(sectionFromSearch('?site=a&section=collections&catalog=c'), 'collections');
   assert.equal(sectionFromSearch('?site=a&section=nope'), 'posts');
   assert.equal(sectionFromSearch('?site=a'), 'posts');
   assert.equal(sectionFromSearch(''), 'posts');

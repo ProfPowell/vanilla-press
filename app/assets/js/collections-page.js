@@ -149,6 +149,7 @@ export function initCollectionsSection({ siteId, root }) {
         itemViews.set(c.id, view);
         $('collection-items-mount').replaceChildren(container);
       }
+      view.setCatalog(c);
       view.show();
     }
     if (route.tab === 'design') {
@@ -163,6 +164,7 @@ export function initCollectionsSection({ siteId, root }) {
             onSaved(saved) {
               collections = collections.map((x) => (x.id === saved.id ? { ...x, ...saved, itemCount: x.itemCount, publishedCount: saved.publishedCount ?? x.publishedCount } : x));
               $('collection-title').textContent = saved.title;
+              itemViews.get(saved.id)?.setCatalog(collections.find((x) => x.id === saved.id));
             },
           }),
         };

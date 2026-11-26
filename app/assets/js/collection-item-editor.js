@@ -16,18 +16,19 @@ const rank = (level) => RANK[level] ?? 2; // an unknown level is private
 const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
 const hasValue = (v) => v !== undefined && v !== null && v !== '';
 
-/** `[id, label]` for every choice in a tree, children indented under their parent. */
-function flatten(choices, depth = 0, out = []) {
+/** `[id, label, path]` for every choice in a tree; the label is marked with its depth by characters that do not collapse. */
+function flatten(choices, depth = 0, trail = [], out = []) {
   for (const c of choices || []) {
-    out.push([c.id, `${' '.repeat(depth)}${c.label}`]);
-    flatten(c.children, depth + 1, out);
+    const path = [...trail, c.label];
+    out.push([c.id, `${'\u00a0\u00a0'.repeat(depth)}${depth ? '\u2514 ' : ''}${c.label}`, path.join(' \u203a ')]);
+    flatten(c.children, depth + 1, path, out);
   }
   return out;
 }
 
 /** A select whose chosen option is marked in the markup (a fresh select: the attribute is the choice). */
 function makeSelect(options, value, attrs = {}) {
-  const select = h('select', attrs, ...options.map(([v, l]) => h('option', { value: v }, l)));
+  const select = h('select', attrs, ...options.map(([v, l, title]) => h('option', { value: v, title: title || null }, l)));
   for (const o of select.options) o.toggleAttribute('selected', o.value === value);
   return select;
 }
@@ -39,10 +40,11 @@ function makeSelect(options, value, attrs = {}) {
  *   upload?: Function, downscale?: Function }} opts
  * @returns {{ isDirty: () => boolean }}
  */
-export function createItemEditor({ siteId, container, catalog, item, tags = [], agencies = {}, confirm, onSaved, upload = uploadMedia, downscale = downscaleImage }) {
+export function createItemEditor({ siteId, container, catalog: given, item, tags = [], agencies = {}, confirm, onSaved, upload = uploadMedia, downscale = downscaleImage }) {
+  let catalog = given;
   const siteBase = `/api/sites/${encodeURIComponent(siteId)}`;
-  const base = `${siteBase}/catalogs/${encodeURIComponent(catalog.id)}/items/${encodeURIComponent(item.id)}`;
-  const design = catalog.design;
+  const base = `${siteBase}/catalogs/${encodeURIComponent(given.id)}/items/${encodeURIComponent(item.id)}`;
+  let design = catalog.design;
   let current = item;
   const draft = clone(item);
   draft.categories ||= {}; draft.fields ||= {}; draft.links ||= []; draft.photos ||= []; draft.tags ||= [];
@@ -350,9 +352,6 @@ export function createItemEditor({ siteId, container, catalog, item, tags = [], 
   // --- Build ---
   parts.error = h('p', { id: 'item-error', class: 'error', role: 'alert', hidden: true });
   parts.status = h('p', { id: 'item-status', class: 'design-status', role: 'status' });
-  parts.categories = h('div', { id: 'item-categories', class: 'item-categories' });
-  parts.grade = h('div', { id: 'item-grade', class: 'design-basics' });
-  parts.links = h('ul', { id: 'item-links', class: 'design-lists' });
   const save$ = h('button', { type: 'button', id: 'item-save', class: 'primary' }, 'Save');
   save$.addEventListener('click', onSave);
   parts.publish = h('button', { type: 'button', id: 'item-publish' }, 'Publish');
@@ -361,31 +360,55 @@ export function createItemEditor({ siteId, container, catalog, item, tags = [], 
   parts.unpublish.addEventListener('click', () => onPublish(true));
   const back = h('button', { type: 'button', id: 'item-back' }, 'Back to items');
 
-  const tagsInput = textInput({ id: 'item-tags', list: 'item-tags-list' }, draft.tags.join(', '),
-    (v) => { draft.tags = v.split(',').map((t) => t.trim()).filter(Boolean); });
-  const description = h('textarea', { id: 'item-description', rows: '6' });
-  description.value = draft.description || '';
-  description.addEventListener('input', () => { draft.description = description.value; markDirty(); });
-  const addLink = h('button', { type: 'button', id: 'item-link-add', 'data-key': 'item-link-add' }, 'Add link');
-  addLink.addEventListener('click', () => { draft.links.push({ label: '', url: '' }); markDirty(); drawLinks(); container.querySelector('#item-links li:last-child input')?.focus?.(); });
+  /** Draw the whole form from the working copy (again after the collection's design changes). */
+  function render() {
+    parts.categories = h('div', { id: 'item-categories', class: 'item-categories' });
+    parts.grade = h('div', { id: 'item-grade', class: 'design-basics' });
+    parts.links = h('ul', { id: 'item-links', class: 'design-lists' });
+    const tagsInput = textInput({ id: 'item-tags', list: 'item-tags-list' }, draft.tags.join(', '),
+      (v) => { draft.tags = v.split(',').map((t) => t.trim()).filter(Boolean); });
+    const description = h('textarea', { id: 'item-description', rows: '6' });
+    description.value = draft.description || '';
+    description.addEventListener('input', () => { draft.description = description.value; markDirty(); });
+    const addLink = h('button', { type: 'button', id: 'item-link-add', 'data-key': 'item-link-add' }, 'Add link');
+    addLink.addEventListener('click', () => { draft.links.push({ label: '', url: '' }); markDirty(); drawLinks(); container.querySelector('#item-links li:last-child input')?.focus?.(); });
 
-  drawCategories(); drawLinks();
-  if (design.grading) drawGrade();
-  container.replaceChildren(
-    h('div', { class: 'design-actions' }, back, save$, parts.publish, parts.unpublish, parts.status),
-    parts.error,
-    section('item-basics-h', 'About this item', buildBasics()),
-    section('item-photos-h', 'Photos', ...buildPhotos()),
-    design.lists.length ? section('item-categories-h', 'Categories', parts.categories) : null,
-    design.grading ? section('item-grade-h', 'Grade', parts.grade) : null,
-    design.fields.length ? section('item-fields-h', 'Fields', ...buildFields()) : null,
-    section('item-tags-h', 'Tags',
-      labelled('item-tags', 'Tags, separated by commas', tagsInput),
-      h('datalist', { id: 'item-tags-list' }, ...tags.map((t) => h('option', { value: t })))),
-    section('item-description-h', 'Description', labelled('item-description', 'Description', description,
-      h('p', { class: 'detail-hint' }, 'A blank line starts a new paragraph.'))),
-    section('item-video-h', 'Video link', labelled('item-video', 'Video link', textInput({ id: 'item-video', type: 'url', placeholder: 'https://' }, draft.video, (v) => { draft.video = v; }))),
-    section('item-links-h', 'Links', parts.links, h('div', { class: 'design-add' }, addLink)));
+    drawCategories(); drawLinks();
+    if (design.grading) drawGrade();
+    container.replaceChildren(
+      h('div', { class: 'design-actions' }, back, save$, parts.publish, parts.unpublish, parts.status),
+      parts.error,
+      section('item-basics-h', 'About this item', buildBasics()),
+      section('item-photos-h', 'Photos', ...buildPhotos()),
+      design.lists.length ? section('item-categories-h', 'Categories', parts.categories) : null,
+      design.grading ? section('item-grade-h', 'Grade', parts.grade) : null,
+      design.fields.length ? section('item-fields-h', 'Fields', ...buildFields()) : null,
+      section('item-tags-h', 'Tags',
+        labelled('item-tags', 'Tags, separated by commas', tagsInput),
+        h('datalist', { id: 'item-tags-list' }, ...tags.map((t) => h('option', { value: t })))),
+      section('item-description-h', 'Description', labelled('item-description', 'Description', description,
+        h('p', { class: 'detail-hint' }, 'A blank line starts a new paragraph.'))),
+      section('item-video-h', 'Video link', labelled('item-video', 'Video link', textInput({ id: 'item-video', type: 'url', placeholder: 'https://' }, draft.video, (v) => { draft.video = v; }))),
+      section('item-links-h', 'Links', parts.links, h('div', { class: 'design-add' }, addLink)));
+  }
+
+  render();
   drawActions();
-  return { isDirty: () => dirty, backButton: back };
+
+  /** The collection changed (design saved, level raised): draw the form against it, keeping the edits. */
+  function setCatalog(next) {
+    if (JSON.stringify([next.design, next.access]) === JSON.stringify([catalog.design, catalog.access])) { catalog = next; return; }
+    catalog = next;
+    design = next.design;
+    const fieldIds = new Set(design.fields.map((f) => f.id));
+    for (const id of Object.keys(draft.fields)) if (!fieldIds.has(id)) delete draft.fields[id];
+    for (const id of Object.keys(draft.categories)) {
+      const list = design.lists.find((l) => l.id === id);
+      const kept = list ? draft.categories[id].filter((c) => findChoice(design, id, c)) : [];
+      if (kept.length) draft.categories[id] = kept; else delete draft.categories[id];
+    }
+    if (draft.grade && !design.grading?.agencies?.includes(draft.grade.agency)) draft.grade = null;
+    render();
+  }
+  return { isDirty: () => dirty, backButton: back, setCatalog };
 }

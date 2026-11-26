@@ -15,10 +15,11 @@ const levelName = (level) => ({ public: 'Public', friends: 'Friends' }[level] ||
  *   confirm: (q: Object) => Promise<boolean>,
  *   onCounts?: (counts: {itemCount: number, publishedCount: number}) => void,
  *   upload?: Function, downscale?: Function }} opts
- * @returns {{ show: () => Promise<void>, isDirty: () => boolean }}
+ * @returns {{ show: () => Promise<void>, isDirty: () => boolean, setCatalog: (catalog: Object) => void }}
  */
-export function createItemsView({ siteId, container, catalog, agencies, confirm, onCounts, upload, downscale }) {
-  const base = `/api/sites/${encodeURIComponent(siteId)}/catalogs/${encodeURIComponent(catalog.id)}/items`;
+export function createItemsView({ siteId, container, catalog: given, agencies, confirm, onCounts, upload, downscale }) {
+  let catalog = given;
+  const base = `/api/sites/${encodeURIComponent(siteId)}/catalogs/${encodeURIComponent(given.id)}/items`;
   let items = [];
   let tags = [];
   let editor = null; // the open item editor, when there is one
@@ -143,5 +144,11 @@ export function createItemsView({ siteId, container, catalog, agencies, confirm,
     /** Draw the list (fresh from the server), unless an item is open: that stays as it is. */
     async show() { if (!editor) await load(); },
     isDirty: () => !!editor?.isDirty(),
+    /** The collection changed: new items and an open editor use it (an open editor keeps its edits). */
+    setCatalog(next) {
+      catalog = next;
+      editor?.setCatalog(next);
+      if (!editor) drawList();
+    },
   };
 }

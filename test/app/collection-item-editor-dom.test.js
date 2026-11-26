@@ -270,6 +270,31 @@ describe('Item editor', () => {
   });
 });
 
+describe('Nested choices and a changed design', () => {
+  it('marks depth with characters that do not collapse and gives each option its full path', async () => {
+    await open();
+    const options = [...$('[data-list-id="l_sys"] select').options];
+    const nes = options.find((o) => o.value === 'c_nes');
+    assert.match(nes.textContent, /^\u00a0+\u2514 NES$/);
+    assert.equal(nes.getAttribute('title'), 'Nintendo \u203a NES');
+    assert.equal(options.find((o) => o.value === 'c_nin').textContent, 'Nintendo');
+  });
+
+  it('an open editor takes a new design, keeps its edited title and drops values of removed fields', async () => {
+    const editor = await open(item({ fields: { f_note: 'hi', f_year: 1990 } }));
+    change($('#item-title'), 'Edited title');
+    const next = catalog({ design: { ...design(), fields: [...design().fields.filter((f) => f.id !== 'f_note'), { id: 'f_new', label: 'Condition', type: 'text', level: 'public' }] } });
+    editor.setCatalog(next);
+    assert.ok($('[data-field-id="f_new"]'));
+    assert.equal($('[data-field-id="f_note"]'), null);
+    assert.equal($('#item-title').value, 'Edited title');
+    assert.equal(editor.isDirty(), true);
+    click($('#item-save'));
+    await settle();
+    assert.deepEqual(putBody().fields, { f_year: 1990 });
+  });
+});
+
 describe('Items list', () => {
   it('lists items with thumbnail, status, level and updated; filters by text', async () => {
     const view = createItemsView({ siteId: 'my site', container, catalog: catalog(), agencies, confirm, upload, downscale, onCounts() {} });
@@ -321,6 +346,32 @@ describe('Items list', () => {
 });
 
 describe('Collections page', () => {
+  it('after a design save, the Items tab shows the new field', async () => {
+    globalThis.location = { search: '?site=my%20site&section=collections&catalog=cat_1&tab=design' };
+    const newDesign = { ...design(), fields: [...design().fields, { id: 'f_new', label: 'Condition', type: 'text', level: 'public' }] };
+    responders['PUT /catalogs/cat_1'] = () => Response.json(catalog({ design: newDesign }));
+    responders['GET /catalogs/cat_1/items/item_1'] = () => Response.json(item());
+    const root = win.document.getElementById('collections-section');
+    const section = initCollectionsSection({ siteId: 'my site', root });
+    await section.show();
+    await settle();
+    root.querySelector('#collection-tabs button[data-tab="items"]').dispatchEvent(new win.Event('click', { bubbles: true }));
+    await settle();
+    root.querySelector('#collection-items-mount tbody [data-role="open"]').dispatchEvent(new win.Event('click', { bubbles: true }));
+    await settle();
+    assert.equal(root.querySelector('[data-field-id="f_new"]'), null);
+    root.querySelector('#item-title').value = 'Dirty title';
+    root.querySelector('#item-title').dispatchEvent(new win.Event('input', { bubbles: true }));
+    root.querySelector('#collection-tabs button[data-tab="design"]').dispatchEvent(new win.Event('click', { bubbles: true }));
+    await settle();
+    root.querySelector('#design-save').dispatchEvent(new win.Event('click', { bubbles: true }));
+    await settle();
+    root.querySelector('#collection-tabs button[data-tab="items"]').dispatchEvent(new win.Event('click', { bubbles: true }));
+    await settle();
+    assert.ok(root.querySelector('[data-field-id="f_new"]'));
+    assert.equal(root.querySelector('#item-title').value, 'Dirty title');
+  });
+
   it('mounts the items list on the Items tab', async () => {
     globalThis.location = { search: '?site=my%20site&section=collections&catalog=cat_1' };
     const root = win.document.getElementById('collections-section');

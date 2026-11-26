@@ -27,6 +27,7 @@ import { mountLayoutRoutes } from './layout-routes.js';
 import { layoutWritesPath } from './layout-writes.js';
 import { mountProgramRoutes } from './program-routes.js';
 import { mountSocialRoutes } from './social-routes.js';
+import { mountCatalogRoutes } from './catalog-routes.js';
 import { mountServiceRoutes } from './service-routes.js';
 import { createImageSearch } from '../services/image-search.js';
 import { clearTmp } from '../programs/import.js';
@@ -97,6 +98,7 @@ export function isQueuedWrite(method, pathname) {
   const rest = pathname.replace(/^\/api\/sites\/[^/]+/, '');
   if (rest === '/sync') return true;
   if (rest === '/media' || rest.startsWith('/media/')) return true;
+  if (rest === '/catalogs' || rest.startsWith('/catalogs/')) return true;
   return (rest === '/documents' || rest.startsWith('/documents/')) && !ACTION_PATH.test(rest);
 }
 
@@ -265,6 +267,7 @@ export async function startApp({
       mountSocialRoutes(router, prefix, {
         site, ws, db, backup, writes, deps: git, fetch: fetchImpl, cookSocial, marked,
       });
+      mountCatalogRoutes(router, prefix, { db });
       const entry = { ws, db, router, backup, writes };
       open.set(site.id, entry);
       return entry;

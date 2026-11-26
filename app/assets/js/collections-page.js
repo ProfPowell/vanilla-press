@@ -8,6 +8,7 @@
 import { api, h } from './app-api.js';
 import { openDialog } from './theme-dialogs.js';
 import { createDesignEditor } from './collection-design.js';
+import { createItemsView } from './collection-items.js';
 
 const levelName = (level) => ({ public: 'Public', friends: 'Friends' }[level] || 'Private');
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -24,6 +25,7 @@ export function initCollectionsSection({ siteId, root }) {
   let templates = null; // { templates, agencies }, loaded once
   let route = { catalogId: null, tab: 'items' };
   const drafts = new Map(); // catalog id -> { editor, container }: kept across tabs, views and hide/show
+  const itemViews = new Map(); // catalog id -> the items view (its open item editor keeps its edits too)
   let latest = 0;
 
   const showError = (message) => {
@@ -41,16 +43,20 @@ export function initCollectionsSection({ siteId, root }) {
   /** Move to a view: updates the address, then draws it. */
   async function go(next) {
     if (route.catalogId && next.catalogId !== route.catalogId) {
-      const draft = drafts.get(route.catalogId);
-      if (draft?.editor.isDirty()) {
+      const designDirty = drafts.get(route.catalogId)?.editor.isDirty();
+      const itemDirty = itemViews.get(route.catalogId)?.isDirty();
+      if (designDirty || itemDirty) {
         const discard = await confirm({
-          title: 'Discard unsaved design changes?',
-          description: 'This collection\u2019s design has changes that are not saved. Leaving it throws them away.',
+          title: designDirty && !itemDirty ? 'Discard unsaved design changes?' : 'Discard unsaved changes?',
+          description: designDirty && !itemDirty
+            ? 'This collection\u2019s design has changes that are not saved. Leaving it throws them away.'
+            : 'This collection has changes that are not saved. Leaving it throws them away.',
           ok: 'Discard changes', busyText: 'Leaving\u2026',
         });
         if (!discard) return;
       }
       drafts.delete(route.catalogId);
+      itemViews.delete(route.catalogId);
     }
     route = next;
     if (typeof history !== 'undefined') history.pushState(null, '', routeHref(route));
@@ -111,6 +117,11 @@ export function initCollectionsSection({ siteId, root }) {
   }
 
   // --- One collection ---
+  const showSummary = (c) => {
+    $('collection-summary').textContent =
+      `${levelName(c.access)} · ${plural(c.itemCount ?? 0, 'item')} · ${c.publishedCount ?? 0} published`;
+  };
+
   function renderCollection() {
     const c = collections.find((x) => x.id === route.catalogId);
     if (!c) {
@@ -118,12 +129,28 @@ export function initCollectionsSection({ siteId, root }) {
       return false;
     }
     $('collection-title').textContent = c.title;
-    $('collection-summary').textContent =
-      `${levelName(c.access)} · ${plural(c.itemCount ?? 0, 'item')} · ${c.publishedCount ?? 0} published`;
+    showSummary(c);
     $('collection-back').setAttribute('href', sectionHref());
     for (const b of $('collection-tabs').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.tab === route.tab));
     $('collection-items').hidden = route.tab !== 'items';
     $('collection-design').hidden = route.tab !== 'design';
+    if (route.tab === 'items') {
+      let view = itemViews.get(c.id);
+      if (!view) {
+        const container = h('div', { class: 'items-view' });
+        view = createItemsView({
+          siteId, container, catalog: c, agencies: templates.agencies, confirm,
+          onCounts(counts) {
+            collections = collections.map((x) => (x.id === c.id ? { ...x, ...counts } : x));
+            showSummary({ ...c, ...counts, access: collections.find((x) => x.id === c.id)?.access ?? c.access });
+          },
+        });
+        view.container = container;
+        itemViews.set(c.id, view);
+        $('collection-items-mount').replaceChildren(container);
+      }
+      view.show();
+    }
     if (route.tab === 'design') {
       // An edited design stays as it is; a clean one is rebuilt so it shows the latest counts.
       let draft = drafts.get(c.id);

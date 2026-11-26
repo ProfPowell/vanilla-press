@@ -12,17 +12,19 @@ const UNREACHABLE = "Upload failed: the app didn't answer. Is vp still running?"
  * editor): its id, level and section, so the server gives the file that
  * document's level (the media library itself sends none: public).
  * @param {File} file
- * @param {{ alt?: string|null, editedFrom?: string, credit?: object, source?: string,
- *   document?: { id?: string, access?: string, section?: string }|null }} [opts]
+ * @param {{ alt?: string|null, editedFrom?: string, credit?: object, source?: string, access?: string,
+ *   document?: { id?: string, access?: string, section?: string }|null }} [opts] `access` is the
+ *   file's own level (a collection item's photo), which wins over a document's
  * @returns {FormData}
  */
-export function uploadForm(file, { alt, editedFrom, credit, source, document } = {}) {
+export function uploadForm(file, { alt, editedFrom, credit, source, access, document } = {}) {
   const form = new FormData();
   form.append('file', file, file.name);
   if (alt != null) form.append('alt', alt);
   if (editedFrom) form.append('edited_from', editedFrom);
   if (credit) form.append('credit', JSON.stringify(credit));
   if (source) form.append('source', source);
+  if (access) form.append('access', access);
   if (document?.id) form.append('document', document.id);
   if (document?.access != null) form.append('document_access', document.access);
   if (document?.section != null) form.append('document_section', document.section);

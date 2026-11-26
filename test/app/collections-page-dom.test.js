@@ -46,6 +46,7 @@ before(async () => {
     const r = responders[`${method} ${path}`];
     if (r) return r(body);
     if (method === 'GET' && path === '/catalogs') return Response.json({ catalogs });
+    if (method === 'GET' && /^\/catalogs\/[^/]+\/items$/.test(path)) return Response.json({ items: [], tags: [] });
     if (method === 'GET' && path === '/catalogs/templates') {
       return Response.json({
         templates: [{ id: 'retro-games', label: 'Retro games', description: 'Games' }, { id: 'coins', label: 'Coins', description: 'Coins' }],
@@ -127,7 +128,7 @@ describe('Collections section', () => {
 });
 
 describe('Collection design', () => {
-  it('shows the collection fields, with Items as a placeholder tab', async () => {
+  it('shows the collection fields, with the Items tab beside it', async () => {
     await openDesign('?site=my%20site&section=collections&catalog=cat_1');
     assert.equal($('collection-view').hidden, false);
     assert.equal($('collection-items').hidden, false);

@@ -108,6 +108,12 @@ test('uploadMedia options are passed through', async () => {
   assert.equal(typeof opts.onProgress, 'function');
 });
 
+test("uploadForm: an access level is sent as the file's own", () => {
+  const f = new File(['x'], 'a.jpg', { type: 'image/jpeg' });
+  assert.equal(uploadForm(f, { access: 'private' }).get('access'), 'private');
+  assert.equal(uploadForm(f, {}).has('access'), false);
+});
+
 test("uploadForm: an upload from a document's editor names the document, its level and section", () => {
   const f = new File(['x'], 'a.jpg', { type: 'image/jpeg' });
   const plain = uploadForm(f, {});

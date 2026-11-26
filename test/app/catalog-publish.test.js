@@ -9,7 +9,7 @@ import { ensureInstalled, runBuild } from '../../src/app/site-process.js';
 import { startApp } from '../../src/app/server.js';
 import { resolveWorkspace, openWorkspaceDb } from '../../src/workspace/workspace.js';
 import { saveDocument } from '../../src/store/content.js';
-import { createCatalog, createItem, getItem, updateCatalog } from '../../src/store/catalogs.js';
+import { createCatalog, createItem, getItem, updateCatalog, updateItem } from '../../src/store/catalogs.js';
 import { designFromTemplate } from '../../src/catalogs/templates.js';
 import { writeMediaJson } from '../../src/sync/site-files.js';
 import { makeGitSite, fakeClock, git, write, BUILD_FAIL } from './git-site-fixture.js';
@@ -168,12 +168,84 @@ describe('publishCatalog', () => {
       publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: untitled.id, publish: true }, deps: deps() }),
       (err) => err instanceof PublishRejectedError && err.status === 422,
     );
+    addMedia('gone.jpg');
     const missing = createItem(db, catalog.id, { title: 'Missing', photos: [{ file: 'gone.jpg' }] });
     await assert.rejects(
       publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: missing.id, publish: true }, deps: deps() }),
       (err) => err instanceof PublishRejectedError && err.status === 422 && /gone\.jpg/.test(err.body.error),
     );
     assert.equal(getItem(db, missing.id).status, 'draft');
+  });
+
+  test('publishing another item checks the items already published at the collection\'s current level', async () => {
+    const { ws, catalog } = setup();
+    const first = createItem(db, catalog.id, { title: 'First', photos: [{ file: 'a.jpg' }] });
+    await publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: first.id, publish: true }, deps: deps() });
+    updateCatalog(db, catalog.id, { access: 'friends' });
+    const second = createItem(db, catalog.id, { title: 'Second', access: 'friends' });
+    await assert.rejects(
+      publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: second.id, publish: true }, deps: deps() }),
+      (err) => err instanceof PublishRejectedError && err.status === 409
+        && err.body.photoWarnings.length === 1 && err.body.photoWarnings[0].file === 'a.jpg'
+        && err.body.photoWarnings[0].item.id === first.id && err.body.photoWarnings[0].needed === 'friends',
+    );
+    assert.equal(getItem(db, second.id).status, 'draft');
+  });
+
+  test('a photo added to a published item is committed when another item is published', async () => {
+    const { ws, catalog } = setup();
+    const first = createItem(db, catalog.id, { title: 'First', photos: [{ file: 'a.jpg' }] });
+    await publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: first.id, publish: true }, deps: deps() });
+    write(fx.site, 'src/media/b.jpg', 'jpeg b');
+    addMedia('b.jpg');
+    updateItem(db, first.id, { photos: [{ file: 'a.jpg' }, { file: 'b.jpg' }] });
+    const second = createItem(db, catalog.id, { title: 'Second' });
+    await publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: second.id, publish: true }, deps: deps() });
+    assert.ok(remoteChanged().includes('src/media/b.jpg'), remoteChanged().join());
+    assert.deepEqual(readData().items.find((i) => i.id === first.id).photos.map((p) => p.file), ['a.jpg', 'b.jpg']);
+  });
+
+  test('a missing photo on another published item is refused (422)', async () => {
+    const { ws, catalog } = setup();
+    const first = createItem(db, catalog.id, { title: 'First' });
+    await publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: first.id, publish: true }, deps: deps() });
+    addMedia('gone.jpg');
+    updateItem(db, first.id, { photos: [{ file: 'gone.jpg' }] });
+    const second = createItem(db, catalog.id, { title: 'Second' });
+    await assert.rejects(
+      publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: second.id, publish: true }, deps: deps() }),
+      (err) => err instanceof PublishRejectedError && err.status === 422 && /gone\.jpg/.test(err.body.error),
+    );
+    assert.equal(getItem(db, second.id).status, 'draft');
+  });
+
+  test('a photo with no media row is refused (422), even when confirmed', async () => {
+    const { ws, catalog } = setup();
+    write(fx.site, 'src/media/norow.jpg', 'jpeg');
+    const item = createItem(db, catalog.id, { title: 'Mine', access: 'friends', photos: [{ file: 'norow.jpg' }] });
+    const before = git(fx.site, 'rev-parse', 'HEAD');
+    await assert.rejects(
+      publishCatalog({
+        ws, db, catalogId: catalog.id, change: { itemId: item.id, publish: true }, confirmRaisePhotoAccess: true, deps: deps(),
+      }),
+      (err) => err instanceof PublishRejectedError && err.status === 422
+        && err.body.error === "This photo isn't in the media library: norow.jpg. Re-add it to the item.",
+    );
+    assert.equal(getItem(db, item.id).status, 'draft');
+    assert.equal(existsSync(join(fx.site, FILE)), false);
+    assert.equal(git(fx.site, 'rev-parse', 'HEAD'), before);
+  });
+
+  test('a photo with no media row on another published item is refused (422)', async () => {
+    const { ws, catalog } = setup();
+    const first = createItem(db, catalog.id, { title: 'First' });
+    await publishCatalog({ ws, db, catalogId: catalog.id, change: { itemId: first.id, publish: true }, deps: deps() });
+    write(fx.site, 'src/media/norow.jpg', 'jpeg');
+    updateItem(db, first.id, { photos: [{ file: 'norow.jpg' }] });
+    await assert.rejects(
+      publishCatalog({ ws, db, catalogId: catalog.id, change: null, confirmRaisePhotoAccess: true, deps: deps() }),
+      (err) => err instanceof PublishRejectedError && err.status === 422 && /isn't in the media library: norow\.jpg/.test(err.body.error),
+    );
   });
 
   test('an unknown collection or item is 404', async () => {

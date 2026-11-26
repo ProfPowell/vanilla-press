@@ -29,11 +29,13 @@ const photoFiles = (items) => [...new Set(items.flatMap((i) => (i.photos ?? []).
  *     gitStatus: Function, readSiteUrl?: Function },
  * }} options - change: an item's Publish (`publish: true`) or Unpublish; null re-publishes
  *   the collection itself (its design or level) with the items already published.
- *   The items going live (the item published, or every published item for null) are
- *   refused (422) with no title or with a photo missing from src/media, and (409, body
- *   `photoWarnings` from photoAccessWarnings) when a photo is less restricted than the
- *   item, until confirmRaisePhotoAccess: then each such photo's media level is raised to
- *   what its items need and content/media.json rewritten.
+ *   Every item the file will hold (the published items after the change) is checked at
+ *   the collection's current level: refused (422) with no title, with a photo that has
+ *   no media row (no override: it would be public on the site) or is missing from
+ *   src/media, and (409, body `photoWarnings` from photoAccessWarnings) when a photo is
+ *   less restricted than its item, until confirmRaisePhotoAccess: then each such photo's
+ *   media level is raised to what its items need and content/media.json rewritten.
+ *   The commit carries every photo those items use.
  * @returns {Promise<{ status: 'pushed'|'saved', sha: string|null, url: string|null }>}
  *   url: the item's (or collection's) page, null for Unpublish or without a siteUrl
  * @throws {BuildError|PublishRejectedError|Error} git errors propagate (GitConflictError, ...)
@@ -44,12 +46,21 @@ export async function publishCatalog({ ws, db, catalogId, change = null, confirm
   const previous = change ? getItem(db, change.itemId) : null;
   if (change && (!previous || previous.catalogId !== catalog.id)) throw new PublishRejectedError(404, { error: 'Item not found' });
 
-  const going = !change ? listItems(db, catalog.id).filter((i) => i.status === 'published')
-    : change.publish ? [previous] : [];
+  // Every item the written file will hold (the published ones, after the change) is
+  // checked, at its level under the collection's current level, and its photos committed.
+  const going = listItems(db, catalog.id).filter((i) => (change && i.id === previous.id ? change.publish : i.status === 'published'));
   const untitled = going.find((i) => !String(i.title ?? '').trim());
   if (untitled) throw new PublishRejectedError(422, { error: 'Give the item a title before publishing.' });
-  const linked = db.prepare('SELECT url FROM media WHERE filename = ?');
-  const missing = photoFiles(going).filter((file) => isMissing(ws.mediaDir, file, linked.get(file)?.url ?? null));
+  // A photo with no media row has no level: the site would show it as public. Fail closed.
+  const mediaRow = db.prepare('SELECT url FROM media WHERE filename = ?');
+  const files = photoFiles(going);
+  const unlisted = files.filter((file) => !mediaRow.get(file));
+  if (unlisted.length) {
+    throw new PublishRejectedError(422, {
+      error: `${unlisted.length === 1 ? "This photo isn't" : "These photos aren't"} in the media library: ${unlisted.join(', ')}. Re-add ${unlisted.length === 1 ? 'it' : 'them'} to the item.`,
+    });
+  }
+  const missing = files.filter((file) => isMissing(ws.mediaDir, file, mediaRow.get(file).url ?? null));
   if (missing.length) {
     throw new PublishRejectedError(422, {
       error: `Photos missing from src/media: ${missing.join(', ')}. Remove them or add the files, then publish.`,
@@ -98,7 +109,7 @@ export async function publishCatalog({ ws, db, catalogId, change = null, confirm
   const status = await deps.gitStatus(ws.siteDir);
   let sha = null;
   if (status.isRepo) {
-    const photos = photoFiles(change ? [item] : going).map((f) => `src/media/${f}`);
+    const photos = files.map((f) => `src/media/${f}`);
     const paths = [`content/catalogs/${catalog.slug}.json`, 'content/media.json', ...photos];
     const message = !change ? `Update collection: ${catalog.title}`
       : `${change.publish ? 'Publish' : 'Unpublish'} collection item: ${item.title}`;

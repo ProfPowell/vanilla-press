@@ -166,11 +166,66 @@ describe('catalog routes', () => {
     assert.equal((await api('/catalogs/cat_missing', { method: 'DELETE' })).status, 404);
   });
 
+  describe('PUT design removals', () => {
+    const textField = (d) => d.fields.find((f) => f.type === 'text');
+
+    it('a removed list or choice that an item uses is 409 with count; items untouched', async () => {
+      const cat = await makeCatalog({ title: 'Design lists', template: 'retro-games' });
+      const list = cat.design.lists[0];
+      const choice = list.choices[0];
+      const item = (await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'A', categories: { [list.id]: [choice.id] } } })).data;
+      const noList = { ...cat.design, lists: cat.design.lists.filter((l) => l.id !== list.id) };
+      const r1 = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design: noList } });
+      assert.equal(r1.status, 409);
+      assert.equal(r1.data.count, 1);
+      const noChoice = { ...cat.design, lists: cat.design.lists.map((l) => (l.id === list.id ? { ...l, choices: l.choices.slice(1) } : l)) };
+      const r2 = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design: noChoice } });
+      assert.equal(r2.status, 409);
+      assert.equal(r2.data.count, 1);
+      assert.deepEqual((await api(`/catalogs/${cat.id}/items/${item.id}`)).data.categories, { [list.id]: [choice.id] });
+      assert.deepEqual((await api(`/catalogs/${cat.id}`)).data.design, cat.design);
+    });
+
+    it('a removed field with values is 409 with count and field; confirmDropValues saves and cleans the items', async () => {
+      const cat = await makeCatalog({ title: 'Design fields', template: 'retro-games' });
+      const f = textField(cat.design);
+      const a = (await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'A', fields: { [f.id]: 'hello' } } })).data;
+      const b = (await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'B' } })).data;
+      const design = { ...cat.design, fields: cat.design.fields.filter((x) => x.id !== f.id) };
+      const refused = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design } });
+      assert.equal(refused.status, 409);
+      assert.equal(refused.data.count, 1);
+      assert.equal(refused.data.field, f.id);
+      assert.equal((await api(`/catalogs/${cat.id}/items/${a.id}`)).data.fields[f.id], 'hello');
+      assert.ok((await api(`/catalogs/${cat.id}`)).data.design.fields.some((x) => x.id === f.id));
+      const ok = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design, confirmDropValues: true } });
+      assert.equal(ok.status, 200, JSON.stringify(ok.data));
+      assert.equal(ok.data.design.fields.some((x) => x.id === f.id), false);
+      assert.equal(f.id in (await api(`/catalogs/${cat.id}/items/${a.id}`)).data.fields, false);
+      assert.equal((await api(`/catalogs/${cat.id}/items/${a.id}`, { method: 'PUT', body: { title: 'A2' } })).status, 200);
+      assert.equal((await api(`/catalogs/${cat.id}/items/${b.id}`)).status, 200);
+    });
+
+    it('a removed field nobody has a value for is dropped without confirmation', async () => {
+      const cat = await makeCatalog({ title: 'Design empty', template: 'retro-games' });
+      const f = textField(cat.design);
+      await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'A', fields: { [f.id]: '' } } });
+      const design = { ...cat.design, fields: cat.design.fields.filter((x) => x.id !== f.id) };
+      const ok = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design } });
+      assert.equal(ok.status, 200, JSON.stringify(ok.data));
+    });
+  });
+
   it('writes under /catalogs are queued behind a publish; reads are not', () => {
     assert.equal(isQueuedWrite('PUT', '/api/sites/x/catalogs/y'), true);
     assert.equal(isQueuedWrite('POST', '/api/sites/x/catalogs'), true);
     assert.equal(isQueuedWrite('DELETE', '/api/sites/x/catalogs/y/items/z'), true);
     assert.equal(isQueuedWrite('GET', '/api/sites/x/catalogs/y'), false);
+    // Publish routes (Task 5) take the lock themselves, like document publish.
+    assert.equal(isQueuedWrite('POST', '/api/sites/x/catalogs/y/items/z/publish'), false);
+    assert.equal(isQueuedWrite('POST', '/api/sites/x/catalogs/y/items/z/unpublish'), false);
+    assert.equal(isQueuedWrite('POST', '/api/sites/x/catalogs/y/publish'), false);
+    assert.equal(isQueuedWrite('POST', '/api/sites/x/catalogs/y/items'), true);
   });
 
   it('a request with a foreign Origin is refused', async () => {

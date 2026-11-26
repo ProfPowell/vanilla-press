@@ -48,6 +48,34 @@ function storeStatus(err) {
   return 0;
 }
 
+const hasValue = (v) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0);
+
+/** Every choice id in a list's tree. */
+function choiceIds(choices, out = new Set()) {
+  for (const c of choices ?? []) {
+    out.add(c.id);
+    choiceIds(c.children, out);
+  }
+  return out;
+}
+
+/**
+ * What a new design takes away from the old one, as the items see it: the choice ids
+ * removed (a removed list takes all its choices) and the field ids removed.
+ */
+function removals(oldDesign, newDesign) {
+  const newLists = new Map(newDesign.lists.map((l) => [l.id, choiceIds(l.choices)]));
+  const choices = new Map(); // listId -> removed choice ids
+  for (const l of oldDesign.lists) {
+    const kept = newLists.get(l.id) ?? new Set();
+    const gone = [...choiceIds(l.choices)].filter((id) => !kept.has(id));
+    if (gone.length) choices.set(l.id, new Set(gone));
+  }
+  const keptFields = new Set(newDesign.fields.map((f) => f.id));
+  const fields = oldDesign.fields.map((f) => f.id).filter((id) => !keptFields.has(id));
+  return { choices, fields };
+}
+
 /**
  * @param {{ add: Function }} router
  * @param {string} prefix - `/api/sites/<id>`
@@ -140,7 +168,30 @@ export function mountCatalogRoutes(router, prefix, { db }) {
       const errors = validateDesign(patch.design);
       if (errors.length) throw new HttpError(400, 'The design is not valid', { errors });
     }
-    sendJson(res, 200, updateCatalog(db, req.params.id, patch));
+    if (patch.design === undefined) return sendJson(res, 200, updateCatalog(db, req.params.id, patch));
+    const catalog = need(req.params.id);
+    const items = listItems(db, catalog.id);
+    const gone = removals(catalog.design, patch.design);
+    // A choice or list that items still use cannot go: move the items first.
+    const inUse = items.filter((it) => [...gone.choices].some(([listId, ids]) => (it.categories?.[listId] ?? []).some((c) => ids.has(c))));
+    if (inUse.length) {
+      throw new HttpError(409, `${inUse.length} item${inUse.length === 1 ? ' uses' : 's use'} a list or choice this design removes. Move them first.`, { count: inUse.length });
+    }
+    // A field with values is dropped only when the caller confirms; its values go with it.
+    const withValues = gone.fields.map((field) => ({ field, items: items.filter((it) => hasValue(it.fields?.[field])) }))
+      .filter((f) => f.items.length);
+    if (withValues.length && body(req).confirmDropValues !== true) {
+      const [{ field, items: used }] = withValues;
+      throw new HttpError(409, `${used.length} item${used.length === 1 ? ' has' : 's have'} a value in a field this design removes.`, { count: used.length, field });
+    }
+    const saved = db.transaction(() => {
+      for (const it of items) {
+        const dropped = gone.fields.filter((f) => f in (it.fields ?? {}));
+        if (dropped.length) updateItem(db, it.id, { fields: Object.fromEntries(Object.entries(it.fields).filter(([k]) => !dropped.includes(k))) });
+      }
+      return updateCatalog(db, catalog.id, patch);
+    })();
+    sendJson(res, 200, saved);
   }));
 
   router.add('DELETE', `${prefix}/catalogs/:id`, write((req, res) => {

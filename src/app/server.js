@@ -82,6 +82,7 @@ const STATIC_MOUNTS = [
 ];
 
 /** Actions with their own queue (they take the write lock inside the backup queue). */
+const CATALOG_ACTION_PATH = /^\/catalogs\/[^/]+(\/items\/[^/]+)?\/(publish|unpublish)$/;
 const ACTION_PATH = /\/documents\/[^/]+\/(publish|update|unpublish)$/;
 
 /**
@@ -98,7 +99,8 @@ export function isQueuedWrite(method, pathname) {
   const rest = pathname.replace(/^\/api\/sites\/[^/]+/, '');
   if (rest === '/sync') return true;
   if (rest === '/media' || rest.startsWith('/media/')) return true;
-  if (rest === '/catalogs' || rest.startsWith('/catalogs/')) return true;
+  // Collection publish routes take the lock themselves, like the documents' publish actions.
+  if (rest === '/catalogs' || rest.startsWith('/catalogs/')) return !CATALOG_ACTION_PATH.test(rest);
   return (rest === '/documents' || rest.startsWith('/documents/')) && !ACTION_PATH.test(rest);
 }
 

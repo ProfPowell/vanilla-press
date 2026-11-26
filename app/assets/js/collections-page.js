@@ -23,7 +23,7 @@ export function initCollectionsSection({ siteId, root }) {
   let collections = [];
   let templates = null; // { templates, agencies }, loaded once
   let route = { catalogId: null, tab: 'items' };
-  let editor = null;
+  const drafts = new Map(); // catalog id -> { editor, container }: kept across tabs, views and hide/show
   let latest = 0;
 
   const showError = (message) => {
@@ -40,6 +40,18 @@ export function initCollectionsSection({ siteId, root }) {
 
   /** Move to a view: updates the address, then draws it. */
   async function go(next) {
+    if (route.catalogId && next.catalogId !== route.catalogId) {
+      const draft = drafts.get(route.catalogId);
+      if (draft?.editor.isDirty()) {
+        const discard = await confirm({
+          title: 'Discard unsaved design changes?',
+          description: 'This collection\u2019s design has changes that are not saved. Leaving it throws them away.',
+          ok: 'Discard changes', busyText: 'Leaving\u2026',
+        });
+        if (!discard) return;
+      }
+      drafts.delete(route.catalogId);
+    }
     route = next;
     if (typeof history !== 'undefined') history.pushState(null, '', routeHref(route));
     await render();
@@ -113,16 +125,23 @@ export function initCollectionsSection({ siteId, root }) {
     $('collection-items').hidden = route.tab !== 'items';
     $('collection-design').hidden = route.tab !== 'design';
     if (route.tab === 'design') {
-      editor = createDesignEditor({
-        siteId, container: $('collection-design'), catalog: c, agencies: templates.agencies, confirm,
-        onSaved(saved) {
-          collections = collections.map((x) => (x.id === saved.id ? { ...x, ...saved, itemCount: x.itemCount, publishedCount: saved.publishedCount ?? x.publishedCount } : x));
-          $('collection-title').textContent = saved.title;
-        },
-      });
-    } else {
-      editor = null;
-      $('collection-design').replaceChildren();
+      // An edited design stays as it is; a clean one is rebuilt so it shows the latest counts.
+      let draft = drafts.get(c.id);
+      if (!draft || !draft.editor.isDirty()) {
+        const container = h('div', { class: 'design-editor' });
+        draft = {
+          container,
+          editor: createDesignEditor({
+            siteId, container, catalog: c, agencies: templates.agencies, confirm,
+            onSaved(saved) {
+              collections = collections.map((x) => (x.id === saved.id ? { ...x, ...saved, itemCount: x.itemCount, publishedCount: saved.publishedCount ?? x.publishedCount } : x));
+              $('collection-title').textContent = saved.title;
+            },
+          }),
+        };
+        drafts.set(c.id, draft);
+      }
+      $('collection-design').replaceChildren(draft.container);
     }
     return true;
   }

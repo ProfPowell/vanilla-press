@@ -374,7 +374,8 @@ button.danger-text:hover { background: var(--color-error-subtle); }
 .collection-back { font-size: 0.875rem; }
 #collection-tabs { margin-block: 1rem; }
 #collection-design { display: flex; flex-direction: column; gap: 1.5rem; }
-#collection-design[hidden] { display: none; }
+/* Buttons are inline-flex, which beats the UA [hidden] rule: keep anything hidden here hidden. */
+#collections-section [hidden] { display: none !important; }
 .design-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 .design-status { margin: 0; font-size: 0.875rem; color: var(--color-text-muted); }
 .design-section { display: flex; flex-direction: column; gap: 0.75rem; padding: 1.25rem; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-xl); }

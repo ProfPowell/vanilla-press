@@ -81,6 +81,9 @@ beforeEach(async () => {
   responders = {};
   catalogs = [catalog(), catalog({ id: 'cat_2', slug: 'coins', title: 'Coins', access: 'public', itemCount: 0, publishedCount: 0 })];
   globalThis.location = { search: '?site=my%20site&section=collections' };
+  // A fresh copy of the section, so earlier tests' sections do not keep listening to clicks
+  const old = $('collections-section');
+  old.replaceWith(old.cloneNode(true));
   section = await initCollectionsSection({ siteId: 'my site', root: $('collections-section') });
   await section.show();
   await settle();
@@ -254,5 +257,62 @@ describe('Collection design', () => {
     click($('design-publish'));
     await settle();
     assert.match(text($('design-error')), /Photos missing/);
+  });
+});
+
+describe('Collections section: hidden and unsaved edits', () => {
+  it('the stylesheet keeps every hidden element in the section hidden (buttons are inline-flex)', () => {
+    const css = readFileSync(new URL('../../app/assets/app.css', import.meta.url), 'utf8');
+    assert.match(css, /#collections-section \[hidden\]\s*\{[^}]*display:\s*none\s*!important/);
+    assert.ok($('collections-section').querySelector('#collections-new'), 'section exists');
+  });
+
+  const edit = () => { const t = $('design-title'); t.value = 'Renamed'; t.dispatchEvent(new win.Event('input', { bubbles: true })); };
+
+  it('keeps an unsaved edit when switching to Items and back', async () => {
+    await openDesign();
+    edit();
+    click($('collection-tabs').querySelector('[data-tab="items"]'));
+    await settle();
+    assert.equal($('collection-design').hidden, true);
+    click($('collection-tabs').querySelector('[data-tab="design"]'));
+    await settle();
+    assert.equal($('design-title').value, 'Renamed');
+  });
+
+  it('keeps an unsaved edit across hide() and show()', async () => {
+    await openDesign();
+    edit();
+    await section.hide();
+    await section.show();
+    await settle();
+    assert.equal($('design-title').value, 'Renamed');
+  });
+
+  it('asks before leaving a collection with unsaved edits; Cancel stays, Discard leaves', async () => {
+    await openDesign();
+    edit();
+    click($('collection-back'));
+    await settle();
+    assert.equal($('collections-confirm-dialog').open, true);
+    assert.match(text($('collections-confirm-title')), /Discard unsaved design changes\?/);
+    $('collections-confirm-dialog').close();
+    await settle();
+    assert.equal($('collection-view').hidden, false);
+    assert.equal($('design-title').value, 'Renamed');
+    click($('collection-back'));
+    await settle();
+    $('collections-confirm-form').onsubmit(new win.Event('submit'));
+    await settle();
+    assert.equal($('collection-view').hidden, true);
+    assert.equal($('collections-list-view').hidden, false);
+  });
+
+  it('does not ask when nothing was edited', async () => {
+    await openDesign();
+    click($('collection-back'));
+    await settle();
+    assert.equal($('collections-confirm-dialog').open, false);
+    assert.equal($('collections-list-view').hidden, false);
   });
 });

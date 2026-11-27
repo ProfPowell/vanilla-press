@@ -149,6 +149,22 @@ test('detailModel: a live-only use and a hand-written page', () => {
   ]);
 });
 
+test('detailModel and deleteDecision: a collection item that uses the file', () => {
+  const m = detail({ filename: 'z.jpg', usedIn: [
+    { title: 'Retro games: Mario', status: 'draft', catalogId: 'cat 1', itemId: 'item_m' },
+    { title: 'Retro games: Zelda', status: 'published', catalogId: 'cat 1', itemId: 'item_z' },
+  ] });
+  assert.deepEqual(m.usedIn, [
+    { title: 'Retro games: Mario', href: 'site.html?site=my%20site&section=collections&catalog=cat%201', statusText: 'Collection item, draft' },
+    { title: 'Retro games: Zelda', href: 'site.html?site=my%20site&section=collections&catalog=cat%201', statusText: 'Collection item, published' },
+  ]);
+  const used = item({ id: 'Z', filename: 'z.jpg', usedIn: [{ title: 'Retro games: Zelda', status: 'published', catalogId: 'c', itemId: 'i' }] });
+  assert.deepEqual(filterMedia([used], { filter: 'unused' }), []);
+  assert.deepEqual(deleteDecision(used), {
+    allowed: false, message: 'Used by published posts or collection items: Retro games: Zelda. Remove it from them and Update first.',
+  });
+});
+
 test('a live-only use counts as used: not Unused, and delete is refused', () => {
   const live = item({ id: 'L', filename: 'live.jpg', usedIn: [{ id: 'p', title: 'Hello', status: 'published', liveOnly: true }] });
   const page = item({ id: 'P', filename: 'page.jpg', usedIn: [{ title: 'src/about.html', path: 'src/about.html', status: 'published' }] });

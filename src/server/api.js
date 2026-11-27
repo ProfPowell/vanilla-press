@@ -41,6 +41,7 @@ import { MAX_BYTES, LARGE_BYTES, tooLargeMessage, unsupportedMessage } from '../
 import { mediaUsage, mediaSrc, linkedIndex, linkedKey, linkedUrl } from '../media/usage.js';
 import { kindOf } from '../media/types.js';
 import { getConfig, setConfig, getAllConfig } from '../store/config.js';
+import { listCatalogs, listItems } from '../store/catalogs.js';
 import { listThemes } from '../themes/list-themes.js';
 import { themeCatalog } from '../themes/site-vb.js';
 import { sendJson, readRawBody } from './router.js';
@@ -395,6 +396,7 @@ export function mountApi(router, db, options) {
     const docs = getAllDocuments(db);
     const linked = linkedIndex(db.prepare('SELECT url, filename FROM media WHERE url IS NOT NULL').all().map((r) => [r.url, r.filename]));
     const usage = mediaUsage(docs, { linked });
+    addCatalogUses(usage);
     if (!options.liveMedia) return usage;
     let live;
     try {
@@ -420,6 +422,23 @@ export function mountApi(router, db, options) {
       if (list.length) usage.set(file, list);
     }
     return usage;
+  }
+
+  /**
+   * Collection items' photos are uses too: `{ title: '<collection>: <item>', status, catalogId, itemId }`.
+   * A published item blocks a delete as a published post does (its page shows the photo, and
+   * every later publish of the collection would be refused without it).
+   */
+  function addCatalogUses(usage) {
+    for (const catalog of listCatalogs(db)) {
+      for (const item of listItems(db, catalog.id)) {
+        for (const file of new Set((item.photos ?? []).map((p) => p?.file).filter(Boolean))) {
+          const list = usage.get(file) || [];
+          list.push({ title: `${catalog.title}: ${item.title}`, status: item.status === 'published' ? 'published' : 'draft', catalogId: catalog.id, itemId: item.id });
+          usage.set(file, list);
+        }
+      }
+    }
   }
 
   /** A media row as the API returns it. */
@@ -811,9 +830,10 @@ export function mountApi(router, db, options) {
     }
     const users = usage.get(row.filename) || [];
     const published = users.filter((u) => u.status === 'published')
-      .map(({ id, title, path }) => (id ? { id, title } : { title, path }));
+      .map(({ id, title, path, catalogId, itemId }) => (id ? { id, title } : itemId ? { title, catalogId, itemId } : { title, path }));
     if (published.length) {
-      sendJson(res, 409, { error: 'Used by published posts. Remove it from them and Update first.', posts: published });
+      const who = published.some((u) => u.itemId) ? 'published posts or collection items' : 'published posts';
+      sendJson(res, 409, { error: `Used by ${who}. Remove it from them and Update first.`, posts: published });
       return;
     }
     rmSync(join(mediaDir, row.filename), { force: true });

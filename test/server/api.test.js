@@ -11,6 +11,7 @@ import Database from 'better-sqlite3';
 import { migrate } from '../../src/store/migrate.js';
 import { createRouter, sendJson } from '../../src/server/router.js';
 import { mountApi } from '../../src/server/api.js';
+import { createCatalog, createItem } from '../../src/store/catalogs.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -541,6 +542,32 @@ describe('API', () => {
       assert.deepEqual(data.posts, [{ id: doc.id, title: 'Guard link' }]);
       assert.ok(existsSync(join(MEDIA_DIR, item.filename)));
       await api(`/api/documents/${doc.id}`, { method: 'DELETE' });
+    });
+
+    it('collection items count as uses: listed under Used in, and a published item blocks delete', async () => {
+      const { data: pub } = await upload(jpeg(1, 1), 'item-photo.jpg');
+      const { data: draftOnly } = await upload(jpeg(1, 1), 'item-draft.jpg');
+      const catalog = createCatalog(db, { title: 'Retro games', design: { fields: [], lists: [], grading: null, sort: ['title'] } });
+      const shown = createItem(db, catalog.id, { title: 'Zelda', status: 'published', photos: [{ file: pub.filename, main: true }] });
+      const drafted = createItem(db, catalog.id, { title: 'Mario', photos: [{ file: pub.filename }, { file: draftOnly.filename }] });
+
+      const found = (await api('/api/media')).data.find((m) => m.id === pub.id);
+      assert.deepEqual(found.usedIn, [
+        { title: 'Retro games: Mario', status: 'draft', catalogId: catalog.id, itemId: drafted.id },
+        { title: 'Retro games: Zelda', status: 'published', catalogId: catalog.id, itemId: shown.id },
+      ]);
+      const refused = await api(`/api/media/${pub.id}`, { method: 'DELETE' });
+      assert.equal(refused.status, 409);
+      assert.match(refused.data.error, /collection items/);
+      assert.deepEqual(refused.data.posts, [{ title: 'Retro games: Zelda', catalogId: catalog.id, itemId: shown.id }]);
+      assert.ok(existsSync(join(MEDIA_DIR, pub.filename)));
+
+      // A draft item does not block; it is named like a draft post.
+      const gone = await api(`/api/media/${draftOnly.id}`, { method: 'DELETE' });
+      assert.equal(gone.status, 200);
+      assert.deepEqual(gone.data.drafts.map((d) => d.title), ['Retro games: Mario']);
+      db.prepare('DELETE FROM catalog_items WHERE catalog_id = ?').run(catalog.id);
+      db.prepare('DELETE FROM catalogs WHERE id = ?').run(catalog.id);
     });
 
     it('an odd filename gets an encoded src, and a published post using it blocks delete', async () => {

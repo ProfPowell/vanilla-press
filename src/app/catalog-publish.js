@@ -56,8 +56,10 @@ export async function publishCatalog({ ws, db, catalogId, change = null, confirm
   const files = photoFiles(going);
   const unlisted = files.filter((file) => !mediaRow.get(file));
   if (unlisted.length) {
+    // Name the items too: the file name alone doesn't say which item to open.
+    const usedBy = (file) => going.filter((i) => (i.photos ?? []).some((p) => p?.file === file)).map((i) => `“${i.title}”`).join(', ');
     throw new PublishRejectedError(422, {
-      error: `${unlisted.length === 1 ? "This photo isn't" : "These photos aren't"} in the media library: ${unlisted.join(', ')}. Re-add ${unlisted.length === 1 ? 'it' : 'them'} to the item.`,
+      error: `${unlisted.length === 1 ? "This photo isn't" : "These photos aren't"} in the media library: ${unlisted.map((f) => `${f} (in ${usedBy(f)})`).join(', ')}. Re-add ${unlisted.length === 1 ? 'it' : 'them'} to the item.`,
     });
   }
   const missing = files.filter((file) => isMissing(ws.mediaDir, file, mediaRow.get(file).url ?? null));

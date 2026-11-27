@@ -229,7 +229,7 @@ describe('publishCatalog', () => {
         ws, db, catalogId: catalog.id, change: { itemId: item.id, publish: true }, confirmRaisePhotoAccess: true, deps: deps(),
       }),
       (err) => err instanceof PublishRejectedError && err.status === 422
-        && err.body.error === "This photo isn't in the media library: norow.jpg. Re-add it to the item.",
+        && err.body.error === "This photo isn't in the media library: norow.jpg (in “Mine”). Re-add it to the item.",
     );
     assert.equal(getItem(db, item.id).status, 'draft');
     assert.equal(existsSync(join(fx.site, FILE)), false);
@@ -244,7 +244,7 @@ describe('publishCatalog', () => {
     updateItem(db, first.id, { photos: [{ file: 'norow.jpg' }] });
     await assert.rejects(
       publishCatalog({ ws, db, catalogId: catalog.id, change: null, confirmRaisePhotoAccess: true, deps: deps() }),
-      (err) => err instanceof PublishRejectedError && err.status === 422 && /isn't in the media library: norow\.jpg/.test(err.body.error),
+      (err) => err instanceof PublishRejectedError && err.status === 422 && /isn't in the media library: norow\.jpg \(in “First”\)/.test(err.body.error),
     );
   });
 

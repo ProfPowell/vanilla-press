@@ -211,7 +211,12 @@ export function detailModel(item, { siteId, locale } = {}) {
     linkedNote: linked ? LINKED_NOTE : null,
     altState: altState(item.alt),
     canEdit: !linked && canEditImage(item.mime_type) && !item.missing,
-    usedIn: (item.usedIn || []).map((u) => ({
+    usedIn: (item.usedIn || []).map((u) => (u.itemId ? {
+      // A collection item: open its collection.
+      title: u.title || 'Untitled',
+      href: `site.html?site=${encodeURIComponent(siteId)}&section=collections&catalog=${encodeURIComponent(u.catalogId)}`,
+      statusText: u.status === 'published' ? 'Collection item, published' : 'Collection item, draft',
+    } : {
       title: u.title || u.path || 'Untitled',
       // A page Vanilla Press didn't write (u.path, no id) has no post to open.
       href: u.id ? `/editor/?site=${encodeURIComponent(siteId)}#doc-${encodeURIComponent(u.id)}` : null,
@@ -274,7 +279,8 @@ const titles = (list) => list.map((u) => u.title || 'Untitled').join(', ');
  * @param {Array<{ title?: string }>} posts - the refusal's `posts` list
  */
 export function refusedDeleteMessage(posts) {
-  return `Used by published posts: ${titles(posts)}. Remove it from them and Update first.`;
+  const who = posts.some((u) => u.itemId) ? 'published posts or collection items' : 'published posts';
+  return `Used by ${who}: ${titles(posts)}. Remove it from them and Update first.`;
 }
 
 /**

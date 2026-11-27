@@ -32,9 +32,10 @@ function findChoice(choices, id) {
 /**
  * @param {{ siteId: string, container: HTMLElement, catalog: Object, agencies: Object,
  *   confirm: (q: {title: string, description: string, items?: string[], ok?: string}) => Promise<boolean>,
- *   onSaved: (catalog: Object) => void, onPublished?: (result: Object) => void }} opts
+ *   onSaved: (catalog: Object) => void, onPublished?: (result: Object) => void,
+ *   onDeleted?: (catalog: Object) => void }} opts
  */
-export function createDesignEditor({ siteId, container, catalog, agencies, confirm, onSaved, onPublished }) {
+export function createDesignEditor({ siteId, container, catalog, agencies, confirm, onSaved, onPublished, onDeleted }) {
   const base = `/api/sites/${encodeURIComponent(siteId)}/catalogs/${encodeURIComponent(catalog.id)}`;
   let current = catalog; // the last saved collection
   const draft = {
@@ -353,8 +354,35 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
         setStatus('Updating the site…');
         result = await api(`${base}/publish`, { method: 'POST', body: { confirmRaisePhotoAccess: true } });
       }
-      setStatus(`Site updated.${result?.url ? ` ${result.url}` : ''}`);
+      // 'saved': committed but not pushed (no remote, or not connected): the live site is unchanged.
+      setStatus(result?.status === 'saved'
+        ? 'Saved, not pushed. The site updates the next time it is pushed.'
+        : `Site updated.${result?.url ? ` ${result.url}` : ''}`);
       onPublished?.(result);
+    } catch (err) {
+      setStatus('');
+      setError(refusalText(err));
+    } finally {
+      busy = false;
+    }
+  }
+
+  /** Delete the collection and its items, after asking. The server refuses while items are published. */
+  async function onDelete() {
+    if (busy) return;
+    setError('');
+    const count = current.itemCount ?? 0;
+    const sure = await confirm({
+      title: 'Delete this collection?',
+      description: `“${current.title}”${count ? ` and its ${plural(count, 'item')}` : ''} ${count ? 'are' : 'is'} deleted. Photos stay in the media library. This can’t be undone.`,
+      ok: 'Delete collection', busyText: 'Deleting…',
+    });
+    if (!sure) return;
+    busy = true;
+    try {
+      await api(base, { method: 'DELETE' });
+      dirty = false;
+      onDeleted?.(current);
     } catch (err) {
       setStatus('');
       setError(refusalText(err));
@@ -374,11 +402,13 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
   save$.addEventListener('click', onSave);
   const publish$ = h('button', { type: 'button', id: 'design-publish', hidden: !hasPublished() }, 'Update site');
   publish$.addEventListener('click', onPublish);
+  const delete$ = h('button', { type: 'button', id: 'design-delete', class: 'danger' }, 'Delete collection');
+  delete$.addEventListener('click', onDelete);
   const section = (id, title, ...kids) => h('section', { class: 'design-section', 'aria-labelledby': id }, h('h2', { id }, title), ...kids);
 
   drawFields(); drawLists(); drawGrading(); drawSort();
   container.replaceChildren(
-    h('div', { class: 'design-actions' }, save$, publish$, parts.status),
+    h('div', { class: 'design-actions' }, save$, publish$, delete$, parts.status),
     parts.error,
     section('design-basics-h', 'About this collection', buildBasics()),
     section('design-fields-h', 'Fields', parts.fields, buildAddField()),

@@ -347,6 +347,43 @@ describe('A grade the collection no longer takes', () => {
   });
 });
 
+describe('Deleting an item', () => {
+  it('Delete asks, deletes and returns to the list without the item', async () => {
+    const view = createItemsView({ siteId: 'my site', container, catalog: catalog(), agencies, confirm, upload, downscale, onCounts() {} });
+    await view.show();
+    await settle();
+    responders['GET /catalogs/cat_1/items/item_1'] = () => Response.json(item());
+    click(container.querySelector('tr[data-item-id="item_1"] [data-role="open"]'));
+    await settle();
+    let gone = false;
+    responders['DELETE /catalogs/cat_1/items/item_1'] = () => { gone = true; return new Response(null, { status: 204 }); };
+    responders['GET /catalogs/cat_1/items'] = () => Response.json({ items: gone ? [item({ id: 'item_2', title: 'Zelda' })] : [item()], tags: [] });
+    click($('#item-delete'));
+    await settle();
+    assert.equal(confirms.length, 1);
+    assert.match(confirms[0].title, /Delete/);
+    assert.match(confirms[0].ok, /Delete/);
+    assert.ok(calls.some((c) => c.method === 'DELETE' && c.path === '/catalogs/cat_1/items/item_1'));
+    assert.equal($('#item-title'), null, 'the editor is closed');
+    assert.deepEqual([...container.querySelectorAll('tbody tr')].map((tr) => tr.getAttribute('data-item-id')), ['item_2']);
+  });
+
+  it('declining the confirm deletes nothing; a refusal (published) is shown', async () => {
+    await open(item({ status: 'published', published: '2026-02-01T00:00:00Z' }));
+    confirmAnswer = false;
+    click($('#item-delete'));
+    await settle();
+    assert.equal(calls.filter((c) => c.method === 'DELETE').length, 0);
+    confirmAnswer = true;
+    responders['DELETE /catalogs/cat_1/items/item_1'] = () => Response.json({ error: 'A published item must be unpublished first' }, { status: 409 });
+    click($('#item-delete'));
+    await settle();
+    assert.match(text($('#item-error')), /unpublished first/);
+    assert.equal($('#item-error').hidden, false);
+    assert.ok($('#item-title'), 'the editor stays open');
+  });
+});
+
 describe('Items list', () => {
   it('lists items with thumbnail, status, level and updated; filters by text', async () => {
     const view = createItemsView({ siteId: 'my site', container, catalog: catalog(), agencies, confirm, upload, downscale, onCounts() {} });

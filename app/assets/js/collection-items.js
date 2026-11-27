@@ -86,6 +86,15 @@ export function createItemsView({ siteId, container, catalog: given, agencies, c
         items = items.some((i) => i.id === saved.id) ? items.map((i) => (i.id === saved.id ? saved : i)) : [...items, saved];
         reportCounts();
       },
+      async onDeleted(gone) {
+        items = items.filter((i) => i.id !== gone.id);
+        reportCounts();
+        editor = null;
+        container.replaceChildren(parts.list);
+        drawList();
+        await load();
+        parts.newButton.focus?.();
+      },
     });
     editor.backButton.addEventListener('click', closeEditor);
     container.replaceChildren(holder);

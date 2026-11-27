@@ -266,6 +266,43 @@ describe('Collection design', () => {
     assert.match(text($('design-status')), /Site updated/);
   });
 
+  it('Update site says when the change was saved but not pushed', async () => {
+    catalogs[0].publishedCount = 2;
+    await openDesign();
+    responders['POST /catalogs/cat_1/publish'] = () => Response.json({ status: 'saved', sha: 'abc', url: null });
+    click($('design-publish'));
+    await settle();
+    assert.doesNotMatch(text($('design-status')), /Site updated/);
+    assert.match(text($('design-status')), /not pushed/);
+  });
+
+  it('Delete collection asks, deletes and goes back to the list', async () => {
+    await openDesign();
+    responders['DELETE /catalogs/cat_1'] = () => new Response(null, { status: 204 });
+    click($('design-delete'));
+    await settle();
+    assert.equal($('collections-confirm-dialog').open, true);
+    assert.match(text($('collections-confirm-title')), /Delete/);
+    $('collections-confirm-form').onsubmit(new win.Event('submit'));
+    await settle();
+    assert.ok(calls.some((c) => c.method === 'DELETE' && c.path === '/catalogs/cat_1'));
+    assert.equal($('collection-view').hidden, true);
+    assert.equal($('collections-list-view').hidden, false);
+    assert.equal($('collections-list').querySelector('[data-id="cat_1"]'), null);
+  });
+
+  it('Delete collection shows the refusal when items are published', async () => {
+    catalogs[0].publishedCount = 1;
+    await openDesign();
+    responders['DELETE /catalogs/cat_1'] = () => Response.json({ error: 'Published items must be unpublished first' }, { status: 409 });
+    click($('design-delete'));
+    await settle();
+    $('collections-confirm-form').onsubmit(new win.Event('submit'));
+    await settle();
+    assert.match(text($('design-error')), /unpublished first/);
+    assert.equal($('collection-view').hidden, false);
+  });
+
   it('shows a publish refusal', async () => {
     catalogs[0].publishedCount = 2;
     await openDesign();

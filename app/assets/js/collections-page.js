@@ -166,6 +166,13 @@ export function initCollectionsSection({ siteId, root }) {
               $('collection-title').textContent = saved.title;
               itemViews.get(saved.id)?.setCatalog(collections.find((x) => x.id === saved.id));
             },
+            async onDeleted(gone) {
+              collections = collections.filter((x) => x.id !== gone.id);
+              drafts.delete(gone.id);
+              itemViews.delete(gone.id);
+              await go({ catalogId: null, tab: 'items' });
+              $('collections-new')?.focus?.();
+            },
           }),
         };
         drafts.set(c.id, draft);

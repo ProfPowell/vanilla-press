@@ -36,11 +36,11 @@ function makeSelect(options, value, attrs = {}) {
 /**
  * @param {{ siteId: string, container: HTMLElement, catalog: Object, item: Object, tags?: string[],
  *   agencies: Object, confirm: (q: Object) => Promise<boolean>,
- *   onSaved?: (item: Object) => void, onClose?: () => void,
+ *   onSaved?: (item: Object) => void, onDeleted?: (item: Object) => void, onClose?: () => void,
  *   upload?: Function, downscale?: Function }} opts
  * @returns {{ isDirty: () => boolean }}
  */
-export function createItemEditor({ siteId, container, catalog: given, item, tags = [], agencies = {}, confirm, onSaved, upload = uploadMedia, downscale = downscaleImage }) {
+export function createItemEditor({ siteId, container, catalog: given, item, tags = [], agencies = {}, confirm, onSaved, onDeleted, upload = uploadMedia, downscale = downscaleImage }) {
   let catalog = given;
   const siteBase = `/api/sites/${encodeURIComponent(siteId)}`;
   const base = `${siteBase}/catalogs/${encodeURIComponent(given.id)}/items/${encodeURIComponent(item.id)}`;
@@ -385,6 +385,26 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
     } finally { busy = false; }
   }
 
+  /** Delete the item, after asking. The server refuses a published item: its words are shown. */
+  async function onDelete() {
+    if (busy) return;
+    setError('');
+    const sure = await confirm({
+      title: 'Delete this item?',
+      description: `“${current.title || 'Untitled'}” and its details are deleted. Its photos stay in the media library. This can’t be undone.`,
+      ok: 'Delete item', busyText: 'Deleting…',
+    });
+    if (!sure) return;
+    busy = true;
+    try {
+      await api(base, { method: 'DELETE' });
+      dirty = false;
+      onDeleted?.(current);
+    } catch (err) {
+      setStatus(''); setError(refusal(err));
+    } finally { busy = false; }
+  }
+
   // --- Build ---
   parts.error = h('p', { id: 'item-error', class: 'error', role: 'alert', hidden: true });
   parts.status = h('p', { id: 'item-status', class: 'design-status', role: 'status' });
@@ -395,6 +415,8 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
   parts.unpublish = h('button', { type: 'button', id: 'item-unpublish', hidden: true }, 'Unpublish');
   parts.unpublish.addEventListener('click', () => onPublish(true));
   const back = h('button', { type: 'button', id: 'item-back' }, 'Back to items');
+  const delete$ = h('button', { type: 'button', id: 'item-delete', class: 'danger' }, 'Delete item');
+  delete$.addEventListener('click', onDelete);
 
   /** Draw the whole form from the working copy (again after the collection's design changes). */
   function render() {
@@ -412,7 +434,7 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
     drawCategories(); drawLinks();
     if (design.grading || draft.grade) drawGrade();
     container.replaceChildren(
-      h('div', { class: 'design-actions' }, back, save$, parts.publish, parts.unpublish, parts.status),
+      h('div', { class: 'design-actions' }, back, save$, parts.publish, parts.unpublish, delete$, parts.status),
       parts.error,
       section('item-basics-h', 'About this item', buildBasics()),
       section('item-photos-h', 'Photos', ...buildPhotos()),

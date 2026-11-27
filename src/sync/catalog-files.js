@@ -1,7 +1,9 @@
 /**
  * A collection's data file in the site repo (`content/catalogs/<slug>.json`):
  * `{ version: 1, catalog, items }`, its published items sorted by title with every
- * field (the build leaves out what a level must not show). Plus the photo check
+ * field (the build leaves out what a level must not show). The design's grading also
+ * carries `labels` (`{ <agency>: { label, extras: { <extra>: label } } }`, from AGENCIES),
+ * so the site can print "PCGS MS-65, CAC sticker" without knowing Vanilla Press's ids. Plus the photo check
  * a publish makes: photos less restricted than the item that shows them.
  *
  * @module sync/catalog-files
@@ -15,6 +17,7 @@ import { getAllPublished } from '../store/content.js';
 import { effectiveLevel } from '../catalogs/model.js';
 import { accessRank } from '../access/levels.js';
 import { usedFiles } from '../access/media-warnings.js';
+import { AGENCIES } from '../catalogs/grading.js';
 
 export const CATALOG_FILE_VERSION = 1;
 
@@ -29,6 +32,18 @@ export function catalogFilePath(ws, slug) {
 
 const byTitle = (a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }) || a.id.localeCompare(b.id);
 
+/** Labels for the grading companies the design lists and the items use (unknown ids are left out). */
+function gradingLabels(grading, items) {
+  const ids = new Set([...(grading.agencies ?? []), ...items.map((i) => i.grade?.agency).filter(Boolean)]);
+  const labels = {};
+  for (const id of ids) {
+    const agency = AGENCIES[id];
+    if (!agency) continue;
+    labels[id] = { label: agency.label, extras: Object.fromEntries((agency.extras ?? []).map((e) => [e.id, e.label])) };
+  }
+  return labels;
+}
+
 /**
  * Write a collection's data file (atomically): its published items only.
  * @param {import('../workspace/workspace.js').Workspace} ws
@@ -41,7 +56,10 @@ export function writeCatalogFile(ws, db, catalogId) {
   if (!catalog) throw new Error(`No collection ${catalogId}`);
   const items = listItems(db, catalogId).filter((i) => i.status === 'published').sort(byTitle);
   const path = catalogFilePath(ws, catalog.slug);
-  writeFileAtomic(path, JSON.stringify({ version: CATALOG_FILE_VERSION, catalog, items }, null, 2) + '\n');
+  const out = catalog.design?.grading
+    ? { ...catalog, design: { ...catalog.design, grading: { ...catalog.design.grading, labels: gradingLabels(catalog.design.grading, items) } } }
+    : catalog;
+  writeFileAtomic(path, JSON.stringify({ version: CATALOG_FILE_VERSION, catalog: out, items }, null, 2) + '\n');
   return path;
 }
 

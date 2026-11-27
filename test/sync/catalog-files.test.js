@@ -36,6 +36,19 @@ describe('catalog files', () => {
     assert.equal(catalogFilePath(ws, 'retro-games'), join(ws.siteDir, 'content', 'catalogs', 'retro-games.json'));
   });
 
+  test('the file names each grading company and its extras, so the site can print them', () => {
+    const coins = createCatalog(db, { title: 'Coins', template: 'us-coins', design: { ...designFromTemplate('us-coins'), grading: { level: 'public', agencies: ['pcgs', 'bgs'] } } });
+    createItem(db, coins.id, { title: 'Wheat cent', status: 'published', grade: { agency: 'pcgs', value: 'MS-65', extras: { cac: true }, other: '' } });
+    const data = JSON.parse(readFileSync(writeCatalogFile(ws, db, coins.id), 'utf8'));
+    assert.deepEqual(data.catalog.design.grading.labels, {
+      pcgs: { label: 'PCGS', extras: { cac: 'CAC sticker' } },
+      bgs: { label: 'Beckett (BGS)', extras: { centering: 'Centering', corners: 'Corners', edges: 'Edges', surface: 'Surface' } },
+    });
+    assert.deepEqual(data.catalog.design.grading.agencies, ['pcgs', 'bgs']);
+    // Only the file carries the labels; the stored design is unchanged.
+    assert.equal('labels' in coins.design.grading, false);
+  });
+
   test('drafts are not written; items sorted by title; every field present', () => {
     const field = catalog.design.fields[0].id;
     createItem(db, catalog.id, { title: 'zelda', status: 'published' });
@@ -49,7 +62,8 @@ describe('catalog files', () => {
     const data = JSON.parse(readFileSync(path, 'utf8'));
     assert.equal(data.version, 1);
     assert.equal(data.catalog.id, catalog.id);
-    assert.deepEqual(data.catalog.design, catalog.design);
+    const { labels, ...grading } = data.catalog.design.grading ?? {};
+    assert.deepEqual({ ...data.catalog.design, grading: data.catalog.design.grading && grading }, catalog.design);
     assert.deepEqual(data.items.map((i) => i.title), ['Earthbound', 'zelda']);
     const eb = data.items[0];
     assert.equal(eb.access, 'private');

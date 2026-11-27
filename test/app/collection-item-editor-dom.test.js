@@ -167,6 +167,16 @@ describe('Item editor', () => {
     assert.equal($('#item-slug').hasAttribute('disabled'), false);
   });
 
+  it('cleans a typed address into a slug when the field is left', async () => {
+    await open();
+    change($('#item-slug'), 'Super Mario Bros. 3!');
+    $('#item-slug').dispatchEvent(new win.Event('blur'));
+    assert.equal($('#item-slug').value, 'super-mario-bros-3');
+    click($('#item-save'));
+    await settle();
+    assert.equal(putBody().slug, 'super-mario-bros-3');
+  });
+
   it('downscales then uploads each photo at the item’s effective level; the first becomes Main', async () => {
     await open();
     change($('#item-access'), 'private');

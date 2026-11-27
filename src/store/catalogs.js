@@ -74,8 +74,11 @@ function hasPublished(db, catalogId) {
   return !!db.prepare("SELECT 1 FROM catalog_items WHERE catalog_id = ? AND status = 'published' LIMIT 1").get(catalogId);
 }
 
-// Slugs are part of published URLs: locked once any item was ever published.
-function everPublished(db, catalogId) {
+/**
+ * Whether any item of a collection was ever published (unpublished ones count). Slugs are
+ * part of published URLs, so the collection's slug is locked from then on.
+ */
+export function everPublished(db, catalogId) {
   return !!db.prepare('SELECT 1 FROM catalog_items WHERE catalog_id = ? AND published IS NOT NULL LIMIT 1').get(catalogId);
 }
 

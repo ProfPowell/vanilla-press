@@ -309,6 +309,12 @@ describe('collection publish routes', () => {
     assert.equal(lastRemote(), 'Unpublish collection item: Earthbound');
     assert.deepEqual(readData().items, []);
 
+    // The address stays locked after an unpublish: the list says it was ever published.
+    const listed = (await api('/catalogs')).data.catalogs.find((c) => c.id === cat.id);
+    assert.equal(listed.publishedCount, 0);
+    assert.equal(listed.everPublished, true);
+    assert.equal((await api(`/catalogs/${cat.id}`)).data.everPublished, true);
+
     assert.equal((await api(`/catalogs/${cat.id}/items/item_nope/publish`, { method: 'POST' })).status, 404);
     write(fx.site, 'build.js', BUILD_FAIL);
     const failed = await api(`/catalogs/${cat.id}/items/${item.id}/publish`, { method: 'POST' });

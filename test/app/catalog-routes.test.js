@@ -138,6 +138,29 @@ describe('catalog routes', () => {
     assert.equal((await api('/catalogs/cat_missing/items')).status, 404);
   });
 
+  it('slugs must be lowercase letters, numbers and single hyphens: 400 otherwise, paths refused', async () => {
+    const cat = await makeCatalog({ title: 'Slugs', template: 'retro-games' });
+    for (const slug of ['Retro Games', '../evil', 'a/b', '..', 'a--b', '-a', 'a-', 'ä', ' ']) {
+      const res = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { slug } });
+      assert.equal(res.status, 400, `catalog slug ${JSON.stringify(slug)}`);
+    }
+    assert.equal((await api(`/catalogs/${cat.id}`)).data.slug, 'slugs');
+    assert.equal((await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { slug: 'old-games-2' } })).data.slug, 'old-games-2');
+
+    for (const slug of ['../..', 'a b', 'A', 'x/../y', '.hidden']) {
+      const made = await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'T', slug } });
+      assert.equal(made.status, 400, `item create slug ${JSON.stringify(slug)}`);
+    }
+    const item = (await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'Fine', slug: 'fine-1' } })).data;
+    assert.equal(item.slug, 'fine-1');
+    for (const slug of ['../../index', 'Has Caps', 'a//b']) {
+      const res = await api(`/catalogs/${cat.id}/items/${item.id}`, { method: 'PUT', body: { slug } });
+      assert.equal(res.status, 400, `item update slug ${JSON.stringify(slug)}`);
+    }
+    assert.equal((await api(`/catalogs/${cat.id}/items/${item.id}`)).data.slug, 'fine-1');
+    assert.equal((await api(`/catalogs/${cat.id}/items/${item.id}`, { method: 'PUT', body: { slug: 'fine-2' } })).data.slug, 'fine-2');
+  });
+
   it('an item in another catalog is 404', async () => {
     const a = await makeCatalog({ title: 'Cat A', template: 'retro-games' });
     const b = await makeCatalog({ title: 'Cat B', template: 'retro-games' });

@@ -13,7 +13,7 @@ import { sendJson } from '../server/router.js';
 import { validAccess } from '../schema/content-schema.js';
 import { higherAccess } from '../access/levels.js';
 import {
-  ChoiceInUseError, addChoice, renameChoice, removeChoice, validateDesign, validateItem,
+  ChoiceInUseError, addChoice, renameChoice, removeChoice, validateDesign, validateItem, isSlug,
 } from '../catalogs/model.js';
 import { TEMPLATES, designFromTemplate } from '../catalogs/templates.js';
 import { AGENCIES } from '../catalogs/grading.js';
@@ -22,7 +22,7 @@ import { publishCatalog } from './catalog-publish.js';
 import { publishErrorResponse } from './publish.js';
 import {
   CatalogHasPublishedError, listCatalogs, getCatalog, createCatalog, updateCatalog, deleteCatalog,
-  listItems, getItem, createItem, updateItem, deleteItem, usedTags,
+  listItems, getItem, createItem, updateItem, deleteItem, usedTags, everPublished,
 } from '../store/catalogs.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -128,6 +128,14 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
     if (typeof label !== 'string' || !label.trim()) throw new HttpError(400, 'A label is required');
     return label.trim();
   };
+  /** A slug the client gives must be what slugify produces: it becomes a path and a URL. */
+  const checkSlug = (slug) => {
+    if (slug !== undefined && !isSlug(slug)) {
+      throw new HttpError(400, 'The address may use only lowercase letters, numbers and single hyphens (like "retro-games").');
+    }
+  };
+  /** A collection as the API returns it: with whether its address is locked (anything ever published). */
+  const withLock = (c) => c && { ...c, everPublished: everPublished(db, c.id) };
   const saveDesign = (catalog, design) => updateCatalog(db, catalog.id, { design });
 
   router.add('GET', `${prefix}/catalogs/templates`, handle((req, res) => {
@@ -140,7 +148,7 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
   router.add('GET', `${prefix}/catalogs`, handle((req, res) => {
     const catalogs = listCatalogs(db).map((c) => {
       const items = listItems(db, c.id);
-      return { ...c, itemCount: items.length, publishedCount: items.filter((i) => i.status === 'published').length };
+      return { ...withLock(c), itemCount: items.length, publishedCount: items.filter((i) => i.status === 'published').length };
     });
     sendJson(res, 200, { catalogs });
   }));
@@ -163,20 +171,20 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
   }));
 
   router.add('GET', `${prefix}/catalogs/:id`, handle((req, res) => {
-    sendJson(res, 200, need(req.params.id));
+    sendJson(res, 200, withLock(need(req.params.id)));
   }));
 
   router.add('PUT', `${prefix}/catalogs/:id`, write((req, res) => {
     need(req.params.id);
     const patch = pick(body(req), ['title', 'description', 'access', 'slug', 'design']);
     if (patch.title !== undefined && (typeof patch.title !== 'string' || !patch.title.trim())) throw new HttpError(400, 'A title is required');
-    if (patch.slug !== undefined && (typeof patch.slug !== 'string' || !patch.slug.trim())) throw new HttpError(400, 'A slug is required');
+    checkSlug(patch.slug);
     checkAccess(patch.access);
     if (patch.design !== undefined) {
       const errors = validateDesign(patch.design);
       if (errors.length) throw new HttpError(400, 'The design is not valid', { errors });
     }
-    if (patch.design === undefined) return sendJson(res, 200, updateCatalog(db, req.params.id, patch));
+    if (patch.design === undefined) return sendJson(res, 200, withLock(updateCatalog(db, req.params.id, patch)));
     const catalog = need(req.params.id);
     const items = listItems(db, catalog.id);
     const gone = removals(catalog.design, patch.design);
@@ -199,7 +207,7 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
       }
       return updateCatalog(db, catalog.id, patch);
     })();
-    sendJson(res, 200, saved);
+    sendJson(res, 200, withLock(saved));
   }));
 
   router.add('DELETE', `${prefix}/catalogs/:id`, write((req, res) => {
@@ -247,6 +255,7 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
   router.add('POST', `${prefix}/catalogs/:id/items`, write((req, res) => {
     const catalog = need(req.params.id);
     const partial = pick(body(req), ITEM_KEYS);
+    checkSlug(partial.slug);
     // An item is never public in a collection that is not; an unknown level is private.
     partial.access = higherAccess(catalog.access, partial.access);
     const errors = validateItem(partial, catalog.design);
@@ -262,6 +271,7 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
     const catalog = need(req.params.id);
     const cur = needItem(catalog, req.params.itemId);
     const patch = pick(body(req), ITEM_KEYS);
+    checkSlug(patch.slug);
     const next = { ...cur, ...patch };
     patch.access = higherAccess(catalog.access, next.access);
     next.access = patch.access;

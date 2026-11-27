@@ -6,7 +6,7 @@
  * @module collection-item-editor
  */
 import { api, h } from './app-api.js';
-import { findChoice } from '../../../src/catalogs/model.js';
+import { findChoice, slugify } from '../../../src/catalogs/model.js';
 import { uploadMedia } from '../../../editor/assets/js/media-upload.js';
 import { downscaleImage } from './downscale.js';
 
@@ -75,6 +75,12 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
     const title = textInput({ id: 'item-title', maxlength: '160' }, draft.title, (v) => { draft.title = v; });
     const slug = textInput({ id: 'item-slug', maxlength: '80', 'aria-describedby': 'item-slug-note', disabled: everPublished() }, draft.slug, (v) => { draft.slug = v; });
     parts.slug = slug;
+    // Show the address as the server will take it: lowercase letters, numbers and single hyphens.
+    slug.addEventListener('blur', () => {
+      if (!slug.value.trim()) return;
+      slug.value = slugify(slug.value);
+      draft.slug = slug.value;
+    });
     parts.slugNote = h('p', { id: 'item-slug-note', class: 'detail-hint' });
     const levels = LEVELS.filter(([v]) => rank(v) >= rank(catalog.access));
     const shown = levels.some(([v]) => v === draft.access) ? draft.access : levels[0][0];

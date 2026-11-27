@@ -6,7 +6,7 @@
  * @module collection-design
  */
 import { api, h } from './app-api.js';
-import { newId } from '../../../src/catalogs/model.js';
+import { newId, slugify } from '../../../src/catalogs/model.js';
 
 const LEVELS = [['public', 'Public'], ['friends', 'Friends'], ['private', 'Private']];
 const TYPES = [['text', 'Text'], ['number', 'Number'], ['money', 'Money'], ['date', 'Date'], ['bool', 'Yes/no'], ['url', 'Link'], ['choice', 'Choice']];
@@ -44,7 +44,9 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
   let dirty = false;
   let busy = false;
   const parts = {};
-  const locked = () => (current.publishedCount ?? 0) > 0;
+  // The address locks once anything was ever published (an unpublished item's old links count), as on the server.
+  const locked = () => !!current.everPublished;
+  const hasPublished = () => (current.publishedCount ?? 0) > 0;
 
   const markDirty = () => { dirty = true; setStatus(''); };
   function setStatus(message) { parts.status.textContent = message || ''; }
@@ -80,9 +82,15 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
     const slug = h('input', { type: 'text', id: 'design-slug', maxlength: '80', autocomplete: 'off', 'aria-describedby': 'design-slug-note', disabled: locked() });
     slug.value = draft.slug;
     slug.addEventListener('input', () => { draft.slug = slug.value; markDirty(); });
+    // Show the address as the server will take it: lowercase letters, numbers and single hyphens.
+    slug.addEventListener('blur', () => {
+      if (!slug.value.trim()) return;
+      slug.value = slugify(slug.value);
+      draft.slug = slug.value;
+    });
     const note = h('p', { id: 'design-slug-note', class: 'detail-hint' },
       locked()
-        ? 'The address can’t change once the collection has published items, so existing links keep working.'
+        ? 'The address can’t change once an item in the collection has been published, so existing links keep working.'
         : 'The collection’s address on the site: /collections/<address>/');
     const access = levelSelect(draft.access, (v) => { draft.access = v; markDirty(); }, { id: 'design-access', 'aria-describedby': 'design-access-note' });
     return h('div', { class: 'design-basics' },
@@ -305,7 +313,7 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
           saved = await save({ confirmDropValues: true });
         } else throw err;
       }
-      current = { ...current, ...saved, publishedCount: saved.publishedCount ?? current.publishedCount };
+      current = { ...current, ...saved, publishedCount: saved.publishedCount ?? current.publishedCount, everPublished: saved.everPublished ?? current.everPublished };
       dirty = false;
       setStatus('Design saved.');
       onSaved?.(current);
@@ -358,7 +366,7 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
   parts.sort = h('ul', { id: 'design-sort', class: 'design-sort' });
   const save$ = h('button', { type: 'button', id: 'design-save', class: 'primary' }, 'Save design');
   save$.addEventListener('click', onSave);
-  const publish$ = h('button', { type: 'button', id: 'design-publish', hidden: !locked() }, 'Update site');
+  const publish$ = h('button', { type: 'button', id: 'design-publish', hidden: !hasPublished() }, 'Update site');
   publish$.addEventListener('click', onPublish);
   const section = (id, title, ...kids) => h('section', { class: 'design-section', 'aria-labelledby': id }, h('h2', { id }, title), ...kids);
 

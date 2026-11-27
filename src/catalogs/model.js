@@ -49,6 +49,17 @@ export function slugify(title) {
 }
 
 /**
+ * Whether a string is a valid address part (what slugify produces): lowercase a-z and
+ * 0-9 in runs joined by single hyphens. No spaces, slashes or dots, so a slug can't
+ * leave its folder or break a URL.
+ * @param {unknown} slug
+ * @returns {boolean}
+ */
+export function isSlug(slug) {
+  return typeof slug === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
+}
+
+/**
  * base, or base-2, base-3 ... the first not in `taken`.
  * @param {string} base
  * @param {Set<string>} taken

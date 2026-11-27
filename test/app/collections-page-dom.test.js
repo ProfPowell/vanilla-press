@@ -205,13 +205,26 @@ describe('Collection design', () => {
     assert.equal(puts[1].body.confirmDropValues, true);
   });
 
-  it('locks the slug once something is published, with a note', async () => {
+  it('locks the slug once something was ever published (as the server does), with a note', async () => {
     await openDesign();
     assert.equal($('design-slug').hasAttribute('disabled'), false);
-    catalogs[0].publishedCount = 1;
+    // Everything unpublished again: the server still locks the address.
+    catalogs[0].publishedCount = 0;
+    catalogs[0].everPublished = true;
     await openDesign();
     assert.equal($('design-slug').hasAttribute('disabled'), true);
     assert.match(text($('design-slug-note')), /published/i);
+  });
+
+  it('cleans a typed address into a slug when the field is left', async () => {
+    await openDesign();
+    responders['PUT /catalogs/cat_1'] = (body) => Response.json(catalog({ design: body.design, slug: body.slug }));
+    change($('design-slug'), ' Old Games / NES ');
+    $('design-slug').dispatchEvent(new win.Event('blur'));
+    assert.equal($('design-slug').value, 'old-games-nes');
+    click($('design-save'));
+    await settle();
+    assert.equal(calls.find((c) => c.method === 'PUT').body.slug, 'old-games-nes');
   });
 
   it('sends a changed slug, and edits grading and sort', async () => {

@@ -282,7 +282,7 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
   // --- Save and Update site ---
   function refusalText(err) {
     const d = err.data || {};
-    if (err.status === 409 && d.count != null && !d.field) return `Used by ${plural(d.count, 'item')}; move them first.`;
+    if (err.status === 409 && d.count != null && !d.fields) return `Used by ${plural(d.count, 'item')}; move them first.`;
     if (d.errors?.length) return d.errors.join(' ');
     return err.message;
   }
@@ -301,11 +301,17 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
       try {
         saved = await save();
       } catch (err) {
-        if (err.status === 409 && err.data?.field) {
+        if (err.status === 409 && Array.isArray(err.data?.fields)) {
           setStatus('');
+          // Every value the save would remove, field by field, and the grades.
+          const { count, fields, grades = 0 } = err.data;
           const sure = await confirm({
-            title: 'Remove this field?',
-            description: `${plural(err.data.count, 'item')} ${err.data.count === 1 ? 'has' : 'have'} a value for “${err.data.field}”. Saving removes ${err.data.count === 1 ? 'it' : 'those values'} from the collection. This can’t be undone.`,
+            title: 'Remove these values?',
+            description: `${plural(count, 'item')} ${count === 1 ? 'has' : 'have'} values this design removes. Saving removes them from the collection. This can’t be undone.`,
+            items: [
+              ...fields.map((f) => `${f.label}: ${plural(f.count, 'item')}`),
+              ...(grades ? [`Grade (its company is no longer listed): ${plural(grades, 'item')}`] : []),
+            ],
             ok: 'Remove values and save', busyText: 'Saving…',
           });
           if (!sure) { setStatus(''); return; }

@@ -318,6 +318,35 @@ describe('Nested choices and a changed design', () => {
   });
 });
 
+describe('A grade the collection no longer takes', () => {
+  it('grading turned off: the grade is shown as such and can be cleared, then the item saves without it', async () => {
+    const grade = { agency: 'pcgs', value: 'MS-65', extras: {}, other: '' };
+    await open(item({ grade }), catalog({ design: { ...design(), grading: null } }));
+    assert.ok($('#item-grade'), 'the Grade section is drawn for a stale grade');
+    assert.match(text($('#item-grade')), /PCGS MS-65/);
+    assert.match(text($('#item-grade')), /no longer uses grading/i);
+    click($('#item-grade-clear'));
+    click($('#item-save'));
+    await settle();
+    assert.equal(putBody().grade, null);
+  });
+
+  it('an agency no longer listed is shown by name, not as No grade, and can be cleared', async () => {
+    const grade = { agency: 'pcgs', value: 'MS-65', extras: {}, other: '' };
+    await open(item({ grade }), catalog({ design: { ...design(), grading: { level: 'public', agencies: ['ngc'] } } }));
+    const select = $('#item-grade-agency');
+    assert.equal(select.value, 'pcgs');
+    assert.match([...select.options].find((o) => o.hasAttribute('selected')).textContent, /PCGS.*no longer/i);
+    assert.match(text($('#item-grade')), /no longer in this collection/i);
+    // Saving untouched keeps it (the server explains); Clear grade removes it.
+    click($('#item-grade-clear'));
+    assert.equal($('#item-grade-agency').value, '');
+    click($('#item-save'));
+    await settle();
+    assert.equal(putBody().grade, null);
+  });
+});
+
 describe('Items list', () => {
   it('lists items with thumbnail, status, level and updated; filters by text', async () => {
     const view = createItemsView({ siteId: 'my site', container, catalog: catalog(), agencies, confirm, upload, downscale, onCounts() {} });

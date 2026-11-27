@@ -189,14 +189,16 @@ describe('Collection design', () => {
     await openDesign();
     let n = 0;
     responders['PUT /catalogs/cat_1'] = (body) => (++n === 1
-      ? Response.json({ error: 'values', count: 2, field: 'Price paid' }, { status: 409 })
+      ? Response.json({ error: 'values', count: 3, fields: [{ id: 'f_paid', label: 'Price paid', count: 2 }, { id: 'f_region', label: 'Region', count: 1 }], grades: 1 }, { status: 409 })
       : Response.json(catalog({ design: body.design })));
     click(fieldRow('f_paid').querySelector('[data-role="remove"]'));
     click($('design-save'));
     await settle();
     assert.equal($('collections-confirm-dialog').open, true);
-    assert.match(text($('collections-confirm-desc')), /2 items/);
-    assert.match(text($('collections-confirm-desc')), /Price paid/);
+    assert.match(text($('collections-confirm-desc')), /3 items/);
+    // Every field the save would empty is named with its count, and the grades too.
+    const listed = [...$('collections-confirm-list').querySelectorAll('li')].map(text);
+    assert.deepEqual(listed, ['Price paid: 2 items', 'Region: 1 item', 'Grade (its company is no longer listed): 1 item']);
     $('collections-confirm-form').onsubmit(new win.Event('submit'));
     await settle();
     const puts = calls.filter((c) => c.method === 'PUT');

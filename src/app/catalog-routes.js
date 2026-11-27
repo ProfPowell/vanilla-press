@@ -192,17 +192,33 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
     if (inUse.length) {
       throw new HttpError(409, `${inUse.length} item${inUse.length === 1 ? ' uses' : 's use'} a list or choice this design removes. Move them first.`, { count: inUse.length });
     }
-    // A field with values is dropped only when the caller confirms; its values go with it.
-    const withValues = gone.fields.map((field) => ({ field, items: items.filter((it) => hasValue(it.fields?.[field])) }))
+    // Values the new design has no place for are dropped only when the caller confirms: a
+    // removed field's values, and a grade whose company is no longer listed (or grading is
+    // off). The 409 names every field with its count, and the graded items, before anything goes.
+    const fieldsById = new Map(catalog.design.fields.map((f) => [f.id, f]));
+    const withValues = gone.fields.map((id) => ({ id, label: fieldsById.get(id)?.label || id, items: items.filter((it) => hasValue(it.fields?.[id])) }))
       .filter((f) => f.items.length);
-    if (withValues.length && body(req).confirmDropValues !== true) {
-      const [{ field, items: used }] = withValues;
-      throw new HttpError(409, `${used.length} item${used.length === 1 ? ' has' : 's have'} a value in a field this design removes.`, { count: used.length, field });
+    const staleGrade = (it) => it.grade != null && !(patch.design.grading?.agencies ?? []).includes(it.grade.agency);
+    const ungraded = items.filter(staleGrade);
+    const affected = new Set([...withValues.flatMap((f) => f.items), ...ungraded].map((it) => it.id));
+    if (affected.size && body(req).confirmDropValues !== true) {
+      const parts = [
+        ...withValues.map((f) => `${f.label} (${f.items.length})`),
+        ...(ungraded.length ? [`grade (${ungraded.length})`] : []),
+      ];
+      throw new HttpError(409, `${affected.size} item${affected.size === 1 ? ' has' : 's have'} values this design removes: ${parts.join(', ')}.`, {
+        count: affected.size,
+        fields: withValues.map((f) => ({ id: f.id, label: f.label, count: f.items.length })),
+        grades: ungraded.length,
+      });
     }
     const saved = db.transaction(() => {
       for (const it of items) {
         const dropped = gone.fields.filter((f) => f in (it.fields ?? {}));
-        if (dropped.length) updateItem(db, it.id, { fields: Object.fromEntries(Object.entries(it.fields).filter(([k]) => !dropped.includes(k))) });
+        const patchItem = {};
+        if (dropped.length) patchItem.fields = Object.fromEntries(Object.entries(it.fields).filter(([k]) => !dropped.includes(k)));
+        if (staleGrade(it)) patchItem.grade = null;
+        if (Object.keys(patchItem).length) updateItem(db, it.id, patchItem);
       }
       return updateCatalog(db, catalog.id, patch);
     })();

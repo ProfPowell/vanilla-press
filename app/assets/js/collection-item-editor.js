@@ -190,17 +190,44 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
   }
 
   // --- Grade ---
+  /** "PCGS MS-65": a grade as the owner reads it. */
+  const gradeName = (g) => [agencies[g.agency]?.label || g.agency, g.value].filter(Boolean).join(' ');
+  function clearGradeButton() {
+    const b = h('button', { type: 'button', id: 'item-grade-clear', 'data-key': 'item-grade-clear' }, 'Clear grade');
+    b.addEventListener('click', () => {
+      draft.grade = null;
+      markDirty(); drawGrade(); focusKey(design.grading ? 'item-grade-agency' : 'item-grade-none');
+    });
+    return b;
+  }
   function drawGrade() {
     const grading = design.grading;
     const g = draft.grade;
+    // A grade the collection no longer takes (grading off, or its company unticked) is kept
+    // and named until the owner clears it: the server refuses to save it as it is.
+    if (!grading) {
+      parts.grade.replaceChildren(g
+        ? h('div', { class: 'theme-field' },
+          h('p', { class: 'detail-hint', id: 'item-grade-stale' }, `This collection no longer uses grading. This item still has a grade: ${gradeName(g)}. Clear it to save the item.`),
+          clearGradeButton())
+        : h('p', { class: 'detail-hint', id: 'item-grade-none', tabindex: '-1' }, 'No grade.'));
+      return;
+    }
+    const stale = !!g && !(grading.agencies || []).includes(g.agency);
     const agencyIds = (grading.agencies || []).filter((id) => agencies[id]);
-    const agency = makeSelect([['', 'No grade'], ...agencyIds.map((id) => [id, agencies[id].label || id])], g?.agency || '', { id: 'item-grade-agency' });
+    const options = [['', 'No grade'], ...agencyIds.map((id) => [id, agencies[id].label || id])];
+    if (stale) options.push([g.agency, `${agencies[g.agency]?.label || g.agency} (no longer in this collection)`]);
+    const agency = makeSelect(options, g?.agency || '', { id: 'item-grade-agency', 'aria-describedby': stale ? 'item-grade-stale' : null });
     agency.addEventListener('change', () => {
       draft.grade = agency.value ? { agency: agency.value, value: '', extras: {}, other: draft.grade?.other || '' } : null;
       markDirty(); drawGrade(); focusKey('item-grade-agency');
     });
     agency.setAttribute('data-key', 'item-grade-agency');
     const out = [labelled('item-grade-agency', 'Grading company', agency)];
+    if (stale) {
+      out.push(h('p', { class: 'detail-hint', id: 'item-grade-stale' },
+        `${agencies[g.agency]?.label || g.agency} is no longer in this collection’s grading companies. Clear the grade or choose another company to save the item.`));
+    }
     if (g) {
       const spec = agencies[g.agency] || { scale: [], extras: [] };
       const scale = spec.scale.includes(g.value) || !g.value ? spec.scale : [...spec.scale, g.value];
@@ -228,6 +255,7 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
       }
       out.push(labelled('item-grade-other', 'Other', textInput({ id: 'item-grade-other', maxlength: '120' }, g.other, (v) => { g.other = v; }),
         h('p', { class: 'detail-hint' }, 'A note for a grade that is not on the list, such as a different scale.')));
+      out.push(h('div', { class: 'design-add' }, clearGradeButton()));
     }
     parts.grade.replaceChildren(...out);
   }
@@ -382,14 +410,14 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
     addLink.addEventListener('click', () => { draft.links.push({ label: '', url: '' }); markDirty(); drawLinks(); container.querySelector('#item-links li:last-child input')?.focus?.(); });
 
     drawCategories(); drawLinks();
-    if (design.grading) drawGrade();
+    if (design.grading || draft.grade) drawGrade();
     container.replaceChildren(
       h('div', { class: 'design-actions' }, back, save$, parts.publish, parts.unpublish, parts.status),
       parts.error,
       section('item-basics-h', 'About this item', buildBasics()),
       section('item-photos-h', 'Photos', ...buildPhotos()),
       design.lists.length ? section('item-categories-h', 'Categories', parts.categories) : null,
-      design.grading ? section('item-grade-h', 'Grade', parts.grade) : null,
+      design.grading || draft.grade ? section('item-grade-h', 'Grade', parts.grade) : null,
       design.fields.length ? section('item-fields-h', 'Fields', ...buildFields()) : null,
       section('item-tags-h', 'Tags',
         labelled('item-tags', 'Tags, separated by commas', tagsInput),

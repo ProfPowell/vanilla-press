@@ -225,7 +225,7 @@ describe('catalog routes', () => {
       const refused = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design } });
       assert.equal(refused.status, 409);
       assert.equal(refused.data.count, 1);
-      assert.equal(refused.data.field, f.id);
+      assert.deepEqual(refused.data.fields, [{ id: f.id, label: f.label, count: 1 }]);
       assert.equal((await api(`/catalogs/${cat.id}/items/${a.id}`)).data.fields[f.id], 'hello');
       assert.ok((await api(`/catalogs/${cat.id}`)).data.design.fields.some((x) => x.id === f.id));
       const ok = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design, confirmDropValues: true } });
@@ -234,6 +234,49 @@ describe('catalog routes', () => {
       assert.equal(f.id in (await api(`/catalogs/${cat.id}/items/${a.id}`)).data.fields, false);
       assert.equal((await api(`/catalogs/${cat.id}/items/${a.id}`, { method: 'PUT', body: { title: 'A2' } })).status, 200);
       assert.equal((await api(`/catalogs/${cat.id}/items/${b.id}`)).status, 200);
+    });
+
+    it('several removed fields with values: the 409 names every field and its count', async () => {
+      const cat = await makeCatalog({ title: 'Design many', template: 'retro-games' });
+      const [f1, f2] = cat.design.fields.filter((x) => x.type === 'text' || x.type === 'number').slice(0, 2);
+      assert.ok(f1 && f2, 'template has two text/number fields');
+      const val = (f) => (f.type === 'number' ? 1 : 'x');
+      await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'A', fields: { [f1.id]: val(f1) } } });
+      await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'B', fields: { [f1.id]: val(f1), [f2.id]: val(f2) } } });
+      const design = { ...cat.design, fields: cat.design.fields.filter((x) => x.id !== f1.id && x.id !== f2.id) };
+      const refused = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design } });
+      assert.equal(refused.status, 409);
+      assert.equal(refused.data.count, 2);
+      assert.deepEqual(refused.data.fields, [{ id: f1.id, label: f1.label, count: 2 }, { id: f2.id, label: f2.label, count: 1 }]);
+      assert.match(refused.data.error, new RegExp(`${f1.label}.*${f2.label}`));
+    });
+
+    it('turning grading off or removing an agency is 409 with the graded items; confirmDropValues clears those grades', async () => {
+      const cat = await makeCatalog({ title: 'Graded', template: 'retro-games' });
+      const graded = { ...cat.design, grading: { level: 'public', agencies: ['wata', 'vga'] } };
+      assert.equal((await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design: graded } })).status, 200);
+      const a = (await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'A', grade: { agency: 'wata', value: '9.4', extras: {}, other: '' } } })).data;
+      const b = (await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'B', grade: { agency: 'vga', value: '85', extras: {}, other: '' } } })).data;
+      assert.ok(a.grade && b.grade);
+
+      const noVga = { ...graded, grading: { level: 'public', agencies: ['wata'] } };
+      const r1 = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design: noVga } });
+      assert.equal(r1.status, 409);
+      assert.equal(r1.data.count, 1);
+      assert.equal(r1.data.grades, 1);
+      assert.deepEqual(r1.data.fields, []);
+      const off = { ...graded, grading: null };
+      const r2 = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design: off } });
+      assert.equal(r2.status, 409);
+      assert.equal(r2.data.grades, 2);
+      assert.deepEqual((await api(`/catalogs/${cat.id}/items/${a.id}`)).data.grade.agency, 'wata');
+
+      const ok = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { design: noVga, confirmDropValues: true } });
+      assert.equal(ok.status, 200, JSON.stringify(ok.data));
+      assert.equal((await api(`/catalogs/${cat.id}/items/${b.id}`)).data.grade, null);
+      assert.equal((await api(`/catalogs/${cat.id}/items/${a.id}`)).data.grade.agency, 'wata');
+      // The item that lost its grade saves again.
+      assert.equal((await api(`/catalogs/${cat.id}/items/${b.id}`, { method: 'PUT', body: { title: 'B2' } })).status, 200);
     });
 
     it('a removed field nobody has a value for is dropped without confirmation', async () => {

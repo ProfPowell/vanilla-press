@@ -45,9 +45,10 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
   let dirty = false;
   let busy = false;
   const parts = {};
-  // The address locks once anything was ever published (an unpublished item's old links count), as on the server.
-  const locked = () => !!current.everPublished;
+  // The address locks once anything was ever published (an unpublished item's old links count),
+  // as on the server; something published now is the same answer if the list is behind.
   const hasPublished = () => (current.publishedCount ?? 0) > 0;
+  const locked = () => !!current.everPublished || hasPublished();
 
   const markDirty = () => { dirty = true; setStatus(''); };
   function setStatus(message) { parts.status.textContent = message || ''; }
@@ -89,17 +90,25 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
       slug.value = slugify(slug.value);
       draft.slug = slug.value;
     });
-    const note = h('p', { id: 'design-slug-note', class: 'detail-hint' },
-      locked()
-        ? 'The address can’t change once an item in the collection has been published, so existing links keep working.'
-        : 'The collection’s address on the site: /collections/<address>/');
+    parts.slug = slug;
+    parts.slugNote = h('p', { id: 'design-slug-note', class: 'detail-hint' });
+    drawLock();
     const access = levelSelect(draft.access, (v) => { draft.access = v; markDirty(); }, { id: 'design-access', 'aria-describedby': 'design-access-note' });
     return h('div', { class: 'design-basics' },
       labelled('design-title', 'Title', title),
       labelled('design-description', 'Description', description),
-      labelled('design-slug', 'Address', slug, note),
+      labelled('design-slug', 'Address', slug, parts.slugNote),
       labelled('design-access', 'Who can see this collection', access,
         h('p', { id: 'design-access-note', class: 'detail-hint' }, 'Friends and Private collections are left out of the public site. An item is never more public than its collection.')));
+  }
+
+  /** The address field and its note, locked or not. A locked address shows the saved one. */
+  function drawLock() {
+    if (locked() && draft.slug !== current.slug) { draft.slug = current.slug; parts.slug.value = current.slug; }
+    parts.slug.toggleAttribute('disabled', locked());
+    parts.slugNote.textContent = locked()
+      ? 'The address can’t change once an item in the collection has been published, so existing links keep working.'
+      : 'The collection’s address on the site: /collections/<address>/';
   }
 
   // --- Fields ---
@@ -294,31 +303,55 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
     return api(base, { method: 'PUT', body });
   }
 
+  const AUDIENCE = { public: 'everyone', friends: 'friends' };
+  /** Ask before a save the server holds back (409); the answer is a flag to resend with, or null. */
+  async function askToConfirm(err) {
+    const d = err.data || {};
+    if (Array.isArray(d.items)) {
+      // A more visible level: name every item that becomes more visible with it.
+      const sure = await confirm({
+        title: 'Make these items more visible?',
+        description: `These items will become visible to ${AUDIENCE[draft.access] || 'more people'}:`,
+        items: d.items.map((it) => (it.access === draft.access ? it.title : `${it.title} (${AUDIENCE[it.access] || 'only you'})`)),
+        ok: 'Make visible and save', busyText: 'Saving…',
+      });
+      return sure ? 'confirmLowerLevel' : null;
+    }
+    if (Array.isArray(d.fields)) {
+      // Every value the save would remove, field by field, and the grades.
+      const { count, fields, grades = 0 } = d;
+      const sure = await confirm({
+        title: 'Remove these values?',
+        description: `${plural(count, 'item')} ${count === 1 ? 'has' : 'have'} values this design removes. Saving removes them from the collection. This can’t be undone.`,
+        items: [
+          ...fields.map((f) => `${f.label}: ${plural(f.count, 'item')}`),
+          ...(grades ? [`Grade (its company is no longer listed): ${plural(grades, 'item')}`] : []),
+        ],
+        ok: 'Remove values and save', busyText: 'Saving…',
+      });
+      return sure ? 'confirmDropValues' : null;
+    }
+    throw err;
+  }
+
   async function onSave() {
     if (busy) return;
     busy = true; setError(''); setStatus('Saving…');
     try {
+      const confirmed = {};
       let saved;
-      try {
-        saved = await save();
-      } catch (err) {
-        if (err.status === 409 && Array.isArray(err.data?.fields)) {
+      // Each question the server asks is answered once; a save can need both.
+      for (let asked = 0; !saved; asked++) {
+        try {
+          saved = await save(confirmed);
+        } catch (err) {
+          if (err.status !== 409 || asked >= 2) throw err;
           setStatus('');
-          // Every value the save would remove, field by field, and the grades.
-          const { count, fields, grades = 0 } = err.data;
-          const sure = await confirm({
-            title: 'Remove these values?',
-            description: `${plural(count, 'item')} ${count === 1 ? 'has' : 'have'} values this design removes. Saving removes them from the collection. This can’t be undone.`,
-            items: [
-              ...fields.map((f) => `${f.label}: ${plural(f.count, 'item')}`),
-              ...(grades ? [`Grade (its company is no longer listed): ${plural(grades, 'item')}`] : []),
-            ],
-            ok: 'Remove values and save', busyText: 'Saving…',
-          });
-          if (!sure) { setStatus(''); return; }
+          const flag = await askToConfirm(err);
+          if (!flag) return;
+          confirmed[flag] = true;
           setStatus('Saving…');
-          saved = await save({ confirmDropValues: true });
-        } else throw err;
+        }
       }
       current = { ...current, ...saved, publishedCount: saved.publishedCount ?? current.publishedCount, everPublished: saved.everPublished ?? current.everPublished };
       dirty = false;
@@ -415,5 +448,13 @@ export function createDesignEditor({ siteId, container, catalog, agencies, confi
     section('design-lists-h', 'Lists', parts.lists, buildAddList()),
     section('design-grading-h', 'Grading', parts.grading),
     section('design-sort-h', 'Sort by', h('p', { class: 'detail-hint' }, 'The first one checked is the default order.'), parts.sort));
-  return { isDirty: () => dirty };
+  return {
+    isDirty: () => dirty,
+    /** Items were published or unpublished elsewhere: lock the address and show Update site to match. */
+    setCounts(counts) {
+      current = { ...current, ...counts, everPublished: !!(current.everPublished || counts.everPublished) };
+      drawLock();
+      publish$.hidden = !hasPublished();
+    },
+  };
 }

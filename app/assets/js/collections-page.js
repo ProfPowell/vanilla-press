@@ -141,7 +141,10 @@ export function initCollectionsSection({ siteId, root }) {
         view = createItemsView({
           siteId, container, catalog: c, agencies: templates.agencies, confirm,
           onCounts(counts) {
-            collections = collections.map((x) => (x.id === c.id ? { ...x, ...counts } : x));
+            // Once anything was published the collection's address stays locked, as on the server.
+            collections = collections.map((x) => (x.id === c.id ? { ...x, ...counts, everPublished: !!(x.everPublished || counts.everPublished) } : x));
+            const { itemCount, publishedCount, everPublished } = collections.find((x) => x.id === c.id);
+            drafts.get(c.id)?.editor.setCounts({ itemCount, publishedCount, everPublished });
             showSummary({ ...c, ...counts, access: collections.find((x) => x.id === c.id)?.access ?? c.access });
           },
         });

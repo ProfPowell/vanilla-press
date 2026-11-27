@@ -3,7 +3,8 @@
  * collections (create, read, update, delete), their choices and their items. Every
  * response is JSON. Status codes: 400 invalid input (`errors` lists validation
  * messages), 404 unknown collection/item/list, 409 a conflict with existing data
- * (slug taken, choice in use, published items block a delete), 422 a slug that is
+ * (slug taken, choice in use, published items block a delete, values a design removes or
+ * items a more visible level widens, until confirmed), 422 a slug that is
  * locked because something was published. Publishing is a separate set of routes.
  *
  * @module app/catalog-routes
@@ -23,6 +24,7 @@ import {
   CatalogHasPublishedError, listCatalogs, getCatalog, createCatalog, updateCatalog, deleteCatalog,
   listItems, getItem, createItem, updateItem, deleteItem, usedTags, everPublished,
 } from '../store/catalogs.js';
+import { accessRank, higherAccess } from '../access/levels.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -183,9 +185,18 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
       const errors = validateDesign(patch.design);
       if (errors.length) throw new HttpError(400, 'The design is not valid', { errors });
     }
-    if (patch.design === undefined) return sendJson(res, 200, withLock(updateCatalog(db, req.params.id, patch)));
     const catalog = need(req.params.id);
     const items = listItems(db, catalog.id);
+    // A more visible level widens every item that has no level of its own at or above the old
+    // one (drafts too: they show once published). The caller confirms after seeing their titles.
+    if (patch.access !== undefined && accessRank(patch.access) < accessRank(catalog.access) && body(req).confirmLowerLevel !== true) {
+      const widened = items.filter((it) => accessRank(it.access) < accessRank(catalog.access))
+        .map((it) => ({ id: it.id, title: it.title, access: higherAccess(patch.access, it.access) }));
+      if (widened.length) {
+        throw new HttpError(409, `These items will become more visible: ${widened.map((it) => it.title).join(', ')}.`, { items: widened });
+      }
+    }
+    if (patch.design === undefined) return sendJson(res, 200, withLock(updateCatalog(db, req.params.id, patch)));
     const gone = removals(catalog.design, patch.design);
     // A choice or list that items still use cannot go: move the items first.
     const inUse = items.filter((it) => [...gone.choices].some(([listId, ids]) => (it.categories?.[listId] ?? []).some((c) => ids.has(c))));

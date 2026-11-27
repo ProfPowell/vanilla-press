@@ -93,24 +93,44 @@ const pick = async (names) => {
 };
 
 describe('Item editor', () => {
-  it('offers only levels at or above the collection’s', async () => {
+  it('offers "Same as the collection", then the explicit levels at or above the collection’s', async () => {
     await open();
-    assert.deepEqual([...$('#item-access').options].map((o) => o.value), ['friends', 'private']);
+    const options = () => [...$('#item-access').options].map((o) => [o.value, text(o)]);
+    assert.deepEqual(options(), [['public', 'Same as the collection (Friends)'], ['friends', 'Friends'], ['private', 'Private']]);
     await open(item({ access: 'public' }), catalog({ access: 'public' }));
-    assert.deepEqual([...$('#item-access').options].map((o) => o.value), ['public', 'friends', 'private']);
+    assert.deepEqual(options(), [['public', 'Same as the collection (Public)'], ['friends', 'Friends'], ['private', 'Private']]);
+    await open(item({ access: 'public' }), catalog({ access: 'private' }));
+    assert.deepEqual(options(), [['public', 'Same as the collection (Private)'], ['private', 'Private']]);
   });
 
-  it('keeps the item\'s own level below the collection\'s: shows the collection\'s, saves its own', async () => {
+  it('an item that follows the collection shows "Same as the collection"; a pinned one shows its level', async () => {
     await open(item({ access: 'public' }), catalog({ access: 'friends' }));
+    assert.equal($('#item-access').value, 'public');
+    assert.match(text($('#item-access-note')), /Same as the collection.*follows/i);
+    await open(item({ access: 'friends' }), catalog({ access: 'friends' }));
     assert.equal($('#item-access').value, 'friends');
-    change($('#item-title'), 'Mario 2');
+  });
+
+  it('choosing Friends explicitly pins the item; Same as the collection stores public (no level of its own)', async () => {
+    await open(item({ access: 'public' }), catalog({ access: 'friends' }));
+    change($('#item-access'), 'friends');
+    click($('#item-save'));
+    await settle();
+    assert.equal(putBody().access, 'friends');
+    change($('#item-access'), 'public');
     click($('#item-save'));
     await settle();
     assert.equal(putBody().access, 'public');
-    change($('#item-access'), 'private');
+  });
+
+  it('an item pinned below a more private collection keeps its level, shown as such', async () => {
+    await open(item({ access: 'friends' }), catalog({ access: 'private' }));
+    assert.equal($('#item-access').value, 'friends');
+    assert.match(text([...$('#item-access').options].find((o) => o.hasAttribute('selected'))), /Friends.*Private/);
+    change($('#item-title'), 'Mario 2');
     click($('#item-save'));
     await settle();
-    assert.equal(putBody().access, 'private');
+    assert.equal(putBody().access, 'friends');
   });
 
   it('marks private and friends fields', async () => {

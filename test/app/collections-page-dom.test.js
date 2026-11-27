@@ -311,6 +311,102 @@ describe('Collection design', () => {
     await settle();
     assert.match(text($('design-error')), /Photos missing/);
   });
+
+  it('making the collection more visible lists the items that follow it, then resends with confirmLowerLevel', async () => {
+    await openDesign();
+    let n = 0;
+    responders['PUT /catalogs/cat_1'] = (body) => (++n === 1
+      ? Response.json({ error: 'more visible', items: [{ id: 'i1', title: 'Zelda', access: 'public' }, { id: 'i2', title: 'Mario', access: 'public' }] }, { status: 409 })
+      : Response.json(catalog({ access: body.access, design: body.design })));
+    change($('design-access'), 'public');
+    click($('design-save'));
+    await settle();
+    assert.equal($('collections-confirm-dialog').open, true);
+    assert.match(text($('collections-confirm-desc')), /visible to everyone/);
+    assert.deepEqual([...$('collections-confirm-list').querySelectorAll('li')].map(text), ['Zelda', 'Mario']);
+    $('collections-confirm-form').onsubmit(new win.Event('submit'));
+    await settle();
+    const puts = calls.filter((c) => c.method === 'PUT');
+    assert.equal(puts.length, 2);
+    assert.equal(puts[0].body.confirmLowerLevel, undefined);
+    assert.equal(puts[1].body.confirmLowerLevel, true);
+    assert.match(text($('design-status')), /saved/i);
+  });
+
+  it('declining the more-visible confirm saves nothing', async () => {
+    await openDesign();
+    responders['PUT /catalogs/cat_1'] = () => Response.json({ error: 'more visible', items: [{ id: 'i1', title: 'Zelda', access: 'friends' }] }, { status: 409 });
+    catalogs[0].access = 'private';
+    await openDesign();
+    change($('design-access'), 'friends');
+    click($('design-save'));
+    await settle();
+    assert.match(text($('collections-confirm-desc')), /visible to friends/);
+    $('collections-confirm-dialog').close();
+    await settle();
+    assert.equal(calls.filter((c) => c.method === 'PUT').length, 1);
+  });
+
+  it('locks the address after an item is published in this session', async () => {
+    const draft = { id: 'item_1', catalogId: 'cat_1', slug: 'zelda', title: 'Zelda', status: 'draft', access: 'public', published: null, categories: {}, fields: {}, links: [], tags: [], photos: [], grade: null, rating: null, description: '', video: '' };
+    let current = draft;
+    responders['GET /catalogs/cat_1/items'] = () => Response.json({ items: [current], tags: [] });
+    responders['GET /catalogs/cat_1/items/item_1'] = () => Response.json(current);
+    responders['POST /catalogs/cat_1/items/item_1/publish'] = () => {
+      current = { ...draft, status: 'published', published: '2026-11-26T00:00:00Z' };
+      return Response.json({ status: 'pushed' });
+    };
+    await openDesign('?site=my%20site&section=collections&catalog=cat_1&tab=items');
+    click($('collection-items-mount').querySelector('[data-item-id="item_1"] [data-role="open"]'));
+    await settle();
+    click($('item-publish'));
+    await settle();
+    click($('collection-tabs').querySelector('[data-tab="design"]'));
+    await settle();
+    assert.equal($('design-slug').hasAttribute('disabled'), true);
+    assert.match(text($('design-slug-note')), /published/i);
+    // Unpublished again in the same session: the address stays locked, as on the server.
+    click($('collection-tabs').querySelector('[data-tab="items"]'));
+    await settle();
+    responders['POST /catalogs/cat_1/items/item_1/unpublish'] = () => {
+      current = { ...current, status: 'draft' };
+      return Response.json({ status: 'pushed' });
+    };
+    click($('item-unpublish'));
+    await settle();
+    assert.match(text($('collection-summary')), /0 published/);
+    click($('collection-tabs').querySelector('[data-tab="design"]'));
+    await settle();
+    assert.equal($('design-slug').hasAttribute('disabled'), true);
+  });
+
+  it('an open design with unsaved edits locks its address when an item is published meanwhile', async () => {
+    const draft = { id: 'item_1', catalogId: 'cat_1', slug: 'zelda', title: 'Zelda', status: 'draft', access: 'public', published: null, categories: {}, fields: {}, links: [], tags: [], photos: [], grade: null, rating: null, description: '', video: '' };
+    let current = draft;
+    responders['GET /catalogs/cat_1/items'] = () => Response.json({ items: [current], tags: [] });
+    responders['GET /catalogs/cat_1/items/item_1'] = () => Response.json(current);
+    responders['POST /catalogs/cat_1/items/item_1/publish'] = () => {
+      current = { ...draft, status: 'published', published: '2026-11-26T00:00:00Z' };
+      return Response.json({ status: 'pushed' });
+    };
+    await openDesign();
+    change($('design-slug'), 'new-address');
+    click($('collection-tabs').querySelector('[data-tab="items"]'));
+    await settle();
+    click($('collection-items-mount').querySelector('[data-item-id="item_1"] [data-role="open"]'));
+    await settle();
+    click($('item-publish'));
+    await settle();
+    click($('collection-tabs').querySelector('[data-tab="design"]'));
+    await settle();
+    assert.equal($('design-slug').hasAttribute('disabled'), true);
+    assert.equal($('design-slug').value, 'retro-games');
+    assert.equal($('design-publish').hidden, false);
+    responders['PUT /catalogs/cat_1'] = (body) => Response.json(catalog({ design: body.design }));
+    click($('design-save'));
+    await settle();
+    assert.equal('slug' in calls.find((c) => c.method === 'PUT').body, false);
+  });
 });
 
 describe('Collections section: hidden and unsaved edits', () => {

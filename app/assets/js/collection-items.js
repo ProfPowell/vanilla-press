@@ -13,7 +13,7 @@ const levelName = (level) => ({ public: 'Public', friends: 'Friends' }[level] ||
 /**
  * @param {{ siteId: string, container: HTMLElement, catalog: Object, agencies: Object,
  *   confirm: (q: Object) => Promise<boolean>,
- *   onCounts?: (counts: {itemCount: number, publishedCount: number}) => void,
+ *   onCounts?: (counts: {itemCount: number, publishedCount: number, everPublished: boolean}) => void,
  *   upload?: Function, downscale?: Function }} opts
  * @returns {{ show: () => Promise<void>, isDirty: () => boolean, setCatalog: (catalog: Object) => void }}
  */
@@ -26,7 +26,11 @@ export function createItemsView({ siteId, container, catalog: given, agencies, c
   let latest = 0;
   const parts = {};
 
-  const reportCounts = () => onCounts?.({ itemCount: items.length, publishedCount: items.filter((i) => i.status === 'published').length });
+  const reportCounts = () => onCounts?.({
+    itemCount: items.length,
+    publishedCount: items.filter((i) => i.status === 'published').length,
+    everPublished: items.some((i) => !!i.published), // an unpublished item keeps its published date
+  });
   const setError = (message) => { parts.error.textContent = message || ''; parts.error.hidden = !message; };
 
   function row(item) {

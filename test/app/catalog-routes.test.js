@@ -179,8 +179,8 @@ describe('catalog routes', () => {
     assert.equal(up.data.access, 'private');
     const titled = await api(`/catalogs/${cat.id}/items/${plain.id}`, { method: 'PUT', body: { title: 'Two again' } });
     assert.equal(titled.data.access, 'public');
-    // Making the collection public later: the items it held back follow it, nothing to redo by hand.
-    assert.equal((await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { access: 'public' } })).status, 200);
+    // Making the collection public later (once confirmed): the items it held back follow it, nothing to redo by hand.
+    assert.equal((await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { access: 'public', confirmLowerLevel: true } })).status, 200);
     assert.equal((await api(`/catalogs/${cat.id}/items/${plain.id}`)).data.access, 'public');
     assert.equal((await api(`/catalogs/${cat.id}/items/${created.data.id}`)).data.access, 'private');
     // An unknown level is refused, not stored.
@@ -194,6 +194,46 @@ describe('catalog routes', () => {
     assert.equal((await api(`/catalogs/${cat.id}`, { method: 'DELETE' })).status, 204);
     assert.equal((await api(`/catalogs/${cat.id}`)).status, 404);
     assert.equal((await api('/catalogs/cat_missing', { method: 'DELETE' })).status, 404);
+  });
+
+  describe('PUT a more visible level', () => {
+    const items = async (cat, ...specs) => {
+      const out = [];
+      for (const [title, access] of specs) out.push((await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title, access } })).data);
+      return out;
+    };
+
+    it('is 409 naming the items that follow the collection (draft or published); pinned items are not named; the confirm saves', async () => {
+      const cat = await makeCatalog({ title: 'Lower me', template: 'retro-games', access: 'friends' });
+      const [follows, pinned, secret] = await items(cat, ['Follows', 'public'], ['Pinned', 'friends'], ['Secret', 'private']);
+      const refused = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { access: 'public' } });
+      assert.equal(refused.status, 409);
+      assert.deepEqual(refused.data.items, [{ id: follows.id, title: 'Follows', access: 'public' }]);
+      assert.match(refused.data.error, /Follows/);
+      assert.ok(!JSON.stringify(refused.data).includes(pinned.id) && !JSON.stringify(refused.data).includes(secret.id));
+      assert.equal((await api(`/catalogs/${cat.id}`)).data.access, 'friends', 'nothing saved');
+      // A design save with the lower level is refused the same way: no client can skip the question.
+      const withDesign = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { access: 'public', design: cat.design } });
+      assert.equal(withDesign.status, 409);
+      const ok = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { access: 'public', confirmLowerLevel: true } });
+      assert.equal(ok.status, 200, JSON.stringify(ok.data));
+      assert.equal(ok.data.access, 'public');
+    });
+
+    it('names an item pinned below the old level with the level it will have; raising or keeping the level never asks', async () => {
+      const cat = await makeCatalog({ title: 'Private one', template: 'retro-games', access: 'private' });
+      const [follows, friendsOnly] = await items(cat, ['Follows', 'public'], ['Friends only', 'friends'], ['Secret', 'private']);
+      const refused = await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { access: 'public' } });
+      assert.equal(refused.status, 409);
+      assert.deepEqual(refused.data.items, [
+        { id: follows.id, title: 'Follows', access: 'public' },
+        { id: friendsOnly.id, title: 'Friends only', access: 'friends' },
+      ]);
+      assert.equal((await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { access: 'private', title: 'Same level' } })).status, 200);
+      const empty = await makeCatalog({ title: 'No items', template: 'retro-games', access: 'private' });
+      assert.equal((await api(`/catalogs/${empty.id}`, { method: 'PUT', body: { access: 'public' } })).status, 200);
+      assert.equal((await api(`/catalogs/${empty.id}`, { method: 'PUT', body: { access: 'private' } })).status, 200);
+    });
   });
 
   describe('PUT design removals', () => {

@@ -82,12 +82,18 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
       draft.slug = slug.value;
     });
     parts.slugNote = h('p', { id: 'item-slug-note', class: 'detail-hint' });
-    // Only levels at or above the collection's are offered. The item keeps its own level: one
-    // below the collection's shows as the collection's and is saved unchanged, so the item
-    // follows the collection if that is made more public later.
-    const levels = LEVELS.filter(([v]) => rank(v) >= rank(catalog.access));
-    const shown = levels.some(([v]) => v === draft.access) ? draft.access : levels[0][0];
-    const access = makeSelect(levels, shown, { id: 'item-access', 'aria-describedby': 'item-access-note' });
+    // The stored level says what the item asks for itself: 'public' means no restriction of its
+    // own, so the item follows the collection ("Same as the collection"). Friends or Private pin
+    // it there whatever the collection becomes. Only pins at or above the collection's level are
+    // offered; a pin below it (made while the collection was more visible) is kept and shown so.
+    const name = (level) => LEVELS.find(([v]) => v === level)?.[1] || 'Private';
+    const collectionName = name(catalog.access);
+    const options = [['public', `Same as the collection (${collectionName})`],
+      ...LEVELS.filter(([v]) => v !== 'public' && rank(v) >= rank(catalog.access))];
+    if (!options.some(([v]) => v === draft.access)) {
+      options.splice(1, 0, [draft.access, `${name(draft.access)} (${collectionName} for now: the collection is ${collectionName})`]);
+    }
+    const access = makeSelect(options, draft.access, { id: 'item-access', 'aria-describedby': 'item-access-note' });
     access.addEventListener('change', () => { draft.access = access.value; markDirty(); });
     const rating = makeSelect([['', 'No rating'], ...[1, 2, 3, 4, 5].map((n) => [String(n), `${n} of 5`])], draft.rating == null ? '' : String(draft.rating), { id: 'item-rating' });
     rating.addEventListener('change', () => { draft.rating = rating.value ? Number(rating.value) : null; markDirty(); });
@@ -96,7 +102,7 @@ export function createItemEditor({ siteId, container, catalog: given, item, tags
       labelled('item-title', 'Title', title),
       labelled('item-slug', 'Address', slug, parts.slugNote),
       labelled('item-access', 'Who can see this', access,
-        h('p', { id: 'item-access-note', class: 'detail-hint' }, `Never more public than the collection (${LEVELS.find(([v]) => v === catalog.access)?.[1] || 'Private'}); at the collection’s level it follows the collection. Its photos are uploaded at this level.`)),
+        h('p', { id: 'item-access-note', class: 'detail-hint' }, `Same as the collection: the item follows the collection (${collectionName} now), and becomes more visible if the collection does. Friends or Private keep it there whatever the collection becomes. Never more public than the collection. Its photos are uploaded at the level it has now.`)),
       labelled('item-rating', 'Rating', rating));
   }
   function drawSlugNote() {

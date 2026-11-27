@@ -100,6 +100,19 @@ describe('Item editor', () => {
     assert.deepEqual([...$('#item-access').options].map((o) => o.value), ['public', 'friends', 'private']);
   });
 
+  it('keeps the item\'s own level below the collection\'s: shows the collection\'s, saves its own', async () => {
+    await open(item({ access: 'public' }), catalog({ access: 'friends' }));
+    assert.equal($('#item-access').value, 'friends');
+    change($('#item-title'), 'Mario 2');
+    click($('#item-save'));
+    await settle();
+    assert.equal(putBody().access, 'public');
+    change($('#item-access'), 'private');
+    click($('#item-save'));
+    await settle();
+    assert.equal(putBody().access, 'private');
+  });
+
   it('marks private and friends fields', async () => {
     await open();
     assert.match(text($('[data-field-id="f_paid"]')), /Private/);

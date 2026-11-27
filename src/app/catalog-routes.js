@@ -11,7 +11,6 @@
 
 import { sendJson } from '../server/router.js';
 import { validAccess } from '../schema/content-schema.js';
-import { higherAccess } from '../access/levels.js';
 import {
   ChoiceInUseError, addChoice, renameChoice, removeChoice, validateDesign, validateItem, isSlug,
 } from '../catalogs/model.js';
@@ -256,8 +255,9 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
     const catalog = need(req.params.id);
     const partial = pick(body(req), ITEM_KEYS);
     checkSlug(partial.slug);
-    // An item is never public in a collection that is not; an unknown level is private.
-    partial.access = higherAccess(catalog.access, partial.access);
+    // The item's own level is stored as given; what it shows at is the higher of that and
+    // the collection's (effectiveLevel), so a collection made more public later takes its items along.
+    checkAccess(partial.access);
     const errors = validateItem(partial, catalog.design);
     if (errors.length) throw new HttpError(400, 'The item is not valid', { errors });
     sendJson(res, 201, createItem(db, catalog.id, partial));
@@ -272,9 +272,8 @@ export function mountCatalogRoutes(router, prefix, { db, ws = null, publishing =
     const cur = needItem(catalog, req.params.itemId);
     const patch = pick(body(req), ITEM_KEYS);
     checkSlug(patch.slug);
+    checkAccess(patch.access);
     const next = { ...cur, ...patch };
-    patch.access = higherAccess(catalog.access, next.access);
-    next.access = patch.access;
     const errors = validateItem(next, catalog.design);
     if (errors.length) throw new HttpError(400, 'The item is not valid', { errors });
     sendJson(res, 200, updateItem(db, cur.id, patch));

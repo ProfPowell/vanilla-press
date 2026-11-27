@@ -168,17 +168,24 @@ describe('catalog routes', () => {
     assert.equal((await api(`/catalogs/${b.id}/items/${item.id}`)).status, 404);
   });
 
-  it('item access is clamped up to the collection level on create and update', async () => {
+  it('an item keeps its own level; the collection\'s level only raises what it shows (effective level)', async () => {
     const cat = await makeCatalog({ title: 'Friends only', template: 'retro-games', access: 'friends' });
     const created = await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'One', access: 'public' } });
-    assert.equal(created.data.access, 'friends');
-    const upd = await api(`/catalogs/${cat.id}/items/${created.data.id}`, { method: 'PUT', body: { access: 'public' } });
-    assert.equal(upd.data.access, 'friends');
+    assert.equal(created.status, 201);
+    assert.equal(created.data.access, 'public');
+    const plain = (await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'Two' } })).data;
+    assert.equal(plain.access, 'public');
     const up = await api(`/catalogs/${cat.id}/items/${created.data.id}`, { method: 'PUT', body: { access: 'private' } });
     assert.equal(up.data.access, 'private');
-    // Raising the collection's level lifts items too when they are next saved; a bogus level fails closed.
-    const odd = await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'Odd', access: 'weird' } });
-    assert.equal(odd.data.access, 'private');
+    const titled = await api(`/catalogs/${cat.id}/items/${plain.id}`, { method: 'PUT', body: { title: 'Two again' } });
+    assert.equal(titled.data.access, 'public');
+    // Making the collection public later: the items it held back follow it, nothing to redo by hand.
+    assert.equal((await api(`/catalogs/${cat.id}`, { method: 'PUT', body: { access: 'public' } })).status, 200);
+    assert.equal((await api(`/catalogs/${cat.id}/items/${plain.id}`)).data.access, 'public');
+    assert.equal((await api(`/catalogs/${cat.id}/items/${created.data.id}`)).data.access, 'private');
+    // An unknown level is refused, not stored.
+    assert.equal((await api(`/catalogs/${cat.id}/items`, { method: 'POST', body: { title: 'Odd', access: 'weird' } })).status, 400);
+    assert.equal((await api(`/catalogs/${cat.id}/items/${plain.id}`, { method: 'PUT', body: { access: 'weird' } })).status, 400);
   });
 
   it('DELETE /catalogs/:id: 204 when empty of published items; 409 with a published item', async () => {
